@@ -1,108 +1,22 @@
-import sys
+# main_window.py
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QGraphicsScene, QGraphicsView,
-    QGraphicsRectItem, QPushButton, QWidget, QVBoxLayout, QHBoxLayout
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QGraphicsScene, QMessageBox, QGraphicsRectItem
 )
-from PyQt6.QtGui import QBrush, QPen, QColor
-from PyQt6.QtCore import Qt, QRectF
+from PyQt6.QtGui import QAction
 
+from graphics.view import GraphicsView
+from graphics.items.component_item import ComponentItem
 
-# ------------------------------------------------------------
-# Item gráfico básico (um bloco arrastável)
-# ------------------------------------------------------------
-class ComponentItem(QGraphicsRectItem):
-    def __init__(self, x=0, y=0, w=80, h=40):
-        super().__init__(QRectF(0, 0, w, h))
-        self.editor = None
-
-        self.setBrush(QBrush(QColor("#ADD8E6")))
-        self.setPen(QPen(Qt.GlobalColor.black, 2))
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsMovable, False)
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
-        self.setPos(x, y)
-
-    def mousePressEvent(self, event):
-        if self.editor and self.editor.delete_mode:   # se modo delete estiver ativo
-            self.scene().removeItem(self)            # apaga o item
-            return                                   # evita clique normal
-        super().mousePressEvent(event)
-
-# ------------------------------------------------------------
-# View personalizada (zoom + pan)
-# ------------------------------------------------------------
-class GraphicsView(QGraphicsView):
-    def __init__(self, editor, *args):
-        super().__init__(*args)
-        self.editor = editor
-
-        self._panning = False
-        self._pan_start = None
-        self.setRenderHints(self.renderHints())
-
-        # Suavização visual
-        self.setRenderHints(self.renderHints())
-
-        # Melhor qualidade de arraste
-        self.setDragMode(QGraphicsView.DragMode.NoDrag)
-
-    def wheelEvent(self, event):
-        """Zoom com a roda do mouse."""
-        zoom_in_factor = 1.25
-        zoom_out_factor = 1 / zoom_in_factor
-
-        if event.angleDelta().y() > 0:
-            zoom_factor = zoom_in_factor
-        else:
-            zoom_factor = zoom_out_factor
-
-        self.scale(zoom_factor, zoom_factor)
-
-    def mousePressEvent(self, event):
-        # Clique esquerdo no modo adicionar → criar item na posição clicada
-        if event.button() == Qt.MouseButton.LeftButton and self.editor.add_mode:
-            scene_pos = self.mapToScene(event.pos())
-            self.editor.add_component_at(scene_pos.x(), scene_pos.y())
-            return  # evita clicar/selecionar outros itens
-
-        # Pan com botão direito
-        if event.button() == Qt.MouseButton.RightButton:
-            self._panning = True
-            self._pan_start = event.pos()
-            self.setCursor(Qt.CursorShape.ClosedHandCursor)
-        else:
-            super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._panning:
-            delta = event.pos() - self._pan_start
-            self._pan_start = event.pos()
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - delta.x()
-            )
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - delta.y()
-            )
-        else:
-            super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton:
-            self._panning = False
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-        else:
-            super().mouseReleaseEvent(event)
-
-
-# ------------------------------------------------------------
-# Janela principal
-# ------------------------------------------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self._create_menus()
         self.setWindowTitle("Simulador – Editor Gráfico (Template)")
         self.scene = QGraphicsScene()
         self.view = GraphicsView(self, self.scene)
+       
 
         # Estado do modo mover
         self.move_mode = False
@@ -274,14 +188,106 @@ class MainWindow(QMainWindow):
         item.setPos(x - w/2, y - h/2)
 
         self.scene.addItem(item)
+        self.update_scene_rect()
 
+    def _create_menus(self):
+        menu_bar = self.menuBar()
 
-# ------------------------------------------------------------
-# Execução
-# ------------------------------------------------------------
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    w = MainWindow()
-    w.resize(800, 600)
-    w.show()
-    sys.exit(app.exec())
+        # -----------------
+        # FILE
+        # -----------------
+        file_menu = menu_bar.addMenu("File")
+
+        new_action = QAction("New", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.new_scene)
+
+        open_action = QAction("Open", self)
+        open_action.setShortcut("Ctrl+O")
+
+        save_action = QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
+
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+
+        file_menu.addAction(new_action)
+        file_menu.addAction(open_action)
+        file_menu.addAction(save_action)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
+        # -----------------
+        # EDIT
+        # -----------------
+        edit_menu = menu_bar.addMenu("Edit")
+
+        delete_action = QAction("Delete", self)
+        delete_action.setShortcut("Del")
+        delete_action.triggered.connect(lambda: self.activate_mode("delete"))
+
+        edit_menu.addAction(delete_action)
+
+        # -----------------
+        # VIEW
+        # -----------------
+        view_menu = menu_bar.addMenu("View")
+
+        toggle_grid = QAction("Show Grid", self, checkable=True)
+        toggle_grid.setChecked(True)
+
+        view_menu.addAction(toggle_grid)
+
+        # -----------------
+        # HELP
+        # -----------------
+        help_menu = menu_bar.addMenu("Help")
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+
+        help_menu.addAction(about_action)
+
+    def new_scene(self):
+        self.scene.clear()
+
+    def show_about(self):
+        QMessageBox.about(
+            self,
+            "About",
+            "Simulador – Editor Gráfico\n"
+            "Pneumatic and Hydraulic Systems\n\n"
+            "Built with PyQt6"
+        )
+
+    def update_scene_rect(self):
+        
+
+        view = self.view
+
+        # salvar posição atual da câmera
+        h_scroll = view.horizontalScrollBar().value()
+        v_scroll = view.verticalScrollBar().value()
+
+        # área visível
+        visible_rect = view.mapToScene(
+            view.viewport().rect()
+        ).boundingRect()
+
+        # área dos itens
+        items_rect = self.scene.itemsBoundingRect()
+        margin = max(
+            80,
+            max(visible_rect.width(), visible_rect.height()) * 0.1
+        )
+        # união
+        united = visible_rect.united(items_rect)
+
+        self.scene.setSceneRect(
+            united.adjusted(-margin, -margin, margin, margin)
+        )
+
+        # restaurar posição da câmera
+        view.horizontalScrollBar().setValue(h_scroll)
+        view.verticalScrollBar().setValue(v_scroll)

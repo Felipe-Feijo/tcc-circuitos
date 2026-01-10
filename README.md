@@ -21,7 +21,7 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
-3. Gerenciamento profissional de dependências usando pip-tools
+3. Gerenciamento de dependências usando pip-tools
 
 Este projeto utiliza pip-tools para manter as dependências organizadas.
 

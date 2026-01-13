@@ -29,6 +29,15 @@ class MainWindow(QMainWindow):
     def set_mode(self, mode: str | None):
         self.mode = mode
 
+    def zoom_in(self):
+        self.view.zoom_in()
+
+    def zoom_out(self):
+        self.view.zoom_out()
+
+    def zoom_to_contents(self):
+        self.view.zoom_to_contents()
+
     def show_about(self):
         QMessageBox.about(
             self,

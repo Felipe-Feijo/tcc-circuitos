@@ -3,6 +3,10 @@ from PyQt6.QtWidgets import QGraphicsView
 from PyQt6.QtCore import Qt
 
 class GraphicsView(QGraphicsView):
+
+    ZOOM_IN_FACTOR = 1.25
+    ZOOM_OUT_FACTOR = 0.8
+
     def __init__(self, editor, *args):
         super().__init__(*args)
         self.editor = editor
@@ -18,12 +22,35 @@ class GraphicsView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
 
-    def wheelEvent(self, event):
-        zoom = 1.25 if event.angleDelta().y() > 0 else 0.8
-        self.scale(zoom, zoom)
+    def zoom_in(self):
+        self.scale(self.ZOOM_IN_FACTOR, self.ZOOM_IN_FACTOR)
+        if self.editor:
+            self.editor.update_scene_rect()
+
+    def zoom_out(self):
+        self.scale(self.ZOOM_OUT_FACTOR, self.ZOOM_OUT_FACTOR)
+        if self.editor:
+            self.editor.update_scene_rect()
+
+    def zoom_to_contents(self):
+        scene = self.scene()
+        if not scene:
+            return
+
+        items_rect = scene.itemsBoundingRect()
+        if items_rect.isNull():
+            return
+
+        self.fitInView(items_rect, Qt.AspectRatioMode.KeepAspectRatio)
 
         if self.editor:
             self.editor.update_scene_rect()
+
+    def wheelEvent(self, event):
+        if event.angleDelta().y() > 0:
+            self.zoom_in()
+        else:
+            self.zoom_out()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add":

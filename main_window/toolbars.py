@@ -9,4 +9,9 @@ def create_toolbars(main_window, actions):
     toolbar.addAction(actions["mode_delete"])
     toolbar.addAction(actions["mode_select"])
 
+    toolbar.addSeparator()
+    toolbar.addAction(actions["zoom_in"])
+    toolbar.addAction(actions["zoom_out"])
+    toolbar.addAction(actions["zoom_fit"])
+
     main_window.addToolBar(toolbar)

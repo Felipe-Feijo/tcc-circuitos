@@ -1,0 +1,14 @@
+QToolBar QToolButton {
+    background: transparent;
+    border: none;
+    padding: 6px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #3a3a3a;
+    border-radius: 4px;
+}
+
+QToolBar QToolButton:checked {
+    background-color: #505050;
+}

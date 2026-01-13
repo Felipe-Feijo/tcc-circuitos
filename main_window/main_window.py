@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsRectItem, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsRectItem, QMessageBox, QGraphicsItem
 from graphics.view import GraphicsView
 from graphics.items.component_item import ComponentItem
 
@@ -26,8 +26,22 @@ class MainWindow(QMainWindow):
         self.scene.clear()
         self.update_scene_rect()
 
+
     def set_mode(self, mode: str | None):
         self.mode = mode
+
+        is_select_mode = (mode is None)
+
+        for item in self.scene.items():
+            if isinstance(item, ComponentItem):
+                item.setFlag(
+                    QGraphicsItem.GraphicsItemFlag.ItemIsSelectable,
+                    is_select_mode
+                )
+                item.setFlag(
+                    QGraphicsItem.GraphicsItemFlag.ItemIsMovable,
+                    is_select_mode
+                )
 
     def zoom_in(self):
         self.view.zoom_in()
@@ -53,6 +67,9 @@ class MainWindow(QMainWindow):
         w, h = 80, 40
         item = ComponentItem(0, 0, w, h)
         item.editor = self
+        
+        # aplica política do modo atual
+        item.set_editable(self.mode is None)
 
         # centraliza no clique
         item.setPos(x - w / 2, y - h / 2)

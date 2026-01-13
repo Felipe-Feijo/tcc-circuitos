@@ -10,7 +10,7 @@ class GraphicsView(QGraphicsView):
         self._panning = False
         self._pan_start = None
 
-        self.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
 
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -26,7 +26,7 @@ class GraphicsView(QGraphicsView):
             self.editor.update_scene_rect()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.editor.add_mode:
+        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add":
             scene_pos = self.mapToScene(event.pos())
             self.editor.add_component_at(scene_pos.x(), scene_pos.y())
             event.accept()

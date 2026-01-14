@@ -1,6 +1,10 @@
 # graphics/view.py
-from PyQt6.QtWidgets import QGraphicsView
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsPathItem
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainterPath, QPen
+
+from graphics.items.component_item import ComponentItem
+from graphics.items.connection_item import ConnectionItem
 
 class GraphicsView(QGraphicsView):
 
@@ -13,6 +17,11 @@ class GraphicsView(QGraphicsView):
 
         self._panning = False
         self._pan_start = None
+
+        self._connecting = False
+        self._conn_source_item = None
+        self._conn_source_anchor = None
+        self._temp_connection = None
 
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
 
@@ -65,6 +74,10 @@ class GraphicsView(QGraphicsView):
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
             return
+        
+        if (event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "connect"):
+            self.handle_connect_press(event)
+            return
 
         super().mousePressEvent(event)
 
@@ -81,8 +94,13 @@ class GraphicsView(QGraphicsView):
             )
             event.accept()
             return
-
+        if self.editor.mode == "connect" and self._connecting:
+            scene_pos = self.mapToScene(event.pos())
+            self._temp_connection.update_temp_endpoint(scene_pos)
+            return
+        
         super().mouseMoveEvent(event)
+
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
@@ -92,5 +110,63 @@ class GraphicsView(QGraphicsView):
             if self.editor:
                 self.editor.update_scene_rect()
             return
+        
+        if self.editor.mode == "connect" and self._connecting:
+            scene_pos = self.mapToScene(event.pos())
+            item = self.scene().itemAt(scene_pos, self.transform())
+
+            if isinstance(item, ComponentItem):
+                anchor = item.anchor_near_mouse(scene_pos)
+                print("anchor destino:", anchor)
+                if anchor and item is not self._conn_source_item:
+                    self.create_connection(item, anchor)
+
+            self.cleanup_temp_connection()
+            return
 
         super().mouseReleaseEvent(event)
+
+    def handle_connect_press(self, event):
+        scene_pos = self.mapToScene(event.pos())
+        item = self.scene().itemAt(scene_pos, self.transform())
+
+        if isinstance(item, ComponentItem):
+            anchor = item.anchor_near_mouse(scene_pos)
+            if anchor:
+                self._connecting = True
+                self._conn_source_item = item
+                self._conn_source_anchor = anchor
+                self.start_temp_connection(item, anchor)
+
+
+    def create_connection(self, target_item, target_anchor):
+        conn = ConnectionItem(
+            self._conn_source_item,
+            self._conn_source_anchor,
+            target_item,
+            target_anchor
+        )
+
+        self.scene().addItem(conn)
+
+        self._conn_source_item.connections.append(conn)
+        target_item.connections.append(conn)
+
+    def start_temp_connection(self, source_item, source_anchor):
+        self._temp_connection = ConnectionItem(source_item, source_anchor)
+
+        pen = QPen(Qt.GlobalColor.darkGray, 2, Qt.PenStyle.DashLine)
+        self._temp_connection.setPen(pen)
+        self._temp_connection.setZValue(-1)
+
+        self.scene().addItem(self._temp_connection)
+
+
+    def cleanup_temp_connection(self):
+        if self._temp_connection:
+            self.scene().removeItem(self._temp_connection)
+            self._temp_connection = None
+
+        self._connecting = False
+        self._conn_source_item = None
+        self._conn_source_anchor = None

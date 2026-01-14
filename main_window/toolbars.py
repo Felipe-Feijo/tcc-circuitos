@@ -6,8 +6,9 @@ def create_toolbars(main_window, actions):
     toolbar.setMovable(False)
 
     toolbar.addAction(actions["mode_add"])
-    toolbar.addAction(actions["mode_delete"])
+    toolbar.addAction(actions["delete"])
     toolbar.addAction(actions["mode_select"])
+    toolbar.addAction(actions["mode_connect"])
 
     toolbar.addSeparator()
     toolbar.addAction(actions["zoom_in"])

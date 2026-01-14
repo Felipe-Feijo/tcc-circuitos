@@ -10,7 +10,7 @@ def create_menus(main_window, actions):
     file_menu.addAction(actions["exit"])
 
     edit_menu = menubar.addMenu("Edit")
-    edit_menu.addAction(actions["mode_delete"])
+    edit_menu.addAction(actions["delete"])
 
     view_menu = menubar.addMenu("View")
 

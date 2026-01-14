@@ -17,6 +17,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.view)
 
         self.mode = None
+        self.active_context_menu = None
 
         self.actions = create_actions(self)
         create_menus(self, self.actions)
@@ -105,3 +106,24 @@ class MainWindow(QMainWindow):
         self.scene.setSceneRect(
             united.adjusted(-margin, -margin, margin, margin)
         )
+
+    def delete_selected_items(self):
+
+        if self.active_context_menu is not None:
+            self.active_context_menu.close()
+            self.active_context_menu = None
+            
+        self.delete_items(self.scene.selectedItems())
+
+    def delete_items(self, items):
+        if not items:
+            return
+
+        scene = self.scene
+
+        for item in items:
+            if hasattr(item, "prepare_delete"):
+                item.prepare_delete()
+            scene.removeItem(item)
+
+        self.update_scene_rect()

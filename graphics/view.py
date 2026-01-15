@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import QGraphicsView, QGraphicsPathItem
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainterPath, QPen
 
-from graphics.items.component_item import ComponentItem
-from graphics.items.connection_item import ConnectionItem
+from graphics.items.nodes.component_item import ComponentItem
+from graphics.items.connections.connection_item import ConnectionItem
 
 class GraphicsView(QGraphicsView):
 
@@ -140,17 +140,32 @@ class GraphicsView(QGraphicsView):
 
 
     def create_connection(self, target_item, target_anchor):
+        source = self._conn_source_item
+        source_anchor = self._conn_source_anchor
+
+        # 🔒 PROTEÇÃO DE DUPLICATA
+        for conn in source.connections:
+            if (conn.source is source
+                and conn.target is target_item
+                and conn.source_anchor == source_anchor
+                and conn.target_anchor == target_anchor):
+
+                print("⚠️ Duplicate connection ignored")
+                return
+
         conn = ConnectionItem(
-            self._conn_source_item,
-            self._conn_source_anchor,
+            source,
+            source_anchor,
             target_item,
             target_anchor
         )
 
         self.scene().addItem(conn)
 
-        self._conn_source_item.connections.append(conn)
+        source.connections.append(conn)
         target_item.connections.append(conn)
+
+        print(f"✔ Connection created: {source} → {target_item}")
 
     def start_temp_connection(self, source_item, source_anchor):
         self._temp_connection = ConnectionItem(source_item, source_anchor)

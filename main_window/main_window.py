@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsRectItem, QMessageBox, QGraphicsItem
 from graphics.view import GraphicsView
-from graphics.items.component_item import ComponentItem
+from graphics.items.nodes.component_item import ComponentItem
 
 from .actions import create_actions
 from .menus import create_menus
@@ -68,10 +68,10 @@ class MainWindow(QMainWindow):
         w, h = 80, 40
         item = ComponentItem(0, 0, w, h)
         item.editor = self
+    
+        item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
         
-        # aplica política do modo atual
-        item.set_editable(self.mode is None)
-
         # centraliza no clique
         item.setPos(x - w / 2, y - h / 2)
 
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         if self.active_context_menu is not None:
             self.active_context_menu.close()
             self.active_context_menu = None
-            
+
         self.delete_items(self.scene.selectedItems())
 
     def delete_items(self, items):

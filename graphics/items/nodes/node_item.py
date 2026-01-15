@@ -1,54 +1,20 @@
-from PyQt6.QtWidgets import QGraphicsItem, QMenu, QGraphicsRectItem
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence
-from math import hypot
 
-class EditorItem():
+from PyQt6.QtWidgets import QGraphicsItem
+from PyQt6.QtCore import Qt
+from math import hypot
+from graphics.items.base.diagram_item_base import DiagramItemBase
+
+
+class NodeItem(DiagramItemBase):
     def __init__(self):
-        super().__init__()
-        self.editor = None
+        DiagramItemBase.__init__(self)
+        self.anchors = []
         self.connections = []
+        self._hover_anchor = None
+        self.setAcceptHoverEvents(True)
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
-
-    def set_editable(self, enabled: bool):
-        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, enabled)
-        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, enabled)
-
-
-    def mouseReleaseEvent(self, event):
-        QGraphicsItem.mouseReleaseEvent(self, event)
-        if self.editor:
-            self.editor.update_scene_rect()
-
-    def contextMenuEvent(self, event):
-        if not self.editor:
-            return
-        
-        if self.editor.mode is not None:
-            event.ignore()
-            return
-
-        scene = self.scene()
-
-        if not self.isSelected():
-            scene.clearSelection()
-            self.setSelected(True)
-
-        menu = QMenu()
-        self.editor.active_context_menu = menu
-
-        menu.addAction(self.editor.actions["delete"])
-
-        self.extend_context_menu(menu)
-        menu.exec(event.screenPos())
-
-        self.editor.active_context_menu = None
-        event.accept()
-
-    def extend_context_menu(self, menu: QMenu):
-        """Hook para subclasses"""
-        pass
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
 
     def anchor_near_mouse(self, scene_pos):
         best_anchor = None
@@ -61,16 +27,14 @@ class EditorItem():
             dy = scene_pos.y() - anchor_scene.y()
             dist = hypot(dx, dy)
 
-            # ajuste se você compensar zoom depois
             if dist <= anchor.radius:
                 if best_dist is None or dist < best_dist:
                     best_dist = dist
                     best_anchor = anchor
 
         return best_anchor
-    
+
     def hoverMoveEvent(self, event):
-        # só faz sentido no modo connect
         view = self.scene().views()[0]
         if view.editor.mode != "connect":
             if self._hover_anchor:
@@ -83,12 +47,10 @@ class EditorItem():
 
         if anchor != self._hover_anchor:
             self._hover_anchor = anchor
-
             if anchor:
                 self.setCursor(Qt.CursorShape.CrossCursor)
             else:
                 self.unsetCursor()
-
             self.update()
 
     def hoverLeaveEvent(self, event):
@@ -100,10 +62,23 @@ class EditorItem():
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             for conn in self.connections:
                 conn.update_path()
-
-        return QGraphicsRectItem.itemChange(self, change, value)
+        return super().itemChange(change, value)
     
     def update_connections(self):
         for conn in self.connections:
             conn.update_path()
-    
+
+    def prepare_delete(self):
+        print(f"Deleting NodeItem at {self.pos()}")
+
+        print(f"Node at {self.pos()} has connections:")
+        for c in self.connections:
+            print(" -", c, "to", c.target)
+        # desconecta todas as conexões
+        for conn in self.connections[:]:  # copia da lista
+            conn.prepare_delete()           # <- chama prepare_delete da conexão
+            if conn.scene():                # remove visualmente
+                conn.scene().removeItem(conn)
+
+        self.connections.clear()
+        print(f"All connections detached from NodeItem at {self.pos()}\n")

@@ -11,8 +11,13 @@ def create_toolbars(main_window, actions):
     toolbar.addAction(actions["mode_connect"])
 
     toolbar.addSeparator()
+
     toolbar.addAction(actions["zoom_in"])
     toolbar.addAction(actions["zoom_out"])
     toolbar.addAction(actions["zoom_fit"])
+
+    toolbar.addSeparator()
+
+    toolbar.addAction(actions["print_graph"])
 
     main_window.addToolBar(toolbar)

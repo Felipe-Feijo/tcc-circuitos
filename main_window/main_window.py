@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsRectItem, QMessageBox, QGraphicsItem
+from editor.editor_controller import EditorController
 from graphics.view import GraphicsView
 from graphics.items.nodes.component_item import ComponentItem
 
@@ -13,6 +14,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Simulador – Editor Gráfico")
 
         self.scene = QGraphicsScene()
+
+        self.editor_controller = EditorController(self.scene)
         self.view = GraphicsView(self, self.scene)
         self.setCentralWidget(self.view)
 
@@ -22,6 +25,8 @@ class MainWindow(QMainWindow):
         self.actions = create_actions(self)
         create_menus(self, self.actions)
         create_toolbars(self, self.actions)
+
+        
     
     def new_scene(self):
         self.scene.clear()

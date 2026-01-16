@@ -1,6 +1,7 @@
 
 from PyQt6.QtWidgets import QGraphicsItem
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QRectF, QPointF
+from PyQt6.QtGui import QPen, QPainter, QPixmap
 from math import hypot
 from graphics.items.base.diagram_item_base import DiagramItemBase
 
@@ -12,6 +13,9 @@ class NodeItem(DiagramItemBase):
         self.connections = []
         self._hover_anchor = None
         self.setAcceptHoverEvents(True)
+
+        self.pixmap: QPixmap | None = None
+        self.draw_selection = True
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -82,3 +86,30 @@ class NodeItem(DiagramItemBase):
 
         self.connections.clear()
         print(f"All connections detached from NodeItem at {self.pos()}\n")
+
+    def boundingRect(self) -> QRectF:
+        return QRectF(0, 0, self.width, self.height)
+
+    def paint(self, painter: QPainter, option, widget=None):
+
+        # ícone (se existir)
+        if self.pixmap and not self.pixmap.isNull():
+            scaled = self.pixmap.scaled(
+                self.width,
+                self.height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            pos = QPointF(
+                (self.width - scaled.width()) / 2,
+                (self.height - scaled.height()) / 2
+            )
+            painter.drawPixmap(pos, scaled)
+
+        # feedback de seleção
+        if self.draw_selection and self.isSelected():
+            pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(0, 0, self.width, self.height)

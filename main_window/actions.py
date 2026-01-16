@@ -45,11 +45,12 @@ def create_actions(main_window):
     actions["delete"].triggered.connect(main_window.delete_selected_items)
     
 
-    actions["mode_add"] = QAction("Add", main_window)
-    actions["mode_add"].setCheckable(True)
-    actions["mode_add"].toggled.connect(lambda: main_window.set_mode("add"))
-    actions["mode_add"].setIcon(QIcon("resources/icons/add-icon.png"))
-    main_window.mode_group.addAction(actions["mode_add"])
+    actions["open_palette"] = QAction("Add", main_window)
+    actions["open_palette"].setCheckable(True)
+    actions["open_palette"].setIcon(QIcon("resources/icons/add-icon.png"))
+    actions["open_palette"].toggled.connect(main_window.toggle_component_palette)
+    main_window.palette_dock.visibilityChanged.connect(actions["open_palette"].setChecked)
+
 
     actions["mode_select"] = QAction("Select", main_window)
     actions["mode_select"].setCheckable(True)

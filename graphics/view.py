@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import QGraphicsView, QGraphicsPathItem
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainterPath, QPen
 
-from graphics.items.nodes.component_item import ComponentItem
-from graphics.items.connections.connection_item import ConnectionItem
+from graphics.items.base.nodes.component_item import ComponentItem
+from graphics.items.base.connections.connection_item import ConnectionItem
 
 class GraphicsView(QGraphicsView):
 
@@ -62,7 +62,7 @@ class GraphicsView(QGraphicsView):
             self.zoom_out()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add":
+        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_component:
             scene_pos = self.mapToScene(event.pos())
             self.editor.add_component_at(scene_pos.x(), scene_pos.y())
             event.accept()

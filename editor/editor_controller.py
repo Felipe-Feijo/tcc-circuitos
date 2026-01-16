@@ -1,6 +1,6 @@
 from domain.graph_builder import GraphBuilder
-from graphics.items.nodes.component_item import ComponentItem
-from graphics.items.connections.connection_item import ConnectionItem
+from graphics.items.base.nodes.component_item import ComponentItem
+from graphics.items.base.connections.connection_item import ConnectionItem
 from domain.debug import print_graph
 
 

@@ -5,7 +5,7 @@ def create_toolbars(main_window, actions):
     toolbar = QToolBar("Tools", main_window)
     toolbar.setMovable(False)
 
-    toolbar.addAction(actions["mode_add"])
+    toolbar.addAction(actions["open_palette"])
     toolbar.addAction(actions["delete"])
     toolbar.addAction(actions["mode_select"])
     toolbar.addAction(actions["mode_connect"])

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Tuple
-from domain.components import Anchor
+from domain.nodes import Anchor
 
 
 class Connection:

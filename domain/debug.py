@@ -3,24 +3,23 @@ def debug_print_graph(self):
     from domain.debug import print_graph
 
     builder = GraphBuilder(self.scene)
-    components, connections = builder.build()
+    nodes, connections = builder.build()
 
-    print_graph(components, connections)
+    print_graph(nodes, connections)
 
-def print_graph(components, connections):
+def print_graph(nodes, connections):
     """
     Debug helper that prints a human-readable representation
     of the domain graph built from the editor.
     """
 
-    print("\n=== COMPONENTS ===")
+    print("\n=== NODES ===")
 
-    # Iterate over all domain components (dictionary values)
-    for component in components.values():
-        print(f"Component {component.id} ({component.type})")
-
-        # Iterate over all anchors belonging to this component
-        for anchor in component.anchors.values():
+    # Iterate over all domain nodes (dictionary values)
+    for node in nodes.values():
+        print(f"Node {node.id} ({node.type})")
+        # Iterate over all anchors belonging to this node
+        for anchor in node.anchors.values():
 
             # Collect all anchors connected to this anchor
             connected_anchors = []

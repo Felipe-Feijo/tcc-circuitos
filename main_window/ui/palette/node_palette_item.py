@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt
 
-class ComponentPaletteItem(QWidget):
+class NodePaletteItem(QWidget):
     def __init__(self, name: str, pixmap, parent=None):
         super().__init__(parent)
 

@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import QGraphicsView, QGraphicsPathItem
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainterPath, QPen
 
-from graphics.items.base.nodes.component_item import ComponentItem
 from graphics.items.base.connections.connection_item import ConnectionItem
+from graphics.items.base.nodes.node_item import NodeItem
 
 class GraphicsView(QGraphicsView):
 
@@ -62,9 +62,9 @@ class GraphicsView(QGraphicsView):
             self.zoom_out()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_component:
+        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_node:
             scene_pos = self.mapToScene(event.pos())
-            self.editor.add_component_at(scene_pos.x(), scene_pos.y())
+            self.editor.add_node_at(scene_pos.x(), scene_pos.y())
             event.accept()
             return
 
@@ -115,9 +115,8 @@ class GraphicsView(QGraphicsView):
             scene_pos = self.mapToScene(event.pos())
             item = self.scene().itemAt(scene_pos, self.transform())
 
-            if isinstance(item, ComponentItem):
+            if isinstance(item, NodeItem):
                 anchor = item.anchor_near_mouse(scene_pos)
-                print("anchor destino:", anchor)
                 if anchor and item is not self._conn_source_item:
                     self.create_connection(item, anchor)
 
@@ -130,7 +129,7 @@ class GraphicsView(QGraphicsView):
         scene_pos = self.mapToScene(event.pos())
         item = self.scene().itemAt(scene_pos, self.transform())
 
-        if isinstance(item, ComponentItem):
+        if isinstance(item, NodeItem):
             anchor = item.anchor_near_mouse(scene_pos)
             if anchor:
                 self._connecting = True

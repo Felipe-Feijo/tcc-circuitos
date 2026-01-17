@@ -1,5 +1,5 @@
 from domain.graph_builder import GraphBuilder
-from graphics.items.base.nodes.component_item import ComponentItem
+from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.connections.connection_item import ConnectionItem
 from domain.debug import print_graph
 
@@ -11,10 +11,10 @@ class EditorController:
     def build_graph(self):
         builder = GraphBuilder()
 
-        # 1. Componentes
+        # 1. Nodes
         for item in self.scene.items():
-            if isinstance(item, ComponentItem):
-                builder.add_component_from_item(item)
+            if isinstance(item, NodeItem):
+                builder.add_node_from_item(item)
 
         # 2. Conexões
         for item in self.scene.items():
@@ -25,4 +25,4 @@ class EditorController:
 
     def build_and_print_graph(self):
         builder = self.build_graph()
-        print_graph(builder.components, builder.connections)
+        print_graph(builder.nodes, builder.connections)

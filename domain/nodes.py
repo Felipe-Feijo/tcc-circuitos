@@ -16,10 +16,10 @@ class Anchor:
             self.connections.append(connection)
 
 
-class Component:
-    def __init__(self, component_id, comp_type):
-        self.id = component_id
-        self.type = comp_type
+class Node:
+    def __init__(self, node_id, node_type):
+        self.id = node_id
+        self.type = node_type
         self.anchors = {}
 
     def add_anchor(self, name):
@@ -29,8 +29,8 @@ class Component:
             return self.anchors[name]
 
     @classmethod
-    def from_component_item(cls, item):
-        comp = cls(item.id, item.component_type)
+    def from_node_item(cls, item):
+        node = cls(item.id, item.node_type)
         for a in item.anchors:
-            comp.add_anchor(a.name)
-        return comp
+            node.add_anchor(a.name)
+        return node

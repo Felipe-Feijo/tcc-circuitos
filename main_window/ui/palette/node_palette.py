@@ -2,10 +2,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QScrollArea, QGridLayout
 )
 from PyQt6.QtCore import Qt
-from graphics.ui.palette.component_palette_item import ComponentPaletteItem
+from main_window.ui.palette.node_palette_item import NodePaletteItem
 
 
-class ComponentPalette(QWidget):
+class NodePalette(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -13,7 +13,7 @@ class ComponentPalette(QWidget):
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(8)
 
-        title = QLabel("Componentes")
+        title = QLabel("Nodes")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title)
 
@@ -33,12 +33,11 @@ class ComponentPalette(QWidget):
         # contador de linhas/colunas
         self.num_columns = 2  # ajuste conforme quiser
 
-    def add_component(self, name: str, pixmap, callback):
+    def add_node(self, name: str, pixmap, callback):
         """
         Adiciona um item na grid e conecta clique.
         """
-        item = ComponentPaletteItem(name, pixmap)
-
+        item = NodePaletteItem(name, pixmap)
         # calcula posição na grid
         count = self.grid_layout.count()
         row = count // self.num_columns

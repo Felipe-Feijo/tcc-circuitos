@@ -76,7 +76,15 @@ class GraphicsView(QGraphicsView):
             return
         
         if (event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "connect"):
-            self.handle_connect_press(event)
+            if self._connecting:
+                target_anchor = self.editor.hover_anchor
+
+                if target_anchor and target_anchor.node is not self._conn_source_item:
+                    self.create_connection(target_anchor.node, target_anchor)
+
+                self.cleanup_temp_connection()
+            else:
+                self.handle_connect_press(event)
             return
 
         super().mousePressEvent(event)
@@ -94,10 +102,15 @@ class GraphicsView(QGraphicsView):
             )
             event.accept()
             return
-        if self.editor.mode == "connect" and self._connecting:
-            scene_pos = self.mapToScene(event.pos())
-            self._temp_connection.update_temp_endpoint(scene_pos)
-            return
+        if self.editor.mode == "connect":
+            if self.editor.hover_anchor:
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            else:
+                self.unsetCursor()
+            if self._connecting:
+                scene_pos = self.mapToScene(event.pos())
+                self._temp_connection.update_temp_endpoint(scene_pos)
+
         
         super().mouseMoveEvent(event)
 
@@ -110,32 +123,20 @@ class GraphicsView(QGraphicsView):
             if self.editor:
                 self.editor.update_scene_rect()
             return
-        
-        if self.editor.mode == "connect" and self._connecting:
-            scene_pos = self.mapToScene(event.pos())
-            item = self.scene().itemAt(scene_pos, self.transform())
-
-            if isinstance(item, NodeItem):
-                anchor = item.anchor_near_mouse(scene_pos)
-                if anchor and item is not self._conn_source_item:
-                    self.create_connection(item, anchor)
-
-            self.cleanup_temp_connection()
-            return
+    
 
         super().mouseReleaseEvent(event)
 
     def handle_connect_press(self, event):
-        scene_pos = self.mapToScene(event.pos())
-        item = self.scene().itemAt(scene_pos, self.transform())
+        anchor = self.editor.hover_anchor
+        if not anchor:
+            return
 
-        if isinstance(item, NodeItem):
-            anchor = item.anchor_near_mouse(scene_pos)
-            if anchor:
-                self._connecting = True
-                self._conn_source_item = item
-                self._conn_source_anchor = anchor
-                self.start_temp_connection(item, anchor)
+        self._connecting = True
+        self._conn_source_item = anchor.node
+        self._conn_source_anchor = anchor
+
+        self.start_temp_connection(anchor.node, anchor)
 
 
     def create_connection(self, target_item, target_anchor):
@@ -175,11 +176,18 @@ class GraphicsView(QGraphicsView):
 
         self.scene().addItem(self._temp_connection)
 
+        source_anchor.setBrush(Qt.GlobalColor.gray)
+        source_anchor.update()
+
 
     def cleanup_temp_connection(self):
         if self._temp_connection:
             self.scene().removeItem(self._temp_connection)
             self._temp_connection = None
+
+        if self._conn_source_anchor:
+            self._conn_source_anchor.setBrush(Qt.GlobalColor.transparent)
+            self._conn_source_anchor.update()
 
         self._connecting = False
         self._conn_source_item = None

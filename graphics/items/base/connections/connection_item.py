@@ -1,5 +1,5 @@
 # graphics/items/connection_item.py
-from PyQt6.QtWidgets import QGraphicsPathItem
+from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsItem
 from PyQt6.QtGui import QPainterPath, QPen
 from PyQt6.QtCore import Qt, QPointF
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -18,15 +18,16 @@ class ConnectionItem(QGraphicsPathItem, DiagramItemBase):
         self.temp_target_pos = None
 
         self.setPen(QPen(Qt.GlobalColor.red, 2))
-        self.setZValue(-1)
+        self.setZValue(-10)
+
 
         self.update_path()
 
     def update_path(self):
-        p1 = self.source.mapToScene(self.source_anchor.pos)
+        p1 = self.source_anchor.scenePos()
 
         if self.target:
-            p2 = self.target.mapToScene(self.target_anchor.pos)
+            p2 = self.target_anchor.scenePos()
         else:
             if self.temp_target_pos is None:
                 return

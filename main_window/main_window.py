@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         self.mode = None
         self.pending_node = None
         self.active_context_menu = None
+        self.hover_anchor = None
 
     def _init_editor(self):
         self.scene = QGraphicsScene()

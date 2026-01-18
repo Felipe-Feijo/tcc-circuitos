@@ -1,16 +1,18 @@
 
 from PyQt6.QtWidgets import QGraphicsItem
-from PyQt6.QtCore import Qt, QRectF, QPointF
+from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
 from PyQt6.QtGui import QPen, QPainter, QPixmap
 from graphics.items.base.diagram_item_base import DiagramItemBase
 
 
 class NodeItem(DiagramItemBase):
+    buttonCommand = pyqtSignal(str, str) #node_id, command
     def __init__(self):
         DiagramItemBase.__init__(self)
         self.anchors = []
         self.connections = []
         self.setAcceptHoverEvents(True)
+
 
         self.pixmap: QPixmap | None = None
         self.draw_selection = True
@@ -22,12 +24,12 @@ class NodeItem(DiagramItemBase):
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             for conn in self.connections:
-                conn.update_path()
+                conn.update()
         return super().itemChange(change, value)
     
     def update_connections(self):
         for conn in self.connections:
-            conn.update_path()
+            conn.update()
 
     def prepare_delete(self):
         print(f"Deleting NodeItem at {self.pos()}")
@@ -65,8 +67,4 @@ class NodeItem(DiagramItemBase):
             painter.drawPixmap(pos, scaled)
 
         # feedback de seleção
-        if self.draw_selection and self.isSelected():
-            pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(0, 0, self.width, self.height)
+        self.paint_selection_feedback(painter)

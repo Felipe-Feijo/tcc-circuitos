@@ -1,5 +1,7 @@
 from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem, QDockWidget, QToolBar
 from PyQt6.QtCore import Qt
+from simulation.debug import SimulationController
+from simulation.simulation_engine import SimulationEngine
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -70,6 +72,8 @@ class MainWindow(QMainWindow):
         self.palette_dock.hide()
         self.actions["open_palette"].setChecked(False)
 
+        self.view.cleanup_temp_connection()
+
     def new_scene(self):
         self.scene.clear()
         self.update_scene_rect()
@@ -95,6 +99,11 @@ class MainWindow(QMainWindow):
                     QGraphicsItem.GraphicsItemFlag.ItemIsMovable,
                     is_select_mode
                 )
+
+        if mode == "simulate":
+            self.start_simulation()
+        else:
+            self.stop_simulation()
 
     def zoom_in(self):
         self.view.zoom_in()
@@ -172,3 +181,25 @@ class MainWindow(QMainWindow):
 
     def toggle_node_palette(self, checked):
         self.palette_dock.setVisible(checked)
+
+    def start_simulation(self):
+        editor = EditorController(self.scene)
+        builder = editor.build_graph()
+
+        self.sim_engine = SimulationEngine(
+            nodes=builder.nodes,
+            connections=builder.connections
+        )
+
+        self.sim_controller = SimulationController(self.sim_engine)
+
+        # 🔴 AQUI é onde os sinais são conectados
+        for item in self.scene.items():
+            if isinstance(item, NodeItem):
+                item.buttonCommand.connect(self.sim_controller.command)
+
+        print("Simulation started")
+
+    def stop_simulation(self):
+        self.sim_engine = None
+        self.sim_controller = None

@@ -111,7 +111,7 @@ class GraphicsView(QGraphicsView):
                 scene_pos = self.mapToScene(event.pos())
                 self._temp_connection.update_temp_endpoint(scene_pos)
 
-        
+
         super().mouseMoveEvent(event)
 
 
@@ -171,7 +171,7 @@ class GraphicsView(QGraphicsView):
         self._temp_connection = ConnectionItem(source_item, source_anchor)
 
         pen = QPen(Qt.GlobalColor.darkGray, 2, Qt.PenStyle.DashLine)
-        self._temp_connection.setPen(pen)
+        self._temp_connection.pen = pen
         self._temp_connection.setZValue(-1)
 
         self.scene().addItem(self._temp_connection)

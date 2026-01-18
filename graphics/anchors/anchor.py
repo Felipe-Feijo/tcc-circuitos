@@ -27,7 +27,9 @@ class AnchorItem(QGraphicsEllipseItem):
 
     def hoverEnterEvent(self, event):
 
-        if self.node.editor and self.node.editor.mode == "connect":
+        is_source_anchor = (self.node.editor.view._connecting and self.node.editor.view._conn_source_anchor is self)
+        
+        if self.node.editor and self.node.editor.mode == "connect" and not is_source_anchor:
             self.setBrush(Qt.GlobalColor.red)
             self.node.editor.hover_anchor = self
 

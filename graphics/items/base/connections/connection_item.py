@@ -1,13 +1,12 @@
 # graphics/items/connection_item.py
-from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsItem
-from PyQt6.QtGui import QPainterPath, QPen
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtWidgets import QGraphicsItem
+from PyQt6.QtGui import QPainterPath, QPen, QPainter, QPainterPathStroker
+from PyQt6.QtCore import Qt, QPointF, QRectF
 from graphics.items.base.diagram_item_base import DiagramItemBase
 
 
-class ConnectionItem(QGraphicsPathItem, DiagramItemBase):
+class ConnectionItem(DiagramItemBase):
     def __init__(self, source_node, source_anchor, target_node=None, target_anchor=None):
-        QGraphicsPathItem.__init__(self)
         DiagramItemBase.__init__(self)
 
         self.source = source_node
@@ -17,58 +16,113 @@ class ConnectionItem(QGraphicsPathItem, DiagramItemBase):
 
         self.temp_target_pos = None
 
-        self.setPen(QPen(Qt.GlobalColor.red, 2))
+        # Pens para normal e selecionado
+        self.pen = QPen(Qt.GlobalColor.red, 2)
+        
         self.setZValue(-10)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.update()
+
+    def shape(self) -> QPainterPath:
+        """Define a área clicável/selecionável seguindo o caminho da linha"""
+        path = QPainterPath()
+        points = self.get_path_points()
+        
+        if len(points) < 2:
+            return path
+        
+        # Cria um "stroke" ao redor da linha para facilitar seleção
+        line_path = QPainterPath()
+        line_path.moveTo(points[0])
+        for point in points[1:]:
+            line_path.lineTo(point)
+        
+        # Cria uma área de 8px ao redor da linha (facilita clique/seleção)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(8)
+        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        
+        return stroker.createStroke(line_path)
+    
+
+    def boundingRect(self) -> QRectF:
+        """Bounding box que segue o formato da linha com margem mínima"""
+        points = self.get_path_points()
+        if len(points) < 2:
+            return QRectF()
+
+        # Margem para seleção e pen width
+        margin = 10
+
+        # Calcula bounds de forma eficiente
+        min_x = min(p.x() for p in points)
+        max_x = max(p.x() for p in points)
+        min_y = min(p.y() for p in points)
+        max_y = max(p.y() for p in points)
+        
+        return QRectF(
+            min_x - margin,
+            min_y - margin,
+            max_x - min_x + 2 * margin,
+            max_y - min_y + 2 * margin
+        )
+
+    
+    def paint(self, painter: QPainter, option, widget=None):
+        points = self.get_path_points()
+        if len(points) < 2:
+            return
+
+        # Usa pen azul se selecionado, vermelho se não
+        pen = QPen(Qt.GlobalColor.blue, 2) if self.isSelected() else self.pen
+        painter.setPen(pen)
+        
+        for start, end in zip(points, points[1:]):
+            painter.drawLine(start, end)
 
 
-        self.update_path()
+    def get_path_points(self) -> list[QPointF]:
+        if not self.source_anchor:
+            return []
 
-    def update_path(self):
-        p1 = self.source_anchor.scenePos()
-
-        if self.target:
-            p2 = self.target_anchor.scenePos()
+        p1 = self.mapFromScene(self.source_anchor.scenePos())
+        if self.target_anchor:
+            p2 = self.mapFromScene(self.target_anchor.scenePos())
+        elif self.temp_target_pos:
+            p2 = self.mapFromScene(self.temp_target_pos)
         else:
-            if self.temp_target_pos is None:
-                return
-            p2 = self.temp_target_pos  # posição do mouse
+            return [p1]
 
-        dx = abs(p2.x() - p1.x())
-        dy = abs(p2.y() - p1.y())
-
-        if dx > dy:
-            mid = QPointF(p2.x(), p1.y())
-        else:
-            mid = QPointF(p1.x(), p2.y())
-
-        path = QPainterPath(p1)
-        path.lineTo(mid)
-        path.lineTo(p2)
-
-        self.setPath(path)
+        mid_y = (p1.y() + p2.y()) / 2
+        return [p1, QPointF(p1.x(), mid_y), QPointF(p2.x(), mid_y), p2]
 
     def update_temp_endpoint(self, scene_pos):
+        """Atualiza endpoint temporário garantindo atualização correta da área"""
+        self.prepareGeometryChange()
         self.temp_target_pos = scene_pos
-        self.update_path()
+        self.update()
+
+    def update_position(self):
+        """Chamado quando nós conectados se movem"""
+        self.prepareGeometryChange()
+        self.update()
+
+    def itemChange(self, change, value):
+        """Detecta mudanças e força atualização adequada"""
+        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
+            # Quando seleção muda, apenas repinta com a cor correta
+            self.update()
+        
+        return super().itemChange(change, value)
 
     def prepare_delete(self):
-        """Remove referências nos nós antes de apagar da cena, com feedback."""
-        src_pos = self.source.pos() if self.source else "None"
-        tgt_pos = self.target.pos() if self.target else "None"
-        
-        print(f"Deleting Connection: {src_pos} -> {tgt_pos}")
-
-        # Remove referência no source
+        """Remove referências nos nós antes de apagar da cena"""
         if self.source and self in self.source.connections:
             self.source.connections.remove(self)
-            print(f" - Removed from source node at {src_pos}")
 
-        # Remove referência no target
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
-            print(f" - Removed from target node at {tgt_pos}")
 
-        # Desconecta anchors
         self.source_anchor = None
         self.target_anchor = None
-        print(f" - Anchors disconnected\n")

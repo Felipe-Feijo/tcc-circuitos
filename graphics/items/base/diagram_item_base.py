@@ -1,9 +1,13 @@
-from PyQt6.QtWidgets import QGraphicsItem, QMenu
+from PyQt6.QtWidgets import QGraphicsItem, QMenu, QGraphicsObject
+from PyQt6.QtGui import QPen
+from PyQt6.QtCore import Qt
 
-class DiagramItemBase(QGraphicsItem):
+
+class DiagramItemBase(QGraphicsObject):
     def __init__(self):
         super().__init__()
         self.editor = None
+        self.draw_selection = True
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
@@ -39,3 +43,13 @@ class DiagramItemBase(QGraphicsItem):
 
     def extend_context_menu(self, menu: QMenu):
         pass
+
+    def paint_selection_feedback(self, painter):
+        """Desenhar destaque de seleção genérico."""
+        if self.draw_selection and self.isSelected():
+            pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            # Bounding rect ou retângulo custom
+            rect = self.boundingRect()
+            painter.drawRect(rect)

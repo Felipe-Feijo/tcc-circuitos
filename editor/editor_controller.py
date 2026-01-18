@@ -1,7 +1,7 @@
-from domain.graph_builder import GraphBuilder
+from simulation.graph_builder import GraphBuilder
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.connections.connection_item import ConnectionItem
-from domain.debug import print_graph
+from simulation.debug import print_graph
 
 
 class EditorController:

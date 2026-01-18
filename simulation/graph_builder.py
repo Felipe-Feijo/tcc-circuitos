@@ -1,8 +1,14 @@
 # domain/graph_builder.py
 
-from domain.nodes import Node
-from domain.connections import Connection
+from simulation.nodes.nodes import Valve3_2, PressureSource, Exhaust, Piston
+from simulation.connections import Connection
 
+NODE_FACTORY = {
+    "valve_3_2_ways": Valve3_2,
+    "pressure_source": PressureSource,
+    "exhaust": Exhaust,
+    "piston": Piston,
+}
 
 class GraphBuilder:
     def __init__(self):
@@ -10,19 +16,8 @@ class GraphBuilder:
         self.connections = []
 
     def add_node_from_item(self, node_item):
-        """
-        Create a domain Node from a graphical NodeItem.
-        """
-
-        # Create the domain-level node
-        node = Node(
-            node_id=node_item.id,
-            node_type=node_item.node_type,
-        )
-
-        # Create domain anchors based on the graphical anchors
-        for anchor_item in node_item.anchors:
-            node.add_anchor(anchor_item.name)
+        node_cls = NODE_FACTORY[node_item.node_type]
+        node = node_cls(node_item.id)
 
         self.nodes[node.id] = node
         return node

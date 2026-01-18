@@ -18,6 +18,6 @@ def create_toolbars(main_window, actions):
 
     toolbar.addSeparator()
 
-    toolbar.addAction(actions["print_graph"])
+    toolbar.addAction(actions["mode_simulate"])
 
     main_window.addToolBar(toolbar)

@@ -1,6 +1,9 @@
+from simulation.simulation_engine import SimulationEngine
+
+
 def debug_print_graph(self):
-    from domain.graph_builder import GraphBuilder
-    from domain.debug import print_graph
+    from simulation.graph_builder import GraphBuilder
+    from simulation.debug import print_graph
 
     builder = GraphBuilder(self.scene)
     nodes, connections = builder.build()
@@ -38,3 +41,16 @@ def print_graph(nodes, connections):
     # Print all connections explicitly
     for connection in connections:
         print(f"{connection.anchor_a.id} <--> {connection.anchor_b.id}")
+
+class SimulationController:
+    def __init__(self, engine: SimulationEngine):
+        self.engine = engine
+
+    def command(self, node_id: str, cmd: str):
+        node = self.engine.nodes.get(node_id)
+        if not node:
+            print(f"Node {node_id} not found")
+            return
+
+        node.handle_command(cmd)
+        self.engine.run_until_stable()

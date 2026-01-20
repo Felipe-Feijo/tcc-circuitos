@@ -1,3 +1,4 @@
+from simulation.nodes.nodes import Piston
 from simulation.simulation_engine import SimulationEngine
 
 
@@ -45,6 +46,7 @@ def print_graph(nodes, connections):
 class SimulationController:
     def __init__(self, engine: SimulationEngine):
         self.engine = engine
+        self.on_update_node = None  # dict[NodeItem, DomainNode]
 
     def command(self, node_id: str, cmd: str):
         node = self.engine.nodes.get(node_id)
@@ -53,4 +55,19 @@ class SimulationController:
             return
 
         node.handle_command(cmd)
+        self.step()
+
+    def step(self):
+        print("starting simulation step")
+        # 1. Resolve o sistema até convergir
         self.engine.run_until_stable()
+
+        # 2. Publica o estado para a UI
+        if not self.on_update_node:
+            return
+
+        for node_item, domain_node in self.on_update_node.items():
+            # pistão
+            if domain_node.type == "piston":
+                node_item.set_extended(domain_node.position == 1)
+        print("step complete")

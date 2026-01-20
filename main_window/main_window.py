@@ -192,11 +192,18 @@ class MainWindow(QMainWindow):
         )
 
         self.sim_controller = SimulationController(self.sim_engine)
-
+        self.node_map = {}
         # 🔴 AQUI é onde os sinais são conectados
         for item in self.scene.items():
             if isinstance(item, NodeItem):
+                item.simulation_mode = True
                 item.buttonCommand.connect(self.sim_controller.command)
+
+                domain_node = builder.nodes[item.id]
+                self.node_map[item] = domain_node
+
+        self.sim_controller.on_update_node = self.node_map
+        self.sim_controller.step()
 
         print("Simulation started")
 

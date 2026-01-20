@@ -1,6 +1,6 @@
 
 from PyQt6.QtWidgets import QGraphicsItem
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
+from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty, QPropertyAnimation
 from PyQt6.QtGui import QPen, QPainter, QPixmap
 from graphics.items.base.diagram_item_base import DiagramItemBase
 
@@ -14,8 +14,11 @@ class NodeItem(DiagramItemBase):
         self.setAcceptHoverEvents(True)
 
 
+        self.simulation_mode = False
+
         self.pixmap: QPixmap | None = None
         self.draw_selection = True
+        self._visual_offset = QPointF(0, 0)
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -50,6 +53,10 @@ class NodeItem(DiagramItemBase):
         return QRectF(0, 0, self.width, self.height)
 
     def paint(self, painter: QPainter, option, widget=None):
+        painter.save()  # salva estado atual do painter
+
+        # aplica deslocamento visual (somente para feedback, não afeta anchors)
+        painter.translate(self._visual_offset)
 
         # ícone (se existir)
         if self.pixmap and not self.pixmap.isNull():
@@ -66,5 +73,16 @@ class NodeItem(DiagramItemBase):
             )
             painter.drawPixmap(pos, scaled)
 
-        # feedback de seleção
+        # feedback de seleção (bordas, highlight, etc.)
         self.paint_selection_feedback(painter)
+
+        painter.restore()  # restaura estado original, remove o translate
+
+    def getVisualOffset(self):
+        return self._visual_offset
+
+    def setVisualOffset(self, value):
+        self._visual_offset = value
+        self.update()  # força redraw
+
+    visual_offset = pyqtProperty(QPointF, fget=getVisualOffset, fset=setVisualOffset)  

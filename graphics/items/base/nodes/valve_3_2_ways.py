@@ -9,6 +9,7 @@ from ....anchors.anchor import AnchorItem
 
 
 class Valve_3_2_Ways(NodeItem):
+    
     def __init__(self, icon_path="resources/nodes/valve_3_2_ways/valve_3_2_ways.png"):
         super().__init__()
 
@@ -16,9 +17,11 @@ class Valve_3_2_Ways(NodeItem):
 
         self.node_type = "valve_3_2_ways"
 
-        if icon_path and os.path.isfile(icon_path):
-            self.pixmap = QPixmap(icon_path)
-    
+        self.icon_idle = QPixmap("resources/nodes/valve_3_2_ways/valve_3_2_ways.png")
+        self.icon_pressed = QPixmap("resources/nodes/valve_3_2_ways/valve_3_2_ways_pressed.png")
+
+        self.pixmap = self.icon_idle
+
         self.width = self.pixmap.width()
         self.height = self.pixmap.height()
 
@@ -35,6 +38,16 @@ class Valve_3_2_Ways(NodeItem):
             self.width * 0.20,    # w
             self.height * 0.47     # h
         )
+        
+
+    def boundingRect(self) -> QRectF:
+        margin = 25  # ajuste conforme o deslocamento máximo do visual_offset
+        return QRectF(
+            0,
+            0,
+            self.width + margin * 2,
+            self.height
+        )
 
     def mousePressEvent(self, event):
         if self.button_rect.contains(event.pos()):
@@ -45,19 +58,23 @@ class Valve_3_2_Ways(NodeItem):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self.button_rect.contains(event.pos()):
-            self.on_button_released()
-            event.accept()
-            return
-
-        super().mouseReleaseEvent(event)
+        self.on_button_released()
+        event.accept()
 
     def on_button_pressed(self):
-        self.buttonCommand.emit(self.id, "press")
+        if self.simulation_mode:
+            self.pixmap = self.icon_pressed
+            self.visual_offset = QPointF(96, 0)  # empurra levemente pro lado
+            self.buttonCommand.emit(self.id, "press")
 
     def on_button_released(self):
-        self.buttonCommand.emit(self.id, "release")
+        if self.simulation_mode:
+            self.pixmap = self.icon_idle
+            self.visual_offset = QPointF(0, 0)
+            self.buttonCommand.emit(self.id, "release")
 
+
+    
 
 
     

@@ -13,17 +13,20 @@ class Piston(NodeItem):
         super().__init__()
 
         self.id = str(uuid.uuid4())
-
         self.node_type = "piston"
-        
 
-        if icon_path and os.path.isfile(icon_path):
-            self.pixmap = QPixmap(icon_path)
+        self.icon_retracted = QPixmap("resources/nodes/piston/piston.png")
+        self.icon_extended = QPixmap("resources/nodes/piston/piston_extended.png")
+
+        self.pixmap = self.icon_retracted
 
         self.width = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        # Anchors do node
         self.anchors = [
-            AnchorItem("A", QPointF(self.width*0.0932, self.height), node=self),
+            AnchorItem("A", QPointF(self.width * 0.0621, self.height), node=self),
         ]
+
+    def set_extended(self, extended: bool):
+        self.pixmap = self.icon_extended if extended else self.icon_retracted
+        self.update()

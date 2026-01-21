@@ -1,5 +1,4 @@
 import os
-import uuid
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 
@@ -12,8 +11,6 @@ class Exhaust(NodeItem):
     def __init__(self, icon_path="resources/nodes/exhaust/exhaust.png"):
         super().__init__()
 
-        self.id = str(uuid.uuid4())
-
         self.node_type = "exhaust"
 
         if icon_path and os.path.isfile(icon_path):
@@ -23,8 +20,6 @@ class Exhaust(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.anchors = [
-            AnchorItem("R", QPointF(self.width*0.5, 0), node=self),
-        ]
+        self.add_anchor(AnchorItem("R", QPointF(self.width*0.5, 0), node=self))
 
 

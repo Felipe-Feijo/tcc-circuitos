@@ -1,4 +1,6 @@
-from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem, QDockWidget, QToolBar
+from pathlib import Path
+from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem, QFileDialog
+from persistence.serializer import save_to_file, load_from_file
 from PyQt6.QtCore import Qt
 from simulation.debug import SimulationController
 from simulation.simulation_engine import SimulationEngine
@@ -25,6 +27,7 @@ class MainWindow(QMainWindow):
         self._init_node_palette()
         self._init_actions_ui()
 
+        self.current_file: str | None = None
         
 
     def _init_state(self):
@@ -73,9 +76,14 @@ class MainWindow(QMainWindow):
         self.actions["open_palette"].setChecked(False)
 
         self.view.cleanup_temp_connection()
+        self.view.cleanup_node_preview()
+
+        self.view.unsetCursor()
 
     def new_scene(self):
         self.scene.clear()
+        self.current_file = None
+        self.setWindowTitle("Simulador – Editor Gráfico")
         self.update_scene_rect()
 
 
@@ -141,6 +149,7 @@ class MainWindow(QMainWindow):
 
         self.scene.addItem(item)
         self.update_scene_rect()
+        self.set_mode(None)
 
     def update_scene_rect(self):
         view = self.view
@@ -210,3 +219,64 @@ class MainWindow(QMainWindow):
     def stop_simulation(self):
         self.sim_engine = None
         self.sim_controller = None
+
+    def save_scene(self):
+        if not self.current_file:
+            return self.save_scene_as()
+
+        try:
+            save_to_file(self.scene, self.current_file)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Erro ao salvar",
+                str(e)
+            )
+
+    def save_scene_as(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvar cena",
+            "",
+            "Scene Files (*.json)"
+        )
+
+        if not path:
+            return
+
+        if not path.endswith(".json"):
+            path += ".json"
+
+        try:
+            save_to_file(self.scene, path)
+            self.current_file = path
+            self.setWindowTitle(f"Simulador – {Path(path).name}")
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Erro ao salvar",
+                str(e)
+            )
+
+    def open_scene(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir cena",
+            "",
+            "Scene Files (*.json)"
+        )
+
+        if not path:
+            return
+
+        try:
+            load_from_file(self.scene, path, self)
+            self.current_file = path
+            self.update_scene_rect()
+            self.setWindowTitle(f"Simulador – {Path(path).name}")
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Erro ao abrir",
+                str(e)
+            )

@@ -1,5 +1,4 @@
 import os
-import uuid
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
 
@@ -13,7 +12,6 @@ class Valve_3_2_Ways(NodeItem):
     def __init__(self, icon_path="resources/nodes/valve_3_2_ways/valve_3_2_ways.png"):
         super().__init__()
 
-        self.id = str(uuid.uuid4())
 
         self.node_type = "valve_3_2_ways"
 
@@ -26,12 +24,10 @@ class Valve_3_2_Ways(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.anchors = [
-            AnchorItem("A", QPointF(self.width*0.66, 0), node=self),
-            AnchorItem("R", QPointF(self.width*0.5411, self.height), node=self),
-            AnchorItem("P", QPointF(self.width*0.66, self.height), node=self),
-        ]
-
+        self.add_anchor(AnchorItem("A", QPointF(self.width*0.66, 0), node=self))
+        self.add_anchor(AnchorItem("R", QPointF(self.width*0.5411, self.height), node=self))
+        self.add_anchor(AnchorItem("P", QPointF(self.width*0.66, self.height), node=self))
+        
         self.button_rect = QRectF(
             0,                    # x
             self.height * 0.48,   # y

@@ -1,15 +1,26 @@
 
+import uuid
 from PyQt6.QtWidgets import QGraphicsItem
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty, QPropertyAnimation
+from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPen, QPainter, QPixmap
+from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
 
 
 class NodeItem(DiagramItemBase):
+    registry = {}
     buttonCommand = pyqtSignal(str, str) #node_id, command
+
+    def __init_subclass__(cls):
+            super().__init_subclass__()
+            NodeItem.registry[cls.__name__] = cls
+
     def __init__(self):
         DiagramItemBase.__init__(self)
-        self.anchors = []
+
+        self.id = str(uuid.uuid4())
+        
+        self.anchors = {}
         self.connections = []
         self.setAcceptHoverEvents(True)
 
@@ -23,6 +34,9 @@ class NodeItem(DiagramItemBase):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
 
+
+    def add_anchor(self, anchor: AnchorItem):
+        self.anchors[anchor.name] = anchor
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -86,3 +100,33 @@ class NodeItem(DiagramItemBase):
         self.update()  # força redraw
 
     visual_offset = pyqtProperty(QPointF, fget=getVisualOffset, fset=setVisualOffset)  
+
+    def apply_preview_constraints(self):
+        self.setOpacity(0.5)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.__class__.__name__,
+            "position": {
+                "x": self.pos().x(),
+                "y": self.pos().y()
+            },
+            "properties": getattr(self, "properties", {})
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict):
+        node_cls = cls.registry[data["type"]]
+        node = node_cls()
+
+        node.id = data["id"]
+
+        pos = data["position"]
+        node.setPos(float(pos["x"]), float(pos["y"]))
+
+        node.properties = data.get("properties", {})
+        return node

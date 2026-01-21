@@ -1,5 +1,4 @@
 import os
-import uuid
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 
@@ -12,8 +11,6 @@ class PressureSource(NodeItem):
     def __init__(self, icon_path="resources/nodes/pressure_source/pressure_source.png"):
         super().__init__()
 
-        self.id = str(uuid.uuid4())
-
         self.node_type = "pressure_source"
         
 
@@ -24,6 +21,4 @@ class PressureSource(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.anchors = [
-            AnchorItem("P", QPointF(self.width*0.467, 0), node=self),
-        ]
+        self.add_anchor(AnchorItem("P", QPointF(self.width*0.467, 0), node=self))

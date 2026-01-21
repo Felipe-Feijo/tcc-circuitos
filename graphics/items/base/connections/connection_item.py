@@ -126,3 +126,29 @@ class ConnectionItem(DiagramItemBase):
 
         self.source_anchor = None
         self.target_anchor = None
+
+    def to_dict(self):
+        return {
+            "source": {
+                "node": self.source.id,
+                "anchor": self.source_anchor.name
+            },
+            "target": {
+                "node": self.target.id,
+                "anchor": self.target_anchor.name
+            }
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict, node_index: dict):
+        source_data = data["source"]
+        target_data = data["target"]
+
+        source_node = node_index[source_data["node"]]
+        target_node = node_index[target_data["node"]]
+
+        source_anchor = source_node.anchors[source_data["anchor"]]
+        target_anchor = target_node.anchors[target_data["anchor"]]
+
+        conn = cls(source_node, source_anchor, target_node, target_anchor)
+        return conn

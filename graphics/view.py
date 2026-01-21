@@ -1,7 +1,7 @@
 # graphics/view.py
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsPathItem
+from PyQt6.QtWidgets import QGraphicsView
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainterPath, QPen
+from PyQt6.QtGui import QPen
 
 from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
@@ -22,6 +22,8 @@ class GraphicsView(QGraphicsView):
         self._conn_source_item = None
         self._conn_source_anchor = None
         self._temp_connection = None
+
+        self._preview_node = None
 
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
 
@@ -64,6 +66,7 @@ class GraphicsView(QGraphicsView):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_node:
             scene_pos = self.mapToScene(event.pos())
+            self.cleanup_node_preview()
             self.editor.add_node_at(scene_pos.x(), scene_pos.y())
             event.accept()
             return
@@ -102,6 +105,7 @@ class GraphicsView(QGraphicsView):
             )
             event.accept()
             return
+        
         if self.editor.mode == "connect":
             if self.editor.hover_anchor:
                 self.setCursor(Qt.CursorShape.CrossCursor)
@@ -110,6 +114,23 @@ class GraphicsView(QGraphicsView):
             if self._connecting:
                 scene_pos = self.mapToScene(event.pos())
                 self._temp_connection.update_temp_endpoint(scene_pos)
+
+        if self.editor.mode == "add" and self.editor.pending_node:
+            scene_pos = self.mapToScene(event.pos())
+
+            if not self._preview_node:
+                self.start_node_preview()
+
+            w = self._preview_node.boundingRect().width()
+            h = self._preview_node.boundingRect().height()
+
+            self._preview_node.setPos(
+                scene_pos.x() - w / 2,
+                scene_pos.y() - h / 2
+            )
+
+            event.accept()
+            return
 
 
         super().mouseMoveEvent(event)
@@ -192,3 +213,21 @@ class GraphicsView(QGraphicsView):
         self._connecting = False
         self._conn_source_item = None
         self._conn_source_anchor = None
+
+    def start_node_preview(self):
+        if self._preview_node:
+            return
+
+        if not self.editor.pending_node:
+            return
+
+        item = self.editor.pending_node()
+        item.apply_preview_constraints()
+
+        self._preview_node = item
+        self.scene().addItem(item)
+
+    def cleanup_node_preview(self):
+        if self._preview_node:
+            self.scene().removeItem(self._preview_node)
+            self._preview_node = None

@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QGraphicsEllipseItem
-from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPen, QBrush
+from PyQt6.QtCore import Qt, QPointF, QRectF
+from PyQt6.QtGui import QPen, QPainterPath
 
 class AnchorItem(QGraphicsEllipseItem):
     def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None,):
@@ -9,7 +9,7 @@ class AnchorItem(QGraphicsEllipseItem):
         self.name = name
         self.id = name
         self.node = node
-        self.radius = radius
+        self.hit_radius = radius * 4
 
         self.setPos(pos)
 
@@ -24,6 +24,16 @@ class AnchorItem(QGraphicsEllipseItem):
         self.setZValue(100)
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def shape(self) -> QPainterPath:
+        path = QPainterPath()
+        r = self.hit_radius
+        path.addEllipse(-r, -r, 2 * r, 2 * r)
+        return path
+    
+    def boundingRect(self):
+        r = self.hit_radius
+        return QRectF(-r, -r, 2 * r, 2 * r)
 
     def hoverEnterEvent(self, event):
 

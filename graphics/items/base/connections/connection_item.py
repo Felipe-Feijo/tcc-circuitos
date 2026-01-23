@@ -9,6 +9,13 @@ class ConnectionItem(DiagramItemBase):
     def __init__(self, source_node, source_anchor, target_node=None, target_anchor=None):
         DiagramItemBase.__init__(self)
 
+        self.pressurized = False
+
+        self.id = frozenset([
+            source_anchor.id,
+            target_anchor.id if target_anchor else None
+        ])
+
         self.source = source_node
         self.source_anchor = source_anchor
         self.target = target_node
@@ -74,8 +81,13 @@ class ConnectionItem(DiagramItemBase):
         if len(points) < 2:
             return
 
-        # Usa pen azul se selecionado, vermelho se não
-        pen = QPen(Qt.GlobalColor.blue, 2) if self.isSelected() else self.pen
+        if self.isSelected():
+            pen = QPen(Qt.GlobalColor.blue, 2)
+        elif self.pressurized:
+            pen = QPen(Qt.GlobalColor.green, 2)
+        else:
+            pen = self.pen
+
         painter.setPen(pen)
         
         for start, end in zip(points, points[1:]):
@@ -152,3 +164,9 @@ class ConnectionItem(DiagramItemBase):
 
         conn = cls(source_node, source_anchor, target_node, target_anchor)
         return conn
+    
+
+    def set_pressurized(self, value: bool):
+        if self.pressurized != value:
+            self.pressurized = value
+            self.update()

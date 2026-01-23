@@ -27,3 +27,9 @@ class Connection:
             return self.anchor_a
         else:
             raise ValueError(f"Anchor {anchor.id} not in connection {self.id}")
+        
+    def is_pressurized(self) -> bool:
+        return (
+            self.anchor_a.pressurized
+            and self.anchor_b.pressurized
+        )

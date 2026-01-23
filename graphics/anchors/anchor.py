@@ -7,7 +7,7 @@ class AnchorItem(QGraphicsEllipseItem):
         super().__init__(-radius, -radius, 2 * radius, 2 * radius, node)
 
         self.name = name
-        self.id = name
+        self.id = (node.id, name)
         self.node = node
         self.hit_radius = radius * 4
 

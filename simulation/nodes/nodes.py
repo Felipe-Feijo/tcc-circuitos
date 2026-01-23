@@ -79,10 +79,8 @@ class Valve3_2(Node):
     def handle_command(self, command: str):
         if command == "press":
             self.button_pressed = True
-            print(f"Valve {self.id} button pressed")
         elif command == "release":
             self.button_pressed = False
-            print(f"Valve {self.id} button released")
 
     # -------------------------
     # Interface de controle
@@ -157,10 +155,5 @@ class Piston(Node):
         self.position = 0
 
     def update(self):
-        old = self.position
         self.position = 1 if self.anchors["A"].pressurized else 0
         
-        print(
-                f"Piston {self.id} -> "
-                f"{'ADVANCED' if self.position else 'RETRACTED'}"
-            )

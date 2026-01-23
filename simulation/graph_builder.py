@@ -13,13 +13,16 @@ NODE_FACTORY = {
 class GraphBuilder:
     def __init__(self):
         self.nodes = {}
-        self.connections = []
+        self.connections = {}
+        self.node_map = {}        # NodeItem -> DomainNode
+        self.connection_map = {}  # ConnectionItem -> DomainConnection
 
     def add_node_from_item(self, node_item):
         node_cls = NODE_FACTORY[node_item.node_type]
         node = node_cls(node_item.id)
 
         self.nodes[node.id] = node
+        self.node_map[node_item] = node
         return node
     
     def add_connection_from_item(self, connection_item):
@@ -38,8 +41,12 @@ class GraphBuilder:
         # Domain anchors corresponding to the graphical anchors
         source_anchor = source_node.get_anchor(source_anchor_item.name)
         target_anchor = target_node.get_anchor(target_anchor_item.name)
+
         # Create the domain connection (non-directional)
         connection = Connection(source_anchor, target_anchor)
-        self.connections.append(connection)
 
-        return connection
+        if connection.id not in self.connections:
+            self.connections[connection.id] = connection
+            self.connection_map[connection_item] = connection
+
+        return self.connections[connection.id]

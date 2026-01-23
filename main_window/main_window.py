@@ -2,8 +2,6 @@ from pathlib import Path
 from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem, QFileDialog
 from persistence.serializer import save_to_file, load_from_file
 from PyQt6.QtCore import Qt
-from simulation.debug import SimulationController
-from simulation.simulation_engine import SimulationEngine
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -11,6 +9,8 @@ from main_window.ui.docks.node_palette_dock import create_node_palette
 from graphics.items.base.nodes.node_item import NodeItem
 
 from graphics.view import GraphicsView
+from simulation.simulation_session import SimulationSession
+from persistence.file_session import SceneFileSession
 
 from .actions import create_actions
 from .ui.menus import create_menus
@@ -22,12 +22,18 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Simulador – Editor Gráfico")
 
+        self.current_file: str | None = None
+
         self._init_state()
         self._init_editor()
+
+        self.simulation = SimulationSession(self.scene)
+        self.file_session = SceneFileSession(self.scene, self)
+
         self._init_node_palette()
         self._init_actions_ui()
 
-        self.current_file: str | None = None
+
         
 
     def _init_state(self):
@@ -181,102 +187,31 @@ class MainWindow(QMainWindow):
         )
 
     def delete_selected_items(self):
+        # UI concern
         if self.active_context_menu:
             self.active_context_menu.close()
             self.active_context_menu = None
 
-        self.delete_manager.delete_items(self.scene.selectedItems())
-        self.update_scene_rect()
+        # domain/editor concern
+        deleted = self.delete_manager.delete_selection()
+
+        if deleted:
+            self.update_scene_rect()
 
     def toggle_node_palette(self, checked):
         self.palette_dock.setVisible(checked)
 
     def start_simulation(self):
-        editor = EditorController(self.scene)
-        builder = editor.build_graph()
-
-        self.sim_engine = SimulationEngine(
-            nodes=builder.nodes,
-            connections=builder.connections
-        )
-
-        self.sim_controller = SimulationController(self.sim_engine)
-        self.node_map = {}
-        # 🔴 AQUI é onde os sinais são conectados
-        for item in self.scene.items():
-            if isinstance(item, NodeItem):
-                item.simulation_mode = True
-                item.buttonCommand.connect(self.sim_controller.command)
-
-                domain_node = builder.nodes[item.id]
-                self.node_map[item] = domain_node
-
-        self.sim_controller.on_update_node = self.node_map
-        self.sim_controller.step()
-
-        print("Simulation started")
+        self.simulation.start()
 
     def stop_simulation(self):
-        self.sim_engine = None
-        self.sim_controller = None
+        self.simulation.stop()
 
     def save_scene(self):
-        if not self.current_file:
-            return self.save_scene_as()
-
-        try:
-            save_to_file(self.scene, self.current_file)
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Erro ao salvar",
-                str(e)
-            )
+        self.file_session.save()
 
     def save_scene_as(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salvar cena",
-            "",
-            "Scene Files (*.json)"
-        )
-
-        if not path:
-            return
-
-        if not path.endswith(".json"):
-            path += ".json"
-
-        try:
-            save_to_file(self.scene, path)
-            self.current_file = path
-            self.setWindowTitle(f"Simulador – {Path(path).name}")
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Erro ao salvar",
-                str(e)
-            )
+        self.file_session.save_as()
 
     def open_scene(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Abrir cena",
-            "",
-            "Scene Files (*.json)"
-        )
-
-        if not path:
-            return
-
-        try:
-            load_from_file(self.scene, path, self)
-            self.current_file = path
-            self.update_scene_rect()
-            self.setWindowTitle(f"Simulador – {Path(path).name}")
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Erro ao abrir",
-                str(e)
-            )
+        self.file_session.open()

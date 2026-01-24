@@ -9,7 +9,7 @@ from graphics.items.base.diagram_item_base import DiagramItemBase
 
 class NodeItem(DiagramItemBase):
     registry = {}
-    buttonCommand = pyqtSignal(str, str) #node_id, command
+    command = pyqtSignal(str, dict) #node_id, command
 
     def __init_subclass__(cls):
             super().__init_subclass__()

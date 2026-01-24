@@ -8,13 +8,12 @@ from ....anchors.anchor import AnchorItem
 
 
 class Exhaust(NodeItem):
-    def __init__(self, icon_path="resources/nodes/exhaust/exhaust.png"):
+    def __init__(self):
         super().__init__()
 
         self.node_type = "exhaust"
 
-        if icon_path and os.path.isfile(icon_path):
-            self.pixmap = QPixmap(icon_path)
+        self.pixmap = QPixmap("resources/nodes/exhaust/exhaust.png")
     
         self.width = self.pixmap.width()
         self.height = self.pixmap.height()

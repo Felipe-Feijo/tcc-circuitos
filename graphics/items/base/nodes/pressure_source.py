@@ -1,4 +1,3 @@
-import os
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 
@@ -8,14 +7,13 @@ from ....anchors.anchor import AnchorItem
 
 
 class PressureSource(NodeItem):
-    def __init__(self, icon_path="resources/nodes/pressure_source/pressure_source.png"):
+    def __init__(self):
         super().__init__()
 
         self.node_type = "pressure_source"
         
 
-        if icon_path and os.path.isfile(icon_path):
-            self.pixmap = QPixmap(icon_path)
+        self.pixmap = QPixmap("resources/nodes/pressure_source/pressure_source.png")
 
         self.width = self.pixmap.width()
         self.height = self.pixmap.height()

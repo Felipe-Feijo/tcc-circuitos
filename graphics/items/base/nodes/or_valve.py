@@ -16,7 +16,6 @@ class OrValve(NodeItem):
 
         self.icon_x_side = QPixmap("resources/nodes/or_valve/or_valve_x_side.png")
         self.icon_y_side = QPixmap("resources/nodes/or_valve/or_valve_y_side.png")
-        #self.icon_pressed = QPixmap("resources/nodes/or_valve/or_valve_pressed.png")
 
         self.pixmap = self.icon_x_side
 

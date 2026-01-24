@@ -81,11 +81,12 @@ class Valve3_2(Node):
         # Sinais de controle (vindos da UI / engine)
         self.button_pressed = False
 
-    def handle_command(self, command: str):
-        if command == "press":
-            self.button_pressed = True
-        elif command == "release":
-            self.button_pressed = False
+    def handle_command(self, command: dict):
+        if command["type"] == "button":
+            if command["action"] == "press":
+                self.button_pressed = True
+            elif command["action"] == "release":
+                self.button_pressed = False
 
     # -------------------------
     # Interface de controle
@@ -191,4 +192,51 @@ class OrValve(Node):
     
     def get_visual_state(self):
         return self.active_input  # "X" ou "Y"
+    
+
+class Valve_4_2_Ways(Node):
+    def __init__(self, node_id):
+        super().__init__(node_id, "valve_4_2_ways")
+
+        # Anchors
+        self.add_anchor("P")
+        self.add_anchor("A")
+        self.add_anchor("B")
+        self.add_anchor("R")
+
+        # Bits do item gráfico
+        self.bits = {"left": 0, "right": 0}
+
+        # Estado atual da válvula (conexão ativa)
+        # Representa qual lado do corpo está ativo
+        self.body_state = 0  # 0 = repouso, 1 = ativo
+
+    def handle_command(self, command: dict):
+        """
+        command: 'press' ou 'release'
+        side: 'left' ou 'right'
+        """
+
+        if command["type"] == "button":
+            if command["side"] not in self.bits:
+                return
+
+            if command["action"] == "press":
+                self.bits[command["side"]] = 1
+            elif command["action"] == "release":
+                self.bits[command["side"]] = 0
+
+    def update(self):
+        """Atualiza estado interno da válvula."""
+        if (self.bits["left"], self.bits["right"]) == (1, 0):
+            self.body_state = 1  # ativa
+        elif (self.bits["left"], self.bits["right"]) == (0, 1):
+            self.body_state = 0  # desativa
+
+    def get_internal_connections(self):
+        """Retorna pares de anchors conectados internamente."""
+        if self.body_state == 0:
+            return [("P", "A"), ("B", "R")]
+        else:
+            return [("P", "B"), ("A", "R")]
         

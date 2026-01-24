@@ -67,7 +67,7 @@ class SimulationSession:
                 continue
 
             item.simulation_mode = True
-            item.buttonCommand.connect(self.controller.command)
+            item.command.connect(self.controller.command)
 
     def _deactivate_node_items(self):
         for item in self.scene.items():
@@ -77,7 +77,7 @@ class SimulationSession:
             item.simulation_mode = False
 
             try:
-                item.buttonCommand.disconnect(self.controller.command)
+                item.command.disconnect(self.controller.command)
             except TypeError:
                 # already disconnected or never connected
                 pass

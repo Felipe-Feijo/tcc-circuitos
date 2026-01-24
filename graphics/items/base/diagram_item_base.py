@@ -45,11 +45,11 @@ class DiagramItemBase(QGraphicsObject):
         pass
 
     def paint_selection_feedback(self, painter):
-        """Desenhar destaque de seleção genérico."""
+        """Desenhar destaque de seleção baseado no shape real."""
         if self.draw_selection and self.isSelected():
             pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            # Bounding rect ou retângulo custom
-            rect = self.boundingRect()
-            painter.drawRect(rect)
+
+            # desenha o shape real, incluindo body + botões na posição atual
+            painter.drawPath(self.shape())

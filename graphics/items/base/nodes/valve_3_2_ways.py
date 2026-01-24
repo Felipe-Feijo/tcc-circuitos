@@ -60,13 +60,13 @@ class Valve_3_2_Ways(NodeItem):
         if self.simulation_mode:
             self.pixmap = self.icon_pressed
             self.visual_offset = QPointF(96, 0)  # empurra levemente pro lado
-            self.buttonCommand.emit(self.id, "press")
+            self.command.emit(self.id, {"type": "button", "action": "press"})
 
     def on_button_released(self):
         if self.simulation_mode:
             self.pixmap = self.icon_idle
             self.visual_offset = QPointF(0, 0)
-            self.buttonCommand.emit(self.id, "release")
+            self.command.emit(self.id, {"type": "button", "action": "release"})
 
 
     

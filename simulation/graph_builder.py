@@ -1,10 +1,11 @@
 # domain/graph_builder.py
 
-from simulation.nodes.nodes import OrValve, Valve3_2, PressureSource, Exhaust, Piston
+from simulation.nodes.nodes import OrValve, Valve3_2, PressureSource, Exhaust, Piston, Valve_4_2_Ways
 from simulation.connections import Connection
 
 NODE_FACTORY = {
     "valve_3_2_ways": Valve3_2,
+    "valve_4_2_ways": Valve_4_2_Ways,
     "pressure_source": PressureSource,
     "exhaust": Exhaust,
     "piston": Piston,

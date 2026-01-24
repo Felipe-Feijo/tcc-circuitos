@@ -1,4 +1,3 @@
-import os
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
 
@@ -55,7 +54,7 @@ class Valve_3_2_Ways(NodeItem):
 
     def mouseReleaseEvent(self, event):
         self.on_button_released()
-        event.accept()
+        super().mouseReleaseEvent(event)
 
     def on_button_pressed(self):
         if self.simulation_mode:

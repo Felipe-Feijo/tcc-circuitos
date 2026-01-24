@@ -59,6 +59,11 @@ class Node:
         """
         return []
     
+    def get_visual_state(self):
+        return None
+
+
+
 class Valve3_2(Node):
     def __init__(self, node_id):
         super().__init__(node_id=node_id, node_type="valve_3_2_ways")
@@ -156,4 +161,34 @@ class Piston(Node):
 
     def update(self):
         self.position = 1 if self.anchors["A"].pressurized else 0
+
+    def get_visual_state(self):
+            return self.position
+
+class OrValve(Node):
+    def __init__(self, node_id):
+        super().__init__(node_id=node_id, node_type="or_valve")
+
+        # Anchors pneumáticos
+        self.add_anchor("X")
+        self.add_anchor("Y")
+        self.add_anchor("A")
+
+        # Estado interno (shuttle com memória)
+        self.active_input: str = "X"  # estado inicial
+
+    def update(self):
+        x = self.anchors["X"].pressurized
+        y = self.anchors["Y"].pressurized
+
+        # Só muda se exatamente uma entrada estiver pressurizada
+        if x ^ y:
+            self.active_input = "X" if x else "Y"
+        # else: mantém o estado atual
+
+    def get_internal_connections(self):
+        return [(self.active_input, "A")]
+    
+    def get_visual_state(self):
+        return self.active_input  # "X" ou "Y"
         

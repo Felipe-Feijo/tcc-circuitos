@@ -1,6 +1,5 @@
 from pathlib import Path
-from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem, QFileDialog
-from persistence.serializer import save_to_file, load_from_file
+from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController

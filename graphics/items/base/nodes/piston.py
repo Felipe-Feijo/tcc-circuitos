@@ -23,6 +23,8 @@ class Piston(NodeItem):
 
         self.add_anchor(AnchorItem("A", QPointF(self.width * 0.0621, self.height), node=self))
 
-    def set_extended(self, extended: bool):
+
+    def update_from_domain(self, domain_node):
+        extended = (domain_node.get_visual_state() == 1)
         self.pixmap = self.icon_extended if extended else self.icon_retracted
         self.update()

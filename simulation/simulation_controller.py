@@ -24,8 +24,7 @@ class SimulationController:
 
         if self.on_update_node:
             for node_item, domain_node in self.on_update_node.items():
-                if domain_node.type == "piston":
-                    node_item.set_extended(domain_node.position == 1)
+                node_item.update_from_domain(domain_node)
 
         if self.on_update_connection:
             for conn_item, domain_conn in self.on_update_connection.items():

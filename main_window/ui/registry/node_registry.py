@@ -1,3 +1,4 @@
+from graphics.items.base.nodes.or_valve import OrValve
 from graphics.items.base.nodes.pressure_source import PressureSource
 from graphics.items.base.nodes.valve_3_2_ways import Valve_3_2_Ways
 from graphics.items.base.nodes.piston import Piston
@@ -34,4 +35,12 @@ def register_nodes(palette, on_add_node):
             "resources/nodes/pressure_source/pressure_source.png"
         ),
         callback=lambda: on_add_node(PressureSource)
+    )
+
+    palette.add_node(
+        name="OrValve",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/or_valve/or_valve_x_side.png"
+        ),
+        callback=lambda: on_add_node(OrValve)
     )

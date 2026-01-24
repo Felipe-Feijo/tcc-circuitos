@@ -23,6 +23,9 @@ class ConnectionItem(DiagramItemBase):
 
         self.temp_target_pos = None
 
+        self.setPos(0, 0)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+
         # Pens para normal e selecionado
         self.pen = QPen(Qt.GlobalColor.red, 2)
         
@@ -54,20 +57,16 @@ class ConnectionItem(DiagramItemBase):
     
 
     def boundingRect(self) -> QRectF:
-        """Bounding box que segue o formato da linha com margem mínima"""
         points = self.get_path_points()
         if len(points) < 2:
             return QRectF()
 
-        # Margem para seleção e pen width
         margin = 10
-
-        # Calcula bounds de forma eficiente
         min_x = min(p.x() for p in points)
         max_x = max(p.x() for p in points)
         min_y = min(p.y() for p in points)
         max_y = max(p.y() for p in points)
-        
+
         return QRectF(
             min_x - margin,
             min_y - margin,
@@ -98,16 +97,22 @@ class ConnectionItem(DiagramItemBase):
         if not self.source_anchor:
             return []
 
-        p1 = self.mapFromScene(self.source_anchor.scenePos())
+        p1 = self.source_anchor.scenePos()
+
         if self.target_anchor:
-            p2 = self.mapFromScene(self.target_anchor.scenePos())
+            p2 = self.target_anchor.scenePos()
         elif self.temp_target_pos:
-            p2 = self.mapFromScene(self.temp_target_pos)
+            p2 = self.temp_target_pos
         else:
             return [p1]
 
         mid_y = (p1.y() + p2.y()) / 2
-        return [p1, QPointF(p1.x(), mid_y), QPointF(p2.x(), mid_y), p2]
+        return [
+            p1,
+            QPointF(p1.x(), mid_y),
+            QPointF(p2.x(), mid_y),
+            p2
+        ]
 
     def update_temp_endpoint(self, scene_pos):
         """Atualiza endpoint temporário garantindo atualização correta da área"""
@@ -136,6 +141,8 @@ class ConnectionItem(DiagramItemBase):
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
 
+        self.source = None
+        self.target = None
         self.source_anchor = None
         self.target_anchor = None
 
@@ -163,6 +170,9 @@ class ConnectionItem(DiagramItemBase):
         target_anchor = target_node.anchors[target_data["anchor"]]
 
         conn = cls(source_node, source_anchor, target_node, target_anchor)
+
+        source_node.connections.append(conn)
+        target_node.connections.append(conn)
         return conn
     
 

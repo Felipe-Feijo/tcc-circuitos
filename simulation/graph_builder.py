@@ -1,6 +1,6 @@
 # domain/graph_builder.py
 
-from simulation.nodes.nodes import Valve3_2, PressureSource, Exhaust, Piston
+from simulation.nodes.nodes import OrValve, Valve3_2, PressureSource, Exhaust, Piston
 from simulation.connections import Connection
 
 NODE_FACTORY = {
@@ -8,6 +8,7 @@ NODE_FACTORY = {
     "pressure_source": PressureSource,
     "exhaust": Exhaust,
     "piston": Piston,
+    "or_valve": OrValve,
 }
 
 class GraphBuilder:

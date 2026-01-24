@@ -40,12 +40,12 @@ class NodeItem(DiagramItemBase):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            for conn in self.connections:
-                conn.update()
+            self.update_connections()
         return super().itemChange(change, value)
     
     def update_connections(self):
         for conn in self.connections:
+            conn.prepareGeometryChange()
             conn.update()
 
     def prepare_delete(self):
@@ -55,10 +55,8 @@ class NodeItem(DiagramItemBase):
         for c in self.connections:
             print(" -", c, "to", c.target)
         # desconecta todas as conexões
-        for conn in self.connections[:]:  # copia da lista
-            conn.prepare_delete()           # <- chama prepare_delete da conexão
-            if conn.scene():                # remove visualmente
-                conn.scene().removeItem(conn)
+        for conn in self.connections[:]:  
+            conn.prepare_delete()           
 
         self.connections.clear()
         print(f"All connections detached from NodeItem at {self.pos()}\n")
@@ -130,3 +128,6 @@ class NodeItem(DiagramItemBase):
 
         node.properties = data.get("properties", {})
         return node
+    
+    def update_from_domain(self, domain_node):
+        pass

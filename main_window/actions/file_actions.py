@@ -15,6 +15,10 @@ def create_file_actions(main_window):
     actions["save"].setShortcut("Ctrl+S")
     actions["save"].triggered.connect(main_window.save_scene)
 
+    actions["save_as"] = QAction("Save As", main_window)
+    actions["save_as"].setShortcut("F12")
+    actions["save_as"].triggered.connect(main_window.save_scene_as)
+
     actions["exit"] = QAction("Exit", main_window)
     actions["exit"].setShortcut("Ctrl+Q")
     actions["exit"].triggered.connect(main_window.close)

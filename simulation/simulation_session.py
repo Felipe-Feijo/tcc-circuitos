@@ -1,3 +1,4 @@
+from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
 from editor.editor_controller import EditorController
 from simulation.simulation_engine import SimulationEngine
@@ -71,13 +72,14 @@ class SimulationSession:
 
     def _deactivate_node_items(self):
         for item in self.scene.items():
-            if not isinstance(item, NodeItem):
-                continue
+            if isinstance(item, NodeItem):
+                
+                item.reset_visual_state()
 
-            item.simulation_mode = False
-
-            try:
-                item.command.disconnect(self.controller.command)
-            except TypeError:
-                # already disconnected or never connected
-                pass
+                try:
+                    item.command.disconnect(self.controller.command)
+                except TypeError:
+                    # already disconnected or never connected
+                    pass
+            elif isinstance(item, ConnectionItem):
+                item.reset_visual_state()

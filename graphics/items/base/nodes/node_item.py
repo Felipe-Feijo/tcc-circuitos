@@ -36,7 +36,32 @@ class NodeItem(DiagramItemBase):
 
 
     def add_anchor(self, anchor: AnchorItem):
+        existing = self.anchors.get(anchor.name)
+
+        if existing:
+            # reaproveita a anchor existente
+            existing.setPos(anchor.pos())
+            print("Reusing existing anchor", anchor.name)
+            return
+
+        anchor.setParentItem(self)
         self.anchors[anchor.name] = anchor
+
+    def remove_anchor(self, name: str):
+        anchor = self.anchors.pop(name, None)
+        if not anchor:
+            return
+
+        print(f"Removing anchor {name}")
+
+        # desconecta conexões que usam essa anchor
+        for conn in self.connections[:]:
+            if conn.source_anchor == anchor or conn.target_anchor == anchor:
+                conn.prepare_delete()
+
+        # remove da cena
+        if anchor.scene():
+            anchor.scene().removeItem(anchor)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -127,7 +152,34 @@ class NodeItem(DiagramItemBase):
         node.setPos(float(pos["x"]), float(pos["y"]))
 
         node.properties = data.get("properties", {})
+
+        # 🔹 aplica propriedades estruturais
+        if hasattr(node, "apply_properties"):
+            node.apply_properties()
+            
         return node
     
     def update_from_domain(self, domain_node):
         pass
+
+    def reset_visual_state(self):
+        """
+        Retorna o item gráfico ao estado default (fora de simulação).
+        """
+        self.simulation_mode = False
+
+        # 🔹 reset visual
+        self.visual_offset = QPointF(0, 0)
+
+        if hasattr(self, "initialize_actuators"):
+            self.initialize_actuators()
+
+        # 🔹 reset estado do corpo (se existir)
+        if hasattr(self, "body_state"):
+            self.body_state = 0
+
+        # 🔹 atualiza anchors dependentes do estado
+        if hasattr(self, "update_anchor_positions"):
+            self.update_anchor_positions()
+
+        self.update()

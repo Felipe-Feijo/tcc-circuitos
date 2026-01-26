@@ -1,40 +1,81 @@
 
-from PyQt6.QtGui import QPainter, QColor, QBrush, QPixmap, QTransform, QPainterPath
+from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
 from PyQt6.QtCore import QPointF, QRectF
-
+from PyQt6.QtWidgets import QMenu
 
 
 from graphics.items.base.nodes.node_item import NodeItem
 from ....anchors.anchor import AnchorItem
+
 ACTUATOR_DICT = {
     "button": {
-        "sprite_active_path": "resources/actuators/button_active.png",
-        "sprite_inactive_path": "resources/actuators/button_inactive.png",
-        "mirrored": True
+        "label": "Botão",
+        "sprite_active_path": "resources/actuators/button/button_active.png",
+        "sprite_inactive_path": "resources/actuators/button/button_inactive.png",
+        "mirrored": True,
+        "default_bit": 0,
     },
+    "spring": {
+        "label": "Mola",
+        "sprite_active_path": "resources/actuators/spring/spring_active.png",
+        "sprite_inactive_path": "resources/actuators/spring/spring_inactive.png",
+        "mirrored": True,
+        "default_bit": 1,
+    },
+    "pilot": {
+        "label": "Pilotagem",
+        "sprite_active_path": "resources/actuators/pilot/pilot.png",
+        "sprite_inactive_path": "resources/actuators/pilot/pilot.png",
+        "mirrored": True,
+        "default_bit": 0,
+    }
+}
+BODY_VISUALS = {
+    0: {  # repouso
+        "sprite": "resources/nodes/valve_4_2_ways/valve_4_2_body_right.png",
+        "offset": QPointF(0, 0),
+    },
+    1: {  # ativo
+        "sprite": "resources/nodes/valve_4_2_ways/valve_4_2_body_left.png",
+        "offset": QPointF(147, 0),
+    }
 }
 
 class Valve_4_2_Ways(NodeItem):
 
-    def __init__(self, actuator_size=30):
+    def __init__(self):
         super().__init__()
 
         self.node_type = "valve_4_2_ways"
 
 
-        self.actuators = {
-            "left": "button",   # apenas o tipo
-            "right": "button",  # apenas o tipo
+        self.properties = {
+            "actuators": {
+                "left": None,
+                "right": None
+            }
         }
 
-        for actuator_type, data in ACTUATOR_DICT.items():
-            if "sprite_active" not in data:
-                data["sprite_active"] = QPixmap(data["sprite_active_path"])
-                data["sprite_inactive"] = QPixmap(data["sprite_inactive_path"])
+        self.actuators = {}
+        self.actuator_visuals = {}  # sprites carregados
+        self.actuator_rects = {}
 
-        self.body_left_icon = QPixmap("resources/nodes/valve_4_2_ways/valve_4_2_body_left.png")
-        self.body_right_icon = QPixmap("resources/nodes/valve_4_2_ways/valve_4_2_body_right.png")
-        self.body_sprite = self.body_right_icon
+
+        self.body_visuals = {
+            state: {
+                "sprite": QPixmap(desc["sprite"]),
+                "offset": desc["offset"]
+            }
+            for state, desc in BODY_VISUALS.items()
+        }
+        self.max_offset_x = max(
+            visual["offset"].x()
+            for visual in self.body_visuals.values()
+        )
+
+        self.body_state = 0
+        self.body_sprite = self.body_visuals[0]["sprite"]
+        self.visual_offset = self.body_visuals[0]["offset"]
 
         # Dimensões do body
         self.width = self.body_sprite.width()
@@ -50,26 +91,17 @@ class Valve_4_2_Ways(NodeItem):
         self.bits = {"left": 0, "right": 0}
 
 
-        self.max_offset_x = 147  # deslocamento máximo do body ao ativar o atuador esquerdo
 
-        # Cria os rects dos atuadores com base no sprite e posição relativa ao body
-        self.actuator_rects = {}
+        self.initialize_actuators()
 
-        for side in ["left", "right"]:
-            actuator_type = ACTUATOR_DICT.get(self.actuators.get(side))
-            if not actuator_type:
-                continue
-            sprite = actuator_type["sprite_active"]  # ou inactive, só para pegar tamanho
-            w, h = sprite.width(), sprite.height()
-
-            if side == "left":
-                x = -w  # encostado na borda esquerda do body
-            else:
-                x = self.width  # encostado na borda direita do body
-
-            y = self.height/2 - h/2  # centralizado vertical
-
-            self.actuator_rects[side] = QRectF(x, y, w, h)
+    @property
+    def body_rect(self):
+        return QRectF(
+            self.visual_offset.x(),
+            self.visual_offset.y(),
+            self.width,
+            self.height
+        )
 
     # --------------------------
     # Retângulo delimitador
@@ -81,13 +113,13 @@ class Valve_4_2_Ways(NodeItem):
 
         # se os rects ainda não existirem, usamos tamanho padrão do body ou 0
         left_w = left_h = right_w = right_h = 0
-        if hasattr(self, "actuator_rects"):
-            left_rect = self.actuator_rects.get("left")
-            if left_rect:
-                left_w, left_h = left_rect.width(), left_rect.height()
-            right_rect = self.actuator_rects.get("right")
-            if right_rect:
-                right_w, right_h = right_rect.width(), right_rect.height()
+
+        left_rect = self.actuator_rects.get("left")
+        if left_rect:
+            left_w, left_h = left_rect.width(), left_rect.height()
+        right_rect = self.actuator_rects.get("right")
+        if right_rect:
+            right_w, right_h = right_rect.width(), right_rect.height()
 
         leftmost_x = -left_w - margin
         total_width = body_w + left_w + right_w + getattr(self, "max_offset_x", 0) + 2*margin
@@ -104,49 +136,29 @@ class Valve_4_2_Ways(NodeItem):
     # Desenho
     # --------------------------
     def paint(self, painter, option, widget=None):
-        # Corpo
-        if self.bits["left"] == 1 and self.bits["right"] == 0:
-            self.body_sprite = self.body_left_icon
-            self.visual_offset = QPointF(self.max_offset_x, 0) 
-        elif self.bits["left"] == 0 and self.bits["right"] == 1:
-            self.body_sprite = self.body_right_icon
-            self.visual_offset = QPointF(0, 0)  # sem deslocamento
-
+        # desenha o corpo
         painter.drawPixmap(
-                int(self.visual_offset.x()),
-                int(self.visual_offset.y()),
-                self.body_sprite
-            )
-        
-        # calcula body_rect (posição + tamanho)
-        body_rect = QRectF(
-            self.visual_offset.x(),
-            self.visual_offset.y(),
-            self.width,
-            self.height
+            int(self.visual_offset.x()),
+            int(self.visual_offset.y()),
+            self.body_sprite
         )
 
-        for side in ["left", "right"]:
-            actuator_type = ACTUATOR_DICT.get(self.actuators.get(side))
-            if not actuator_type or not actuator_type.get("sprite_active") or not actuator_type.get("sprite_inactive"):
-                continue  # pular se não houver atuador
+        # desenha atuadores
+        for side, rect in self.actuator_rects.items():
+            visuals = self.actuator_visuals.get(side)
+            if not visuals:
+                continue
 
-            sprite = actuator_type["sprite_active"] if self.bits[side] else actuator_type["sprite_inactive"]
+            sprite = visuals["active"] if self.bits.get(side, 0) else visuals["inactive"]
 
-            # espelha o sprite se necessário
-            if side == "right" and actuator_type.get("mirrored", False):
-                sprite = sprite.transformed(QTransform().scale(-1, 1))
-
-            # posição relativa ao body
-            if side == "left":
-                x = body_rect.x() - sprite.width()
-            else:
-                x = body_rect.x() + body_rect.width()
-
-            y = body_rect.y() + (body_rect.height() - sprite.height()) / 2
-            painter.drawPixmap(int(x), int(y), sprite)
+            painter.drawPixmap(
+                int(rect.x() + self.visual_offset.x()),
+                int(rect.y() + self.visual_offset.y()),
+                sprite
+            )
 
         self.paint_selection_feedback(painter)
+
 
     # --------------------------
     # Clique do mouse
@@ -160,11 +172,12 @@ class Valve_4_2_Ways(NodeItem):
         if self.simulation_mode:
             for side, rect in self.actuator_rects.items():
                 if rect.translated(self.visual_offset).contains(pos):
+                    if self.actuators[side] != "button":
+                        continue  # só responde a botões
                     # inverte o bit do atuador
-                    self.bits[side] ^= 1
                     self.command.emit(self.id, {
                         "type": "button",
-                        "action": "press" if self.bits[side] else "release",
+                        "action": "press" if self.bits[side] == 0 else "release",
                         "side": side
                     })
                     # apenas atualiza o visual (paint vai usar o bit para desenhar)
@@ -188,12 +201,152 @@ class Valve_4_2_Ways(NodeItem):
         path.addRect(body_rect)
 
         # atuadores, se existirem
-        if hasattr(self, "actuator_rects"):
-            left_rect = self.actuator_rects.get("left")
-            right_rect = self.actuator_rects.get("right")
-            if left_rect:
-                path.addRect(left_rect.translated(self.visual_offset))
-            if right_rect:
-                path.addRect(right_rect.translated(self.visual_offset))
+
+        left_rect = self.actuator_rects.get("left")
+        right_rect = self.actuator_rects.get("right")
+        if left_rect:
+            path.addRect(left_rect.translated(self.visual_offset))
+        if right_rect:
+            path.addRect(right_rect.translated(self.visual_offset))
 
         return path
+    
+
+    def update_from_domain(self, domain_node):
+        self.bits = domain_node.bits.copy()
+
+        state = domain_node.body_state
+        visual = self.body_visuals[state]
+
+        self.body_sprite = visual["sprite"]
+        self.visual_offset = visual["offset"]
+
+        for side in ("left", "right"):
+            anchor_name = "PL" if side == "left" else "PR"
+            if anchor_name not in self.anchors:
+                continue
+
+            base_x = (
+                self.actuator_rects[side].left()
+                if side == "left"
+                else self.actuator_rects[side].right()
+            )
+
+            x = base_x + self.visual_offset.x()
+            y = self.height * 0.6222 + self.visual_offset.y()
+
+            self.anchors[anchor_name].setPos(QPointF(x, y))
+            self.update_connections()
+
+        self.update_connections()
+        self.update()
+
+    def _load_actuator_pixmaps(self, actuator_desc, side):
+        active = QPixmap(actuator_desc["sprite_active_path"])
+        inactive = QPixmap(actuator_desc["sprite_inactive_path"])
+
+        if side == "right" and actuator_desc.get("mirrored", False):
+            active = active.transformed(QTransform().scale(-1, 1))
+            inactive = inactive.transformed(QTransform().scale(-1, 1))
+
+        return {"active": active, "inactive": inactive}
+
+    def initialize_actuators(self):
+        """
+        Reconfigura completamente os atuadores da válvula.
+        Pode ser chamado múltiplas vezes.
+        """
+
+        self.actuator_visuals.clear()
+        self.actuator_rects.clear()
+
+        body = self.body_rect
+
+        self.actuators = self.properties["actuators"]
+
+        for side in ("left", "right"):
+            actuator_name = self.actuators.get(side)
+            actuator_desc = ACTUATOR_DICT.get(actuator_name)
+
+            anchor_name = "PL" if side == "left" else "PR"
+            if not actuator_desc:
+                self.remove_anchor(anchor_name)
+                continue
+
+            # 🔹 estado visual inicial coerente
+            if not self.simulation_mode:
+                default_bit = actuator_desc.get("default_bit")
+                if default_bit is not None:
+                    self.bits[side] = default_bit
+
+            # carregar visuais
+            visuals = self._load_actuator_pixmaps(actuator_desc, side)
+            self.actuator_visuals[side] = visuals
+
+            # calcular rect
+            pix = visuals["active"]
+            w, h = pix.width(), pix.height()
+
+            if side == "left":
+                x = body.left() - w
+            else:
+                x = body.right()
+
+            y = body.center().y() - h / 2
+
+            self.actuator_rects[side] = QRectF(x, y, w, h)
+
+            
+            if actuator_name == "pilot":
+                x = self.actuator_rects[side].left() if side == "left" else self.actuator_rects[side].right()
+                self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self)) 
+            else:
+                # se não é pilot, garante que não exista
+                self.remove_anchor(anchor_name)
+
+    def apply_properties(self):
+        self.initialize_actuators()
+        self.update()
+
+    def extend_context_menu(self, menu: QMenu):
+        menu.addSeparator()
+
+        left_menu = menu.addMenu("Atuador esquerdo")
+        right_menu = menu.addMenu("Atuador direito")
+
+        self._populate_actuator_menu(left_menu, side="left")
+        self._populate_actuator_menu(right_menu, side="right")
+
+    def _populate_actuator_menu(self, menu: QMenu, side: str):
+        current = self.actuators.get(side)
+
+        # opção "nenhum"
+        action_none = QAction("Nenhum", menu, checkable=True)
+        action_none.setChecked(current is None)
+        action_none.triggered.connect(
+            lambda _, s=side: self.set_actuator(s, None)
+        )
+        menu.addAction(action_none)
+
+        menu.addSeparator()
+
+        for name, desc in ACTUATOR_DICT.items():
+            action = QAction(desc["label"], menu, checkable=True)
+            action.setChecked(current == name)
+
+            action.triggered.connect(
+                lambda _, s=side, n=name: self.set_actuator(s, n)
+            )
+
+            menu.addAction(action)
+
+    def set_actuator(self, side: str, actuator_name: str | None):
+        if self.actuators.get(side) == actuator_name:
+            return
+
+        self.actuators[side] = actuator_name
+
+        # reconfigura tudo
+        self.initialize_actuators()
+        self.prepareGeometryChange()
+        self.update()

@@ -195,7 +195,7 @@ class OrValve(Node):
     
 
 class Valve_4_2_Ways(Node):
-    def __init__(self, node_id):
+    def __init__(self, node_id, actuators=None):
         super().__init__(node_id, "valve_4_2_ways")
 
         # Anchors
@@ -203,9 +203,13 @@ class Valve_4_2_Ways(Node):
         self.add_anchor("A")
         self.add_anchor("B")
         self.add_anchor("R")
+        self.add_anchor("PL")
+        self.add_anchor("PR")
 
         # Bits do item gráfico
         self.bits = {"left": 0, "right": 0}
+
+        self.actuators = actuators or {}
 
         # Estado atual da válvula (conexão ativa)
         # Representa qual lado do corpo está ativo
@@ -228,10 +232,29 @@ class Valve_4_2_Ways(Node):
 
     def update(self):
         """Atualiza estado interno da válvula."""
+
+        # --- mola: força o lado se o outro não estiver atuado ---
+        for side, actuators in self.actuators.items():
+            if actuators is None:
+                continue
+            
+            other = "right" if side == "left" else "left"
+            
+            if "pilot" in actuators:
+                anchor_name = "PL" if side == "left" else "PR"
+                self.bits[side] = 1 if self.anchors[anchor_name].pressurized else 0
+
+
+
+            if "spring" in actuators and "spring" not in self.actuators.get(other, []):
+                self.bits[side] = 0 if self.bits[other] else 1
+
+        # --- lógica do corpo (igual à gráfica) ---
         if (self.bits["left"], self.bits["right"]) == (1, 0):
             self.body_state = 1  # ativa
         elif (self.bits["left"], self.bits["right"]) == (0, 1):
             self.body_state = 0  # desativa
+        # 00 e 11 → mantém
 
     def get_internal_connections(self):
         """Retorna pares de anchors conectados internamente."""

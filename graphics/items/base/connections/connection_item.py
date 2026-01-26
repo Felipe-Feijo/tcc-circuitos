@@ -76,6 +76,7 @@ class ConnectionItem(DiagramItemBase):
 
     
     def paint(self, painter: QPainter, option, widget=None):
+
         points = self.get_path_points()
         if len(points) < 2:
             return
@@ -141,10 +142,15 @@ class ConnectionItem(DiagramItemBase):
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
 
-        self.source = None
-        self.target = None
-        self.source_anchor = None
-        self.target_anchor = None
+        #self.source = None
+        #self.target = None
+        #self.source_anchor = None
+        #self.target_anchor = None
+
+        # avisa o Qt que a geometria mudou
+        self.prepareGeometryChange()
+
+        # invalida a área antiga
 
     def to_dict(self):
         return {
@@ -180,3 +186,10 @@ class ConnectionItem(DiagramItemBase):
         if self.pressurized != value:
             self.pressurized = value
             self.update()
+
+    def reset_visual_state(self):
+        """
+        Retorna a conexão ao estado visual neutro (fora de simulação).
+        """
+        self.pressurized = False
+        self.update()

@@ -12,6 +12,8 @@ def create_menus(main_window, actions):
 
     edit_menu = menubar.addMenu("Edit")
     edit_menu.addAction(actions["delete"])
+    edit_menu.addAction(actions["copy"])
+    edit_menu.addAction(actions["paste"])
 
     view_menu = menubar.addMenu("View")
 

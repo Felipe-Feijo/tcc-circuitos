@@ -1,6 +1,7 @@
 from pathlib import Path
 from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt
+from editor.clipboard_manager import ClipboardManager
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -45,6 +46,7 @@ class MainWindow(QMainWindow):
         self.scene = QGraphicsScene()
         self.editor_controller = EditorController(self.scene)
         self.delete_manager = DeleteManager(self.scene)
+        self.clipboard_manager = ClipboardManager()
 
         self.view = GraphicsView(self, self.scene)
         self.setCentralWidget(self.view)

@@ -57,6 +57,7 @@ class ConnectionItem(DiagramItemBase):
     
 
     def boundingRect(self) -> QRectF:
+        
         points = self.get_path_points()
         if len(points) < 2:
             return QRectF()
@@ -95,6 +96,7 @@ class ConnectionItem(DiagramItemBase):
 
 
     def get_path_points(self) -> list[QPointF]:
+    
         if not self.source_anchor:
             return []
 
@@ -135,7 +137,8 @@ class ConnectionItem(DiagramItemBase):
         return super().itemChange(change, value)
 
     def prepare_delete(self):
-        """Remove referências nos nós antes de apagar da cena"""
+
+        # desconecta dos nodes (lógico)
         if self.source and self in self.source.connections:
             self.source.connections.remove(self)
 
@@ -144,13 +147,8 @@ class ConnectionItem(DiagramItemBase):
 
         self.source = None
         self.target = None
-        self.source_anchor = None
-        self.target_anchor = None
 
-        # avisa o Qt que a geometria mudou
         self.prepareGeometryChange()
-
-        # invalida a área antiga
 
     def to_dict(self):
         return {

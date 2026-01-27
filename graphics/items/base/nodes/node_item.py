@@ -74,17 +74,9 @@ class NodeItem(DiagramItemBase):
             conn.update()
 
     def prepare_delete(self):
-        print(f"Deleting NodeItem at {self.pos()}")
-
-        print(f"Node at {self.pos()} has connections:")
-        for c in self.connections:
-            print(" -", c, "to", c.target)
-        # desconecta todas as conexões
-        for conn in self.connections[:]:  
-            conn.prepare_delete()           
-
+    
         self.connections.clear()
-        print(f"All connections detached from NodeItem at {self.pos()}\n")
+
 
     def boundingRect(self) -> QRectF:
         return QRectF(0, 0, self.width, self.height)
@@ -142,21 +134,21 @@ class NodeItem(DiagramItemBase):
         }
     
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_dict(cls, data: dict, *, keep_id=True):
         node_cls = cls.registry[data["type"]]
         node = node_cls()
 
-        node.id = data["id"]
+        if keep_id:
+            node.id = data["id"]
 
         pos = data["position"]
         node.setPos(float(pos["x"]), float(pos["y"]))
 
         node.properties = data.get("properties", {})
 
-        # 🔹 aplica propriedades estruturais
         if hasattr(node, "apply_properties"):
             node.apply_properties()
-            
+
         return node
     
     def update_from_domain(self, domain_node):
@@ -175,8 +167,9 @@ class NodeItem(DiagramItemBase):
             self.initialize_actuators()
 
         # 🔹 reset estado do corpo (se existir)
-        if hasattr(self, "body_state"):
+        if hasattr(self, "update_body_visuals"):
             self.body_state = 0
+            self.update_body_visuals()
 
         # 🔹 atualiza anchors dependentes do estado
         if hasattr(self, "update_anchor_positions"):

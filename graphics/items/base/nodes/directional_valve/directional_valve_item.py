@@ -172,16 +172,25 @@ class DirectionalValveItem(NodeItem):
 
         return path
     
-
     def update_from_domain(self, domain_node):
         self.bits = domain_node.bits.copy()
+        self.body_state = domain_node.body_state
 
-        state = domain_node.body_state
-        visual = self.body_visuals[state]
+        self.update_body_visuals()
+        self.update_actuators_visuals()
+
+        self.update_connections()
+        self.update()
+
+
+    def update_body_visuals(self):
+        visual = self.body_visuals[self.body_state]
 
         self.body_sprite = visual["sprite"]
         self.visual_offset = visual["offset"]
 
+
+    def update_actuators_visuals(self):
         for side in ("left", "right"):
             anchor_name = "PL" if side == "left" else "PR"
             if anchor_name not in self.anchors:
@@ -198,10 +207,8 @@ class DirectionalValveItem(NodeItem):
 
             self.anchors[anchor_name].setPos(QPointF(x, y))
             self.update_connections()
-
-        self.update_connections()
-        self.update()
-
+            
+ 
     def _load_actuator_pixmaps(self, actuator_desc, side):
         active = QPixmap(actuator_desc["sprite_active_path"])
         inactive = QPixmap(actuator_desc["sprite_inactive_path"])

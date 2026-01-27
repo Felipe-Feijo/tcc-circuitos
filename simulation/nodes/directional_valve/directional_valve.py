@@ -45,7 +45,7 @@ class DirectionalValve(Node):
 
             other = "right" if side == "left" else "left"
 
-            if "spring" not in self.actuators.get(other, []):
+            if "spring" not in (self.actuators.get(other) or []):
                 # só atua se o outro lado não estiver forçando
                 self.bits[side] = 0 if self.bits[other] else 1
 

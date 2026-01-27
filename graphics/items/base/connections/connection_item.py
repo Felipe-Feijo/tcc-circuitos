@@ -142,10 +142,10 @@ class ConnectionItem(DiagramItemBase):
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
 
-        #self.source = None
-        #self.target = None
-        #self.source_anchor = None
-        #self.target_anchor = None
+        self.source = None
+        self.target = None
+        self.source_anchor = None
+        self.target_anchor = None
 
         # avisa o Qt que a geometria mudou
         self.prepareGeometryChange()

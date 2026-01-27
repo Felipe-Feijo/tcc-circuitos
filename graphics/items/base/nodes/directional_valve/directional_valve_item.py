@@ -5,49 +5,36 @@ from PyQt6.QtWidgets import QMenu
 
 
 from graphics.items.base.nodes.node_item import NodeItem
-from ....anchors.anchor import AnchorItem
+from .....anchors.anchor import AnchorItem
 
 ACTUATOR_DICT = {
     "button": {
-        "label": "Botão",
+        "label": "Button",
         "sprite_active_path": "resources/actuators/button/button_active.png",
         "sprite_inactive_path": "resources/actuators/button/button_inactive.png",
         "mirrored": True,
         "default_bit": 0,
     },
     "spring": {
-        "label": "Mola",
+        "label": "Spring",
         "sprite_active_path": "resources/actuators/spring/spring_active.png",
         "sprite_inactive_path": "resources/actuators/spring/spring_inactive.png",
         "mirrored": True,
         "default_bit": 1,
     },
     "pilot": {
-        "label": "Pilotagem",
+        "label": "Pilot",
         "sprite_active_path": "resources/actuators/pilot/pilot.png",
         "sprite_inactive_path": "resources/actuators/pilot/pilot.png",
         "mirrored": True,
         "default_bit": 0,
     }
 }
-BODY_VISUALS = {
-    0: {  # repouso
-        "sprite": "resources/nodes/valve_4_2_ways/valve_4_2_body_right.png",
-        "offset": QPointF(0, 0),
-    },
-    1: {  # ativo
-        "sprite": "resources/nodes/valve_4_2_ways/valve_4_2_body_left.png",
-        "offset": QPointF(147, 0),
-    }
-}
 
-class Valve_4_2_Ways(NodeItem):
+class DirectionalValveItem(NodeItem):
 
     def __init__(self):
         super().__init__()
-
-        self.node_type = "valve_4_2_ways"
-
 
         self.properties = {
             "actuators": {
@@ -60,38 +47,12 @@ class Valve_4_2_Ways(NodeItem):
         self.actuator_visuals = {}  # sprites carregados
         self.actuator_rects = {}
 
-
-        self.body_visuals = {
-            state: {
-                "sprite": QPixmap(desc["sprite"]),
-                "offset": desc["offset"]
-            }
-            for state, desc in BODY_VISUALS.items()
-        }
-        self.max_offset_x = max(
-            visual["offset"].x()
-            for visual in self.body_visuals.values()
-        )
-
-        self.body_state = 0
-        self.body_sprite = self.body_visuals[0]["sprite"]
-        self.visual_offset = self.body_visuals[0]["offset"]
-
-        # Dimensões do body
-        self.width = self.body_sprite.width()
-        self.height = self.body_sprite.height()
-
-        # Anchors nos cantos do body
-        self.add_anchor(AnchorItem("P", QPointF(self.width*191/300, self.height), node=self))               # superior esquerdo
-        self.add_anchor(AnchorItem("A", QPointF(self.width*191/300, 0), node=self))      # superior direito
-        self.add_anchor(AnchorItem("B", QPointF(self.width*256/300, 0), node=self))  # inferior direito
-        self.add_anchor(AnchorItem("R", QPointF(self.width*256/300, self.height), node=self))     # inferior esquerdo
-
         # Bits dos atuadores
         self.bits = {"left": 0, "right": 0}
 
 
-
+        self.initialize_body_visuals()
+        self.initialize_anchors()
         self.initialize_actuators()
 
     @property
@@ -251,6 +212,30 @@ class Valve_4_2_Ways(NodeItem):
 
         return {"active": active, "inactive": inactive}
 
+    def initialize_body_visuals(self):
+        self.body_visuals = {
+            state: {
+                "sprite": QPixmap(desc["sprite"]),
+                "offset": desc["offset"]
+            }
+            for state, desc in self.BODY_VISUALS.items()
+        }
+        self.max_offset_x = max(
+            visual["offset"].x()
+            for visual in self.body_visuals.values()
+        )
+
+        self.body_state = 0
+        self.body_sprite = self.body_visuals[0]["sprite"]
+        self.visual_offset = self.body_visuals[0]["offset"]
+
+        # Dimensões do body
+        self.width = self.body_sprite.width()
+        self.height = self.body_sprite.height()
+
+    def initialize_anchors(self):
+        pass
+
     def initialize_actuators(self):
         """
         Reconfigura completamente os atuadores da válvula.
@@ -321,7 +306,7 @@ class Valve_4_2_Ways(NodeItem):
         current = self.actuators.get(side)
 
         # opção "nenhum"
-        action_none = QAction("Nenhum", menu, checkable=True)
+        action_none = QAction("None", menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, s=side: self.set_actuator(s, None)
@@ -347,6 +332,6 @@ class Valve_4_2_Ways(NodeItem):
         self.actuators[side] = actuator_name
 
         # reconfigura tudo
-        self.initialize_actuators()
         self.prepareGeometryChange()
+        self.initialize_actuators()
         self.update()

@@ -5,52 +5,45 @@ class SimulationEngine:
 
     def run_until_stable(self):
         """
-        Resolve o sistema até que nenhum Anchor.pressurized mude.
-        Mudanças internas de Node (FSM, temporizadores, posição, etc.)
-        NÃO impedem estabilização.
+        Resolve until no Anchor.pressurized changes.
+        Internal Node changes (FSM, timers, position) don't prevent stabilization.
         """
-        changed = True
-
-        while changed:
-            changed = False
-
-            # 1. Atualiza lógica interna dos nodes
-            #    (pode alterar conectividade interna)
+        while True:
+            # Update internal node logic
             for node in self.nodes.values():
                 node.update()
 
-            # 2. Propagação de pressão (anchor-driven)
+            # Propagate pressure through connected anchor groups
             visited = set()
+            changed = False
 
             for node in self.nodes.values():
                 for anchor in node.anchors.values():
                     if anchor in visited:
                         continue
 
-                    # BFS para encontrar todo grupo conectado
+                    # Get all connected anchors
                     group = self._get_connected_group(anchor)
                     visited.update(group)
 
-                    # Coletar drivers do grupo
+                    # Collect drivers and compute group state (AND logic)
                     drivers = [a for a in group if a.is_driver]
-
                     if not drivers:
-                        continue  # sem drivers, nada a propagar
+                        continue
 
-                    # AND lógico de todos os drivers
                     group_state = all(d.pressurized for d in drivers)
 
-                    # Aplicar estado aos não-drivers
+                    # Apply state to non-drivers
                     for a in group:
-                        if a.is_driver:
-                            continue
-
-                        if a.pressurized != group_state:
+                        if not a.is_driver and a.pressurized != group_state:
                             a.pressurized = group_state
                             changed = True
 
+            if not changed:
+                break
+
     def _get_connected_group(self, start_anchor):
-        """BFS para coletar todos anchors conectados direta ou indiretamente."""
+        """BFS to collect all directly or indirectly connected anchors."""
         group = set()
         queue = [start_anchor]
 
@@ -58,20 +51,18 @@ class SimulationEngine:
             anchor = queue.pop(0)
             if anchor in group:
                 continue
-
             group.add(anchor)
 
-            # Conexões internas do node (dependem do estado atual)
+            # Internal node connections (state-dependent)
             for a_id, b_id in anchor.node.get_internal_connections():
                 a_anchor = anchor.node.get_anchor(a_id)
                 b_anchor = anchor.node.get_anchor(b_id)
+                
+                other = b_anchor if a_anchor == anchor else a_anchor if b_anchor == anchor else None
+                if other and other not in group:
+                    queue.append(other)
 
-                if a_anchor == anchor and b_anchor not in group:
-                    queue.append(b_anchor)
-                elif b_anchor == anchor and a_anchor not in group:
-                    queue.append(a_anchor)
-
-            # Conexões externas
+            # External connections
             for conn in anchor.connections:
                 other = conn.get_other(anchor)
                 if other not in group:

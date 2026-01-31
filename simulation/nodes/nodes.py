@@ -40,6 +40,20 @@ class Node:
             node.add_anchor(a.name)
         return node
     
+    def get_state(self) -> dict:
+        return {
+            "anchors": {
+                name: anchor.pressurized
+                for name, anchor in self.anchors.items()
+            }
+        }
+
+    def set_state(self, state: dict):
+        anchor_states = state.get("anchors", {})
+        for name, pressurized in anchor_states.items():
+            if name in self.anchors:
+                self.anchors[name].pressurized = pressurized
+
     def handle_command(self, command: str):
         """
         External command (debug / UI / test)
@@ -101,6 +115,15 @@ class Piston(Node):
 
     def get_visual_state(self):
             return self.position
+    
+    def get_state(self):
+        state = super().get_state()
+        state["position"] = self.position
+        return state
+
+    def set_state(self, state):
+        super().set_state(state)
+        self.position = state.get("position", self.position)
 
 class OrValve(Node):
     def __init__(self, node_id):
@@ -128,6 +151,16 @@ class OrValve(Node):
     
     def get_visual_state(self):
         return self.active_input  # "X" ou "Y"
+    
+
+    def get_state(self):
+        state = super().get_state()
+        state["active_input"] = self.active_input
+        return state
+
+    def set_state(self, state):
+        super().set_state(state)
+        self.active_input = state.get("active_input", self.active_input)
     
 
 

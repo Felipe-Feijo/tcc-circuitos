@@ -20,7 +20,7 @@ def create_mode_actions(main_window):
     actions["mode_simulate"] = QAction("Simulate", main_window)
     actions["mode_simulate"].setCheckable(True)
     actions["mode_simulate"].setShortcut("Ctrl+G")
-    actions["mode_simulate"].toggled.connect(lambda checked: checked and main_window.set_mode("simulate"))
+    actions["mode_simulate"].toggled.connect(lambda checked: checked and main_window.set_mode("simulate" if checked else None))
     group.addAction(actions["mode_simulate"])
 
     return actions

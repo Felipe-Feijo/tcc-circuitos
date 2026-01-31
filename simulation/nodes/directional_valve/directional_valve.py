@@ -17,18 +17,25 @@ class DirectionalValve(Node):
 
     def handle_command(self, command: dict):
         """
-        command: 'press' ou 'release'
-        side: 'left' ou 'right'
+        command:
+        type: "actuator"
+        side: "left" | "right"
+        value: 0 | 1
         """
 
-        if command["type"] == "button":
-            if command["side"] not in self.bits:
-                return
+        if command.get("type") != "actuator":
+            return
 
-            if command["action"] == "press":
-                self.bits[command["side"]] = 1
-            elif command["action"] == "release":
-                self.bits[command["side"]] = 0
+        side = command.get("side")
+        value = command.get("value")
+
+        if side not in self.bits:
+            return
+
+        if value not in (0, 1):
+            return
+
+        self.bits[side] = value
 
     def _update_pilots(self):
         for side, actuators in self.actuators.items():
@@ -65,5 +72,20 @@ class DirectionalValve(Node):
         self._update_springs()
         self._compute_body_state()
 
+    def get_state(self):
+        state = super().get_state()
+        state.update({
+            "bits": self.bits.copy(),
+            "body_state": self.body_state
+        })
+        return state
 
+    def set_state(self, state):
+        super().set_state(state)
+
+        if "bits" in state:
+            self.bits = state["bits"].copy()
+
+        if "body_state" in state:
+            self.body_state = state["body_state"]
         

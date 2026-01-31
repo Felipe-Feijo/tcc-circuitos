@@ -24,6 +24,7 @@ class SimulationSession:
 
     def start(self):
         if self.active:
+            print("already running simulation")
             return
 
         # 1️⃣ Build domain graph
@@ -39,14 +40,15 @@ class SimulationSession:
         self.controller = SimulationController(self.engine)
         self.controller.on_update_node = builder.node_map
         self.controller.on_update_connection = builder.connection_map
-
+        
+        self.active = True
         # 3️⃣ Bind graphical items to simulation
         self._activate_node_items()
 
         # 4️⃣ Initial solve
-        self.controller.step()
+        self.controller.request_step(1)
 
-        self.active = True
+       
 
     def stop(self):
         if not self.active:
@@ -83,3 +85,24 @@ class SimulationSession:
                     pass
             elif isinstance(item, ConnectionItem):
                 item.reset_visual_state()
+
+    def play(self):
+        if not self.active:
+            return
+        self.controller.play()
+
+    def pause(self):
+        if not self.active:
+            return
+        self.controller.pause()
+
+    def toggle_play(self):
+        if not self.active:
+            return
+        if self.controller.playing:
+            self.controller.pause()
+        else:
+            self.controller.play()
+
+    def is_playing(self) -> bool:
+        return bool(self.active and self.controller and self.controller.playing)

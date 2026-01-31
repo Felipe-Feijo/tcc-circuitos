@@ -1,14 +1,22 @@
 class SimulationEngine:
-    def __init__(self, nodes, connections):
+    def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes          # dict[id, Node]
         self.connections = connections
+        self.max_iterations = max_iterations    
 
     def run_until_stable(self):
         """
         Resolve until no Anchor.pressurized changes.
         Internal Node changes (FSM, timers, position) don't prevent stabilization.
         """
+        iteration = 0
         while True:
+            iteration += 1
+            if iteration > self.max_iterations:
+                raise RuntimeError(
+                    f"Simulation did not stabilize after {self.max_iterations} iterations. "
+                    "Possible feedback loop or invalid topology."
+                )
             # Update internal node logic
             for node in self.nodes.values():
                 node.update()

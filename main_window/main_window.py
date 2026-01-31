@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
             self.start_simulation()
         else:
             self.stop_simulation()
+        self.update_simulation_actions()
 
     def zoom_in(self):
         self.view.zoom_in()
@@ -204,6 +205,7 @@ class MainWindow(QMainWindow):
 
     def start_simulation(self):
         self.simulation.start()
+        self.simulation.controller.state_changed.connect(self.update_simulation_actions)
 
     def stop_simulation(self):
         self.simulation.stop()
@@ -216,3 +218,49 @@ class MainWindow(QMainWindow):
 
     def open_scene(self):
         self.file_session.open()
+
+    def toggle_play(self):
+        if self.mode != "simulate":
+            self.set_mode("simulate")
+
+        self.simulation.toggle_play()
+        self.update_simulation_actions()
+
+    def on_step_back(self):
+        if self.simulation.controller.step_backward():
+            self.update_simulation_actions()
+
+
+    def on_step_forward(self):
+        if self.simulation.controller.step_forward():
+            self.update_simulation_actions()
+
+    def update_simulation_actions(self):
+        run = self.actions["run"]
+        step_back = self.actions["step_back"]
+        step_fwd = self.actions["step_forward"]
+
+        # fora do modo simulate → tudo apagado
+        if self.mode != "simulate" or not self.simulation or not self.simulation.active:
+            run.setEnabled(False)
+            run.setText("Run")
+            step_back.setEnabled(False)
+            step_fwd.setEnabled(False)
+            return
+
+        ctrl = self.simulation.controller
+
+        # Run / Pause
+        run.setEnabled(True)
+        run.setText("Pause" if ctrl.playing else "Run")
+
+        # Steps só quando pausado
+        steps_enabled = not ctrl.playing
+
+        step_back.setEnabled(
+            steps_enabled and ctrl.can_step_back()
+        )
+
+        step_fwd.setEnabled(
+            steps_enabled
+        )

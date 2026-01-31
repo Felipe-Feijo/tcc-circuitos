@@ -19,5 +19,8 @@ def create_toolbars(main_window, actions):
     toolbar.addSeparator()
 
     toolbar.addAction(actions["mode_simulate"])
+    toolbar.addAction(actions["run"])
+    toolbar.addAction(actions["step_back"])
+    toolbar.addAction(actions["step_forward"])
 
     main_window.addToolBar(toolbar)

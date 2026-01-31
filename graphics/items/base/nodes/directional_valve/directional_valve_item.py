@@ -137,12 +137,10 @@ class DirectionalValveItem(NodeItem):
                         continue  # só responde a botões
                     # inverte o bit do atuador
                     self.command.emit(self.id, {
-                        "type": "button",
-                        "action": "press" if self.bits[side] == 0 else "release",
+                        "type": "actuator",
+                        "value": 1 if self.bits[side] == 0 else 0,
                         "side": side
                     })
-                    # apenas atualiza o visual (paint vai usar o bit para desenhar)
-                    self.update()
                     event.accept()
                     return
 

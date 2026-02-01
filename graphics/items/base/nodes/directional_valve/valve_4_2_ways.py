@@ -15,8 +15,8 @@ class Valve_4_2_Ways(DirectionalValveItem):
             "offset": QPointF(147, 0),
         }
     }
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.node_type = "valve_4_2_ways"
 

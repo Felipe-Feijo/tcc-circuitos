@@ -8,8 +8,8 @@ from ....anchors.anchor import AnchorItem
 
 class OrValve(NodeItem):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
         self.node_type = "or_valve"

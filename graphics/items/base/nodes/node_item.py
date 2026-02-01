@@ -5,22 +5,25 @@ from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPen, QPainter, QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
+from graphics.sensor_registry.sensor_registry import SensorRegistry
 
 
 class NodeItem(DiagramItemBase):
-    registry = {}
+    class_registry = {}
     command = pyqtSignal(str, dict) #node_id, command
 
     def __init_subclass__(cls):
             super().__init_subclass__()
-            NodeItem.registry[cls.__name__] = cls
+            NodeItem.class_registry[cls.__name__] = cls
 
-    def __init__(self):
+    def __init__(self, sensor_registry: SensorRegistry | None = None, *args, **kwargs):
         DiagramItemBase.__init__(self)
 
         self.id = str(uuid.uuid4())
+        self.sensor_registry = sensor_registry
         
         self.anchors = {}
+        self.labels = {}
         self.connections = []
         self.setAcceptHoverEvents(True)
 
@@ -63,6 +66,33 @@ class NodeItem(DiagramItemBase):
         if anchor.scene():
             anchor.scene().removeItem(anchor)
 
+    def add_label(self, key: str, label):
+        """
+        key: identificador lógico do label (ex: 'sensor_retracted')
+        label: QGraphicsTextItem ou subclass
+        """
+        existing = self.labels.get(key)
+
+        if existing:
+            # reaproveita label existente
+            existing.setPlainText(label.toPlainText())
+            existing.setPos(label.pos())
+            return
+
+        label.setParentItem(self)
+        self.labels[key] = label
+
+    def remove_label(self, key: str):
+        label = self.labels.pop(key, None)
+        if not label:
+            return
+
+        if label.scene():
+            label.scene().removeItem(label)
+
+
+
+
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             self.update_connections()
@@ -74,8 +104,15 @@ class NodeItem(DiagramItemBase):
             conn.update()
 
     def prepare_delete(self):
-    
+        # 🔹 desconecta tudo (se ainda precisar)
         self.connections.clear()
+
+        # 🔹 remove todos os sensores da registry
+        if hasattr(self, "sensors") and self.sensor_registry:
+            for pos, sensor in self.sensors.items():
+                name = sensor.get("name")
+                if name:
+                    self.sensor_registry.unregister(name)
 
 
     def boundingRect(self) -> QRectF:

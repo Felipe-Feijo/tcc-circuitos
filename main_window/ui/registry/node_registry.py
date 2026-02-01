@@ -1,6 +1,6 @@
 from graphics.items.base.nodes.or_valve import OrValve
 from graphics.items.base.nodes.pressure_source import PressureSource
-from graphics.items.base.nodes.piston.simple_piston import SimplePiston
+from graphics.items.base.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
 from graphics.items.base.nodes.exhaust import Exhaust
 
 from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
@@ -25,11 +25,11 @@ def register_nodes(palette, on_add_node):
         callback=lambda: on_add_node(Valve_4_2_Ways)
     )
     palette.add_node(
-        name="Piston",
+        name="SingleActingCylinder",
         pixmap=generate_pixmap_for_palette(
-            "resources/nodes/piston/piston.png"
+            "resources/nodes/single_acting_cylinder/single_acting_cylinder_retracted.png"
         ),
-        callback=lambda: on_add_node(SimplePiston)
+        callback=lambda: on_add_node(SingleActingCylinder)
     )
     palette.add_node(
         name="Exhaust",

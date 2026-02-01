@@ -7,8 +7,8 @@ from ....anchors.anchor import AnchorItem
 
 
 class PressureSource(NodeItem):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.node_type = "pressure_source"
         

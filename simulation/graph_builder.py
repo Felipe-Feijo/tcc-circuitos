@@ -2,7 +2,7 @@
 
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
-from simulation.nodes.nodes import OrValve, PressureSource, Exhaust, Piston
+from simulation.nodes.nodes import OrValve, PressureSource, Exhaust, SingleActingCylinder
 from simulation.connections import Connection
 
 NODE_FACTORY = {
@@ -10,7 +10,7 @@ NODE_FACTORY = {
     "valve_4_2_ways": Valve_4_2_Ways,
     "pressure_source": PressureSource,
     "exhaust": Exhaust,
-    "piston": Piston,
+    "single_acting_cylinder": SingleActingCylinder,
     "or_valve": OrValve,
 }
 

@@ -67,6 +67,15 @@ class Node:
         """
         pass
 
+    def post_step_update(self):
+        """
+        Executado UMA vez após estabilização.
+        - sensores
+        - delays
+        - commits de estado físico
+        """
+        pass
+
     def get_internal_connections(self):
         """
         Default: no internal connections.
@@ -98,9 +107,9 @@ class Exhaust(Node):
 
 
     
-class Piston(Node):
+class SingleActingCylinder(Node):
     def __init__(self, node_id):
-        super().__init__(node_id=node_id, node_type="piston")
+        super().__init__(node_id=node_id, node_type="single_acting_cylinder")
 
         # Porta pneumática única
         self.add_anchor("A")

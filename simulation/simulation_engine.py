@@ -50,6 +50,10 @@ class SimulationEngine:
             if not changed:
                 break
 
+        # 🔹 3. Pós-step (fora do loop de estabilização!)
+        for node in self.nodes.values():
+            node.post_step_update()
+
     def _get_connected_group(self, start_anchor):
         """BFS to collect all directly or indirectly connected anchors."""
         group = set()

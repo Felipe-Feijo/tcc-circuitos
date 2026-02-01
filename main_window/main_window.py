@@ -1,10 +1,11 @@
 from pathlib import Path
-from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QMessageBox, QGraphicsItem
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt
 from editor.clipboard_manager import ClipboardManager
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
+from graphics.scene import GraphicsScene
 from main_window.ui.docks.node_palette_dock import create_node_palette
 from graphics.items.base.nodes.node_item import NodeItem
 
@@ -43,7 +44,7 @@ class MainWindow(QMainWindow):
         self.hover_anchor = None
 
     def _init_editor(self):
-        self.scene = QGraphicsScene()
+        self.scene = GraphicsScene()
         self.editor_controller = EditorController(self.scene)
         self.delete_manager = DeleteManager(self.scene)
         self.clipboard_manager = ClipboardManager()
@@ -88,8 +89,10 @@ class MainWindow(QMainWindow):
         self.view.unsetCursor()
 
     def new_scene(self):
-        self.scene.clear()
-        self.current_file = None
+        self.scene = GraphicsScene()
+        self.view.setScene(self.scene)
+        self.simulation = SimulationSession(self.scene)
+        self.file_session = SceneFileSession(self.scene, self)
         self.setWindowTitle("Simulador – Editor Gráfico")
         self.update_scene_rect()
 
@@ -150,7 +153,7 @@ class MainWindow(QMainWindow):
         if not self.pending_node:
             return
 
-        item = self.pending_node()
+        item = self.pending_node(sensor_registry=self.scene.sensor_registry)
         item.editor = self
 
         w = item.boundingRect().width()

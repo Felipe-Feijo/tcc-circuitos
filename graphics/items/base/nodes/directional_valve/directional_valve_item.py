@@ -33,8 +33,8 @@ ACTUATOR_DICT = {
 
 class DirectionalValveItem(NodeItem):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.properties = {
             "actuators": {
@@ -310,25 +310,42 @@ class DirectionalValveItem(NodeItem):
     def _populate_actuator_menu(self, menu: QMenu, side: str):
         current = self.actuators.get(side)
 
-        # opção "nenhum"
+        # -----------------------
+        # Opção "Nenhum"
+        # -----------------------
         action_none = QAction("None", menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, s=side: self.set_actuator(s, None)
         )
         menu.addAction(action_none)
-
         menu.addSeparator()
 
+        # -----------------------
+        # Atuadores do ACTUATOR_DICT
+        # -----------------------
         for name, desc in ACTUATOR_DICT.items():
             action = QAction(desc["label"], menu, checkable=True)
             action.setChecked(current == name)
-
             action.triggered.connect(
                 lambda _, s=side, n=name: self.set_actuator(s, n)
             )
-
             menu.addAction(action)
+
+        # -----------------------
+        # Sensores existentes na sensor_registry
+        # -----------------------
+        if self.sensor_registry:
+            menu.addSeparator()
+            for sensor_name in self.sensor_registry.list_names():
+                action = QAction(sensor_name, menu, checkable=True)
+                # opcional: marcar se algum sensor estiver “associado” ao actuador
+                action.setChecked(False)
+                action.triggered.connect(
+                    lambda _, s=side, n=sensor_name: print(f"Selecionado sensor {n} para {s}")
+                    # aqui você poderia chamar algo tipo: self.set_actuator_sensor(s, n)
+                )
+                menu.addAction(action)
 
     def set_actuator(self, side: str, actuator_name: str | None):
         if self.actuators.get(side) == actuator_name:

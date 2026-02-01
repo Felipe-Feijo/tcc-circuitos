@@ -1,4 +1,3 @@
-from simulation.nodes.nodes import Piston
 from simulation.simulation_engine import SimulationEngine
 
 

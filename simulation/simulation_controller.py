@@ -130,11 +130,9 @@ class SimulationController(QObject):
         snap = self._snapshot()
 
         if self.history and snap == self.history[-1]:
-            print("⏭️ Snapshot skipped (no state change)")
             return False
 
         self.history.append(snap)
-        print("📸 Snapshot saved")
         return True
     
     

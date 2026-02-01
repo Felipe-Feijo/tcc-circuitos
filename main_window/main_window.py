@@ -96,7 +96,11 @@ class MainWindow(QMainWindow):
 
     def set_mode(self, mode: str | None, node_cls=None):
         self.mode = mode
+        self.view.cleanup_node_preview()
         self.pending_node = node_cls
+
+        if mode != "add":
+            self.node_palette.clear_selection()
 
         is_select_mode = (mode is None)
 
@@ -119,6 +123,8 @@ class MainWindow(QMainWindow):
             self.start_simulation()
         else:
             self.stop_simulation()
+
+        self._update_mode_actions(mode)
         self.update_simulation_actions()
 
     def zoom_in(self):
@@ -264,3 +270,7 @@ class MainWindow(QMainWindow):
         step_fwd.setEnabled(
             steps_enabled
         )
+
+    def _update_mode_actions(self, active_mode):
+        for action in self.mode_group.actions():
+            action.setChecked(action.data() == active_mode)

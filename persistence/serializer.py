@@ -46,7 +46,10 @@ def deserialize_scene(data: dict, scene, editor, *, clear_scene=True):
 
     # 1. nodes
     for node_data in data["nodes"]:
-        node = NodeItem.from_dict(node_data)
+        node = NodeItem.from_dict(
+            node_data,
+            sensor_registry=scene.sensor_registry  # 🔥 AQUI
+        )
         node.editor = editor
         scene.addItem(node)
 
@@ -69,6 +72,10 @@ def save_to_file(scene, filepath: str):
         json.dump(data, f, indent=2)
 
 def load_from_file(scene, filepath: str, editor):
+    from graphics.sensor_registry.sensor_registry import SensorRegistry
+
+    scene.sensor_registry = SensorRegistry()  # 🔹 reset controlado
+
     path = Path(filepath)
 
     with path.open("r", encoding="utf-8") as f:

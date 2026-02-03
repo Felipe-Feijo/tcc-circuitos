@@ -21,6 +21,11 @@ class NodeItem(DiagramItemBase):
 
         self.id = str(uuid.uuid4())
         self.sensor_registry = sensor_registry
+
+        #sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
+        #sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
+        #sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
+
         
         self.anchors = {}
         self.labels = {}
@@ -171,9 +176,9 @@ class NodeItem(DiagramItemBase):
         }
     
     @classmethod
-    def from_dict(cls, data: dict, *, keep_id=True):
-        node_cls = cls.registry[data["type"]]
-        node = node_cls()
+    def from_dict(cls, data: dict, *, keep_id=True, sensor_registry=None):
+        node_cls = cls.class_registry[data["type"]]
+        node = node_cls(sensor_registry=sensor_registry)
 
         if keep_id:
             node.id = data["id"]

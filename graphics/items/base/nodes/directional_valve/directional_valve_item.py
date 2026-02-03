@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QMenu
 
 from graphics.items.base.nodes.node_item import NodeItem
 from .....anchors.anchor import AnchorItem
+from graphics.labels.label import LabelItem
 
 ACTUATOR_DICT = {
     "button": {
@@ -13,6 +14,7 @@ ACTUATOR_DICT = {
         "sprite_active_path": "resources/actuators/button/button_active.png",
         "sprite_inactive_path": "resources/actuators/button/button_inactive.png",
         "mirrored": True,
+        "menu": True,
         "default_bit": 0,
     },
     "spring": {
@@ -20,6 +22,7 @@ ACTUATOR_DICT = {
         "sprite_active_path": "resources/actuators/spring/spring_active.png",
         "sprite_inactive_path": "resources/actuators/spring/spring_inactive.png",
         "mirrored": True,
+        "menu": True,
         "default_bit": 1,
     },
     "pilot": {
@@ -27,8 +30,17 @@ ACTUATOR_DICT = {
         "sprite_active_path": "resources/actuators/pilot/pilot.png",
         "sprite_inactive_path": "resources/actuators/pilot/pilot.png",
         "mirrored": True,
+        "menu": True,
         "default_bit": 0,
-    }
+    },
+    "limit_switch": {
+        "label": "Limit Switch",
+        "sprite_active_path": "resources/actuators/limit_switch/limit_switch_active.png",
+        "sprite_inactive_path": "resources/actuators/limit_switch/limit_switch_inactive.png",
+        "mirrored": True,
+        "menu": False,
+        "default_bit": 0,
+    },
 }
 
 class DirectionalValveItem(NodeItem):
@@ -42,7 +54,10 @@ class DirectionalValveItem(NodeItem):
                 "right": None
             }
         }
-
+        if self.sensor_registry:
+            self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
+            self.sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
+            self.sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
         self.actuators = {}
         self.actuator_visuals = {}  # sprites carregados
         self.actuator_rects = {}
@@ -255,7 +270,14 @@ class DirectionalValveItem(NodeItem):
         self.actuators = self.properties["actuators"]
 
         for side in ("left", "right"):
-            actuator_name = self.actuators.get(side)
+            self.remove_label(f"actuator_label_{side}")
+            actuator_cfg = self.actuators.get(side)
+            if not actuator_cfg:
+                actuator_name = None
+                sensor_name = None
+            else:
+                actuator_name = actuator_cfg["type"]
+                sensor_name = actuator_cfg.get("sensor_name")
             actuator_desc = ACTUATOR_DICT.get(actuator_name)
 
             anchor_name = "PL" if side == "left" else "PR"
@@ -294,6 +316,33 @@ class DirectionalValveItem(NodeItem):
                 # se não é pilot, garante que não exista
                 self.remove_anchor(anchor_name)
 
+            label_name = f"actuator_label_{side}"
+
+            # remove label antiga por segurança
+            self.remove_label(label_name)
+
+            if actuator_name == "limit_switch" and sensor_name:
+                rect = self.actuator_rects[side]
+
+                # posição relativa ao sprite
+                label_x = rect.x() + rect.width() * 0.5
+                label_y = rect.y() + rect.height() * 0.30
+
+                label = LabelItem(
+                    text=sensor_name,
+                    editable=False,
+                    max_length=3,
+                    on_commit=lambda t, s=side: self._set_limit_switch_sensor_name(s, t)
+                )
+
+                label.setPos(
+                    label_x + self.visual_offset.x(),
+                    label_y + self.visual_offset.y()
+                )
+
+                self.add_label(label_name, label)
+
+
     def apply_properties(self):
         self.initialize_actuators()
         self.update()
@@ -325,6 +374,8 @@ class DirectionalValveItem(NodeItem):
         # Atuadores do ACTUATOR_DICT
         # -----------------------
         for name, desc in ACTUATOR_DICT.items():
+            if not desc.get("menu", True):
+                continue
             action = QAction(desc["label"], menu, checkable=True)
             action.setChecked(current == name)
             action.triggered.connect(
@@ -339,21 +390,99 @@ class DirectionalValveItem(NodeItem):
             menu.addSeparator()
             for sensor_name in self.sensor_registry.list_names():
                 action = QAction(sensor_name, menu, checkable=True)
-                # opcional: marcar se algum sensor estiver “associado” ao actuador
-                action.setChecked(False)
+
+                action.setChecked(
+                    self.actuators.get(side) == "limit_switch"
+                    and self.actuator_sensor_name.get(side) == sensor_name
+                )
+
                 action.triggered.connect(
-                    lambda _, s=side, n=sensor_name: print(f"Selecionado sensor {n} para {s}")
-                    # aqui você poderia chamar algo tipo: self.set_actuator_sensor(s, n)
+                    lambda _, s=side, n=sensor_name: self.set_actuator(s, "limit_switch", n)
                 )
                 menu.addAction(action)
 
-    def set_actuator(self, side: str, actuator_name: str | None):
-        if self.actuators.get(side) == actuator_name:
+    def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None,):
+        current = self.properties["actuators"].get(side)
+
+        if actuator_name is None:
+            new_value = None
+        elif actuator_name == "limit_switch":
+            new_value = {
+                "type": "limit_switch",
+                "sensor_name": actuator_sensor_name,
+            }
+        else:
+            new_value = {
+                "type": actuator_name
+            }
+
+        if current == new_value:
             return
 
-        self.actuators[side] = actuator_name
+        self.properties["actuators"][side] = new_value
 
-        # reconfigura tudo
         self.prepareGeometryChange()
         self.initialize_actuators()
         self.update()
+
+
+    def _set_limit_switch_sensor_name(self, side: str, new_name: str):
+        actuator = self.properties["actuators"].get(side)
+        if not actuator or actuator.get("type") != "limit_switch":
+            return
+
+        old_name = actuator.get("sensor_name")
+
+        if not new_name or new_name == old_name:
+            return
+
+        # valida existência no registry
+        if self.sensor_registry and not self.sensor_registry.exists(new_name):
+            # volta ao antigo
+            label = self.labels.get(f"actuator_label_{side}")
+            if label:
+                label.set_text(old_name or "")
+            return
+
+        actuator["sensor_name"] = new_name
+
+    def _on_sensor_registry_changed(self, *args):
+        changed = False
+
+        for side in ("left", "right"):
+            actuator = self.properties["actuators"].get(side)
+            if not actuator or actuator.get("type") != "limit_switch":
+                continue
+
+            sensor_name = actuator.get("sensor_name")
+            if not sensor_name:
+                continue
+
+            if not self.sensor_registry.exists(sensor_name):
+                # sensor sumiu → desassocia
+                actuator["sensor_name"] = None
+                changed = True
+
+        if changed:
+            self.initialize_actuators()
+            self.update()
+
+    def _on_sensor_renamed(self, old_name, new_name, node):
+        updated = False
+
+        for side in ("left", "right"):
+            actuator = self.properties["actuators"].get(side)
+            if not actuator or actuator.get("type") != "limit_switch":
+                continue
+
+            if actuator.get("sensor_name") == old_name:
+                actuator["sensor_name"] = new_name
+
+                label = self.labels.get(f"actuator_label_{side}")
+                if label:
+                    label.set_text(new_name)
+
+                updated = True
+
+        if updated:
+            self.update()

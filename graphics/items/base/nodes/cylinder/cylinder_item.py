@@ -3,7 +3,7 @@ from PyQt6.QtCore import QRectF, QPointF, Qt
 from PyQt6.QtWidgets import QMessageBox
 
 from graphics.items.base.nodes.node_item import NodeItem
-from graphics.labels.editable_label import EditableLabelItem
+from graphics.labels.label import LabelItem
 from .....anchors.anchor import AnchorItem
 
 SENSOR_DICT = {
@@ -178,7 +178,18 @@ class CylinderItem(NodeItem):
         self.update()
 
     def apply_properties(self):
+        # remove qualquer registro antigo desse node
+        for pos in ["retracted", "extended"]:
+            self._unregister_sensor(pos)
+
         self.initialize_sensors()
+
+        # registra sensores carregados
+        for pos in ["retracted", "extended"]:
+            sensor = self.properties["sensors"].get(pos)
+            if sensor and sensor.get("type") is not None:
+                self._register_sensor(pos)
+
         self.update()
 
     def update_body_visuals(self):
@@ -195,7 +206,7 @@ class CylinderItem(NodeItem):
 
         size = 8
         margin = 4
-        line_length = 30
+        line_length = 20
 
         # Mapeia posição → índice do body_visuals
         pos_to_index = {"retracted": 0, "extended": 1}
@@ -210,8 +221,10 @@ class CylinderItem(NodeItem):
                 offset = visual["offset"]
 
                 # Cria o label editável
-                label = EditableLabelItem(
+                label = LabelItem(
                     text=sensor.get("name", ""),
+                    editable=True,
+                    max_length=3,
                     on_commit=lambda t, p=pos: self._set_sensor_name(p, t)
                 )
 

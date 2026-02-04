@@ -113,11 +113,11 @@ class SimulationController(QObject):
         if self.playing or not self.can_step_back():
             return False
 
-        # descarta estado atual
         self.history.pop()
-
-        # restaura o anterior
         self._restore(self.history[-1])
+
+        # 🔹 reconstroi outputs derivados
+        self.engine.compute_outputs()
 
         self._sync_view()
         self.state_changed.emit()

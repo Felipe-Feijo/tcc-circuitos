@@ -20,10 +20,12 @@ class Anchor:
 
 
 class Node:
-    def __init__(self, node_id, node_type):
+    def __init__(self, node_id, node_type, **kwargs):
         self.id = node_id
         self.type = node_type
         self.anchors = {}
+
+        self.properties = kwargs.get("properties", {}) or {}
 
     def add_anchor(self, name) -> Anchor:
         anchor = Anchor(name, self)
@@ -60,7 +62,7 @@ class Node:
         """
         pass
 
-    def update(self):
+    def update(self, outputs=None):
         """
         Default update.
         Nodes without dynamics do nothing.
@@ -88,8 +90,8 @@ class Node:
 
     
 class PressureSource(Node):
-    def __init__(self, node_id):
-        super().__init__(node_id=node_id, node_type="pressure_source")
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id=node_id, node_type="pressure_source", **kwargs)
 
         # Porta de saída
         anchor = self.add_anchor("P")
@@ -97,8 +99,8 @@ class PressureSource(Node):
         anchor.is_driver = True     # marca como driver
 
 class Exhaust(Node):
-    def __init__(self, node_id):
-        super().__init__(node_id=node_id, node_type="exhaust")
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id=node_id, node_type="exhaust", **kwargs)
 
         # Porta de entrada
         anchor = self.add_anchor("R")
@@ -108,8 +110,8 @@ class Exhaust(Node):
 
     
 class SingleActingCylinder(Node):
-    def __init__(self, node_id):
-        super().__init__(node_id=node_id, node_type="single_acting_cylinder")
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id=node_id, node_type="single_acting_cylinder", **kwargs)
 
         # Porta pneumática única
         self.add_anchor("A")
@@ -119,8 +121,31 @@ class SingleActingCylinder(Node):
         # 1 = avançado
         self.position = 0
 
-    def update(self):
+        # Extrai apenas o que precisa
+        self.sensors = self.properties.get("sensors", {
+            "retracted": {"type": None, "name": ""},
+            "extended": {"type": None, "name": ""}
+        })
+
+        self.outputs = {}
+
+    def update(self, outputs=None):
         self.position = 1 if self.anchors["A"].pressurized else 0
+
+    def post_step_update(self):
+        if self.sensors["retracted"]["type"]:
+            name = self.sensors["retracted"]["name"]
+            self.outputs[name] = {
+                "type": "signal",
+                "value": self.position == 0
+            }
+
+        if self.sensors["extended"]["type"]:
+            name = self.sensors["extended"]["name"]
+            self.outputs[name] = {
+                "type": "signal",
+                "value": self.position == 1
+            }
 
     def get_visual_state(self):
             return self.position
@@ -135,8 +160,8 @@ class SingleActingCylinder(Node):
         self.position = state.get("position", self.position)
 
 class OrValve(Node):
-    def __init__(self, node_id):
-        super().__init__(node_id=node_id, node_type="or_valve")
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id=node_id, node_type="or_valve", **kwargs)
 
         # Anchors pneumáticos
         self.add_anchor("X")
@@ -146,7 +171,7 @@ class OrValve(Node):
         # Estado interno (shuttle com memória)
         self.active_input: str = "X"  # estado inicial
 
-    def update(self):
+    def update(self, outputs=None):
         x = self.anchors["X"].pressurized
         y = self.anchors["Y"].pressurized
 

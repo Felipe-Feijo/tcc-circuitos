@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):
         self.view.unsetCursor()
 
     def new_scene(self):
+        self.set_mode(None)
         self.scene = GraphicsScene()
         self.view.setScene(self.scene)
         self.simulation = SimulationSession(self.scene)
@@ -226,6 +227,7 @@ class MainWindow(QMainWindow):
         self.file_session.save_as()
 
     def open_scene(self):
+        self.set_mode(None)
         self.file_session.open()
 
     def toggle_play(self):

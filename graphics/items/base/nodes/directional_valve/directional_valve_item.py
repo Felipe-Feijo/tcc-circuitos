@@ -148,8 +148,11 @@ class DirectionalValveItem(NodeItem):
         if self.simulation_mode:
             for side, rect in self.actuator_rects.items():
                 if rect.translated(self.visual_offset).contains(pos):
-                    if self.actuators[side] != "button":
+                    # ✅ CORRIGIDO: verificar o tipo do atuador
+                    actuator = self.actuators.get(side)
+                    if not actuator or actuator.get("type") != "button":
                         continue  # só responde a botões
+                    
                     # inverte o bit do atuador
                     self.command.emit(self.id, {
                         "type": "actuator",
@@ -206,21 +209,23 @@ class DirectionalValveItem(NodeItem):
     def update_actuators_visuals(self):
         for side in ("left", "right"):
             anchor_name = "PL" if side == "left" else "PR"
-            if anchor_name not in self.anchors:
-                continue
+            if anchor_name in self.anchors:
+                base_x = (
+                    self.actuator_rects[side].left()
+                    if side == "left"
+                    else self.actuator_rects[side].right()
+                )
 
-            base_x = (
-                self.actuator_rects[side].left()
-                if side == "left"
-                else self.actuator_rects[side].right()
-            )
+                x = base_x + self.visual_offset.x()
+                y = self.height * 0.6222 + self.visual_offset.y()
+                self.anchors[anchor_name].setPos(QPointF(x, y))
 
-            x = base_x + self.visual_offset.x()
-            y = self.height * 0.6222 + self.visual_offset.y()
+            # 🔹 mover label do limit switch
+            label = self.labels.get(f"actuator_label_{side}")
+            if label and hasattr(label, "_relative_pos"):
+                label.setPos(label._relative_pos + self.visual_offset)
 
-            self.anchors[anchor_name].setPos(QPointF(x, y))
-            self.update_connections()
-            
+        self.update_connections()
  
     def _load_actuator_pixmaps(self, actuator_desc, side):
         active = QPixmap(actuator_desc["sprite_active_path"])
@@ -323,10 +328,11 @@ class DirectionalValveItem(NodeItem):
 
             if actuator_name == "limit_switch" and sensor_name:
                 rect = self.actuator_rects[side]
+                
 
                 # posição relativa ao sprite
-                label_x = rect.x() + rect.width() * 0.5
-                label_y = rect.y() + rect.height() * 0.30
+                label_x = rect.x() +  rect.width() * (0.42 if side == "left" else 0.18)
+                label_y = rect.y() + rect.height() * 0.25
 
                 label = LabelItem(
                     text=sensor_name,
@@ -335,10 +341,10 @@ class DirectionalValveItem(NodeItem):
                     on_commit=lambda t, s=side: self._set_limit_switch_sensor_name(s, t)
                 )
 
-                label.setPos(
-                    label_x + self.visual_offset.x(),
-                    label_y + self.visual_offset.y()
-                )
+                relative_pos = QPointF(label_x, label_y)
+
+                label._relative_pos = relative_pos
+                label.setPos(relative_pos + self.visual_offset)
 
                 self.add_label(label_name, label)
 
@@ -377,7 +383,8 @@ class DirectionalValveItem(NodeItem):
             if not desc.get("menu", True):
                 continue
             action = QAction(desc["label"], menu, checkable=True)
-            action.setChecked(current == name)
+            # ✅ CORRIGIDO: verificar se current existe e comparar com current["type"]
+            action.setChecked(current is not None and current.get("type") == name)
             action.triggered.connect(
                 lambda _, s=side, n=name: self.set_actuator(s, n)
             )
@@ -391,10 +398,13 @@ class DirectionalValveItem(NodeItem):
             for sensor_name in self.sensor_registry.list_names():
                 action = QAction(sensor_name, menu, checkable=True)
 
-                action.setChecked(
-                    self.actuators.get(side) == "limit_switch"
-                    and self.actuator_sensor_name.get(side) == sensor_name
+                # ✅ CORRIGIDO: verificar current["type"] ao invés de comparar current com string
+                is_checked = (
+                    current is not None
+                    and current.get("type") == "limit_switch"
+                    and current.get("sensor_name") == sensor_name
                 )
+                action.setChecked(is_checked)
 
                 action.triggered.connect(
                     lambda _, s=side, n=sensor_name: self.set_actuator(s, "limit_switch", n)
@@ -460,7 +470,7 @@ class DirectionalValveItem(NodeItem):
 
             if not self.sensor_registry.exists(sensor_name):
                 # sensor sumiu → desassocia
-                actuator["sensor_name"] = None
+                self.properties["actuators"][side] = None
                 changed = True
 
         if changed:

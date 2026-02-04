@@ -24,10 +24,10 @@ class GraphBuilder:
     def add_node_from_item(self, node_item):
         node_cls = NODE_FACTORY[node_item.node_type]
 
+        # Repassa as properties completas
         kwargs = {}
-        # se o item gráfico define atuadores, repassa
-        if hasattr(node_item, "actuators"):
-            kwargs["actuators"] = node_item.actuators
+        if hasattr(node_item, "properties"):
+            kwargs["properties"] = node_item.properties
 
         node = node_cls(node_item.id, **kwargs)
 

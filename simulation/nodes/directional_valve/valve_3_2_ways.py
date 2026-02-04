@@ -2,8 +2,8 @@ from simulation.nodes.directional_valve.directional_valve import DirectionalValv
 
 
 class Valve_3_2_Ways(DirectionalValve):
-    def __init__(self, node_id, actuators=None):
-        super().__init__(node_id, "valve_3_2_ways", actuators)
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id, "valve_3_2_ways", **kwargs)
 
         # Anchors
         self.add_anchor("P")
@@ -16,4 +16,3 @@ class Valve_3_2_Ways(DirectionalValve):
             return [("A", "R")]
         elif self.body_state == 1:
             return [("P", "A")]
-        

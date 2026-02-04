@@ -11,6 +11,7 @@ class DeleteManager:
         self.scene = scene
 
     def delete_selection(self):
+        print("DeleteManager: delete_selection called")
         """
         Deletes all selected items from the scene.
         

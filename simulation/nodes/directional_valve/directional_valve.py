@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class DirectionalValve(Node):
-    def __init__(self, node_id, node_type, actuators=None):
-        super().__init__(node_id, node_type)
+    def __init__(self, node_id, node_type, **kwargs):
+        super().__init__(node_id, node_type, **kwargs)
 
         # Anchors
         self.add_anchor("PL")
@@ -11,7 +11,8 @@ class DirectionalValve(Node):
         # Bits do item gráfico
         self.bits = {"left": 0, "right": 0}
 
-        self.actuators = actuators or {}
+        # Nova estrutura: {"left": {"type": "pilot"}, "right": None}
+        self.actuators = self.properties.get("actuators", {"left": None, "right": None})
 
         self.body_state = 0  # 0 = repouso, 1 = ativo
 
@@ -38,23 +39,47 @@ class DirectionalValve(Node):
         self.bits[side] = value
 
     def _update_pilots(self):
-        for side, actuators in self.actuators.items():
-            if not actuators or "pilot" not in actuators:
+        for side in ("left", "right"):
+            actuator = self.actuators.get(side)
+            if not actuator or actuator.get("type") != "pilot":
                 continue
 
             anchor = "PL" if side == "left" else "PR"
             self.bits[side] = 1 if self.anchors[anchor].pressurized else 0
 
     def _update_springs(self):
-        for side, actuators in self.actuators.items():
-            if not actuators or "spring" not in actuators:
+        for side in ("left", "right"):
+            actuator = self.actuators.get(side)
+            if not actuator or actuator.get("type") != "spring":
                 continue
 
             other = "right" if side == "left" else "left"
+            other_actuator = self.actuators.get(other)
 
-            if "spring" not in (self.actuators.get(other) or []):
-                # só atua se o outro lado não estiver forçando
+            # só atua se o outro lado não estiver forçando
+            if not other_actuator or other_actuator.get("type") != "spring":
                 self.bits[side] = 0 if self.bits[other] else 1
+
+    def _update_limit_switches(self, outputs):
+        """
+        Atualiza bits baseado nos limit switches.
+        outputs: dict[name, payload]
+        """
+        for side in ("left", "right"):
+            actuator = self.actuators.get(side)
+            if not actuator or actuator.get("type") != "limit_switch":
+                continue
+
+            name = actuator.get("sensor_name")
+            payload = outputs.get(name)
+
+            if not payload:
+                continue
+
+            if payload.get("type") != "signal":
+                continue
+
+            self.bits[side] = 1 if payload.get("value") else 0
 
     def _compute_body_state(self):
         left = self.bits["left"]
@@ -66,10 +91,15 @@ class DirectionalValve(Node):
             self.body_state = 0
         # 00 e 11 → mantém
 
-
-    def update(self):
+    def update(self, outputs=None):
+        """
+        sensors: dicionário opcional {sensor_name: bool} com estado dos sensores
+        """
         self._update_pilots()
         self._update_springs()
+        if outputs:
+            self._update_limit_switches(outputs)
+        
         self._compute_body_state()
 
     def get_state(self):
@@ -88,4 +118,3 @@ class DirectionalValve(Node):
 
         if "body_state" in state:
             self.body_state = state["body_state"]
-        

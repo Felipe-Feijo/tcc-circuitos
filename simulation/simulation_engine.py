@@ -2,7 +2,9 @@ class SimulationEngine:
     def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes          # dict[id, Node]
         self.connections = connections
-        self.max_iterations = max_iterations    
+        self.max_iterations = max_iterations   
+
+        self.outputs = {}        # dict[name, payload] 
 
     def run_until_stable(self):
         """
@@ -19,7 +21,7 @@ class SimulationEngine:
                 )
             # Update internal node logic
             for node in self.nodes.values():
-                node.update()
+                node.update(self.outputs)
 
             # Propagate pressure through connected anchor groups
             visited = set()
@@ -51,8 +53,27 @@ class SimulationEngine:
                 break
 
         # 🔹 3. Pós-step (fora do loop de estabilização!)
+        self.compute_outputs()
+        
+
+
+    def compute_outputs(self):
+        self.outputs = {}
+        self.signals = {}
+
         for node in self.nodes.values():
             node.post_step_update()
+
+            node_outputs = getattr(node, "outputs", None)
+            if not node_outputs:
+                continue
+
+            for name, payload in node_outputs.items():
+                self.outputs[name] = payload
+
+                if payload.get("type") == "signal":
+                    self.signals[name] = payload.get("value")
+        print("outputs:", self.outputs)
 
     def _get_connected_group(self, start_anchor):
         """BFS to collect all directly or indirectly connected anchors."""

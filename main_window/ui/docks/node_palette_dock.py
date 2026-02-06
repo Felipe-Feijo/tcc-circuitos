@@ -6,7 +6,12 @@ from main_window.ui.registry.node_registry import register_nodes
 def create_node_palette(main_window):
     palette = NodePalette()
 
+    palette.add_section("Pneumatic")
+    palette.add_section("Electric")
+    palette.add_section("Hydraulic")
+
     dock = QDockWidget("Nodes", main_window)
+    dock.setFixedWidth(260)
     dock.setWidget(palette)
     dock.setAllowedAreas(
         Qt.DockWidgetArea.LeftDockWidgetArea |

@@ -96,9 +96,11 @@ class DirectionalValve(Node):
         sensors: dicionário opcional {sensor_name: bool} com estado dos sensores
         """
         self._update_pilots()
-        self._update_springs()
+        
         if outputs:
             self._update_limit_switches(outputs)
+
+        self._update_springs()
         
         self._compute_body_state()
 

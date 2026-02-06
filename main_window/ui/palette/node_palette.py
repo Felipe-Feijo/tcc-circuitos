@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import ( QWidget, QVBoxLayout, QLabel, QScrollArea, QGridLayout ) 
 from PyQt6.QtCore import Qt 
-from main_window.ui.palette.node_palette_item import NodePaletteItem 
+from main_window.ui.palette.node_palette_item import NodePaletteItem
+from main_window.ui.palette.palette_section import PaletteSection 
 
 class NodePalette(QWidget): 
     def __init__(self, parent=None): 
@@ -16,13 +17,15 @@ class NodePalette(QWidget):
         scroll = QScrollArea() 
         scroll.setWidgetResizable(True) 
         main_layout.addWidget(scroll) 
+
+        self.sections = {}
     
         # container interno com grid layout 
         container = QWidget() 
-        self.grid_layout = QGridLayout(container) 
-        self.grid_layout.setSpacing(8) 
-        self.grid_layout.setRowStretch(999, 1) 
-        self.grid_layout.setColumnStretch(999, 1) 
+        self.container_layout = QVBoxLayout(container)
+        self.container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.container_layout.setSpacing(8)
+        self.container_layout.setContentsMargins(0, 0, 0, 0)
         scroll.setWidget(container) 
 
         # contador de linhas/colunas 
@@ -30,16 +33,6 @@ class NodePalette(QWidget):
         
         # ajuste conforme quiser 
         self.selected_item: NodePaletteItem | None = None 
-        
-    def add_node(self, name: str, pixmap, callback): 
-        item = NodePaletteItem(name, pixmap) 
-        count = self.grid_layout.count() 
-        row = count // self.num_columns 
-        col = count % self.num_columns 
-        self.grid_layout.addWidget(item, row, col) 
-        
-
-        item.mouseReleaseEvent = lambda e: self.on_click(item, callback) 
         
     def on_click(self, item, callback): 
         self.select_item(item) 
@@ -57,3 +50,15 @@ class NodePalette(QWidget):
         if self.selected_item: 
             self.selected_item.set_selected(False) 
         self.selected_item = None
+
+    def add_section(self, name: str):
+        if name in self.sections:
+            return self.sections[name]
+
+        section = PaletteSection(name, num_columns=self.num_columns)
+        self.sections[name] = section
+        self.container_layout.addWidget(section)
+        return section
+
+    def register_item(self, item: NodePaletteItem, callback):
+        item.mouseReleaseEvent = lambda e: self.on_click(item, callback)

@@ -10,35 +10,37 @@ from graphics.utils.pixmap_utils import generate_pixmap_for_palette
 
 
 def register_nodes(palette, on_add_node):
-    palette.add_node(
+
+    pneumatic = palette.sections["Pneumatic"]
+    pneumatic.add_node(
         name="Valve_3_2_Ways",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/valve_3_2_ways/valve_3_2_body_right.png"
         ),
         callback=lambda: on_add_node(Valve_3_2_Ways)
     )
-    palette.add_node(
+    pneumatic.add_node(
         name="Valve_4_2_Ways",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/valve_4_2_ways/valve_4_2_body_right.png"
         ),
         callback=lambda: on_add_node(Valve_4_2_Ways)
     )
-    palette.add_node(
+    pneumatic.add_node(
         name="SingleActingCylinder",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/single_acting_cylinder/single_acting_cylinder_retracted.png"
         ),
         callback=lambda: on_add_node(SingleActingCylinder)
     )
-    palette.add_node(
+    pneumatic.add_node(
         name="Exhaust",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/exhaust/exhaust.png"
         ),
         callback=lambda: on_add_node(Exhaust)
     )
-    palette.add_node(
+    pneumatic.add_node(
         name="PressureSource",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/pressure_source/pressure_source.png"
@@ -46,7 +48,17 @@ def register_nodes(palette, on_add_node):
         callback=lambda: on_add_node(PressureSource)
     )
 
-    palette.add_node(
+    pneumatic.add_node(
+        name="OrValve",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/or_valve/or_valve_x_side.png"
+        ),
+        callback=lambda: on_add_node(OrValve)
+    )
+
+    electric = palette.sections["Electric"]
+
+    electric.add_node(
         name="OrValve",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/or_valve/or_valve_x_side.png"

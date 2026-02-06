@@ -275,6 +275,7 @@ class DirectionalValveItem(NodeItem):
         self.actuators = self.properties["actuators"]
 
         for side in ("left", "right"):
+            
             self.remove_label(f"actuator_label_{side}")
             actuator_cfg = self.actuators.get(side)
             if not actuator_cfg:

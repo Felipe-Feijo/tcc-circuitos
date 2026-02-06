@@ -21,11 +21,6 @@ class NodeItem(DiagramItemBase):
 
         self.id = str(uuid.uuid4())
         self.sensor_registry = sensor_registry
-
-        #sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
-        #sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
-        #sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
-
         
         self.anchors = {}
         self.labels = {}

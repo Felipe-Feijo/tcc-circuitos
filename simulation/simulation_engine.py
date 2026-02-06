@@ -59,7 +59,6 @@ class SimulationEngine:
 
     def compute_outputs(self):
         self.outputs = {}
-        self.signals = {}
 
         for node in self.nodes.values():
             node.post_step_update()
@@ -70,9 +69,6 @@ class SimulationEngine:
 
             for name, payload in node_outputs.items():
                 self.outputs[name] = payload
-
-                if payload.get("type") == "signal":
-                    self.signals[name] = payload.get("value")
         print("outputs:", self.outputs)
 
     def _get_connected_group(self, start_anchor):

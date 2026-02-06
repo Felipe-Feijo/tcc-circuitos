@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from PyQt6.QtCore import QObject, pyqtSignal
 class SensorRegistry(QObject):
 
@@ -8,19 +9,22 @@ class SensorRegistry(QObject):
     def __init__(self):
         super().__init__()
         self._map = {}  # name -> owner_node
+        self._load_depth = 0
 
     def register(self, name: str, node):
         if name in self._map:
             return False
 
         self._map[name] = node
-        self.sensor_added.emit(name, node)
+        if not self.is_loading:
+            self.sensor_added.emit(name, node)
         return True
 
     def unregister(self, name: str):
         if name in self._map:
             self._map.pop(name)
-            self.sensor_removed.emit(name)
+            if not self.is_loading:
+                self.sensor_removed.emit(name)
 
     def rename(self, old_name: str, new_name: str, node):
         if old_name not in self._map:
@@ -31,8 +35,9 @@ class SensorRegistry(QObject):
 
         self._map.pop(old_name)
         self._map[new_name] = node
-
-        self.sensor_renamed.emit(old_name, new_name, node)
+        
+        if not self.is_loading:
+            self.sensor_renamed.emit(old_name, new_name, node)
         return True
 
     def list_names(self):
@@ -47,3 +52,15 @@ class SensorRegistry(QObject):
         while f"{prefix}{i}" in self._map:
             i += 1
         return f"{prefix}{i}"
+    
+    @contextmanager
+    def loading(self):
+        self._load_depth += 1
+        try:
+            yield
+        finally:
+            self._load_depth -= 1
+
+    @property
+    def is_loading(self):
+        return self._load_depth > 0

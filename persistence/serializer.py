@@ -81,4 +81,5 @@ def load_from_file(scene, filepath: str, editor):
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
-    deserialize_scene(data, scene, editor)
+    with scene.sensor_registry.loading():
+        deserialize_scene(data, scene, editor)

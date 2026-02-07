@@ -91,8 +91,6 @@ class NodeItem(DiagramItemBase):
             label.scene().removeItem(label)
 
 
-
-
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             self.update_connections()

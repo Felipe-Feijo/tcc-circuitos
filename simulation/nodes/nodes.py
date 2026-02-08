@@ -25,7 +25,10 @@ class Node:
         self.type = node_type
         self.anchors = {}
 
-        self.properties = kwargs.get("properties", {}) or {}
+        self.domain = kwargs.pop("domain", None)
+        print(self.domain)
+
+        self.properties = kwargs.pop("properties", {}) or {}
 
     def add_anchor(self, name) -> Anchor:
         anchor = Anchor(name, self)

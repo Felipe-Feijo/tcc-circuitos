@@ -25,10 +25,10 @@ ACTUATOR_DICT = {
         "menu": True,
         "default_bit": 1,
     },
-    "pilot": {
-        "label": "Pilot",
-        "sprite_active_path": "resources/actuators/pilot/pilot.png",
-        "sprite_inactive_path": "resources/actuators/pilot/pilot.png",
+    "pneumatic_pilot": {
+        "label": "Pilot (pneumatic)",
+        "sprite_active_path": "resources/actuators/pneumatic_pilot/pneumatic_pilot.png",
+        "sprite_inactive_path": "resources/actuators/pneumatic_pilot/pneumatic_pilot.png",
         "mirrored": True,
         "menu": True,
         "default_bit": 0,
@@ -315,9 +315,9 @@ class DirectionalValveItem(NodeItem):
             self.actuator_rects[side] = QRectF(x, y, w, h)
 
             
-            if actuator_name == "pilot":
+            if actuator_name == "pneumatic_pilot":
                 x = self.actuator_rects[side].left() if side == "left" else self.actuator_rects[side].right()
-                self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self)) 
+                self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self, domain='pneumatic')) 
             else:
                 # se não é pilot, garante que não exista
                 self.remove_anchor(anchor_name)

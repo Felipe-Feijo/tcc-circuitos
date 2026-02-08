@@ -41,7 +41,7 @@ class DirectionalValve(Node):
     def _update_pilots(self):
         for side in ("left", "right"):
             actuator = self.actuators.get(side)
-            if not actuator or actuator.get("type") != "pilot":
+            if not actuator or actuator.get("type") != "pneumatic_pilot":
                 continue
 
             anchor = "PL" if side == "left" else "PR"

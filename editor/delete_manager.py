@@ -23,6 +23,7 @@ class DeleteManager:
             bool: True if items were deleted, False if nothing was selected
         """
         items = list(self.scene.selectedItems())
+        print("Selected:", items)
         if not items:
             return False
 

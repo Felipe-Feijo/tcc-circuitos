@@ -91,6 +91,9 @@ class MainWindow(QMainWindow):
     def new_scene(self):
         self.set_mode(None)
         self.scene = GraphicsScene()
+
+        self.delete_manager.scene = self.scene
+        
         self.view.setScene(self.scene)
         self.simulation = SimulationSession(self.scene)
         self.file_session = SceneFileSession(self.scene, self)
@@ -98,10 +101,10 @@ class MainWindow(QMainWindow):
         self.update_scene_rect()
 
 
-    def set_mode(self, mode: str | None, node_cls=None):
+    def set_mode(self, mode: str | None, node_desc=None):
         self.mode = mode
         self.view.cleanup_node_preview()
-        self.pending_node = node_cls
+        self.pending_node = node_desc
 
         if mode != "add":
             self.node_palette.clear_selection()
@@ -154,7 +157,9 @@ class MainWindow(QMainWindow):
         if not self.pending_node:
             return
 
-        item = self.pending_node(sensor_registry=self.scene.sensor_registry)
+        item = self.pending_node.cls(
+            domain=self.pending_node.domain,
+            sensor_registry=self.scene.sensor_registry)
         item.editor = self
 
         w = item.boundingRect().width()

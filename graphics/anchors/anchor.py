@@ -3,12 +3,13 @@ from PyQt6.QtCore import Qt, QPointF, QRectF
 from PyQt6.QtGui import QPen, QPainterPath
 
 class AnchorItem(QGraphicsEllipseItem):
-    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None,):
+    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None):
         super().__init__(-radius, -radius, 2 * radius, 2 * radius, node)
 
         self.name = name
         self.id = (node.id, name)
         self.node = node
+        self.domain = domain
         self.hit_radius = radius * 4
 
         self.setPos(pos)
@@ -40,6 +41,11 @@ class AnchorItem(QGraphicsEllipseItem):
         is_source_anchor = (self.node.editor.view._connecting and self.node.editor.view._conn_source_anchor is self)
         
         if self.node.editor and self.node.editor.mode == "connect" and not is_source_anchor:
+            source = self.node.editor.view._conn_source_anchor
+
+            if source and source.domain != self.domain:
+                return
+            
             self.setBrush(Qt.GlobalColor.red)
             self.node.editor.hover_anchor = self
 

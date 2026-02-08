@@ -16,10 +16,12 @@ class NodeItem(DiagramItemBase):
             super().__init_subclass__()
             NodeItem.class_registry[cls.__name__] = cls
 
-    def __init__(self, sensor_registry: SensorRegistry | None = None, *args, **kwargs):
+    def __init__(self, *args, domain=None, sensor_registry: SensorRegistry | None = None,  **kwargs):
         DiagramItemBase.__init__(self)
 
         self.id = str(uuid.uuid4())
+        self.domain = domain
+        print(domain)
         self.sensor_registry = sensor_registry
         
         self.anchors = {}
@@ -61,6 +63,8 @@ class NodeItem(DiagramItemBase):
         for conn in self.connections[:]:
             if conn.source_anchor == anchor or conn.target_anchor == anchor:
                 conn.prepare_delete()
+                if conn.scene():
+                    conn.scene().removeItem(conn)
 
         # remove da cena
         if anchor.scene():
@@ -161,6 +165,7 @@ class NodeItem(DiagramItemBase):
         return {
             "id": self.id,
             "type": self.__class__.__name__,
+            "domain": self.domain,
             "position": {
                 "x": self.pos().x(),
                 "y": self.pos().y()
@@ -171,7 +176,7 @@ class NodeItem(DiagramItemBase):
     @classmethod
     def from_dict(cls, data: dict, *, keep_id=True, sensor_registry=None):
         node_cls = cls.class_registry[data["type"]]
-        node = node_cls(sensor_registry=sensor_registry)
+        node = node_cls(domain = data['domain'], sensor_registry=sensor_registry)
 
         if keep_id:
             node.id = data["id"]

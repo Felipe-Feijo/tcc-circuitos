@@ -21,4 +21,4 @@ class SingleActingCylinder(CylinderItem):
         self.node_type = "single_acting_cylinder"
 
     def initialize_anchors(self):
-        self.add_anchor(AnchorItem("A", QPointF(self.width * 18/360, self.height), node=self))
+        self.add_anchor(AnchorItem("A", QPointF(self.width * 18/360, self.height), node=self, domain=self.domain))

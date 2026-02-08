@@ -221,7 +221,7 @@ class GraphicsView(QGraphicsView):
         if not self.editor.pending_node:
             return
 
-        item = self.editor.pending_node()
+        item = self.editor.pending_node.cls()
         item.apply_preview_constraints()
 
         self._preview_node = item

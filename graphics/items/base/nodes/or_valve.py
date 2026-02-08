@@ -23,9 +23,9 @@ class OrValve(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.add_anchor(AnchorItem("X", QPointF(0, self.height*0.5429), node=self))
-        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height*0.5429), node=self))
-        self.add_anchor(AnchorItem("A", QPointF(self.width*0.5039, 0), node=self))
+        self.add_anchor(AnchorItem("X", QPointF(0, self.height*0.5429), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height*0.5429), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("A", QPointF(self.width*0.5039, 0), node=self, domain=self.domain))
 
 
     def update_from_domain(self, domain_node):

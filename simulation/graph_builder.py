@@ -28,6 +28,7 @@ class GraphBuilder:
         kwargs = {}
         if hasattr(node_item, "properties"):
             kwargs["properties"] = node_item.properties
+        kwargs["domain"] = node_item.domain
 
         node = node_cls(node_item.id, **kwargs)
 

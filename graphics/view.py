@@ -58,10 +58,16 @@ class GraphicsView(QGraphicsView):
             self.editor.update_scene_rect()
 
     def wheelEvent(self, event):
+        # Define o ponto de ancoragem como o mouse
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        
         if event.angleDelta().y() > 0:
             self.zoom_in()
         else:
             self.zoom_out()
+        
+        # Restaura a ancoragem original
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_node:

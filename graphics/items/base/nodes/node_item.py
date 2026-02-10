@@ -21,7 +21,6 @@ class NodeItem(DiagramItemBase):
 
         self.id = str(uuid.uuid4())
         self.domain = domain
-        print(domain)
         self.sensor_registry = sensor_registry
         
         self.anchors = {}
@@ -36,6 +35,7 @@ class NodeItem(DiagramItemBase):
         self.draw_selection = True
         self._visual_offset = QPointF(0, 0)
 
+        self.is_preview = False
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
 
@@ -156,6 +156,7 @@ class NodeItem(DiagramItemBase):
     visual_offset = pyqtProperty(QPointF, fget=getVisualOffset, fset=setVisualOffset)  
 
     def apply_preview_constraints(self):
+        self.is_preview = True
         self.setOpacity(0.5)
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)

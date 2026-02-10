@@ -4,10 +4,6 @@ class DirectionalValve(Node):
     def __init__(self, node_id, node_type, **kwargs):
         super().__init__(node_id, node_type, **kwargs)
 
-        # Anchors
-        self.add_anchor("PL")
-        self.add_anchor("PR")
-
         # Bits do item gráfico
         self.bits = {"left": 0, "right": 0}
 

@@ -4,6 +4,7 @@ from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 from simulation.nodes.nodes import OrValve, PressureSource, Exhaust, SingleActingCylinder
 from simulation.connections import Connection
+from simulation.nodes.pressure_line import PressureLine
 
 NODE_FACTORY = {
     "valve_3_2_ways": Valve_3_2_Ways,
@@ -12,6 +13,7 @@ NODE_FACTORY = {
     "exhaust": Exhaust,
     "single_acting_cylinder": SingleActingCylinder,
     "or_valve": OrValve,
+    "pressure_line": PressureLine
 }
 
 class GraphBuilder:
@@ -31,6 +33,13 @@ class GraphBuilder:
         kwargs["domain"] = node_item.domain
 
         node = node_cls(node_item.id, **kwargs)
+        
+        # Cria anchors lógicas baseadas nas anchors gráficas
+        for anchor_item in node_item.anchors.values():
+            node.add_anchor(
+                name=anchor_item.name,
+                domain=anchor_item.domain
+            )
 
         self.nodes[node.id] = node
         self.node_map[node_item] = node

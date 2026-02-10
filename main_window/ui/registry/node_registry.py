@@ -1,6 +1,7 @@
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
 from graphics.items.base.nodes.or_valve import OrValve
+from graphics.items.base.nodes.pressure_line import PressureLine
 from graphics.items.base.nodes.pressure_source import PressureSource
 from graphics.items.base.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
 from graphics.items.base.nodes.exhaust import Exhaust
@@ -57,6 +58,13 @@ def regsiter_pneumatic_nodes(palette, on_add_node):
             "resources/nodes/pressure_source/pressure_source.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(PressureSource, domain=domain))
+    )
+    pneumatic.add_node(
+        name="PressureLine",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/pressure_line/pressure_line_terminal.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(PressureLine, domain=domain))
     )
 
 def register_electric_nodes(palette, on_add_node):

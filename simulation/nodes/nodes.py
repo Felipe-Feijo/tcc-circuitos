@@ -5,9 +5,10 @@ from typing import Dict, List
 
 
 class Anchor:
-    def __init__(self, name: str, node: "Node"):
+    def __init__(self, name: str, node: "Node", domain: str):
         self.node = node
         self.name = name
+        self.domain = domain
         self.id = (node.id, name)
         self.connections: List["Connection"] = []
 
@@ -26,24 +27,15 @@ class Node:
         self.anchors = {}
 
         self.domain = kwargs.pop("domain", None)
-        print(self.domain)
-
         self.properties = kwargs.pop("properties", {}) or {}
 
-    def add_anchor(self, name) -> Anchor:
-        anchor = Anchor(name, self)
+    def add_anchor(self, name, domain) -> Anchor:
+        anchor = Anchor(name, self, domain)
         self.anchors[name] = anchor
         return anchor
 
     def get_anchor(self, name):
-            return self.anchors[name]
-
-    @classmethod
-    def from_node_item(cls, item):
-        node = cls(item.id, item.node_type)
-        for a in item.anchors:
-            node.add_anchor(a.name)
-        return node
+        return self.anchors[name]
     
     def get_state(self) -> dict:
         return {
@@ -96,28 +88,23 @@ class PressureSource(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id=node_id, node_type="pressure_source", **kwargs)
 
-        # Porta de saída
-        anchor = self.add_anchor("P")
-        anchor.pressurized = True  # pressão fixa
-        anchor.is_driver = True     # marca como driver
+    def update(self, outputs=None):
+        self.get_anchor("P").pressurized = True
+        self.get_anchor("P").is_driver = True
 
 class Exhaust(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id=node_id, node_type="exhaust", **kwargs)
 
-        # Porta de entrada
-        anchor = self.add_anchor("R")
-        anchor.pressurized = False  # pressão fixa
-        anchor.is_driver = True     # marca como driver
+    def update(self, outputs=None):
+        self.get_anchor("R").pressurized = False
+        self.get_anchor("R").is_driver = True
 
 
     
 class SingleActingCylinder(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id=node_id, node_type="single_acting_cylinder", **kwargs)
-
-        # Porta pneumática única
-        self.add_anchor("A")
 
         # Estado interno
         # 0 = retraído

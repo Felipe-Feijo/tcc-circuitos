@@ -1,7 +1,7 @@
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
 from graphics.items.base.nodes.or_valve import OrValve
-from graphics.items.base.nodes.pressure_line import PressureLine
+from graphics.items.base.nodes.expandable.pressure_line import PressureLine
 from graphics.items.base.nodes.pressure_source import PressureSource
 from graphics.items.base.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
 from graphics.items.base.nodes.exhaust import Exhaust

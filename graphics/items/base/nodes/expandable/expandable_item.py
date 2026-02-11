@@ -1,30 +1,23 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
-from PyQt6.QtWidgets import QMenu, QGraphicsItem
-
-
+from PyQt6.QtWidgets import QMenu
 
 from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
-from ....anchors.anchor import AnchorItem
+from .....anchors.anchor import AnchorItem
 
-class PressureLine(NodeItem):
+class ExpandableItem(NodeItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.node_type = "pressure_line"
 
         self.properties = {
             "anchors": ["X1", "X2"]
         }
 
-        self.pixmap = QPixmap("resources/nodes/pressure_line/pressure_line_terminal.png")
-
-        self.pix_w = self.pixmap.width()
-        self.pix_h = self.pixmap.height()
+        self.initialize_terminal_visuals()
 
         self.spacing = 120
-        self.internal_connection = None
+        self.internal_connections = []
 
         self.anchor_list = []
 
@@ -71,7 +64,7 @@ class PressureLine(NodeItem):
             removed = self.anchor_list.pop()
 
         # 👉 REBIND ANTES DE DESTRUIR
-        self.update_internal_connection()
+        self.update_internal_connections()
 
         # agora é seguro remover fisicamente
         self.remove_anchor(removed.name)
@@ -91,7 +84,6 @@ class PressureLine(NodeItem):
         y0 = self.pix_h
 
         for i, anchor in enumerate(self.anchor_list):
-            print(anchor.name, anchor.pos())
             br = anchor.boundingRect()
 
             cx = x0 + i * self.spacing
@@ -101,19 +93,21 @@ class PressureLine(NodeItem):
                 cx - br.center().x(),
                 cy - br.center().y()
             )
-        QTimer.singleShot(0, self.update_internal_connection)
-        print(self.properties["anchors"])
+        QTimer.singleShot(0, self.update_internal_connections)
 
     def paint(self, painter, option, widget=None):
+        if not self.pixmap_left or not self.pixmap_right:
+            return
+
         # esquerdo
-        painter.drawPixmap(0, 0, self.pixmap)
+        painter.drawPixmap(0, 0, self.pixmap_left)
 
         # direito
         n = len(self.anchor_list)
         last_anchor_center = self.pix_w * 0.5 + (n - 1) * self.spacing
         pixmap_right_x = last_anchor_center - self.pix_w * 0.5
 
-        painter.drawPixmap(int(pixmap_right_x), 0, self.pixmap)
+        painter.drawPixmap(int(pixmap_right_x), 0, self.pixmap_right)
 
         self.paint_selection_feedback(painter)
 
@@ -137,38 +131,42 @@ class PressureLine(NodeItem):
         rem_menu.addAction("À direita", lambda: self.remove_anchor_side("right"))
 
 
-    def update_internal_connection(self):
+    def update_internal_connections(self):
         if getattr(self, "is_preview", False):
             return
 
         if not self.scene():
-            QTimer.singleShot(0, self.update_internal_connection)
+            QTimer.singleShot(0, self.update_internal_connections)
             return
 
-        if len(self.anchor_list) < 2:
+        anchors = self.anchor_list
+
+        if len(anchors) < 2:
             return
 
-        self.ensure_internal_connection()
+        # garante que existe uma conexão para cada par adjacente
+        for i in range(len(anchors) - 1):
+            a1 = anchors[i]
+            a2 = anchors[i + 1]
 
-        a1 = self.anchor_list[0]
-        a2 = self.anchor_list[-1]
+            if not self._has_internal_connection(a1, a2):
+                conn = self._create_internal_connection(a1, a2)
+                self.internal_connections.append(conn)
 
-        conn = self.internal_connection
-        conn.source_anchor = a1
-        conn.target_anchor = a2
-        conn.update_position()
+        # atualiza posição de todas
+        self.update_connections()
+        print(self.internal_connections)
 
 
-    def ensure_internal_connection(self):
-        if self.internal_connection:
-            return
-
-        if len(self.anchor_list) < 2:
-            return
-
-        a1 = self.anchor_list[0]
-        a2 = self.anchor_list[-1]
-
+    def _has_internal_connection(self, a1, a2):
+        for conn in self.internal_connections:
+            if conn.source_anchor == a1 and conn.target_anchor == a2:
+                return True
+            if conn.source_anchor == a2 and conn.target_anchor == a1:
+                return True
+        return False
+    
+    def _create_internal_connection(self, a1, a2):
         conn = ConnectionItem(self, a1, self, a2)
 
         conn.setZValue(-20)
@@ -179,7 +177,7 @@ class PressureLine(NodeItem):
             self.scene().addItem(conn)
 
         self.connections.append(conn)
-        self.internal_connection = conn
+        return conn
 
     def _next_anchor_name(self):
         i = 1
@@ -209,3 +207,17 @@ class PressureLine(NodeItem):
     def apply_properties(self):
         self.initialize_anchors()
         self.update()
+
+    def initialize_terminal_visuals(self):
+        left_path = self.TERMINAL_VISUALS.get("left")
+        right_path = self.TERMINAL_VISUALS.get("right")
+
+        self.pixmap_left = QPixmap(left_path) if left_path else None
+        self.pixmap_right = QPixmap(right_path) if right_path else None
+
+        if self.pixmap_left:
+            self.pix_w = self.pixmap_left.width()
+            self.pix_h = self.pixmap_left.height()
+        else:
+            self.pix_w = 0
+            self.pix_h = 0

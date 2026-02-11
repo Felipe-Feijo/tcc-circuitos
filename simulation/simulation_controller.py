@@ -86,7 +86,7 @@ class SimulationController(QObject):
 
         if self.on_update_connection:
             for conn_item, domain_conn in self.on_update_connection.items():
-                conn_item.set_pressurized(domain_conn.is_pressurized())
+                conn_item.set_state(domain_conn.get_state())
 
     # -----------------------
     # State snapshot helpers

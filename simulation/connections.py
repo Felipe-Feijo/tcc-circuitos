@@ -28,8 +28,18 @@ class Connection:
         else:
             raise ValueError(f"Anchor {anchor.id} not in connection {self.id}")
         
-    def is_pressurized(self) -> bool:
-        return (
-            self.anchor_a.pressurized
-            and self.anchor_b.pressurized
-        )
+    def get_state(self) -> float:
+        """
+        Retorna o estado atual da conexão.
+        """
+        # Usando anchor_a como referência de domínio/estado
+        domain = getattr(self.anchor_a, "domain", "pneumatic")
+        
+        if domain in ["pneumatic", "electric"]:
+            # considera ativo se ambos os anchors estiverem ativos (booleana)
+            return True if self.anchor_a.state and self.anchor_b.state else False
+        elif domain == "hydraulic":
+            # média entre os estados para simplificação
+            return (self.anchor_a.pressure + self.anchor_b.pressure) > 0
+        else:
+            return False

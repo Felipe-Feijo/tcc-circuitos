@@ -10,10 +10,21 @@ class Anchor:
         self.name = name
         self.domain = domain
         self.id = (node.id, name)
-        self.connections: List["Connection"] = []
+        self.connections: list["Connection"] = []
 
-        self.pressurized: bool = False
-        self.is_driver = False
+        # novo: estado genérico do domínio
+        self.state: bool = False
+
+        # ainda útil para driver/solenoides, bombas etc.
+        self.is_driver: bool = False
+
+        # atributos específicos por domínio (opcional)
+        # elétrica
+        self.type: str | None = None  # "source", "ground", "regular"
+        self.voltage: float = 0.0     # opcional, usado no elétrico
+        # hidráulica
+        self.pressure: float = 0.0    # opcional, se quiser modelar pressão real
+        self.flow: float = 0.0        # opcional, se quiser modelar vazão
 
     def connect(self, connection: "Connection"):
         if connection not in self.connections:
@@ -40,16 +51,16 @@ class Node:
     def get_state(self) -> dict:
         return {
             "anchors": {
-                name: anchor.pressurized
+                name: anchor.state
                 for name, anchor in self.anchors.items()
             }
         }
 
     def set_state(self, state: dict):
         anchor_states = state.get("anchors", {})
-        for name, pressurized in anchor_states.items():
+        for name, state in anchor_states.items():
             if name in self.anchors:
-                self.anchors[name].pressurized = pressurized
+                self.anchors[name].state = state
 
     def handle_command(self, command: str):
         """
@@ -89,7 +100,7 @@ class PressureSource(Node):
         super().__init__(node_id=node_id, node_type="pressure_source", **kwargs)
 
     def update(self, outputs=None):
-        self.get_anchor("P").pressurized = True
+        self.get_anchor("P").state = True
         self.get_anchor("P").is_driver = True
 
 class Exhaust(Node):
@@ -97,7 +108,7 @@ class Exhaust(Node):
         super().__init__(node_id=node_id, node_type="exhaust", **kwargs)
 
     def update(self, outputs=None):
-        self.get_anchor("R").pressurized = False
+        self.get_anchor("R").state = False
         self.get_anchor("R").is_driver = True
 
 
@@ -120,7 +131,7 @@ class SingleActingCylinder(Node):
         self.outputs = {}
 
     def update(self, outputs=None):
-        self.position = 1 if self.anchors["A"].pressurized else 0
+        self.position = 1 if self.anchors["A"].state else 0
 
     def post_step_update(self):
         if self.sensors["retracted"]["type"]:
@@ -162,8 +173,8 @@ class OrValve(Node):
         self.active_input: str = "X"  # estado inicial
 
     def update(self, outputs=None):
-        x = self.anchors["X"].pressurized
-        y = self.anchors["Y"].pressurized
+        x = self.anchors["X"].state
+        y = self.anchors["Y"].state
 
         # Só muda se exatamente uma entrada estiver pressurizada
         if x ^ y:

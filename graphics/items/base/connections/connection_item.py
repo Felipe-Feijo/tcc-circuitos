@@ -9,7 +9,7 @@ class ConnectionItem(DiagramItemBase):
     def __init__(self, source_node, source_anchor, target_node=None, target_anchor=None):
         DiagramItemBase.__init__(self)
 
-        self.pressurized = False
+        self.state: float = 0.0  # 0 = desligado, 1 = ligado (pneumatic/electric), 0-1 contínuo (hidraulic)
 
         self.id = frozenset([
             source_anchor.id,
@@ -26,12 +26,22 @@ class ConnectionItem(DiagramItemBase):
         self.setPos(0, 0)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
 
-        # Pens para normal e selecionado
-        self.pen = QPen(Qt.GlobalColor.red, 2)
+        # Pens para cada domínio
+        if self.domain == "pneumatic":
+            self.pen = QPen(Qt.GlobalColor.red, 2)
+        elif self.domain == "electric":
+            self.pen = QPen(Qt.GlobalColor.white, 2)
+        elif self.domain == "hydraulic":
+            # ainda placeholder
+            self.pen = QPen(Qt.GlobalColor.cyan, 2)
         
         self.setZValue(-10)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.update()
+
+    @property
+    def domain(self):
+        return getattr(self.source_anchor, "domain")
 
     def shape(self) -> QPainterPath:
         """Define a área clicável/selecionável seguindo o caminho da linha"""
@@ -75,19 +85,25 @@ class ConnectionItem(DiagramItemBase):
             max_y - min_y + 2 * margin
         )
 
-    
     def paint(self, painter: QPainter, option, widget=None):
-
         points = self.get_path_points()
         if len(points) < 2:
             return
 
+        # Seleção tem prioridade
         if self.isSelected():
             pen = QPen(Qt.GlobalColor.blue, 2)
-        elif self.pressurized:
-            pen = QPen(Qt.GlobalColor.green, 2)
         else:
-            pen = self.pen
+            # cores por domínio
+            if self.domain == "pneumatic" and self.state == 1:
+                pen = QPen(Qt.GlobalColor.green)
+            elif self.domain == "electric" and self.state == 1:
+                pen = QPen(Qt.GlobalColor.yellow)
+            elif self.domain == "hydraulic" and self.state == 1:
+                # ainda placeholder
+                pen = QPen(Qt.GlobalColor.cyan)
+            else:
+                pen = self.pen
 
         painter.setPen(pen)
         
@@ -180,14 +196,15 @@ class ConnectionItem(DiagramItemBase):
         return conn
     
 
-    def set_pressurized(self, value: bool):
-        if self.pressurized != value:
-            self.pressurized = value
+    def set_state(self, value: float):
+        """
+        Atualiza o estado da connection e repinta de acordo com domínio.
+        """
+        if self.state != value:
+            self.state = value
             self.update()
 
     def reset_visual_state(self):
-        """
-        Retorna a conexão ao estado visual neutro (fora de simulação).
-        """
-        self.pressurized = False
+        """Retorna a connection ao estado neutro fora de simulação"""
+        self.state = 0
         self.update()

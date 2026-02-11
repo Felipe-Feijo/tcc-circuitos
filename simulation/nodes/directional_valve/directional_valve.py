@@ -41,7 +41,7 @@ class DirectionalValve(Node):
                 continue
 
             anchor = "PL" if side == "left" else "PR"
-            self.bits[side] = 1 if self.anchors[anchor].pressurized else 0
+            self.bits[side] = 1 if self.anchors[anchor].state else 0
 
     def _update_springs(self):
         for side in ("left", "right"):

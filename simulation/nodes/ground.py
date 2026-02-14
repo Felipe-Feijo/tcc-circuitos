@@ -1,8 +1,14 @@
 from simulation.nodes.nodes import Node
 
-class PressureLine(Node):
+class Ground(Node):
     def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "pressure_line", **kwargs)
+        super().__init__(node_id, "ground", **kwargs)
+
+    def update(self, outputs=None):
+        # marca apenas a primeira anchor como ground
+        first_anchor = next(iter(self.anchors.values()))
+        print(f"first_anchor: {first_anchor.name}")
+        first_anchor.type = "ground"
 
     def get_internal_connections(self):
         """

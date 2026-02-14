@@ -11,7 +11,7 @@ class ExpandableItem(NodeItem):
         super().__init__(*args, **kwargs)
 
         self.properties = {
-            "anchors": ["X1", "X2"]
+            "anchors": list(getattr(self, "DEFAULT_ANCHORS", []))
         }
 
         self.initialize_terminal_visuals()
@@ -22,6 +22,10 @@ class ExpandableItem(NodeItem):
         self.anchor_list = []
 
         self.initialize_anchors()
+
+    @property
+    def MIN_ANCHORS(self):
+        return len(self.DEFAULT_ANCHORS)
 
     def add_anchor_side(self, side: str):
         anchor = self._create_anchor(side)
@@ -53,7 +57,7 @@ class ExpandableItem(NodeItem):
         return anchor
     
     def remove_anchor_side(self, side: str):
-        if len(self.anchor_list) <= 2:
+        if len(self.anchor_list) <= self.MIN_ANCHORS:
             return
 
         # remove da lista lógica primeiro
@@ -79,37 +83,18 @@ class ExpandableItem(NodeItem):
 
     def update_layout(self):
         self.prepareGeometryChange()
-
-        x0 = self.pix_w * 0.5
-        y0 = self.pix_h
-
-        for i, anchor in enumerate(self.anchor_list):
-            br = anchor.boundingRect()
-
-            cx = x0 + i * self.spacing
-            cy = y0
-
-            anchor.setPos(
-                cx - br.center().x(),
-                cy - br.center().y()
-            )
+        self.layout_anchors()
         QTimer.singleShot(0, self.update_internal_connections)
 
+    def layout_anchors(self):
+        raise NotImplementedError
+
     def paint(self, painter, option, widget=None):
-        if not self.pixmap_left or not self.pixmap_right:
-            return
-
-        # esquerdo
-        painter.drawPixmap(0, 0, self.pixmap_left)
-
-        # direito
-        n = len(self.anchor_list)
-        last_anchor_center = self.pix_w * 0.5 + (n - 1) * self.spacing
-        pixmap_right_x = last_anchor_center - self.pix_w * 0.5
-
-        painter.drawPixmap(int(pixmap_right_x), 0, self.pixmap_right)
-
+        self.paint_symbol(painter)
         self.paint_selection_feedback(painter)
+
+    def paint_symbol(self, painter):
+        raise NotImplementedError
 
     def boundingRect(self):
         n = len(self.anchor_list)

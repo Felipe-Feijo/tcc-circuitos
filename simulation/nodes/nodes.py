@@ -21,7 +21,6 @@ class Anchor:
         # atributos específicos por domínio (opcional)
         # elétrica
         self.type: str | None = None  # "source", "ground", "regular"
-        self.voltage: float = 0.0     # opcional, usado no elétrico
         # hidráulica
         self.pressure: float = 0.0    # opcional, se quiser modelar pressão real
         self.flow: float = 0.0        # opcional, se quiser modelar vazão

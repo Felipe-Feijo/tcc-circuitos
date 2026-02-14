@@ -121,48 +121,80 @@ class SimulationEngine:
         return group
     
     def _update_electric_domain(self):
-        changed = False
-        for node in self.nodes.values():
-            for a in node.anchors.values():
-                if a.domain != "electric": continue
-                a.voltage = 0  # reset
-
-        for node in self.nodes.values():
-            for source in node.anchors.values():
-                if source.type != "source": continue
-                # BFS até encontrar grounds
-                closed_circuit_anchors = self._find_closed_circuits(source)
-                for a in closed_circuit_anchors:
-                    if a.voltage != source.voltage:
-                        a.voltage = source.voltage
+            """
+            Propaga state binário pelo domínio elétrico.
+            """
+            changed = False
+            
+            # Para cada source, marca caminhos válidos
+            valid_anchors = set()
+            for node in self.nodes.values():
+                for source in node.anchors.values():
+                    if source.type == "source":
+                        visited = set()
+                        self._mark_valid_from_source(source, visited, valid_anchors)
+            
+            # Atualiza estados
+            for node in self.nodes.values():
+                for a in node.anchors.values():
+                    if a.domain != "electric":
+                        continue
+                    new_state = a in valid_anchors
+                    if a.state != new_state:
+                        a.state = new_state
                         changed = True
 
-        return changed
+            return changed
 
-    def _find_closed_circuits(self, source):
-        """Retorna anchors que estão em circuito fechado source → ground"""
-        visited = set()
-        queue = [(source, [source])]  # anchor + caminho atual
-        closed_circuit_anchors = set()
-
-        while queue:
-            anchor, path = queue.pop(0)
-            if anchor in visited:
-                continue
-            visited.add(anchor)
-
-            if anchor.type == "ground":
-                # marca todo o caminho como fechado
-                closed_circuit_anchors.update(path)
-                continue
-
-            for conn in anchor.connections:
-                other = conn.get_other(anchor)
-                if other.domain != "electric": continue
-                if other not in visited:
-                    queue.append((other, path + [other]))
-
-        return closed_circuit_anchors
+    def _mark_valid_from_source(self, anchor, visited, valid_anchors):
+        """
+        Marca anchor como válida se ela pode alcançar ground.
+        Explora TODOS os caminhos possíveis através de backtracking.
+        """
+        if anchor in visited:
+            return False
+        
+        visited.add(anchor)
+        
+        # Ground sempre é válido
+        if anchor.type == "ground":
+            valid_anchors.add(anchor)
+            visited.remove(anchor)
+            return True
+        
+        reaches_ground = False
+        
+        # Conexões internas - explora TODAS
+        for a_id, b_id in anchor.node.get_internal_connections():
+            a_anchor = anchor.node.get_anchor(a_id)
+            b_anchor = anchor.node.get_anchor(b_id)
+            
+            other = None
+            if a_anchor == anchor:
+                other = b_anchor
+            elif b_anchor == anchor:
+                other = a_anchor
+            
+            if other and other.domain == "electric":
+                if self._mark_valid_from_source(other, visited, valid_anchors):
+                    reaches_ground = True
+                    # ❌ NÃO faz break aqui! Continua explorando outros caminhos
+        
+        # Conexões externas - explora TODAS
+        for conn in anchor.connections:
+            other = conn.get_other(anchor)
+            if other and other.domain == "electric":
+                if self._mark_valid_from_source(other, visited, valid_anchors):
+                    reaches_ground = True
+                    # ❌ NÃO faz break aqui! Continua explorando outros caminhos
+        
+        visited.remove(anchor)
+        
+        # Marca como válida se alcança ground por QUALQUER caminho
+        if reaches_ground:
+            valid_anchors.add(anchor)
+        
+        return reaches_ground
     
     def _update_hydraulic_domain(self):
         """

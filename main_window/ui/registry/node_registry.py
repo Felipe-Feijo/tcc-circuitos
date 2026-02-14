@@ -1,3 +1,5 @@
+from graphics.items.base.nodes.expandable.ground import Ground
+from graphics.items.base.nodes.expandable.voltage_source import VoltageSource
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
 from graphics.items.base.nodes.or_valve import OrValve
@@ -10,6 +12,7 @@ from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2
 from graphics.items.base.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 
 
+from graphics.items.base.nodes.switch.button_switch import ButtonSwitch
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
 
 
@@ -66,18 +69,40 @@ def regsiter_pneumatic_nodes(palette, on_add_node):
         ),
         callback=lambda: on_add_node(NodeDescriptor(PressureLine, domain=domain))
     )
-
-def register_electric_nodes(palette, on_add_node):
-    electric = palette.sections["Electric"]
-    domain = "electric"
-
-    electric.add_node(
+    pneumatic.add_node(
         name="OrValve",
         pixmap=generate_pixmap_for_palette(
             "resources/nodes/or_valve/or_valve_x_side.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(OrValve, domain=domain))
     )
+
+def register_electric_nodes(palette, on_add_node):
+    electric = palette.sections["Electric"]
+    domain = "electric"
+
+    electric.add_node(
+        name="VoltageSource",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/voltage_source/voltage_source_terminal.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(VoltageSource, domain=domain))
+    )
+    electric.add_node(
+        name="Ground",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/ground/ground_terminal.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(Ground, domain=domain))
+    )
+    electric.add_node(
+        name="ButtonSwitch",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/button_switch/button_switch_no_open.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(ButtonSwitch, domain=domain))
+    )
+
 
 def register_hydraulic_nodes(palette, on_add_node):
     hydraulic = palette.sections["Hydraulic"]

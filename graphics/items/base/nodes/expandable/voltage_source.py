@@ -1,16 +1,15 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 
 
-class PressureLine(ExpandableItem):
+class VoltageSource(ExpandableItem):
     TERMINAL_VISUALS = {
-        "left":  "resources/nodes/pressure_line/pressure_line_terminal.png",
-        "right": "resources/nodes/pressure_line/pressure_line_terminal.png"
+        "left":  "resources/nodes/voltage_source/voltage_source_terminal.png",
     }
-    DEFAULT_ANCHORS = ["X1", "X2"]
+    DEFAULT_ANCHORS = ["X1"]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "pressure_line"
+        self.node_type = "voltage_source"
 
     def paint_symbol(self, painter):
         if not self.pixmap_left:
@@ -18,16 +17,9 @@ class PressureLine(ExpandableItem):
 
         painter.drawPixmap(0, 0, self.pixmap_left)
 
-        if self.pixmap_right:
-            n = len(self.anchor_list)
-            last_anchor_center = self.pix_w * 0.5 + (n - 1) * self.spacing
-            pixmap_right_x = last_anchor_center - self.pix_w * 0.5
-
-            painter.drawPixmap(int(pixmap_right_x), 0, self.pixmap_right)
-
     def layout_anchors(self):
-        x0 = self.pix_w * 0.5
-        y0 = self.pix_h
+        x0 = self.pix_w
+        y0 = self.pix_h * 69/100
 
         for i, anchor in enumerate(self.anchor_list):
             br = anchor.boundingRect()

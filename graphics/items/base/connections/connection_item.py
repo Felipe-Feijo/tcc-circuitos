@@ -28,12 +28,12 @@ class ConnectionItem(DiagramItemBase):
 
         # Pens para cada domínio
         if self.domain == "pneumatic":
-            self.pen = QPen(Qt.GlobalColor.red, 2)
+            self.pen = QPen(Qt.GlobalColor.red, 3)
         elif self.domain == "electric":
-            self.pen = QPen(Qt.GlobalColor.white, 2)
+            self.pen = QPen(Qt.GlobalColor.white, 3)
         elif self.domain == "hydraulic":
             # ainda placeholder
-            self.pen = QPen(Qt.GlobalColor.cyan, 2)
+            self.pen = QPen(Qt.GlobalColor.cyan, 3)
         
         self.setZValue(-10)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -92,16 +92,16 @@ class ConnectionItem(DiagramItemBase):
 
         # Seleção tem prioridade
         if self.isSelected():
-            pen = QPen(Qt.GlobalColor.blue, 2)
+            pen = QPen(Qt.GlobalColor.blue, 3)
         else:
             # cores por domínio
             if self.domain == "pneumatic" and self.state == 1:
-                pen = QPen(Qt.GlobalColor.green)
+                pen = QPen(Qt.GlobalColor.green, 3)
             elif self.domain == "electric" and self.state == 1:
-                pen = QPen(Qt.GlobalColor.yellow)
+                pen = QPen(Qt.GlobalColor.yellow, 3)
             elif self.domain == "hydraulic" and self.state == 1:
                 # ainda placeholder
-                pen = QPen(Qt.GlobalColor.cyan)
+                pen = QPen(Qt.GlobalColor.cyan, 3)
             else:
                 pen = self.pen
 

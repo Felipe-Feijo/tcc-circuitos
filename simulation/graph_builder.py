@@ -1,10 +1,13 @@
 # domain/graph_builder.py
 
+from simulation.nodes.button_switch import ButtonSwitch
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
+from simulation.nodes.ground import Ground
 from simulation.nodes.nodes import OrValve, PressureSource, Exhaust, SingleActingCylinder
 from simulation.connections import Connection
 from simulation.nodes.pressure_line import PressureLine
+from simulation.nodes.voltage_source import VoltageSource
 
 NODE_FACTORY = {
     "valve_3_2_ways": Valve_3_2_Ways,
@@ -13,7 +16,10 @@ NODE_FACTORY = {
     "exhaust": Exhaust,
     "single_acting_cylinder": SingleActingCylinder,
     "or_valve": OrValve,
-    "pressure_line": PressureLine
+    "pressure_line": PressureLine,
+    "voltage_source": VoltageSource,
+    "ground": Ground,
+    "button_switch": ButtonSwitch
 }
 
 class GraphBuilder:
@@ -26,16 +32,22 @@ class GraphBuilder:
     def add_node_from_item(self, node_item):
         node_cls = NODE_FACTORY[node_item.node_type]
 
-        # Repassa as properties completas
         kwargs = {}
         if hasattr(node_item, "properties"):
             kwargs["properties"] = node_item.properties
         kwargs["domain"] = node_item.domain
 
         node = node_cls(node_item.id, **kwargs)
-        
-        # Cria anchors lógicas baseadas nas anchors gráficas
-        for anchor_item in node_item.anchors.values():
+
+        # Determina a ordem das anchors
+        if hasattr(node_item, "anchor_list"):
+            # usa a lista ordenada
+            anchor_items = node_item.anchor_list
+        else:
+            # fallback: dict.values(), ordem arbitrária
+            anchor_items = node_item.anchors.values()
+
+        for anchor_item in anchor_items:
             node.add_anchor(
                 name=anchor_item.name,
                 domain=anchor_item.domain

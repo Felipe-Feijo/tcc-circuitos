@@ -57,8 +57,6 @@ class NodeItem(DiagramItemBase):
         if not anchor:
             return
 
-        print(f"Removing anchor {name}")
-
         # desconecta conexões que usam essa anchor
         for conn in self.connections[:]:
             if conn.source_anchor == anchor or conn.target_anchor == anchor:

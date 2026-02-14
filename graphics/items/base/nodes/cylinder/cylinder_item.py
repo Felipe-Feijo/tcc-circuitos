@@ -222,10 +222,13 @@ class CylinderItem(NodeItem):
 
                 # Cria o label editável
                 label = LabelItem(
-                    text=sensor.get("name", ""),
-                    editable=True,
-                    max_length=3,
-                    on_commit=lambda t, p=pos: self._set_sensor_name(p, t)
+                    properties={
+                        "text": sensor.get("name", ""),
+                        "editable": True,
+                        "max_length": 3,
+                        "on_commit": lambda t, p=pos: self._set_sensor_name(p, t),
+                        "border": True,
+                    }
                 )
 
                 label_x = offset.x() + sprite.width() - size - margin
@@ -330,7 +333,11 @@ class CylinderItem(NodeItem):
             name = self.sensor_registry.next_available_name("A")
             sensor["name"] = name
 
-        self.sensor_registry.register(name, self)
+        self.sensor_registry.register(
+            name=name,
+            sensor_type="cylinder_end",
+            node=self
+        )
 
 
     def _unregister_sensor(self, position):

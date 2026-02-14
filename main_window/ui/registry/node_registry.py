@@ -1,3 +1,4 @@
+from graphics.items.base.nodes.coil.relay_coil import RelayCoil
 from graphics.items.base.nodes.expandable.ground import Ground
 from graphics.items.base.nodes.expandable.voltage_source import VoltageSource
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
@@ -12,7 +13,9 @@ from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2
 from graphics.items.base.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 
 
+from graphics.items.base.nodes.coil.solenoid_coil import SolenoidCoil
 from graphics.items.base.nodes.switch.button_switch import ButtonSwitch
+from graphics.items.base.nodes.switch.relay_switch import RelaySwitch
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
 
 
@@ -98,9 +101,30 @@ def register_electric_nodes(palette, on_add_node):
     electric.add_node(
         name="ButtonSwitch",
         pixmap=generate_pixmap_for_palette(
-            "resources/nodes/button_switch/button_switch_no_open.png"
+            "resources/nodes/button_switch/button_switch_open.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(ButtonSwitch, domain=domain))
+    )
+    electric.add_node(
+        name="RelaySwitch",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/relay_switch/relay_switch_no_open.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(RelaySwitch, domain=domain))
+    )
+    electric.add_node(
+        name="SolenoidCoil",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/solenoid_coil/solenoid_coil.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(SolenoidCoil, domain=domain))
+    )
+    electric.add_node(
+        name="RelayCoil",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/relay_coil/relay_coil.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(RelayCoil, domain=domain))
     )
 
 

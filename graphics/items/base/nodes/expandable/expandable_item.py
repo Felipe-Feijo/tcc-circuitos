@@ -140,7 +140,6 @@ class ExpandableItem(NodeItem):
 
         # atualiza posição de todas
         self.update_connections()
-        print(self.internal_connections)
 
 
     def _has_internal_connection(self, a1, a2):

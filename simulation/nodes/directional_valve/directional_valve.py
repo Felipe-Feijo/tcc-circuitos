@@ -56,14 +56,19 @@ class DirectionalValve(Node):
             if not other_actuator or other_actuator.get("type") != "spring":
                 self.bits[side] = 0 if self.bits[other] else 1
 
-    def _update_limit_switches(self, outputs):
+    def _update_sensor_actuators(self, outputs):
         """
-        Atualiza bits baseado nos limit switches.
+        Atualiza bits baseado em sensores ligados aos atuadores.
         outputs: dict[name, payload]
         """
         for side in ("left", "right"):
             actuator = self.actuators.get(side)
-            if not actuator or actuator.get("type") != "limit_switch":
+            if not actuator:
+                continue
+
+            # por enquanto só existe limit_switch,
+            # mas já fica pronto para outros sensores no futuro
+            if actuator.get("type") not in ["limit_switch", "solenoid"]:
                 continue
 
             name = actuator.get("sensor_name")
@@ -94,7 +99,7 @@ class DirectionalValve(Node):
         self._update_pilots()
         
         if outputs:
-            self._update_limit_switches(outputs)
+            self._update_sensor_actuators(outputs)
 
         self._update_springs()
         

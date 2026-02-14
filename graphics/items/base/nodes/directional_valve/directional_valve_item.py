@@ -40,6 +40,14 @@ ACTUATOR_DICT = {
         "menu": False,
         "default_bit": 0,
     },
+    "solenoid": {
+        "label": "Solenoid (electric)",
+        "sprite_active_path": "resources/actuators/solenoid/solenoid.png",
+        "sprite_inactive_path": "resources/actuators/solenoid/solenoid.png",
+        "mirrored": True,
+        "menu": False,
+        "default_bit": 0,
+    }
 }
 
 class DirectionalValveItem(NodeItem):
@@ -326,7 +334,7 @@ class DirectionalValveItem(NodeItem):
             # remove label antiga por segurança
             self.remove_label(label_name)
 
-            if actuator_name == "limit_switch" and sensor_name:
+            if actuator_name in ["limit_switch", "solenoid"] and sensor_name:
                 rect = self.actuator_rects[side]
                 
 
@@ -335,10 +343,13 @@ class DirectionalValveItem(NodeItem):
                 label_y = rect.y() + rect.height() * 0.25
 
                 label = LabelItem(
-                    text=sensor_name,
-                    editable=False,
-                    max_length=3,
-                    on_commit=lambda t, s=side: self._set_limit_switch_sensor_name(s, t)
+                    properties={
+                        "text": sensor_name,
+                        "editable": False,
+                        "max_length": 3,
+                        "on_commit": lambda t, s=side: self._set_actuator_sensor_name(s, t),
+                        "border": True,
+                    }
                 )
 
                 relative_pos = QPointF(label_x, label_y)
@@ -383,7 +394,6 @@ class DirectionalValveItem(NodeItem):
             if not desc.get("menu", True):
                 continue
             action = QAction(desc["label"], menu, checkable=True)
-            # ✅ CORRIGIDO: verificar se current existe e comparar com current["type"]
             action.setChecked(current is not None and current.get("type") == name)
             action.triggered.connect(
                 lambda _, s=side, n=name: self.set_actuator(s, n)
@@ -391,34 +401,53 @@ class DirectionalValveItem(NodeItem):
             menu.addAction(action)
 
         # -----------------------
-        # Sensores existentes na sensor_registry
+        # Sensores de cilindro (limit_switch)
         # -----------------------
         if self.sensor_registry:
-            menu.addSeparator()
-            for sensor_name in self.sensor_registry.list_names():
-                action = QAction(sensor_name, menu, checkable=True)
+            cylinder_signals = self.sensor_registry.list_names(sensor_type="cylinder_end")
+            if cylinder_signals:
+                menu.addSeparator()
+                for sensor_name in cylinder_signals:
+                    action = QAction(sensor_name, menu, checkable=True)
+                    is_checked = (
+                        current is not None
+                        and current.get("type") == "limit_switch"
+                        and current.get("sensor_name") == sensor_name
+                    )
+                    action.setChecked(is_checked)
+                    action.triggered.connect(
+                        lambda _, s=side, n=sensor_name: self.set_actuator(s, "limit_switch", n)
+                    )
+                    menu.addAction(action)
 
-                # ✅ CORRIGIDO: verificar current["type"] ao invés de comparar current com string
-                is_checked = (
-                    current is not None
-                    and current.get("type") == "limit_switch"
-                    and current.get("sensor_name") == sensor_name
-                )
-                action.setChecked(is_checked)
-
-                action.triggered.connect(
-                    lambda _, s=side, n=sensor_name: self.set_actuator(s, "limit_switch", n)
-                )
-                menu.addAction(action)
+            # -----------------------
+            # Sensores elétricos (solenoid)
+            # -----------------------
+            electric_signals = self.sensor_registry.list_names(sensor_type="solenoid_coil")
+            if electric_signals:
+                menu.addSeparator()
+                for sensor_name in electric_signals:
+                    action = QAction(sensor_name, menu, checkable=True)
+                    # marca como selecionado se este sensor for do tipo solenoid
+                    is_checked = (
+                        current is not None
+                        and current.get("type") == "solenoid"
+                        and current.get("sensor_name") == sensor_name
+                    )
+                    action.setChecked(is_checked)
+                    action.triggered.connect(
+                        lambda _, s=side, n=sensor_name: self.set_actuator(s, "solenoid", n)
+                    )
+                    menu.addAction(action)
 
     def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None,):
         current = self.properties["actuators"].get(side)
 
         if actuator_name is None:
             new_value = None
-        elif actuator_name == "limit_switch":
+        elif actuator_name in ["limit_switch", "solenoid"]:
             new_value = {
-                "type": "limit_switch",
+                "type": actuator_name,
                 "sensor_name": actuator_sensor_name,
             }
         else:
@@ -436,9 +465,9 @@ class DirectionalValveItem(NodeItem):
         self.update()
 
 
-    def _set_limit_switch_sensor_name(self, side: str, new_name: str):
+    def _set_actuator_sensor_name(self, side: str, new_name: str):
         actuator = self.properties["actuators"].get(side)
-        if not actuator or actuator.get("type") != "limit_switch":
+        if not actuator or actuator.get("type") not in ["limit_switch", "solenoid"]:
             return
 
         old_name = actuator.get("sensor_name")
@@ -461,7 +490,7 @@ class DirectionalValveItem(NodeItem):
 
         for side in ("left", "right"):
             actuator = self.properties["actuators"].get(side)
-            if not actuator or actuator.get("type") != "limit_switch":
+            if not actuator or actuator.get("type") not in ["limit_switch", "solenoid"]:
                 continue
 
             sensor_name = actuator.get("sensor_name")
@@ -482,7 +511,7 @@ class DirectionalValveItem(NodeItem):
 
         for side in ("left", "right"):
             actuator = self.properties["actuators"].get(side)
-            if not actuator or actuator.get("type") != "limit_switch":
+            if not actuator or actuator.get("type") not in ["limit_switch", "solenoid"]:
                 continue
 
             if actuator.get("sensor_name") == old_name:

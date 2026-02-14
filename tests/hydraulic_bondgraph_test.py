@@ -317,7 +317,7 @@ pistao = Pistao("pistao1", node=n_pistao, area=1.0,
 # Tanque (reservatório) ainda no nó n3
 tank = Tank("tank1", n3, pressure=0.0)
 
-#relief = ReliefValve("relief1", n1, n3, p_set=10.0, k=3.0)
+relief = ReliefValve("relief1", n1, n3, p_set=10.0, k=3.0)
 
 # --- Lista de componentes ---
 components = [
@@ -327,7 +327,7 @@ components = [
     #valve2,
     pistao,
     tank,
-    #relief,
+    relief,
 ]
 
 # --- Gerar equações de continuidade automaticamente ---
@@ -362,7 +362,7 @@ for step in range(n_steps):
             print(f"  Node {node_id}: P = {sol[key]:.4f}")
 
     print("Vazões nos componentes:")
-    for comp in [pump, valve1a, valve1b, pistao]:
+    for comp in [pump, valve1a, valve1b, relief, pistao]:
         key = f"Q_{comp.id}"
         if key in sol:
             print(f"  {comp.id}: Q = {sol[key]:.4f}")

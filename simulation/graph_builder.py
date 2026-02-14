@@ -1,12 +1,14 @@
 # domain/graph_builder.py
 
-from simulation.nodes.button_switch import ButtonSwitch
+from simulation.nodes.switch.relay_switch import RelaySwitch
+from simulation.nodes.switch.button_switch import ButtonSwitch
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 from simulation.nodes.ground import Ground
 from simulation.nodes.nodes import OrValve, PressureSource, Exhaust, SingleActingCylinder
 from simulation.connections import Connection
 from simulation.nodes.pressure_line import PressureLine
+from simulation.nodes.coil import Coil
 from simulation.nodes.voltage_source import VoltageSource
 
 NODE_FACTORY = {
@@ -19,7 +21,10 @@ NODE_FACTORY = {
     "pressure_line": PressureLine,
     "voltage_source": VoltageSource,
     "ground": Ground,
-    "button_switch": ButtonSwitch
+    "button_switch": ButtonSwitch,
+    "relay_switch": RelaySwitch,
+    "solenoid_coil": Coil,
+    "relay_coil": Coil,
 }
 
 class GraphBuilder:

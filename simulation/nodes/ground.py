@@ -7,7 +7,6 @@ class Ground(Node):
     def update(self, outputs=None):
         # marca apenas a primeira anchor como ground
         first_anchor = next(iter(self.anchors.values()))
-        print(f"first_anchor: {first_anchor.name}")
         first_anchor.type = "ground"
 
     def get_internal_connections(self):

@@ -114,7 +114,7 @@ class Exhaust(Node):
     
 class SingleActingCylinder(Node):
     def __init__(self, node_id, **kwargs):
-        super().__init__(node_id=node_id, node_type="single_acting_cylinder", **kwargs)
+        super().__init__(node_id, "single_acting_cylinder", **kwargs)
 
         # Estado interno
         # 0 = retraído
@@ -162,11 +162,6 @@ class SingleActingCylinder(Node):
 class OrValve(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id=node_id, node_type="or_valve", **kwargs)
-
-        # Anchors pneumáticos
-        self.add_anchor("X")
-        self.add_anchor("Y")
-        self.add_anchor("A")
 
         # Estado interno (shuttle com memória)
         self.active_input: str = "X"  # estado inicial

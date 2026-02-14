@@ -14,26 +14,14 @@ class SwitchItem(NodeItem):
             "contact_type": "NO"  # ou "NC"
         }
 
-        self.state = 0  # estado lógico atual (0 ou 1)
+        self.body_state = 0  # estado lógico atual (0 ou 1)
 
         self.initialize_body_visuals()
         self.initialize_anchors()
 
-    def mousePressEvent(self, event):
-        if self.simulation_mode:
-            if self.shape().contains(event.pos()):
-                self.command.emit(self.id, {
-                    "type": "switch",
-                    "value": 0 if self.state else 1
-                })
-                event.accept()
-                return
-
-        super().mousePressEvent(event)
-
     def update_from_domain(self, domain_node):
-        self.state = domain_node.state
-        self.update_visuals()
+        self.body_state = domain_node.state
+        self.update_body_visuals()
         self.update_connections()
         self.update()
 
@@ -55,15 +43,15 @@ class SwitchItem(NodeItem):
             for visual in ct.values()
         )
 
-        self.update_visuals()
+        self.update_body_visuals()
 
         # dimensões base
         self.width = self.body_sprite.width()
         self.height = self.body_sprite.height()
 
-    def update_visuals(self):
+    def update_body_visuals(self):
         contact_type = self.properties["contact_type"]
-        state = self.state
+        state = self.body_state
 
         visual = self.body_visuals[contact_type][state]
 
@@ -88,7 +76,7 @@ class SwitchItem(NodeItem):
         self.properties["contact_type"] = contact_type
 
         # atualiza visual local imediatamente
-        self.update_visuals()
+        self.update_body_visuals()
         self.update_connections()
         self.update()
 
@@ -100,3 +88,8 @@ class SwitchItem(NodeItem):
         )
 
         self.paint_selection_feedback(painter)
+
+    def apply_properties(self):
+        self.update_body_visuals()
+        self.update()
+

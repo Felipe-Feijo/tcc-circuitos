@@ -22,9 +22,9 @@ class Valve_3_2_Ways(DirectionalValveItem):
 
 
     def initialize_anchors(self):
-        self.add_anchor(AnchorItem("A", QPointF(self.width*254/300, 0), node=self, domain=self.domain))
-        self.add_anchor(AnchorItem("R", QPointF(self.width*190/300, self.height), node=self, domain=self.domain))
-        self.add_anchor(AnchorItem("P", QPointF(self.width*254/300, self.height), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("A", QPointF(self.width*254/300, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("R", QPointF(self.width*190/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
+        self.add_anchor(AnchorItem("P", QPointF(self.width*254/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
 
     
 

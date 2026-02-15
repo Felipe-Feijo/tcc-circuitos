@@ -3,6 +3,9 @@ import sys
 from PyQt6.QtWidgets import QApplication
 from main_window.main_window import MainWindow
 
+import faulthandler
+faulthandler.enable()
+
 app = QApplication(sys.argv)
 
 with open("resources/styles.qss", "r") as f:

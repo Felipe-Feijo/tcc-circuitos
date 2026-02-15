@@ -118,8 +118,9 @@ class GraphicsView(QGraphicsView):
             else:
                 self.unsetCursor()
             if self._connecting:
-                scene_pos = self.mapToScene(event.pos())
-                self._temp_connection.update_temp_endpoint(scene_pos)
+                if self._temp_connection and self._temp_connection.scene():
+                    scene_pos = self.mapToScene(event.pos())
+                    self._temp_connection.update_temp_endpoint(scene_pos)
 
         if self.editor.mode == "add" and self.editor.pending_node:
             scene_pos = self.mapToScene(event.pos())

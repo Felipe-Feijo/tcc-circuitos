@@ -51,8 +51,8 @@ class CoilItem(NodeItem):
         ambas centralizadas na largura
         """
         x = self.width / 2
-        self.add_anchor(AnchorItem("T", QPointF(x, 0), node=self, domain=self.domain))
-        self.add_anchor(AnchorItem("B", QPointF(x, self.height), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("T", QPointF(x, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("B", QPointF(x, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
 
     def initialize_label(self):
         """

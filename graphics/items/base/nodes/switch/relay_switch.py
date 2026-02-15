@@ -44,8 +44,8 @@ class RelaySwitch(SwitchItem):
 
     def initialize_anchors(self):
         # Posicionamento similar ao ButtonSwitch, pode ajustar conforme o sprite
-        self.add_anchor(AnchorItem("T", QPointF(self.width*39/50, 0), node=self, domain=self.domain))
-        self.add_anchor(AnchorItem("B", QPointF(self.width*39/50, self.height), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("T", QPointF(self.width*39/50, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("B", QPointF(self.width*39/50, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
 
 
     def _init_label(self):

@@ -22,6 +22,7 @@ class ConnectionItem(DiagramItemBase):
         self.target_anchor = target_anchor
 
         self.temp_target_pos = None
+        self._being_deleted = False  # Flag para evitar loops de atualização durante deleção
 
         self.setPos(0, 0)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
@@ -110,28 +111,224 @@ class ConnectionItem(DiagramItemBase):
         for start, end in zip(points, points[1:]):
             painter.drawLine(start, end)
 
-
-    def get_path_points(self) -> list[QPointF]:
-    
-        if not self.source_anchor:
+    def get_path_points(self):  
+        if getattr(self, "_being_deleted", False):
+            print("get_path_points during deletion?", self._being_deleted)
             return []
 
-        p1 = self.source_anchor.scenePos()
+        source_anchor = getattr(self, "source_anchor", None)
+        target_anchor = getattr(self, "target_anchor", None)
 
-        if self.target_anchor:
-            p2 = self.target_anchor.scenePos()
+        if not source_anchor or not source_anchor.scene():
+            return []
+
+        p1 = source_anchor.scenePos()
+
+        if target_anchor and target_anchor.scene():
+            p2 = target_anchor.scenePos()
+            is_preview = False
         elif self.temp_target_pos:
             p2 = self.temp_target_pos
+            is_preview = True
         else:
             return [p1]
 
+        # Determina se é conexão interna ou externa
+        is_internal = (self.target_anchor and 
+                    self.source_anchor.node == self.target_anchor.node)
+        
+        # Obtém direções permitidas
+        exit_key = "internal" if is_internal else "external"
+        source_dirs = self.source_anchor.exit_directions.get(exit_key, ["right"])
+        
+        # Escolhe a melhor direção de saída
+        exit_dir = self._choose_best_exit_direction(p1, p2, source_dirs)
+
+        base_margin = 18
+        dist = abs(p2.x() - p1.x()) + abs(p2.y() - p1.y())
+        margin = min(base_margin, max(6, dist * 0.15))
+
+        points = [p1]
+
+        # Segmento de saída da source
+        p1_out = self._apply_margin(p1, exit_dir, margin)
+        points.append(p1_out)
+
+        # ============================================
+        # MODO PREVIEW: caminho simples VHV ou HVH
+        # ============================================
+        if is_preview:
+            dx = abs(p2.x() - p1_out.x())
+            dy = abs(p2.y() - p1_out.y())
+
+            if dx > dy:
+                # HVH dominante
+                points.extend(self._hvh(p1_out, p2))
+            else:
+                # VHV dominante
+                points.extend(self._vhv(p1_out, p2))
+
+            points.append(p2)
+            return points
+
+        # ============================================
+        # MODO NORMAL: lógica completa
+        # ============================================
+        
+        # Obtém direção de entrada do target
+        target_dirs = self.target_anchor.exit_directions.get(exit_key, ["left"])
+        entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
+
+        # Segmento de entrada no target
+        p2_in = self._apply_margin(p2, entry_dir, margin)
+
+        # Conecta p1_out até p2_in
+        middle_points = self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)
+        points.extend(middle_points)
+
+        # Adiciona o segmento final
+        points.append(p2_in)
+        points.append(p2)
+
+        return points
+
+
+    def _choose_best_exit_direction(self, from_point, to_point, allowed_dirs):
+        """Escolhe a melhor direção de saída baseada na posição relativa"""
+        if len(allowed_dirs) == 1:
+            return allowed_dirs[0]
+        
+        dx = to_point.x() - from_point.x()
+        dy = to_point.y() - from_point.y()
+        
+        # Calcula scores para cada direção permitida
+        scores = {}
+        for direction in allowed_dirs:
+            if direction == "right" and dx > 0:
+                scores[direction] = abs(dx)
+            elif direction == "left" and dx < 0:
+                scores[direction] = abs(dx)
+            elif direction == "bottom" and dy > 0:
+                scores[direction] = abs(dy)
+            elif direction == "top" and dy < 0:
+                scores[direction] = abs(dy)
+            else:
+                scores[direction] = -1000  # Penaliza direções contrárias
+        
+        return max(scores, key=scores.get)
+
+
+    def _apply_margin(self, point, direction, margin):
+        """Aplica margem em uma direção específica"""
+        if direction == "left":
+            return QPointF(point.x() - margin, point.y())
+        elif direction == "right":
+            return QPointF(point.x() + margin, point.y())
+        elif direction == "top":
+            return QPointF(point.x(), point.y() - margin)
+        elif direction == "bottom":
+            return QPointF(point.x(), point.y() + margin)
+        return point
+
+
+    def _route_between_points(self, p1_out, p2_in, exit_dir, entry_dir):
+        dx = p2_in.x() - p1_out.x()
+        dy = p2_in.y() - p1_out.y()
+
+        is_exit_horizontal = exit_dir in ("left", "right")
+        is_entry_horizontal = entry_dir in ("left", "right")
+
+        exit_conflict_h = (exit_dir == "left" and dx > 0) or (exit_dir == "right" and dx < 0)
+        exit_conflict_v = (exit_dir == "top" and dy > 0) or (exit_dir == "bottom" and dy < 0)
+
+        entry_conflict_h = (entry_dir == "left" and dx < 0) or (entry_dir == "right" and dx > 0)
+        entry_conflict_v = (entry_dir == "top" and dy < 0) or (entry_dir == "bottom" and dy > 0)
+
+        # Exit horizontal
+        if is_exit_horizontal:
+
+            if exit_conflict_h:
+                return self._vhvh(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
+
+            if is_entry_horizontal:
+                return self._vhvh(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
+
+            return [QPointF(p2_in.x(), p1_out.y())]
+
+        # Exit vertical
+        else:
+
+            if exit_conflict_v:
+                return self._hvhv(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
+
+            if not is_entry_horizontal:
+                return self._hvhv(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
+
+            return [QPointF(p1_out.x(), p2_in.y())]
+    
+    def _vhv(self, p1, p2):
+        """
+        Vertical → Horizontal → Vertical
+        """
         mid_y = (p1.y() + p2.y()) / 2
         return [
-            p1,
             QPointF(p1.x(), mid_y),
-            QPointF(p2.x(), mid_y),
-            p2
+            QPointF(p2.x(), mid_y)
         ]
+
+
+    def _hvh(self, p1, p2):
+        """
+        Horizontal → Vertical → Horizontal
+        """
+        mid_x = (p1.x() + p2.x()) / 2
+        return [
+            QPointF(mid_x, p1.y()),
+            QPointF(mid_x, p2.y())
+        ]
+    
+    def _hvhv(self, p1, p2):
+        """
+        Horizontal → Vertical → Horizontal → Vertical
+        """
+        mid_x = (p1.x() + p2.x()) / 2
+        mid_y = (p1.y() + p2.y()) / 2
+        return [
+            QPointF(mid_x, p1.y()),
+            QPointF(mid_x, mid_y),
+            QPointF(p2.x(), mid_y),
+        ]
+
+
+    def _vhvh(self, p1, p2):
+        """
+        Vertical → Horizontal → Vertical → Horizontal
+        """
+        mid_x = (p1.x() + p2.x()) / 2
+        mid_y = (p1.y() + p2.y()) / 2
+        return [
+            QPointF(p1.x(), mid_y),
+            QPointF(mid_x, mid_y),
+            QPointF(mid_x, p2.y()),
+        ]
+
+    def _get_exit_direction(self):
+        """Mantém compatibilidade com código existente"""
+        if not self.source_anchor:
+            return "right"
+        
+        is_internal = (self.target_anchor and 
+                    self.source_anchor.node == self.target_anchor.node)
+        exit_key = "internal" if is_internal else "external"
+        
+        dirs = self.source_anchor.exit_directions.get(exit_key, ["right"])
+        
+        if self.target_anchor:
+            p1 = self.source_anchor.scenePos()
+            p2 = self.target_anchor.scenePos()
+            return self._choose_best_exit_direction(p1, p2, dirs)
+        
+        return dirs[0] if dirs else "right"
 
     def update_temp_endpoint(self, scene_pos):
         """Atualiza endpoint temporário garantindo atualização correta da área"""
@@ -140,12 +337,18 @@ class ConnectionItem(DiagramItemBase):
         self.update()
 
     def update_position(self):
+        if getattr(self, '_being_deleted', False):
+            print("Connection being deleted, ignoring update_position")
+            return
         """Chamado quando nós conectados se movem"""
         self.prepareGeometryChange()
         self.update()
 
     def itemChange(self, change, value):
         """Detecta mudanças e força atualização adequada"""
+        if getattr(self, '_being_deleted', False):
+            print("Connection is being deleted, ignoring itemChange")
+            return value
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
             # Quando seleção muda, apenas repinta com a cor correta
             self.update()
@@ -153,6 +356,9 @@ class ConnectionItem(DiagramItemBase):
         return super().itemChange(change, value)
 
     def prepare_delete(self):
+        self._being_deleted = True  # Flag para evitar loops de atualização durante deleção
+
+        self.hide()
 
         # desconecta dos nodes (lógico)
         if self.source and self in self.source.connections:
@@ -163,6 +369,7 @@ class ConnectionItem(DiagramItemBase):
 
         self.source = None
         self.target = None
+
 
         self.prepareGeometryChange()
 

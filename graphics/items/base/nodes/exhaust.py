@@ -19,6 +19,6 @@ class Exhaust(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.add_anchor(AnchorItem("R", QPointF(self.width*0.5, 0), node=self, domain=self.domain))
+        self.add_anchor(AnchorItem("R", QPointF(self.width*0.5, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
 
 

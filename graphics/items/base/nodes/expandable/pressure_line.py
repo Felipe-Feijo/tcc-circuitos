@@ -7,6 +7,20 @@ class PressureLine(ExpandableItem):
         "right": "resources/nodes/pressure_line/pressure_line_terminal.png"
     }
     DEFAULT_ANCHORS = ["X1", "X2"]
+    ANCHOR_DIRECTIONS = {
+        "first": {
+            "external": ["left", "bottom"], 
+            "internal": ["right"]
+        },
+        "middle": {
+            "external": ["top", "bottom"], 
+            "internal": ["left", "right"]
+        },
+        "last": {
+            "external": ["right", "bottom"], 
+            "internal": ["left"]
+        }
+    }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

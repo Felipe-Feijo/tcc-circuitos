@@ -19,6 +19,7 @@ class SimulationController(QObject):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._on_timer_tick)
+        self.timer_interval = 1000  # Guarda o intervalo para poder resetar
 
         self.history = deque(maxlen=max_history)
 
@@ -28,14 +29,28 @@ class SimulationController(QObject):
         if self.playing:
             return
         self.playing = True
-        self.timer.start(1000)  # 1 step por segundo
+        self.timer.start(self.timer_interval)
 
     def pause(self):
         self.playing = False
         self.timer.stop()
 
-    def request_step(self, n: int = 1):
+    def request_step(self, n: int = 1, reset_timer: bool = False):
+        """
+        Solicita n steps.
+        
+        Args:
+            n: número de steps a executar
+            reset_timer: se True e playing=True, reinicia o timer para evitar
+                        steps muito próximos
+        """
         self.pending_steps += n
+        
+        # 🔄 RESET DO TIMER se solicitado e em modo play
+        if reset_timer and self.playing:
+            self.timer.stop()
+            self.timer.start(self.timer_interval)
+        
         self._try_consume_steps()
 
     def command(self, node_id: str, cmd: str):
@@ -46,8 +61,8 @@ class SimulationController(QObject):
 
         node.handle_command(cmd)
 
-        # NÃO chama step direto
-        self.request_step(1)
+        # ✅ Solicita step E reseta o timer
+        self.request_step(1, reset_timer=True)
 
     # ───────────── Interno ─────────────
 
@@ -135,4 +150,9 @@ class SimulationController(QObject):
         self.history.append(snap)
         return True
     
-    
+    def set_timer_interval(self, ms: int):
+        """Permite ajustar a velocidade do modo play"""
+        self.timer_interval = ms
+        if self.playing:
+            self.timer.stop()
+            self.timer.start(self.timer_interval)

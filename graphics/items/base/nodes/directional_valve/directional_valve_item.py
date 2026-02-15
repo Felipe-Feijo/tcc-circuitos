@@ -324,7 +324,7 @@ class DirectionalValveItem(NodeItem):
             
             if actuator_name == "pneumatic_pilot":
                 x = self.actuator_rects[side].left() if side == "left" else self.actuator_rects[side].right()
-                self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self, domain='pneumatic')) 
+                self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self, domain='pneumatic', exit_directions={"external": ["left"] if side == "left" else ["right"]})) 
             else:
                 # se não é pilot, garante que não exista
                 self.remove_anchor(anchor_name)

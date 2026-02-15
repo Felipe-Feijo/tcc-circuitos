@@ -84,6 +84,7 @@ class ExpandableItem(NodeItem):
     def update_layout(self):
         self.prepareGeometryChange()
         self.layout_anchors()
+        self.rebuild_exit_rules()
         QTimer.singleShot(0, self.update_internal_connections)
 
     def layout_anchors(self):
@@ -124,12 +125,12 @@ class ExpandableItem(NodeItem):
             QTimer.singleShot(0, self.update_internal_connections)
             return
 
-        anchors = self.anchor_list
 
+        anchors = self.anchor_list
         if len(anchors) < 2:
             return
 
-        # garante que existe uma conexão para cada par adjacente
+        # passo 2: garante que existe uma conexão para cada par adjacente
         for i in range(len(anchors) - 1):
             a1 = anchors[i]
             a2 = anchors[i + 1]
@@ -138,7 +139,8 @@ class ExpandableItem(NodeItem):
                 conn = self._create_internal_connection(a1, a2)
                 self.internal_connections.append(conn)
 
-        # atualiza posição de todas
+        # passo 3: atualiza visual de todas as conexões
+        print(len(self.internal_connections), "conexões internas")
         self.update_connections()
 
 
@@ -205,3 +207,29 @@ class ExpandableItem(NodeItem):
         else:
             self.pix_w = 0
             self.pix_h = 0
+
+    def rebuild_exit_rules(self):
+        # Obtém o dicionário de regras da subclasse
+        anchor_rules = getattr(self, "ANCHOR_DIRECTIONS", None)
+        if not anchor_rules:
+            return
+
+        anchors = self.anchor_list
+        total_anchors = len(anchors)
+
+        # Caso haja apenas uma anchor, aplicamos as regras de "single"
+        if total_anchors == 1:
+            single_rules = anchor_rules.get("single", {})
+            anchors[0].set_exit_directions(single_rules)
+            return
+
+        # Para múltiplas anchors, aplicamos first / middle / last
+        for index, anchor in enumerate(anchors):
+            if index == 0:
+                rules_to_apply = anchor_rules.get("first", {})
+            elif index == total_anchors - 1:
+                rules_to_apply = anchor_rules.get("last", {})
+            else:
+                rules_to_apply = anchor_rules.get("middle", {})
+
+            anchor.set_exit_directions(rules_to_apply)

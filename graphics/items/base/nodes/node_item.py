@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPen, QPainter, QPixmap
 from graphics.anchors.anchor import AnchorItem
+from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 
@@ -57,16 +58,26 @@ class NodeItem(DiagramItemBase):
         if not anchor:
             return
 
-        # desconecta conexões que usam essa anchor
+        # desconecta conexões globais
         for conn in self.connections[:]:
             if conn.source_anchor == anchor or conn.target_anchor == anchor:
                 conn.prepare_delete()
                 if conn.scene():
                     conn.scene().removeItem(conn)
 
+        # se o node tiver internal_connections, remove também
+        if hasattr(self, "internal_connections"):
+           
+            for conn in self.internal_connections[:]:
+                if conn.source_anchor == anchor or conn.target_anchor == anchor:
+                    # apenas remove da lista interna, sem tocar na cena
+                    self.internal_connections.remove(conn)
+                    print(self.internal_connections, "before removing anchor", name)
+
         # remove da cena
         if anchor.scene():
             anchor.scene().removeItem(anchor)
+        print("Removed anchor", name)
 
     def add_label(self, key: str, label):
         """
@@ -97,9 +108,14 @@ class NodeItem(DiagramItemBase):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             self.update_connections()
         return super().itemChange(change, value)
-    
+        
     def update_connections(self):
-        for conn in self.connections:
+        for conn in self.connections[:]:  # iterando sobre uma cópia
+            # ignora conexões órfãs
+            if conn.source_anchor.scene() is None or conn.target_anchor.scene() is None:
+                print(f"Ignorando conexão órfã: {conn.source_anchor.name} <-> {conn.target_anchor.name}")
+                continue
+
             conn.prepareGeometryChange()
             conn.update()
 

@@ -6,6 +6,23 @@ class VoltageSource(ExpandableItem):
         "left":  "resources/nodes/voltage_source/voltage_source_terminal.png",
     }
     DEFAULT_ANCHORS = ["X1"]
+    ANCHOR_DIRECTIONS = {
+        "single": {
+            "external": ["left", "bottom", "top"],
+        },
+        "first": {
+            "external": ["bottom", "top"], 
+            "internal": ["right"]
+        },
+        "middle": {
+            "external": ["top", "bottom"], 
+            "internal": ["left", "right"]
+        },
+        "last": {
+            "external": ["right", "top", "bottom"], 
+            "internal": ["left"]
+        }
+    }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

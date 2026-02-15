@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt, QPointF, QRectF
 from PyQt6.QtGui import QPen, QPainterPath
 
 class AnchorItem(QGraphicsEllipseItem):
-    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None):
+    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None, exit_directions=None):
         super().__init__(-radius, -radius, 2 * radius, 2 * radius, node)
 
         self.name = name
@@ -11,6 +11,8 @@ class AnchorItem(QGraphicsEllipseItem):
         self.node = node
         self.domain = domain
         self.hit_radius = radius * 4
+
+        self.exit_directions = exit_directions # Ex: {"external": ["left", "right"], "internal": ["top"]}
 
         self.setPos(pos)
 
@@ -60,3 +62,6 @@ class AnchorItem(QGraphicsEllipseItem):
         if not is_source_anchor:
                 self.setBrush(Qt.GlobalColor.transparent)
                 self.update()
+
+    def set_exit_directions(self, exit_directions: dict):
+        self.exit_directions = exit_directions

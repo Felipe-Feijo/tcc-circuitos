@@ -101,7 +101,7 @@ def register_electric_nodes(palette, on_add_node):
     electric.add_node(
         name="ButtonSwitch",
         pixmap=generate_pixmap_for_palette(
-            "resources/nodes/button_switch/button_switch_open.png"
+            "resources/nodes/button_switch/button_switch_no_open.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(ButtonSwitch, domain=domain))
     )

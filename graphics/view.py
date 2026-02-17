@@ -187,13 +187,12 @@ class GraphicsView(QGraphicsView):
             target_item,
             target_anchor
         )
+        conn.editor = self.editor
 
         self.scene().addItem(conn)
 
         source.connections.append(conn)
         target_item.connections.append(conn)
-
-        print(f"✔ Connection created: {source} → {target_item}")
 
     def start_temp_connection(self, source_item, source_anchor):
         self._temp_connection = ConnectionItem(source_item, source_anchor)

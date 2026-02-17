@@ -9,22 +9,22 @@ class ButtonSwitch(SwitchItem):
     SWITCH_VISUALS = {
         "NO": {
             0: {
-                "sprite": "resources/nodes/button_switch/button_switch_open.png",
+                "sprite": "resources/nodes/button_switch/button_switch_no_open.png",
                 "offset": QPointF(0, 0),
             },
             1: {
-                "sprite": "resources/nodes/button_switch/button_switch_closed.png",
+                "sprite": "resources/nodes/button_switch/button_switch_no_closed.png",
                 "offset": QPointF(0, 0),
             },
         },
         "NC": {
             0: {
-                "sprite": "resources/nodes/button_switch/button_switch_closed.png",
-                "offset": QPointF(0, 0),
+                "sprite": "resources/nodes/button_switch/button_switch_nc_closed.png",
+                "offset": QPointF(9, 0),
             },
             1: {
-                "sprite": "resources/nodes/button_switch/button_switch_open.png",
-                "offset": QPointF(0, 0),
+                "sprite": "resources/nodes/button_switch/button_switch_nc_open.png",
+                "offset": QPointF(9, 0),
             },
         }
     }

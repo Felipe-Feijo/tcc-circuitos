@@ -1,11 +1,12 @@
 
+from cProfile import label
 import uuid
-from PyQt6.QtWidgets import QGraphicsItem
+from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
-from PyQt6.QtGui import QPen, QPainter, QPixmap
+from PyQt6.QtGui import QPainter, QPixmap
 from graphics.anchors.anchor import AnchorItem
-from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
+from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 
 
@@ -26,6 +27,7 @@ class NodeItem(DiagramItemBase):
         
         self.anchors = {}
         self.labels = {}
+        self.special_labels = {}  # para labels que precisam de tratamento específico (ex: sensor_retracted)
         self.connections = []
         self.setAcceptHoverEvents(True)
 
@@ -79,12 +81,13 @@ class NodeItem(DiagramItemBase):
             anchor.scene().removeItem(anchor)
         print("Removed anchor", name)
 
-    def add_label(self, key: str, label):
+    def add_label(self, key: str, label, special=False):
         """
         key: identificador lógico do label (ex: 'sensor_retracted')
         label: QGraphicsTextItem ou subclass
         """
-        existing = self.labels.get(key)
+        label_dict = self.special_labels if special else self.labels
+        existing = label_dict.get(key)
 
         if existing:
             # reaproveita label existente
@@ -93,10 +96,11 @@ class NodeItem(DiagramItemBase):
             return
 
         label.setParentItem(self)
-        self.labels[key] = label
+        label_dict[key] = label
 
-    def remove_label(self, key: str):
-        label = self.labels.pop(key, None)
+    def remove_label(self, key: str, special=False):
+        label_dict = self.special_labels if special else self.labels
+        label = label_dict.pop(key, None)
         if not label:
             return
 
@@ -185,8 +189,29 @@ class NodeItem(DiagramItemBase):
                 "x": self.pos().x(),
                 "y": self.pos().y()
             },
-            "properties": getattr(self, "properties", {})
+            "properties": getattr(self, "properties", {}),
+            "labels": self.labels_to_dict()
         }
+    
+    def labels_to_dict(self):
+
+        data = {}
+        for key, label in self.labels.items():
+            props = {}
+            for k, v in label.properties.items():
+                if callable(v):
+                    props[k] = v.__name__
+                else:
+                    if isinstance(v, Qt.GlobalColor):
+                        props[k] = v.name.lower()
+            data[key] = {
+                "pos": {
+                    "x": label.pos().x(),
+                    "y": label.pos().y()
+                },
+                "properties": props
+            }
+        return data
     
     @classmethod
     def from_dict(cls, data: dict, *, keep_id=True, sensor_registry=None):
@@ -198,6 +223,14 @@ class NodeItem(DiagramItemBase):
 
         pos = data["position"]
         node.setPos(float(pos["x"]), float(pos["y"]))
+
+        for key, label_data in data.get("labels", {}).items():
+            props = dict(label_data["properties"])
+            label = LabelItem(properties=props)
+            label.setPos(QPointF(label_data["pos"]["x"], label_data["pos"]["y"]))
+            
+            # Adiciona como label normal, special=False
+            node.add_label(key, label, special=False)
 
         node.properties = data.get("properties", {})
 
@@ -231,3 +264,32 @@ class NodeItem(DiagramItemBase):
             self.update_anchor_positions()
 
         self.update()
+
+    def _next_label_key(self):
+        i = 0
+        while f"label_{i}" in self.labels:
+            i += 1
+        return f"label_{i}"
+
+    def extend_context_menu(self, menu: QMenu):
+        add_label_action = menu.addAction("Adicionar label")
+
+        def _add_label():
+            label = LabelItem(properties={
+                "editable": True,
+                "movable": True,
+                "border": False,
+            })
+
+            shape_rect = self.shape().boundingRect()
+            label.setPos(shape_rect.width() / 2, shape_rect.bottom() + 20)
+
+            key = self._next_label_key()
+            self.add_label(key, label, special=False)
+
+            label._editing = True
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+            label.setFocus()
+
+        add_label_action.triggered.connect(_add_label)
+        super().extend_context_menu(menu)

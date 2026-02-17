@@ -56,6 +56,7 @@ class RelaySwitch(SwitchItem):
             properties={
                 "text": sensor_name or "",
                 "editable": False,
+                "movable": False,
                 "border": False,
                 "max_length": 3
             }

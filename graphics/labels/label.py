@@ -6,6 +6,7 @@ class LabelItem(QGraphicsTextItem):
     DEFAULT_PROPERTIES = {
         "text": "",
         "editable": False,
+        "movable": False,
         "max_length": None,
         "on_commit": None,
         "font_size": 12,
@@ -18,31 +19,35 @@ class LabelItem(QGraphicsTextItem):
 
     def __init__(self, properties: dict | None = None):
         # mescla defaults com propriedades passadas
-        props = dict(self.DEFAULT_PROPERTIES)
+        label_properties = dict(self.DEFAULT_PROPERTIES)
         if properties:
-            props.update(properties)
+            label_properties.update(properties)
 
-        super().__init__(props["text"])
+        super().__init__(label_properties["text"])
 
-        self.props = props
+        self.properties = label_properties
         self._editing = False
 
-        self.editable = props["editable"]
-        self.max_length = props["max_length"]
-        self.on_commit = props["on_commit"]
+        self.editable = self.properties["editable"]
+        self.max_length = self.properties["max_length"]
+        self.on_commit = self.properties["on_commit"]
+
+        self.movable = self.properties["movable"]
+        self.setFlag(self.GraphicsItemFlag.ItemIsMovable, self.movable)
+        self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, self.editable or self.movable)
 
         # Fonte
         font = QFont()
-        font.setPointSize(props["font_size"])
-        font.setBold(props["bold"])
+        font.setPointSize(self.properties["font_size"])
+        font.setBold(self.properties["bold"])
         self.setFont(font)
 
         # Cor do texto
-        self.setDefaultTextColor(props["color"])
+        self.setDefaultTextColor(self.properties["color"])
 
         # Interação
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, self.editable)
+
 
     # =========================
     # Edição
@@ -92,15 +97,25 @@ class LabelItem(QGraphicsTextItem):
         self._editing = False
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         self.setSelected(False)
-        self.update()
 
-        text = self.toPlainText()
-        if self.max_length is not None:
+        text = self.toPlainText().strip()
+        if self.max_length:
             text = text[:self.max_length]
             self.setPlainText(text)
 
+        if not text:
+            # remove automaticamente se ficou vazia
+            if self.parentItem() and hasattr(self.parentItem(), "labels"):
+                node = self.parentItem()
+                key = next((k for k, v in node.labels.items() if v is self), None)
+                if key:
+                    node.remove_label(key)
+            return
+
         if callable(self.on_commit):
             self.on_commit(text)
+
+        self.update()
 
     # =========================
     # API externa
@@ -115,12 +130,12 @@ class LabelItem(QGraphicsTextItem):
     def paint(self, painter: QPainter, option, widget=None):
         super().paint(painter, option, widget)
 
-        if not self.props.get("border", True):
+        if not self.properties.get("border", True):
             return
 
         painter.save()
-        pen = QPen(self.props.get("border_color", Qt.GlobalColor.white))
-        pen.setWidthF(self.props.get("border_width", 1.2))
+        pen = QPen(self.properties.get("border_color", Qt.GlobalColor.white))
+        pen.setWidthF(self.properties.get("border_width", 1.2))
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 

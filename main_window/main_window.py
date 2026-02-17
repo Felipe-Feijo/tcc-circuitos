@@ -212,11 +212,8 @@ class MainWindow(QMainWindow):
 
         # domain/editor concern
         deleted = self.delete_manager.delete_selection()
-        print("delete_selected_items result:", deleted)
         if deleted:
-            print("Items deleted, updating scene rect.")
             self.update_scene_rect()
-            print("Scene rect updated.")
 
     def toggle_node_palette(self, checked):
         self.palette_dock.setVisible(checked)

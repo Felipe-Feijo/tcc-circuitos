@@ -62,6 +62,7 @@ class CoilItem(NodeItem):
             properties={
                 "text": self.properties["sensor"].get("name", ""),
                 "editable": True,
+                "movable": False,
                 "max_length": 3,
                 "on_commit": self._set_sensor_name,
                 "border": False,
@@ -71,7 +72,7 @@ class CoilItem(NodeItem):
         x = -label.boundingRect().width() - 25
         y = self.height / 2 - label.boundingRect().height() / 2
         label.setPos(QPointF(x, y))
-        self.add_label("sensor_name", label)
+        self.add_label("sensor_name", label, special=True)
 
     # --------------------------
     # Geometria
@@ -117,7 +118,7 @@ class CoilItem(NodeItem):
             node=self
         )
 
-        label = self.labels.get("sensor_name")
+        label = self.special_labels.get("sensor_name")
         if label:
             label.set_text(name)
 
@@ -129,7 +130,7 @@ class CoilItem(NodeItem):
             if sensor_name and self.sensor_registry.exists(sensor_name):
                 self.sensor_registry.unregister(sensor_name)
             else:
-                label = self.labels.get("sensor_name")
+                label = self.special_labels.get("sensor_name")
                 if label:
                     label_name = label.toPlainText()
                     if label_name and self.sensor_registry.exists(label_name):
@@ -138,7 +139,7 @@ class CoilItem(NodeItem):
         # limpa label e o dict
         if sensor:
             sensor["name"] = ""
-        label = self.labels.get("sensor_name")
+        label = self.special_labels.get("sensor_name")
         if label:
             label.set_text("")
 
@@ -150,7 +151,7 @@ class CoilItem(NodeItem):
             return
 
         ok = self.sensor_registry.rename(old_name, new_name, self)
-        label = self.labels.get("sensor_name")
+        label = self.special_labels.get("sensor_name")
 
         if not ok:
             if label:
@@ -165,7 +166,7 @@ class CoilItem(NodeItem):
 
     def apply_properties(self):
         self._unregister_sensor()
-        label = self.labels.get("sensor_name")
+        label = self.special_labels.get("sensor_name")
         if label:
             label.set_text(self.properties["sensor"].get("name", ""))
         self._register_sensor()

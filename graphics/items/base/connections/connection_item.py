@@ -60,7 +60,7 @@ class ConnectionItem(DiagramItemBase):
         
         # Cria uma área de 8px ao redor da linha (facilita clique/seleção)
         stroker = QPainterPathStroker()
-        stroker.setWidth(8)
+        stroker.setWidth(20)
         stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
         stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         
@@ -113,7 +113,6 @@ class ConnectionItem(DiagramItemBase):
 
     def get_path_points(self):  
         if getattr(self, "_being_deleted", False):
-            print("get_path_points during deletion?", self._being_deleted)
             return []
 
         source_anchor = getattr(self, "source_anchor", None)
@@ -244,27 +243,30 @@ class ConnectionItem(DiagramItemBase):
         entry_conflict_h = (entry_dir == "left" and dx < 0) or (entry_dir == "right" and dx > 0)
         entry_conflict_v = (entry_dir == "top" and dy < 0) or (entry_dir == "bottom" and dy > 0)
 
+        def four_seg(p1, p2):
+            # dy > 0: p2 está abaixo → termina descendo → hvhv
+            # dy < 0: p2 está acima → termina subindo → vhvh
+            # dy == 0: decide pelo dx
+            if dy != 0:
+                return self._hvhv(p1, p2) if dy > 0 else self._vhvh(p1, p2)
+            else:
+                return self._hvhv(p1, p2) if dx > 0 else self._vhvh(p1, p2)
+
         # Exit horizontal
         if is_exit_horizontal:
-
             if exit_conflict_h:
-                return self._vhvh(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
-
+                return four_seg(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
             if is_entry_horizontal:
-                return self._vhvh(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
-
-            return [QPointF(p2_in.x(), p1_out.y())]
+                return four_seg(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
+            return self._hvh(p1_out, p2_in)
 
         # Exit vertical
         else:
-
             if exit_conflict_v:
-                return self._hvhv(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
-
+                return four_seg(p1_out, p2_in) if entry_conflict_h else self._hvh(p1_out, p2_in)
             if not is_entry_horizontal:
-                return self._hvhv(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
-
-            return [QPointF(p1_out.x(), p2_in.y())]
+                return four_seg(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
+            return self._vhv(p1_out, p2_in)
     
     def _vhv(self, p1, p2):
         """
@@ -338,7 +340,6 @@ class ConnectionItem(DiagramItemBase):
 
     def update_position(self):
         if getattr(self, '_being_deleted', False):
-            print("Connection being deleted, ignoring update_position")
             return
         """Chamado quando nós conectados se movem"""
         self.prepareGeometryChange()
@@ -347,7 +348,6 @@ class ConnectionItem(DiagramItemBase):
     def itemChange(self, change, value):
         """Detecta mudanças e força atualização adequada"""
         if getattr(self, '_being_deleted', False):
-            print("Connection is being deleted, ignoring itemChange")
             return value
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
             # Quando seleção muda, apenas repinta com a cor correta

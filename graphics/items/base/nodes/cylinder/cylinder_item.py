@@ -225,6 +225,7 @@ class CylinderItem(NodeItem):
                     properties={
                         "text": sensor.get("name", ""),
                         "editable": True,
+                        "movable": False,
                         "max_length": 3,
                         "on_commit": lambda t, p=pos: self._set_sensor_name(p, t),
                         "border": True,
@@ -234,7 +235,7 @@ class CylinderItem(NodeItem):
                 label_x = offset.x() + sprite.width() - size - margin
                 label_y = offset.y()
                 label.setPos(label_x, label_y)
-                self.add_label(label_name, label)
+                self.add_label(label_name, label, special=True)
 
                 # Cria a linha vertical abaixo do label
                 line_x = label_x + label.boundingRect().width() / 2
@@ -243,7 +244,7 @@ class CylinderItem(NodeItem):
                 self.sensor_rects[pos] = (line_x, line_y1, line_x, line_y2)
 
             else:
-                self.remove_label(label_name)
+                self.remove_label(label_name, special=True)
 
 
     def _set_sensor_name(self, position, new_name):
@@ -257,7 +258,7 @@ class CylinderItem(NodeItem):
 
         # acessa a label correspondente
         label_name = f"sensor_{position}"
-        label = self.labels.get(label_name)
+        label = self.special_labels.get(label_name)
         
         if not ok:
             # volta ao antigo nome
@@ -274,6 +275,7 @@ class CylinderItem(NodeItem):
             label.set_text(new_name)  # atualiza visual
 
     def extend_context_menu(self, menu):
+        super().extend_context_menu(menu)
         menu.addSeparator()
 
         r_menu = menu.addMenu("Sensor retraído")
@@ -281,6 +283,8 @@ class CylinderItem(NodeItem):
 
         self._populate_sensor_menu(r_menu, "retracted")
         self._populate_sensor_menu(e_menu, "extended")
+
+        
 
     def _populate_sensor_menu(self, menu, position):
         sensor = self.properties["sensors"][position]

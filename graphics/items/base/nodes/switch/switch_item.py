@@ -69,6 +69,8 @@ class SwitchItem(NodeItem):
             action.triggered.connect(lambda _, x=t: self.set_contact_type(x))
             contact_menu.addAction(action)
 
+        super().extend_context_menu(menu)
+
     def set_contact_type(self, contact_type: str):
         if self.properties.get("contact_type") == contact_type:
             return
@@ -92,4 +94,31 @@ class SwitchItem(NodeItem):
     def apply_properties(self):
         self.update_body_visuals()
         self.update()
+
+    def boundingRect(self) -> QRectF:
+        margin = 10
+
+        body_w = self.width
+        body_h = self.height
+
+        leftmost_x = -margin
+        total_width = body_w + self.max_offset_x + 2 * margin
+
+        top_y = -margin
+        total_height = body_h + 2 * margin
+
+        return QRectF(leftmost_x, top_y, total_width, total_height)
+    
+    def shape(self):
+        path = QPainterPath()
+
+        body_rect = QRectF(
+            self.visual_offset.x(),
+            self.visual_offset.y(),
+            self.width,
+            self.height
+        )
+
+        path.addRect(body_rect)
+        return path
 

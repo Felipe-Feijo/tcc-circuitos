@@ -228,7 +228,7 @@ class DirectionalValveItem(NodeItem):
                 self.anchors[anchor_name].setPos(QPointF(x, y))
 
             # 🔹 mover label do limit switch
-            label = self.labels.get(f"actuator_label_{side}")
+            label = self.special_labels.get(f"actuator_label_{side}")
             if label and hasattr(label, "_relative_pos"):
                 label.setPos(label._relative_pos + self.visual_offset)
 
@@ -283,7 +283,7 @@ class DirectionalValveItem(NodeItem):
 
         for side in ("left", "right"):
             
-            self.remove_label(f"actuator_label_{side}")
+            self.remove_label(f"actuator_label_{side}", special=True)
             actuator_cfg = self.actuators.get(side)
             if not actuator_cfg:
                 actuator_name = None
@@ -332,7 +332,7 @@ class DirectionalValveItem(NodeItem):
             label_name = f"actuator_label_{side}"
 
             # remove label antiga por segurança
-            self.remove_label(label_name)
+            self.remove_label(label_name, special=True)
 
             if actuator_name in ["limit_switch", "solenoid"] and sensor_name:
                 rect = self.actuator_rects[side]
@@ -346,6 +346,7 @@ class DirectionalValveItem(NodeItem):
                     properties={
                         "text": sensor_name,
                         "editable": False,
+                        "movable": False,
                         "max_length": 3,
                         "on_commit": lambda t, s=side: self._set_actuator_sensor_name(s, t),
                         "border": True,
@@ -357,7 +358,7 @@ class DirectionalValveItem(NodeItem):
                 label._relative_pos = relative_pos
                 label.setPos(relative_pos + self.visual_offset)
 
-                self.add_label(label_name, label)
+                self.add_label(label_name, label, special=True)
 
 
     def apply_properties(self):
@@ -365,6 +366,7 @@ class DirectionalValveItem(NodeItem):
         self.update()
 
     def extend_context_menu(self, menu: QMenu):
+        super().extend_context_menu(menu)
         menu.addSeparator()
 
         left_menu = menu.addMenu("Atuador esquerdo")
@@ -372,6 +374,8 @@ class DirectionalValveItem(NodeItem):
 
         self._populate_actuator_menu(left_menu, side="left")
         self._populate_actuator_menu(right_menu, side="right")
+
+        
 
     def _populate_actuator_menu(self, menu: QMenu, side: str):
         current = self.actuators.get(side)
@@ -478,7 +482,7 @@ class DirectionalValveItem(NodeItem):
         # valida existência no registry
         if self.sensor_registry and not self.sensor_registry.exists(new_name):
             # volta ao antigo
-            label = self.labels.get(f"actuator_label_{side}")
+            label = self.special_labels.get(f"actuator_label_{side}")
             if label:
                 label.set_text(old_name or "")
             return
@@ -517,7 +521,7 @@ class DirectionalValveItem(NodeItem):
             if actuator.get("sensor_name") == old_name:
                 actuator["sensor_name"] = new_name
 
-                label = self.labels.get(f"actuator_label_{side}")
+                label = self.special_labels.get(f"actuator_label_{side}")
                 if label:
                     label.set_text(new_name)
 
@@ -525,3 +529,4 @@ class DirectionalValveItem(NodeItem):
 
         if updated:
             self.update()
+

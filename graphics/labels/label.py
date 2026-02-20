@@ -111,6 +111,8 @@ class LabelItem(QGraphicsTextItem):
                 if key:
                     node.remove_label(key)
             return
+        
+        self.properties["text"] = text
 
         if callable(self.on_commit):
             self.on_commit(text)

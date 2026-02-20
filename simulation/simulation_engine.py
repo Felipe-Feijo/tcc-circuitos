@@ -1,3 +1,7 @@
+from collections import defaultdict
+
+from simulation.hydraulic_solver import NodeContinuity, NonlinearSystemSolver
+
 class SimulationEngine:
     def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes          # dict[id, Node]
@@ -85,7 +89,7 @@ class SimulationEngine:
 
         return changed
     
-    def _get_connected_group(self, start_anchor):
+    def _get_connected_group(self, start_anchor, internal=True):
         """BFS to collect all directly or indirectly connected anchors in the same domain."""
         group = set()
         queue = [start_anchor]
@@ -99,18 +103,19 @@ class SimulationEngine:
             group.add(anchor)
 
             # Internal node connections (state-dependent)
-            for a_id, b_id in anchor.node.get_internal_connections():
-                a_anchor = anchor.node.get_anchor(a_id)
-                b_anchor = anchor.node.get_anchor(b_id)
+            if internal:
+                for a_id, b_id in anchor.node.get_internal_connections():
+                    a_anchor = anchor.node.get_anchor(a_id)
+                    b_anchor = anchor.node.get_anchor(b_id)
 
-                other = (
-                    b_anchor if a_anchor == anchor
-                    else a_anchor if b_anchor == anchor
-                    else None
-                )
+                    other = (
+                        b_anchor if a_anchor == anchor
+                        else a_anchor if b_anchor == anchor
+                        else None
+                    )
 
-                if other and other.domain == domain and other not in group:
-                    queue.append(other)
+                    if other and other.domain == domain and other not in group:
+                        queue.append(other)
 
             # External connections
             for conn in anchor.connections:
@@ -197,7 +202,176 @@ class SimulationEngine:
         return reaches_ground
     
     def _update_hydraulic_domain(self):
-        """
-        Placeholder for hydraulic propagation.
-        """
+        hydraulic_nodes = self._collect_hydraulic_nodes()
+        if not hydraulic_nodes:
+            return False
+
+        anchor_to_pressure_var = self._assign_pressure_vars()
+        circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
+
+        print(f"{len(circuits)} circuito(s) hidráulico(s) detectado(s)")
+
+        for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
+            print(f"circuito {i+1}: {[n.id for n in circuit_nodes]}")
+            self._solve_circuit(i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var)
+
         return False
+
+
+    def _collect_hydraulic_nodes(self):
+        return [
+            node for node in self.nodes.values()
+            if hasattr(node, 'variables') and hasattr(node, 'equations') and hasattr(node, 'hydraulic_ports')
+        ]
+
+
+    def _assign_pressure_vars(self) -> dict:
+        visited_anchors = set()
+        anchor_to_pressure_var = {}
+
+        for node in self.nodes.values():
+            for anchor in node.anchors.values():
+                if anchor.domain != "hydraulic" or anchor in visited_anchors:
+                    continue
+
+                group = self._get_connected_group(anchor, internal=False)
+                visited_anchors.update(group)
+
+                representative = min(group, key=lambda a: str(a.id))
+                pressure_var = f"P_{representative.node.id}_{representative.name}"
+
+                for a in group:
+                    anchor_to_pressure_var[a] = pressure_var
+                    a.pressure_var = pressure_var
+
+        return anchor_to_pressure_var
+
+
+    def _partition_circuits(self, hydraulic_nodes, anchor_to_pressure_var):
+        pressure_var_to_nodes = defaultdict(set)
+        node_to_pressure_vars = defaultdict(set)
+
+        for node in hydraulic_nodes:
+            for anchor_name in node.hydraulic_ports():
+                anchor = node.anchors.get(anchor_name)
+                if anchor:
+                    pvar = anchor_to_pressure_var.get(anchor)
+                    if pvar:
+                        pressure_var_to_nodes[pvar].add(node)
+                        node_to_pressure_vars[node].add(pvar)
+
+            for anchor_name_a, anchor_name_b in (node.get_internal_connections() or []):
+                anchor_a = node.anchors.get(anchor_name_a)
+                anchor_b = node.anchors.get(anchor_name_b)
+                if anchor_a and anchor_b:
+                    pvar_a = anchor_to_pressure_var.get(anchor_a)
+                    pvar_b = anchor_to_pressure_var.get(anchor_b)
+                    if pvar_a and pvar_b and pvar_a != pvar_b:
+                        pressure_var_to_nodes[pvar_a].add(node)
+                        pressure_var_to_nodes[pvar_b].add(node)
+                        node_to_pressure_vars[node].add(pvar_a)
+                        node_to_pressure_vars[node].add(pvar_b)
+
+        def expand_circuit(start_pvar):
+            visited = set()
+            queue = [start_pvar]
+            while queue:
+                pvar = queue.pop()
+                if pvar in visited:
+                    continue
+                visited.add(pvar)
+                for node in pressure_var_to_nodes[pvar]:
+                    for other_pvar in node_to_pressure_vars[node]:
+                        if other_pvar not in visited:
+                            queue.append(other_pvar)
+            return visited
+
+        remaining_pvars = set(pressure_var_to_nodes.keys())
+        circuits = []
+
+        while remaining_pvars:
+            start = next(iter(remaining_pvars))
+            circuit_pvars = expand_circuit(start)
+            circuit_nodes = {node for pvar in circuit_pvars for node in pressure_var_to_nodes[pvar]}
+            circuits.append((circuit_pvars, circuit_nodes))
+            remaining_pvars -= circuit_pvars
+
+        return circuits
+
+
+    def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
+        circuit_list = list(circuit_nodes)
+
+        group_flows = defaultdict(list)
+        for node in circuit_list:
+            for anchor_name, flow_var in node.hydraulic_ports().items():
+                anchor = node.anchors.get(anchor_name)
+                if not anchor:
+                    continue
+                pvar = anchor_to_pressure_var.get(anchor)
+                if pvar:
+                    group_flows[pvar].append(flow_var)
+
+        continuities = [
+            NodeContinuity(pvar, flow_vars)
+            for pvar, flow_vars in group_flows.items()
+        ]
+
+        solver = NonlinearSystemSolver(circuit_list + continuities)
+        x0 = solver.build_initial_guess(circuit_list)
+
+        try:
+            sol = solver.solve(x0)
+            print(f"circuito {index}: convergiu")
+            self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
+
+        except Exception as e:
+            print(f"circuito {index}: falhou — {e}")
+            self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
+
+
+    def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):
+        for node in circuit_nodes:
+            node.fault = False
+            for anchor in node.anchors.values():
+                if anchor.domain != "hydraulic":
+                    continue
+                anchor.fault = False  # ← reset explícito
+                pvar = anchor_to_pressure_var.get(anchor)
+                if pvar and pvar in sol:
+                    anchor.pressure = sol[pvar]
+                    anchor.flow = 0.0
+
+        for node in circuit_nodes:
+            for anchor_name, flow_var in node.hydraulic_ports().items():
+                anchor = node.anchors.get(anchor_name)
+                if anchor and flow_var in sol:
+                    anchor.flow = sol[flow_var]
+
+
+    def _mark_circuit_fault(self, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
+        # procura em TODOS os nodes do grafo, não só os do circuito
+        for node in self.nodes.values():
+            node_hydraulic_anchors = {
+                a for a in node.anchors.values()
+                if a.domain == "hydraulic"
+            }
+
+            if not node_hydraulic_anchors:
+                continue
+
+            any_fault = False
+            all_fault = True
+
+            for anchor in node_hydraulic_anchors:
+                pvar = anchor_to_pressure_var.get(anchor)
+                if pvar and pvar in circuit_pvars:
+                    anchor.fault = True
+                    anchor.pressure = "ERR"
+                    anchor.flow = "ERR"
+                    any_fault = True
+                else:
+                    all_fault = False
+
+            if any_fault and all_fault:
+                node.fault = True

@@ -20,6 +20,7 @@ class SwitchItem(NodeItem):
         self.initialize_anchors()
 
     def update_from_domain(self, domain_node):
+        super().update_from_domain(domain_node)
         self.body_state = domain_node.state
         self.update_body_visuals()
         self.update_connections()

@@ -166,6 +166,7 @@ class CylinderItem(NodeItem):
         Espera-se que o domain_node exponha
         um estado visual inteiro (ex: 0 ou 1).
         """
+        super().update_from_domain(domain_node)
         new_state = domain_node.get_visual_state()
 
         if new_state == self.body_state:

@@ -204,6 +204,8 @@ class NodeItem(DiagramItemBase):
                 else:
                     if isinstance(v, Qt.GlobalColor):
                         props[k] = v.name.lower()
+                    else:
+                        props[k] = v
             data[key] = {
                 "pos": {
                     "x": label.pos().x(),
@@ -226,6 +228,12 @@ class NodeItem(DiagramItemBase):
 
         for key, label_data in data.get("labels", {}).items():
             props = dict(label_data["properties"])
+
+            # reverte cores serializadas de volta para Qt.GlobalColor
+            for color_key in ("color", "border_color"):
+                if color_key in props and isinstance(props[color_key], str):
+                    props[color_key] = {c.name.lower(): c for c in Qt.GlobalColor}.get(props[color_key], Qt.GlobalColor.white)
+
             label = LabelItem(properties=props)
             label.setPos(QPointF(label_data["pos"]["x"], label_data["pos"]["y"]))
             
@@ -240,7 +248,14 @@ class NodeItem(DiagramItemBase):
         return node
     
     def update_from_domain(self, domain_node):
-        pass
+        super().update_from_domain(domain_node)
+        
+        for name, anchor in self.anchors.items():
+            domain_anchor = domain_node.anchors.get(name)
+            if domain_anchor and domain_anchor.domain == "hydraulic":
+                anchor.pressure = domain_anchor.pressure
+                anchor.flow = domain_anchor.flow
+                anchor.update_hydraulic_labels()
 
     def reset_visual_state(self):
         """

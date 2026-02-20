@@ -1,5 +1,7 @@
 # domain/graph_builder.py
 
+from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
+from simulation.nodes.reservoir import Reservoir
 from simulation.nodes.switch.relay_switch import RelaySwitch
 from simulation.nodes.switch.button_switch import ButtonSwitch
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
@@ -25,6 +27,8 @@ NODE_FACTORY = {
     "relay_switch": RelaySwitch,
     "solenoid_coil": Coil,
     "relay_coil": Coil,
+    "reservoir": Reservoir,
+    "fixed_displacement_pump": FixedDisplacementPump,
 }
 
 class GraphBuilder:

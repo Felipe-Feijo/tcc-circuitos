@@ -1,6 +1,7 @@
 from graphics.items.base.nodes.coil.relay_coil import RelayCoil
 from graphics.items.base.nodes.expandable.ground import Ground
 from graphics.items.base.nodes.expandable.voltage_source import VoltageSource
+from graphics.items.base.nodes.fixed_displacement_pump import FixedDisplacementPump
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
 from graphics.items.base.nodes.or_valve import OrValve
@@ -14,6 +15,7 @@ from graphics.items.base.nodes.directional_valve.valve_4_2_ways import Valve_4_2
 
 
 from graphics.items.base.nodes.coil.solenoid_coil import SolenoidCoil
+from graphics.items.base.nodes.reservoir import Reservoir
 from graphics.items.base.nodes.switch.button_switch import ButtonSwitch
 from graphics.items.base.nodes.switch.relay_switch import RelaySwitch
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
@@ -137,5 +139,19 @@ def register_hydraulic_nodes(palette, on_add_node):
             "resources/nodes/valve_3_2_ways/valve_3_2_body_right.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(Valve_3_2_Ways, domain=domain))
+    )
+    hydraulic.add_node(
+        name="Reservoir",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/reservoir/reservoir.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(Reservoir, domain=domain))
+    )
+    hydraulic.add_node(
+        name="FixedDisplacementPump",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(FixedDisplacementPump, domain=domain))
     )
     # Adicione nós hidráulicos aqui usando hydraulic.add_node(...)

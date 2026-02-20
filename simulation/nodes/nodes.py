@@ -24,6 +24,8 @@ class Anchor:
         # hidráulica
         self.pressure: float = 0.0    # opcional, se quiser modelar pressão real
         self.flow: float = 0.0        # opcional, se quiser modelar vazão
+        self.pressure_var: str | None = None  # nome da variável P_* no sistema, preenchido pela engine
+        self.fault = False
 
     def connect(self, connection: "Connection"):
         if connection not in self.connections:

@@ -53,3 +53,6 @@ class DiagramItemBase(QGraphicsObject):
 
             # desenha o shape real, incluindo body + botões na posição atual
             painter.drawPath(self.shape())
+
+    def update_from_domain(self, domain_node):
+        pass

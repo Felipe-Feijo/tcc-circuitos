@@ -29,7 +29,7 @@ class OrValve(NodeItem):
 
 
     def update_from_domain(self, domain_node):
-        print("received")
+        super().update_from_domain(domain_node)
         state = domain_node.get_visual_state()
         if state == "X":
             self.pixmap = self.icon_x_side

@@ -29,17 +29,15 @@ class Connection:
             raise ValueError(f"Anchor {anchor.id} not in connection {self.id}")
         
     def get_state(self) -> float:
-        """
-        Retorna o estado atual da conexão.
-        """
-        # Usando anchor_a como referência de domínio/estado
         domain = getattr(self.anchor_a, "domain", "pneumatic")
         
         if domain in ["pneumatic", "electric"]:
-            # considera ativo se ambos os anchors estiverem ativos (booleana)
-            return True if self.anchor_a.state and self.anchor_b.state else False
+            return 1 if self.anchor_a.state and self.anchor_b.state else 0
         elif domain == "hydraulic":
-            # média entre os estados para simplificação
-            return (self.anchor_a.pressure + self.anchor_b.pressure) > 0
+            if not self.anchor_a.fault and not self.anchor_b.fault:
+                avg = (self.anchor_a.pressure + self.anchor_b.pressure) / 2
+                return 0.0 if abs(avg) < 1e-10 else avg
+            else:
+                return -1.0  # falha na conexão, sem fluxo
         else:
-            return False
+            return 0

@@ -100,9 +100,13 @@ class ConnectionItem(DiagramItemBase):
                 pen = QPen(Qt.GlobalColor.green, 3)
             elif self.domain == "electric" and self.state == 1:
                 pen = QPen(Qt.GlobalColor.yellow, 3)
-            elif self.domain == "hydraulic" and self.state == 1:
-                # ainda placeholder
-                pen = QPen(Qt.GlobalColor.cyan, 3)
+            elif self.domain == "hydraulic":
+                if self.state > 0:
+                    pen = QPen(Qt.GlobalColor.blue, 3)
+                elif self.state < 0:
+                    pen = QPen(Qt.GlobalColor.red, 3)
+                else:
+                    pen = QPen(Qt.GlobalColor.cyan, 3)
             else:
                 pen = self.pen
 
@@ -407,6 +411,7 @@ class ConnectionItem(DiagramItemBase):
         """
         Atualiza o estado da connection e repinta de acordo com domínio.
         """
+        print("got value", value)
         if self.state != value:
             self.state = value
             self.update()

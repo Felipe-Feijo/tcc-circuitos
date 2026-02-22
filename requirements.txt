@@ -19,6 +19,7 @@ numpy==2.3.5
     #   -r requirements.in
     #   contourpy
     #   matplotlib
+    #   scipy
 packaging==25.0
     # via matplotlib
 pillow==12.0.0
@@ -33,5 +34,7 @@ pyqt6-sip==13.10.2
     # via pyqt6
 python-dateutil==2.9.0.post0
     # via matplotlib
+scipy==1.17.0
+    # via -r requirements.in
 six==1.17.0
     # via python-dateutil

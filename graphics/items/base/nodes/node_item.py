@@ -8,6 +8,7 @@ from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
+from graphics.utils.properties_dialog import PropertiesDialog
 
 
 class NodeItem(DiagramItemBase):
@@ -287,6 +288,9 @@ class NodeItem(DiagramItemBase):
         return f"label_{i}"
 
     def extend_context_menu(self, menu: QMenu):
+        props_action = menu.addAction("Propriedades...")
+        props_action.triggered.connect(self._open_properties_dialog)
+        menu.addSeparator()
         add_label_action = menu.addAction("Adicionar label")
 
         def _add_label():
@@ -308,3 +312,17 @@ class NodeItem(DiagramItemBase):
 
         add_label_action.triggered.connect(_add_label)
         super().extend_context_menu(menu)
+
+    def _open_properties_dialog(self):
+        dialog = self.build_properties_dialog()
+        if dialog is None:
+            dialog = PropertiesDialog(title="Properties")
+            dialog.add_no_properties_message()
+        if dialog.exec():  # retorna True só se o usuário clicou OK
+            self.apply_properties_from_dialog(dialog)
+
+    def build_properties_dialog(self) -> PropertiesDialog | None:
+        return None
+    
+    def apply_properties_from_dialog(self, dialog: PropertiesDialog):
+        pass

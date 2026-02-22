@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QMenu
 
 
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.utils.properties_dialog import PropertiesDialog
 from .....anchors.anchor import AnchorItem
 from graphics.labels.label import LabelItem
 
@@ -530,4 +531,46 @@ class DirectionalValveItem(NodeItem):
 
         if updated:
             self.update()
+
+    
+    def build_properties_dialog(self):
+        dialog = PropertiesDialog(title="Directional Valve — Properties")
+
+        options = ["None"]
+        dialog._actuator_key_map = {}
+        for key, desc in ACTUATOR_DICT.items():
+            if desc.get("menu", True):
+                options.append(desc["label"])
+                dialog._actuator_key_map[desc["label"]] = key
+
+        if self.sensor_registry:
+            options += self.sensor_registry.list_names(sensor_type="cylinder_end")
+            options += self.sensor_registry.list_names(sensor_type="solenoid_coil")
+
+        # determina seleção atual
+        def current_label(side):
+            a = self.properties["actuators"].get(side)
+            if not a:
+                return "None"
+            if a["type"] in ["limit_switch", "solenoid"]:
+                return a.get("sensor_name", "None")
+            return ACTUATOR_DICT[a["type"]]["label"]
+
+        dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_label("left"))
+        dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_label("right"))
+
+        return dialog
+
+    def apply_properties_from_dialog(self, dialog):
+        for side, combo in [("left", dialog._combo_left), ("right", dialog._combo_right)]:
+            selected = combo.currentText()
+            if selected == "None":
+                self.set_actuator(side, None)
+            elif selected in dialog._actuator_key_map:
+                self.set_actuator(side, dialog._actuator_key_map[selected])
+            elif self.sensor_registry:
+                info = self.sensor_registry.get(selected)
+                if info:
+                    actuator_type = "limit_switch" if info.sensor_type == "cylinder_end" else "solenoid"
+                    self.set_actuator(side, actuator_type, selected)
 

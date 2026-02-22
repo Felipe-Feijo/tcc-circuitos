@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
+from graphics.utils.properties_dialog import PropertiesDialog
 from .....anchors.anchor import AnchorItem
 
 SENSOR_DICT = {
@@ -351,3 +352,48 @@ class CylinderItem(NodeItem):
 
         if name:
             self.sensor_registry.unregister(name)
+
+    def build_properties_dialog(self):
+        dialog = PropertiesDialog(title="Cylinder — Properties")
+
+        sensor_options = ["None"] + [desc["label"] for desc in SENSOR_DICT.values()]
+        dialog._sensor_label_to_key = {desc["label"]: key for key, desc in SENSOR_DICT.items()}
+
+        def make_side_widgets(pos):
+            sensor = self.properties["sensors"].get(pos)
+            current_type = sensor.get("type") if sensor else None
+            current_label = SENSOR_DICT[current_type]["label"] if current_type else "None"
+            current_name = sensor.get("name", "") if sensor else ""
+
+            combo = dialog.add_combo_field(f"Sensor {pos}", sensor_options, current=current_label)
+            name_field = dialog.add_text_field("  Nome", placeholder="ex: A1", value=current_name)
+            name_field.setEnabled(current_type is not None)
+
+            def on_type_changed(label):
+                is_none = label == "None"
+                name_field.setEnabled(not is_none)
+                if not is_none and not name_field.text().strip():
+                    name_field.setText(self.sensor_registry.next_available_name("A"))
+
+            combo.currentTextChanged.connect(on_type_changed)
+            return combo, name_field
+
+        dialog._combo_retracted, dialog._name_retracted = make_side_widgets("retracted")
+        dialog._combo_extended, dialog._name_extended = make_side_widgets("extended")
+
+        return dialog
+
+    def apply_properties_from_dialog(self, dialog):
+        label_to_key = dialog._sensor_label_to_key
+
+        for pos, combo, name_field in [
+            ("retracted", dialog._combo_retracted, dialog._name_retracted),
+            ("extended", dialog._combo_extended, dialog._name_extended),
+        ]:
+            label = combo.currentText()
+            sensor_type = label_to_key.get(label) if label != "None" else None
+            name = name_field.text().strip() if sensor_type else ""
+
+            self.set_sensor(pos, sensor_type)
+            if sensor_type and name:
+                self._set_sensor_name(pos, name)

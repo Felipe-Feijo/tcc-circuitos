@@ -3,13 +3,12 @@ from simulation.nodes.nodes import Node
 class FixedDisplacementPump(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id, "fixed_displacement_pump", **kwargs)
-        self.properties.setdefault("flow_rate", 1e-4)
         self.flow_in_var  = f"Q_{self.id}_P"   # sucção (P = inlet)
         self.flow_out_var = f"Q_{self.id}_S"   # descarga (S = outlet)
 
     @property
     def flow_hint(self) -> float:
-        return self.properties.get("flow_rate", 1e-4)
+        return self.properties.get("Q", 1e-4)
 
     @property
     def variables(self):
@@ -24,7 +23,7 @@ class FixedDisplacementPump(Node):
     def equations(self, x, idx):
         Q_in  = x[idx[self.flow_in_var]]
         Q_out = x[idx[self.flow_out_var]]
-        Q_set = self.properties["flow_rate"]
+        Q_set = self.properties["Q"]
 
         # Conservação interna: o que entra sai
         # Imposição de vazão: a saída é Q_set

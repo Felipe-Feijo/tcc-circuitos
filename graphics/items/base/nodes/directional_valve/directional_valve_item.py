@@ -62,10 +62,14 @@ class DirectionalValveItem(NodeItem):
                 "right": None
             }
         }
+        if self.domain == "hydraulic":
+            self.properties["k"] = None
+
         if self.sensor_registry:
             self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
             self.sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
             self.sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
+
         self.actuators = {}
         self.actuator_visuals = {}  # sprites carregados
         self.actuator_rects = {}
@@ -535,6 +539,10 @@ class DirectionalValveItem(NodeItem):
     
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Directional Valve — Properties")
+        if self.domain == "hydraulic":
+            dialog._field_k = dialog.add_number_field("k", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("k"))
+        else:
+            dialog._field_k = None
 
         options = ["None"]
         dialog._actuator_key_map = {}
@@ -562,6 +570,9 @@ class DirectionalValveItem(NodeItem):
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
+        if dialog._field_k is not None:
+            k_text = dialog._field_k.text().strip()
+            self.properties["k"] = float(k_text) if k_text else None
         for side, combo in [("left", dialog._combo_left), ("right", dialog._combo_right)]:
             selected = combo.currentText()
             if selected == "None":

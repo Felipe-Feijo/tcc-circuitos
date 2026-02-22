@@ -44,7 +44,7 @@ class PropertiesDialog(QDialog):
 
         self._ok_btn = QPushButton("OK")
         self._ok_btn.setDefault(True)
-        self._ok_btn.clicked.connect(self.accept)
+        self._ok_btn.clicked.connect(self._validate_and_accept)
 
         btn_layout.addWidget(self._cancel_btn)
         btn_layout.addWidget(self._ok_btn)
@@ -71,3 +71,41 @@ class PropertiesDialog(QDialog):
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._main_layout.insertWidget(2, msg)  # após separador
         self._ok_btn.setEnabled(False)
+
+    def add_number_field(self, label: str, placeholder: str = "", value: float | None = None) -> QLineEdit:
+        field = QLineEdit()
+        field.setPlaceholderText(placeholder)
+        if value is not None:
+            field.setText(str(value))
+
+        def on_edit_finished():
+            text = field.text().strip()
+            if not text:
+                field.setStyleSheet("")
+                return
+            try:
+                float(text)
+                field.setStyleSheet("")
+            except ValueError:
+                field.setStyleSheet("border: 1px solid red;")
+
+        field.editingFinished.connect(on_edit_finished)
+        field._is_number_field = True  # marca para validação no OK
+        self._form_layout.addRow(label, field)
+        return field
+    
+    def _validate_and_accept(self):
+        for i in range(self._form_layout.rowCount()):
+            item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
+            if not item:
+                continue
+            widget = item.widget()
+            if isinstance(widget, QLineEdit) and getattr(widget, "_is_number_field", False):
+                text = widget.text().strip()
+                if text:
+                    try:
+                        float(text)
+                    except ValueError:
+                        widget.setStyleSheet("border: 1px solid red;")
+                        return  # não fecha
+        self.accept()

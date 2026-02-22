@@ -326,3 +326,15 @@ class NodeItem(DiagramItemBase):
     
     def apply_properties_from_dialog(self, dialog: PropertiesDialog):
         pass
+
+    def mouseDoubleClickEvent(self, event):
+        if self.simulation_mode:
+            event.ignore()
+            return
+        dialog = self.build_properties_dialog()
+        if dialog is None:
+            event.ignore()
+            return
+        if dialog.exec():
+            self.apply_properties_from_dialog(dialog)
+        event.accept()

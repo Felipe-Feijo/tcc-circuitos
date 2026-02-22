@@ -9,16 +9,12 @@ class Reservoir(Node):
 
     @property
     def variables(self):
-        anchor = self.anchors.get("R")
-        pvar = getattr(anchor, "pressure_var", None) if anchor else None
-        return ([pvar] if pvar else []) + [self.flow_var]
+        return [self.flow_var]
 
     def hydraulic_ports(self):
         return {"R": self.flow_var}  # participa da continuidade do grupo
 
     def equations(self, x, idx):
         anchor = self.anchors.get("R")
-        pvar = getattr(anchor, "pressure_var", None) if anchor else None
-        if not pvar or pvar not in idx:
-            return []
-        return [x[idx[pvar]] - self.pressure]  # só fixa P, Q fica livre
+        pvar = anchor.pressure_var
+        return [x[idx[pvar]] - self.pressure]

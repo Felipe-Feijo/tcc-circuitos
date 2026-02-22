@@ -38,6 +38,6 @@ class Connection:
                 avg = (self.anchor_a.pressure + self.anchor_b.pressure) / 2
                 return 0.0 if abs(avg) < 1e-10 else avg
             else:
-                return -1.0  # falha na conexão, sem fluxo
+                return None  # falha na conexão, sem fluxo
         else:
             return 0

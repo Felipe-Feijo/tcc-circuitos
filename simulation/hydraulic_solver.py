@@ -31,10 +31,14 @@ class NonlinearSystemSolver:
                 x0[self.var_index[var]] = val
 
         system = self.build_equations()
-        sol = fsolve(system, x0, full_output=False)
+        sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
+        residual = np.max(np.abs(info['fvec']))
+        print("fsolve info:", msg, "| residual:", residual)
+        if ier != 1 or residual > 1e-6:
+            raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
 
         return {
-            var: sol[idx]
+            var: sol_array[idx]
             for var, idx in self.var_index.items()
         }
     
@@ -80,8 +84,7 @@ class NodeContinuity:
 
     @property
     def variables(self):
-        # Não introduz novas variáveis — só adiciona uma equação de balanço
-        return []
+        return [self.pressure_var]
 
     def equations(self, x, idx):
         return [sum(x[idx[q]] for q in self.flow_vars if q in idx)]

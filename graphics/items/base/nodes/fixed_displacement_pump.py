@@ -31,7 +31,7 @@ class FixedDisplacementPump(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Fixed Displacement Pump — Properties")
         if self.domain == "hydraulic":
-            dialog._field_Q = dialog.add_number_field("Q", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("Q"))
+            dialog._field_Q = dialog.add_number_field("Q (m³/s)", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("Q"))
         else:
             dialog._field_Q = None
 

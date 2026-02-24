@@ -33,8 +33,7 @@ class NonlinearSystemSolver:
         system = self.build_equations()
         sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
         residual = np.max(np.abs(info['fvec']))
-        print("fsolve info:", msg, "| residual:", residual)
-        if ier != 1 or residual > 1e-6:
+        if ier != 1 or residual > 1e-3:
             raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
 
         return {

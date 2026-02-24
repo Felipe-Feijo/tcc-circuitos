@@ -76,7 +76,7 @@ class Node:
         """
         pass
 
-    def post_step_update(self):
+    def post_step_update(self, dt):
         """
         Executado UMA vez após estabilização.
         - sensores
@@ -114,52 +114,6 @@ class Exhaust(Node):
 
 
     
-class SingleActingCylinder(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "single_acting_cylinder", **kwargs)
-
-        # Estado interno
-        # 0 = retraído
-        # 1 = avançado
-        self.position = 0
-
-        # Extrai apenas o que precisa
-        self.sensors = self.properties.get("sensors", {
-            "retracted": {"type": None, "name": ""},
-            "extended": {"type": None, "name": ""}
-        })
-
-        self.outputs = {}
-
-    def update(self, outputs=None):
-        self.position = 1 if self.anchors["A"].state else 0
-
-    def post_step_update(self):
-        if self.sensors["retracted"]["type"]:
-            name = self.sensors["retracted"]["name"]
-            self.outputs[name] = {
-                "type": "signal",
-                "value": self.position == 0
-            }
-
-        if self.sensors["extended"]["type"]:
-            name = self.sensors["extended"]["name"]
-            self.outputs[name] = {
-                "type": "signal",
-                "value": self.position == 1
-            }
-
-    def get_visual_state(self):
-            return self.position
-    
-    def get_state(self):
-        state = super().get_state()
-        state["position"] = self.position
-        return state
-
-    def set_state(self, state):
-        super().set_state(state)
-        self.position = state.get("position", self.position)
 
 class OrValve(Node):
     def __init__(self, node_id, **kwargs):

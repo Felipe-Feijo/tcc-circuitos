@@ -19,7 +19,7 @@ class Coil(Node):
         """
         self.energized = 1 if (self.anchors["T"].state and self.anchors["B"].state) else 0
 
-    def post_step_update(self):
+    def post_step_update(self, dt):
         """
         Atualiza o sinal de saída do solenoide
         """

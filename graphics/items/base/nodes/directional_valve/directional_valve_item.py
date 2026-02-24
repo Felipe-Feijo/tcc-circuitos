@@ -63,7 +63,7 @@ class DirectionalValveItem(NodeItem):
             }
         }
         if self.domain == "hydraulic":
-            self.properties["k"] = None
+            self.properties.setdefault("k", 1e-4)
 
         if self.sensor_registry:
             self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)

@@ -7,6 +7,10 @@ class Valve_3_2_Ways(DirectionalValve):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id, "valve_3_2_ways", **kwargs)
 
+        if self.domain == "hydraulic":
+            self._last_Q_in = 0.0
+
+
     def get_internal_connections(self):
         """Retorna pares de anchors conectados internamente."""
         if self.body_state == 0:
@@ -60,3 +64,22 @@ class Valve_3_2_Ways(DirectionalValve):
             Q_in + Q_out,
             delta_p - math.copysign((Q_in / k) ** 2, Q_in)
         ]
+    
+    def initial_guess(self):
+        if self.domain != "hydraulic":
+            return {}
+        return {
+            f"Q_{self.id}_in":   self._last_Q_in,
+            f"Q_{self.id}_out": -self._last_Q_in,
+        }
+    
+    def post_step_update(self, dt=None):
+        super().post_step_update(dt=dt)
+        ports = self.hydraulic_ports()
+        if not ports:
+            return
+        first_anchor_name = next(iter(ports))
+        anchor = self.anchors.get(first_anchor_name)
+        if anchor and not isinstance(anchor.flow, str):
+            self._last_Q_in = anchor.flow
+    

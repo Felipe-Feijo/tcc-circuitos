@@ -46,7 +46,7 @@ class SimulationEngine:
         self.outputs = {}
 
         for node in self.nodes.values():
-            node.post_step_update()
+            node.post_step_update(dt = 0.1)
 
             node_outputs = getattr(node, "outputs", None)
             if not node_outputs:
@@ -327,6 +327,8 @@ class SimulationEngine:
 
         except Exception as e:
             print(f"circuito {index}: falhou — {e}")
+            if index == 2:
+                print(f"[x0 circuito 2]: {x0}")
             self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
 
 

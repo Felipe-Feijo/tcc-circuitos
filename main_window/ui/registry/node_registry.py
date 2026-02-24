@@ -154,4 +154,11 @@ def register_hydraulic_nodes(palette, on_add_node):
         ),
         callback=lambda: on_add_node(NodeDescriptor(FixedDisplacementPump, domain=domain))
     )
+    hydraulic.add_node(
+        name="SingleActingCylinder",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/single_acting_cylinder/single_acting_cylinder_retracted.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(SingleActingCylinder, domain=domain))
+    )
     # Adicione nós hidráulicos aqui usando hydraulic.add_node(...)

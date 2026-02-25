@@ -41,12 +41,15 @@ class SingleActingCylinder(Node):
     
     @property
     def flow_hint(self) -> float:
-        """Estima a magnitude do fluxo baseado na força disponível."""
+        if self.locked:
+            return 0.0
         F_mola = self.spring_k * self.x
         F_net  = F_mola + self.external_force
         friction_eff = max(self.friction, 1e-3)
         v_hint = F_net / friction_eff
-        return abs(v_hint * self.area)
+        hint = abs(v_hint * self.area)
+        # fallback: se não há força, usa flow_rate da bomba ou valor mínimo
+        return hint if hint > 1e-10 else 0.0  # retorna 0 — bomba vai fornecer o hint
 
     def hydraulic_ports(self):
         if self.domain != "hydraulic":

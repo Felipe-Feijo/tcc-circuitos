@@ -34,10 +34,9 @@ class Connection:
         if domain in ["pneumatic", "electric"]:
             return 1 if self.anchor_a.state and self.anchor_b.state else 0
         elif domain == "hydraulic":
-            if not self.anchor_a.fault and not self.anchor_b.fault:
-                avg = (self.anchor_a.pressure + self.anchor_b.pressure) / 2
-                return 0.0 if abs(avg) < 1e-10 else avg
-            else:
-                return None  # falha na conexão, sem fluxo
-        else:
-            return 0
+            p_a = self.anchor_a.pressure
+            p_b = self.anchor_b.pressure
+            if isinstance(p_a, str) or isinstance(p_b, str):
+                return "ERR"
+            avg = (p_a + p_b) / 2
+            return 0.0 if abs(avg) < 1e-10 else avg

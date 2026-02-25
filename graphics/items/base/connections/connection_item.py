@@ -101,7 +101,7 @@ class ConnectionItem(DiagramItemBase):
             elif self.domain == "electric" and self.state == 1:
                 pen = QPen(Qt.GlobalColor.yellow, 3)
             elif self.domain == "hydraulic":
-                if self.state is None:  # erro de convergência
+                if self.state == "ERR":  # erro de convergência
                     pen = QPen(Qt.GlobalColor.red, 3)
                 elif self.state > 0:  # pressão positiva
                     pen = QPen(Qt.GlobalColor.blue, 3)

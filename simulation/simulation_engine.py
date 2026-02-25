@@ -333,18 +333,20 @@ class SimulationEngine:
 
 
     def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):
+        # pressão — escreve em TODAS as anchors do grupo, ativas ou não
+        for anchor, pvar in anchor_to_pressure_var.items():
+            if pvar in sol:
+                anchor.pressure = sol[pvar]
+                anchor.fault = False
+
+        # flow — só nas anchors ativas nos ports
         for node in circuit_nodes:
             node.fault = False
             for anchor in node.anchors.values():
                 if anchor.domain != "hydraulic":
                     continue
-                anchor.fault = False  # ← reset explícito
-                pvar = anchor_to_pressure_var.get(anchor)
-                if pvar and pvar in sol:
-                    anchor.pressure = sol[pvar]
-                    anchor.flow = 0.0
+                anchor.flow = 0.0  # reseta — sobrescrito abaixo se ativo
 
-        for node in circuit_nodes:
             for anchor_name, flow_var in node.hydraulic_ports().items():
                 anchor = node.anchors.get(anchor_name)
                 if anchor and flow_var in sol:

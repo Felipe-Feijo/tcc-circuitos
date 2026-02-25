@@ -32,3 +32,10 @@ class FixedDisplacementPump(Node):
             Q_in + Q_out,        # Q_in = -Q_out (conservação)
             Q_out - Q_set,       # Q_out = Q_set (bomba fixa)
         ]
+    
+    def initial_guess(self):
+        Q = self.properties.get("Q", 1e-4)
+        return {
+            self.flow_in_var:  Q,
+            self.flow_out_var: -Q,
+        }

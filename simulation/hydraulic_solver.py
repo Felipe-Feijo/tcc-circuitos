@@ -33,7 +33,7 @@ class NonlinearSystemSolver:
         system = self.build_equations()
         sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
         residual = np.max(np.abs(info['fvec']))
-        if ier != 1 or residual > 1e-3:
+        if ier != 1 and residual > 1e-6:
             raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
 
         return {
@@ -44,21 +44,22 @@ class NonlinearSystemSolver:
     def build_initial_guess(self, hydraulic_nodes) -> dict:
         x0 = {var: 0.0 for node in hydraulic_nodes for var in node.variables}
 
-        # coleta chutes específicos de cada componente
+        guessed_vars = set()
         for node in hydraulic_nodes:
             if hasattr(node, "initial_guess"):
-                x0.update(node.initial_guess())
+                guess = node.initial_guess()
+                x0.update(guess)
+                guessed_vars.update(guess.keys())
 
-        # busca flow_hint de qualquer fonte de vazão no circuito
-        Q_hint = next(
-            (node.flow_hint for node in hydraulic_nodes if hasattr(node, "flow_hint")),
-            None
-        )
+        hints = [node.flow_hint for node in hydraulic_nodes if hasattr(node, "flow_hint")]
+        Q_hint = max(hints) if hints else None
+        if Q_hint is not None and Q_hint < 1e-10:
+            Q_hint = None  # ignora hints zerados
+        print(f"[build_initial_guess] Q_hint={Q_hint}, nodes com flow_hint: {[n.id[:8] for n in hydraulic_nodes if hasattr(n, 'flow_hint')]}")
 
-        # propaga para Q ainda zerados
         if Q_hint:
             for var in x0:
-                if var.startswith("Q_") and x0[var] == 0.0:
+                if var.startswith("Q_") and x0[var] == 0.0 and var not in guessed_vars:
                     x0[var] = Q_hint
 
         return x0

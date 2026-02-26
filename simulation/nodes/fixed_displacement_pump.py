@@ -8,11 +8,19 @@ class FixedDisplacementPump(Node):
 
     @property
     def flow_hint(self) -> float:
-        return self.properties.get("Q", 1e-4)
+        return self.properties["Q"]
 
     @property
     def variables(self):
         return [self.flow_in_var, self.flow_out_var]
+    
+    @property
+    def initial_guess(self):
+        Q = self.properties["Q"]
+        return {
+            self.flow_in_var:  Q,
+            self.flow_out_var: -Q,
+        }
 
     def hydraulic_ports(self):
         return {
@@ -33,9 +41,3 @@ class FixedDisplacementPump(Node):
             Q_out - Q_set,       # Q_out = Q_set (bomba fixa)
         ]
     
-    def initial_guess(self):
-        Q = self.properties.get("Q", 1e-4)
-        return {
-            self.flow_in_var:  Q,
-            self.flow_out_var: -Q,
-        }

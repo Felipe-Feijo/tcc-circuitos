@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from scipy.optimize import fsolve
 
 class NonlinearSystemSolver:
@@ -33,6 +34,10 @@ class NonlinearSystemSolver:
         system = self.build_equations()
         sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
         residual = np.max(np.abs(info['fvec']))
+        for comp in self.components:
+            eqs = comp.equations(sol_array, self.var_index)
+            name = getattr(comp, 'id', getattr(comp, 'pressure_var', str(comp)))
+            print(f"  {str(name)[-8:]}: {[f'{r:.4e}' for r in eqs]}")
         if ier != 1 and residual > 1e-6:
             raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
 
@@ -47,20 +52,29 @@ class NonlinearSystemSolver:
         guessed_vars = set()
         for node in hydraulic_nodes:
             if hasattr(node, "initial_guess"):
-                guess = node.initial_guess()
+                guess = node.initial_guess
                 x0.update(guess)
                 guessed_vars.update(guess.keys())
 
-        hints = [node.flow_hint for node in hydraulic_nodes if hasattr(node, "flow_hint")]
-        Q_hint = max(hints) if hints else None
-        if Q_hint is not None and Q_hint < 1e-10:
-            Q_hint = None  # ignora hints zerados
-        print(f"[build_initial_guess] Q_hint={Q_hint}, nodes com flow_hint: {[n.id[:8] for n in hydraulic_nodes if hasattr(n, 'flow_hint')]}")
+        Q_hint = next(
+            (node.flow_hint for node in hydraulic_nodes 
+            if hasattr(node, "flow_hint") and node.flow_hint > 1e-10),
+            None
+        )
 
-        if Q_hint:
-            for var in x0:
-                if var.startswith("Q_") and x0[var] == 0.0 and var not in guessed_vars:
-                    x0[var] = Q_hint
+        if Q_hint is None:
+            Q_hint = self._last_Q_hint if hasattr(self, "_last_Q_hint") else 1e-4
+        else:
+            self._last_Q_hint = Q_hint
+
+        for var in x0:
+            if not var.startswith("Q_"):
+                continue
+            if var not in guessed_vars and x0[var] == 0.0:
+                x0[var] = Q_hint
+            elif var in guessed_vars and abs(x0[var]) == 1.0:
+                # escala sentinela preservando sinal
+                x0[var] = math.copysign(Q_hint, x0[var])
 
         return x0
 

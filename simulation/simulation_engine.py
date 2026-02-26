@@ -302,6 +302,28 @@ class SimulationEngine:
     def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
         circuit_list = list(circuit_nodes)
 
+        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+
+        if sol is None:
+            relief_valves = [
+                n for n in circuit_list
+                if hasattr(n, "open_relief") and not n._forced_open
+            ]
+
+            if relief_valves:
+                for rv in relief_valves:
+                    rv.open_relief()
+                print(f"circuito {index}: abrindo {len(relief_valves)} relief valve(s), tentando novamente")
+                sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+
+        if sol is None:
+            self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
+            return
+
+        self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
+
+
+    def _try_solve(self, index, circuit_list, anchor_to_pressure_var):
         group_flows = defaultdict(list)
         for node in circuit_list:
             for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -321,15 +343,10 @@ class SimulationEngine:
         x0 = solver.build_initial_guess(circuit_list)
 
         try:
-            sol = solver.solve(x0)
-            print(f"circuito {index}: convergiu")
-            self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
-
+            return solver.solve(x0)
         except Exception as e:
             print(f"circuito {index}: falhou — {e}")
-            if index == 2:
-                print(f"[x0 circuito 2]: {x0}")
-            self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
+            return None
 
 
     def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):

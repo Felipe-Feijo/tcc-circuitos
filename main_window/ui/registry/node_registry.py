@@ -2,6 +2,7 @@ from graphics.items.base.nodes.coil.relay_coil import RelayCoil
 from graphics.items.base.nodes.expandable.ground import Ground
 from graphics.items.base.nodes.expandable.voltage_source import VoltageSource
 from graphics.items.base.nodes.fixed_displacement_pump import FixedDisplacementPump
+from graphics.items.base.nodes.relief_valve import ReliefValve
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
 from graphics.items.base.nodes.or_valve import OrValve
@@ -153,6 +154,13 @@ def register_hydraulic_nodes(palette, on_add_node):
             "resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(FixedDisplacementPump, domain=domain))
+    )
+    hydraulic.add_node(
+        name="ReliefValve",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(ReliefValve, domain=domain))
     )
     hydraulic.add_node(
         name="SingleActingCylinder",

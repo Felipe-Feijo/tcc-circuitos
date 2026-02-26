@@ -17,12 +17,12 @@ class SingleActingCylinder(Node):
 
         # Estado hidráulico (só inicializa se domínio for hidráulico)
         if self.domain == "hydraulic":
-            bore             = self.properties.get("bore", 0.05)
+            bore             = self.properties["bore"]
             self.area        = math.pi * (bore / 2) ** 2
-            self.stroke      = self.properties.get("stroke", 0.1)
-            self.spring_k = self.properties.get("spring_k", 0.0)
-            self.external_force = self.properties.get("external_force", 0.0)
-            self.friction       = self.properties.get("friction", 0.0)
+            self.stroke      = self.properties["stroke"]
+            self.spring_k = self.properties["spring_k"]
+            self.external_force = self.properties["external_force"]
+            self.friction       = self.properties["friction"]
             self.x      = 0.0
             self.locked = False
             self.flow_var = f"Q_{self.id}"
@@ -35,7 +35,7 @@ class SingleActingCylinder(Node):
     def variables(self):
         if self.domain != "hydraulic":
             return []
-        anchor = self.anchors.get("A")
+        anchor = self.anchors["A"]
         pvar = getattr(anchor, "pressure_var", None) if anchor else None
         return ([pvar] if pvar else []) + [self.flow_var]
     
@@ -50,28 +50,8 @@ class SingleActingCylinder(Node):
         hint = abs(v_hint * self.area)
         # fallback: se não há força, usa flow_rate da bomba ou valor mínimo
         return hint if hint > 1e-10 else 0.0  # retorna 0 — bomba vai fornecer o hint
-
-    def hydraulic_ports(self):
-        if self.domain != "hydraulic":
-            return {}
-        return {"A": self.flow_var}
-
-    def equations(self, x, idx):
-        Q = x[idx[self.flow_var]]
-        P = x[idx[self.anchors["A"].pressure_var]]
-        v       = Q / self.area
-        F_hidro = P * self.area
-        F_mola  = self.spring_k * self.x
-        F_res   = F_mola + self.external_force + max(self.friction, 1e-3) * v
-
-        if self.locked:
-            # só bloqueia entrada (Q > 0), permite saída (Q < 0)
-            if Q > 0:
-                return [Q]
-            # se Q < 0, aplica física normal — cilindro pode recuar
-        
-        return [F_hidro - F_res]
-
+    
+    @property
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
@@ -90,6 +70,28 @@ class SingleActingCylinder(Node):
             Q_hint = 0.0
 
         return {self.flow_var: Q_hint}
+
+    def hydraulic_ports(self):
+        if self.domain != "hydraulic":
+            return {}
+        return {"A": self.flow_var}
+
+    def equations(self, x, idx):
+        Q = x[idx[self.flow_var]]
+        P = x[idx[self.anchors["A"].pressure_var]]
+        v       = Q / self.area
+        F_hidro = P * self.area
+        F_mola  = self.spring_k * self.x
+        F_res   = F_mola + self.external_force + self.friction * v
+
+        if self.locked:
+            # só bloqueia entrada (Q > 0), permite saída (Q < 0)
+            if Q > 0:
+                return [Q]
+            # se Q < 0, aplica física normal — cilindro pode recuar
+        
+        return [F_hidro - F_res]
+    
 
     # ------------------------------------------------------------------
     # Update lógico
@@ -124,7 +126,7 @@ class SingleActingCylinder(Node):
 
         # integração hidráulica
         if self.domain == "hydraulic" and dt is not None:
-            anchor = self.anchors.get("A")
+            anchor = self.anchors["A"]
             if anchor and not isinstance(anchor.flow, str):
 
                 # desbloqueia se há fluxo saindo — fora do guard de locked

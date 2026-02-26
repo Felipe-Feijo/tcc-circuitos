@@ -10,11 +10,17 @@ class Reservoir(Node):
     @property
     def variables(self):
         return [self.flow_var]
+    
+    @property
+    def flow_hint(self) -> float:
+        # reservoir sempre pode fornecer/absorver fluxo
+        # usa um valor padrão pequeno como referência de escala
+        return 1e-4
 
     def hydraulic_ports(self):
         return {"R": self.flow_var}  # participa da continuidade do grupo
 
     def equations(self, x, idx):
-        anchor = self.anchors.get("R")
+        anchor = self.anchors["R"]
         pvar = anchor.pressure_var
         return [x[idx[pvar]] - self.pressure]

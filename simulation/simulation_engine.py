@@ -209,13 +209,12 @@ class SimulationEngine:
         anchor_to_pressure_var = self._assign_pressure_vars()
         circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
 
-        print(f"{len(circuits)} circuito(s) hidráulico(s) detectado(s)")
-
+        changed = False
         for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
-            print(f"circuito {i+1}: {[n.id for n in circuit_nodes]}")
-            self._solve_circuit(i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var)
+            result = self._solve_circuit(i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var)
+            changed |= result
 
-        return False
+        return changed
 
 
     def _collect_hydraulic_nodes(self):
@@ -301,26 +300,39 @@ class SimulationEngine:
 
     def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
         circuit_list = list(circuit_nodes)
+        changed = False
 
         sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
             relief_valves = [
                 n for n in circuit_list
-                if hasattr(n, "open_relief") and not n._forced_open
+                if hasattr(n, "open_relief") and not n._open
             ]
-
             if relief_valves:
                 for rv in relief_valves:
                     rv.open_relief()
-                print(f"circuito {index}: abrindo {len(relief_valves)} relief valve(s), tentando novamente")
+                changed = True  # mudou estado — precisa rodar de novo
                 sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
             self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
-            return
+            return changed
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
+
+        # verifica se alguma relief valve deveria fechar
+        for node in circuit_list:
+            if not hasattr(node, "_open"):
+                continue
+            anchor = node.anchors.get("P")
+            if anchor and not isinstance(anchor.pressure, str):
+                should_open = anchor.pressure >= node.p_set
+                if should_open != node._open:
+                    node._open = should_open
+                    changed = True  # mudou estado — precisa rodar de novo
+
+        return changed
 
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var):

@@ -18,9 +18,9 @@ class Reservoir(Node):
         return 1e-4
 
     def hydraulic_ports(self):
-        return {"R": self.flow_var}  # participa da continuidade do grupo
+        return {"T": self.flow_var}  # participa da continuidade do grupo
 
     def equations(self, x, idx):
-        anchor = self.anchors["R"]
+        anchor = self.anchors["T"]
         pvar = anchor.pressure_var
         return [x[idx[pvar]] - self.pressure]

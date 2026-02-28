@@ -5,7 +5,7 @@ from PyQt6.QtGui import QPen, QPainterPath
 from graphics.labels.label import LabelItem
 
 class AnchorItem(QGraphicsEllipseItem):
-    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None, exit_directions=None):
+    def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None, exit_directions=None, margin=None):
         super().__init__(-radius, -radius, 2 * radius, 2 * radius, node)
 
         self.name = name
@@ -15,6 +15,7 @@ class AnchorItem(QGraphicsEllipseItem):
         self.hit_radius = radius * 4
 
         self.exit_directions = exit_directions # Ex: {"external": ["left", "right"], "internal": ["top"]}
+        self.margin = margin
 
         self.setPos(pos)
 
@@ -95,7 +96,7 @@ class AnchorItem(QGraphicsEllipseItem):
             return
 
         p = self.format_hydraulic_value(self.pressure, "Pa")
-        q = self.format_hydraulic_value(self.flow, "m³/s")
+        q = self.format_hydraulic_value(abs(self.flow), "m³/s")
         self._label_hydraulic.set_text(f"{p} | {q}")
 
     def format_hydraulic_value(self,value: float, unit: str) -> str:

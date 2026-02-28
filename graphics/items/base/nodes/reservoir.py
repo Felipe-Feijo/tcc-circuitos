@@ -19,4 +19,4 @@ class Reservoir(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.add_anchor(AnchorItem("R", QPointF(self.width*0.5, self.height*0.95), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("T", QPointF(self.width*0.5, self.height*0.95), node=self, domain=self.domain, exit_directions={"external": ["top"]}, margin=65))

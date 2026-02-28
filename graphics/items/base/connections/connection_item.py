@@ -91,31 +91,78 @@ class ConnectionItem(DiagramItemBase):
         if len(points) < 2:
             return
 
-        # Seleção tem prioridade
         if self.isSelected():
             pen = QPen(Qt.GlobalColor.blue, 3)
         else:
-            # cores por domínio
             if self.domain == "pneumatic" and self.state == 1:
                 pen = QPen(Qt.GlobalColor.green, 3)
             elif self.domain == "electric" and self.state == 1:
                 pen = QPen(Qt.GlobalColor.yellow, 3)
             elif self.domain == "hydraulic":
-                if self.state == "ERR":  # erro de convergência
+                if self.state == "ERR":
                     pen = QPen(Qt.GlobalColor.red, 3)
-                elif self.state > 0:  # pressão positiva
+                elif self.state > 0:
                     pen = QPen(Qt.GlobalColor.blue, 3)
-                elif self.state < 0:  # pressão negativa (sucção)
-                    pen = QPen(QColor(100, 180, 255), 3)  # azul claro
-                else:  # zero
+                elif self.state < 0:
+                    pen = QPen(QColor(100, 180, 255), 3)
+                else:
                     pen = QPen(Qt.GlobalColor.cyan, 3)
             else:
                 pen = self.pen
 
         painter.setPen(pen)
-        
         for start, end in zip(points, points[1:]):
             painter.drawLine(start, end)
+
+        if self.domain == "hydraulic" and self.state != "ERR" and not self.isSelected():
+            if len(points) >= 3:
+                arrow_offset = 4
+
+                # triângulo da source anchor
+                flow_a = getattr(self.source_anchor, "flow", 0.0)
+                if not isinstance(flow_a, str) and abs(flow_a) > 1e-10:
+                    p1_out = points[1]
+                    exit_dir = self._get_exit_direction()
+                    p1_arrow = self._apply_margin(p1_out, exit_dir, -arrow_offset)
+                    self._draw_arrow_at(painter, p1_arrow, exit_dir, flow_a, pen)
+
+                # triângulo da target anchor
+                if self.target_anchor:
+                    flow_b = getattr(self.target_anchor, "flow", 0.0)
+                    if not isinstance(flow_b, str) and abs(flow_b) > 1e-10:
+                        p2_in = points[-2]
+                        is_internal = self.source_anchor.node == self.target_anchor.node
+                        exit_key = "internal" if is_internal else "external"
+                        entry_dirs = self.target_anchor.exit_directions.get(exit_key, ["left"])
+                        entry_dir = self._choose_best_exit_direction(points[-1], points[0], entry_dirs)
+                        p2_arrow = self._apply_margin(p2_in, entry_dir, -arrow_offset)
+                        self._draw_arrow_at(painter, p2_arrow, entry_dir, flow_b, pen)
+
+    def _draw_arrow_at(self, painter, point, direction, flow, pen):
+        size = 6
+
+        # direção base do segmento
+        dir_map = {
+            "right":  ( 1,  0),
+            "left":   (-1,  0),
+            "bottom": ( 0,  1),
+            "top":    ( 0, -1),
+        }
+        ux, uy = dir_map.get(direction, (1, 0))
+
+        # sinal do fluxo determina o sentido
+        if flow > 0:
+            ux, uy = -ux, -uy
+
+        tip   = QPointF(point.x() + ux * size,       point.y() + uy * size)
+        base  = QPointF(point.x() - ux * size,       point.y() - uy * size)
+        left  = QPointF(base.x() - uy * size * 0.6,  base.y() + ux * size * 0.6)
+        right = QPointF(base.x() + uy * size * 0.6,  base.y() - ux * size * 0.6)
+
+        from PyQt6.QtGui import QPolygonF, QBrush
+        painter.setBrush(QBrush(pen.color()))
+        painter.setPen(pen)
+        painter.drawPolygon(QPolygonF([tip, left, right]))
 
     def get_path_points(self):  
         if getattr(self, "_being_deleted", False):
@@ -149,14 +196,26 @@ class ConnectionItem(DiagramItemBase):
         # Escolhe a melhor direção de saída
         exit_dir = self._choose_best_exit_direction(p1, p2, source_dirs)
 
-        base_margin = 18
+        # margem adaptativa (fallback)
         dist = abs(p2.x() - p1.x()) + abs(p2.y() - p1.y())
-        margin = min(base_margin, max(6, dist * 0.15))
+        adaptive_margin = min(18, max(6, dist * 0.15))
+
+        # margem por anchor — se definida, usa exatamente; senão usa adaptativo
+        source_margin = getattr(self.source_anchor, "margin", None)
+        if source_margin is None:
+            source_margin = adaptive_margin
+
+        if self.target_anchor:
+            target_margin = getattr(self.target_anchor, "margin", None)
+            if target_margin is None:
+                target_margin = adaptive_margin
+        else:
+            target_margin = adaptive_margin
 
         points = [p1]
 
         # Segmento de saída da source
-        p1_out = self._apply_margin(p1, exit_dir, margin)
+        p1_out = self._apply_margin(p1, exit_dir, source_margin)
         points.append(p1_out)
 
         # ============================================
@@ -167,10 +226,8 @@ class ConnectionItem(DiagramItemBase):
             dy = abs(p2.y() - p1_out.y())
 
             if dx > dy:
-                # HVH dominante
                 points.extend(self._hvh(p1_out, p2))
             else:
-                # VHV dominante
                 points.extend(self._vhv(p1_out, p2))
 
             points.append(p2)
@@ -185,7 +242,7 @@ class ConnectionItem(DiagramItemBase):
         entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
 
         # Segmento de entrada no target
-        p2_in = self._apply_margin(p2, entry_dir, margin)
+        p2_in = self._apply_margin(p2, entry_dir, target_margin)
 
         # Conecta p1_out até p2_in
         middle_points = self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)

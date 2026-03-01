@@ -48,20 +48,29 @@ class Node:
 
     def get_anchor(self, name):
         return self.anchors[name]
-    
+        
     def get_state(self) -> dict:
-        return {
-            "anchors": {
-                name: anchor.state
-                for name, anchor in self.anchors.items()
-            }
-        }
+        anchors_state = {}
+        for name, anchor in self.anchors.items():
+            anchor_data = {"state": anchor.state}
+            if anchor.domain == "hydraulic":
+                anchor_data["pressure"] = anchor.pressure
+                anchor_data["flow"]     = anchor.flow
+                anchor_data["fault"]    = getattr(anchor, "fault", False)
+            anchors_state[name] = anchor_data
+
+        return {"anchors": anchors_state}
 
     def set_state(self, state: dict):
-        anchor_states = state.get("anchors", {})
-        for name, state in anchor_states.items():
-            if name in self.anchors:
-                self.anchors[name].state = state
+        for name, anchor_data in state.get("anchors", {}).items():
+            anchor = self.anchors.get(name)
+            if not anchor:
+                continue
+            anchor.state = anchor_data.get("state", anchor.state)
+            if anchor.domain == "hydraulic":
+                anchor.pressure = anchor_data.get("pressure", anchor.pressure)
+                anchor.flow     = anchor_data.get("flow", anchor.flow)
+                anchor.fault    = anchor_data.get("fault", False)
 
     def handle_command(self, command: str):
         """

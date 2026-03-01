@@ -76,3 +76,14 @@ class DirectOperatedReliefValve(Node):
         if anchor is None or isinstance(anchor.pressure, str):
             return
         self._open = anchor.pressure >= self.p_set
+
+    def get_state(self):
+        state = super().get_state()
+        if self.domain == "hydraulic":
+            state["_open"] = self._open
+        return state
+
+    def set_state(self, state):
+        super().set_state(state)
+        if self.domain == "hydraulic":
+            self._open = state.get("_open", self._open)

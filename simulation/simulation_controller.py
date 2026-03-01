@@ -132,7 +132,7 @@ class SimulationController(QObject):
         self._restore(self.history[-1])
 
         # 🔹 reconstroi outputs derivados
-        self.engine.compute_outputs()
+        self.engine.compute_outputs(dt = 0)
 
         self._sync_view()
         self.state_changed.emit()

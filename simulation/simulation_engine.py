@@ -40,13 +40,13 @@ class SimulationEngine:
                 break
 
         # 4) Pós-step (fora do loop de estabilização!)
-        self.compute_outputs()
+        self.compute_outputs(dt = 0.1)
         
-    def compute_outputs(self):
+    def compute_outputs(self, dt):
         self.outputs = {}
 
         for node in self.nodes.values():
-            node.post_step_update(dt = 0.1)
+            node.post_step_update(dt)
 
             node_outputs = getattr(node, "outputs", None)
             if not node_outputs:

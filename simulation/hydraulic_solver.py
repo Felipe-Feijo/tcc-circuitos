@@ -33,11 +33,9 @@ class NonlinearSystemSolver:
 
         system = self.build_equations()
         sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
+        self.sol_array = sol_array  # salva para debug
         residual = np.max(np.abs(info['fvec']))
-        for comp in self.components:
-            eqs = comp.equations(sol_array, self.var_index)
-            name = getattr(comp, 'id', getattr(comp, 'pressure_var', str(comp)))
-            print(f"  {str(name)[-8:]}: {[f'{r:.4e}' for r in eqs]}")
+
         if ier != 1 and residual > 1e-6:
             raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
 

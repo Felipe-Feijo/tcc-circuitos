@@ -54,7 +54,6 @@ class SimulationEngine:
 
             for name, payload in node_outputs.items():
                 self.outputs[name] = payload
-        print("outputs:", self.outputs)
 
 
     def _update_pneumatic_domain(self):
@@ -305,6 +304,7 @@ class SimulationEngine:
         sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
+            # tenta abrir relief valves
             relief_valves = [
                 n for n in circuit_list
                 if hasattr(n, "open_relief") and not n._open
@@ -312,25 +312,45 @@ class SimulationEngine:
             if relief_valves:
                 for rv in relief_valves:
                     rv.open_relief()
-                changed = True  # mudou estado — precisa rodar de novo
                 sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
-            self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
-            return changed
+            # tenta excluir cilindros travados
+            locked_cylinders = [
+                n for n in circuit_list
+                if getattr(n, "locked", False)
+            ]
+            if locked_cylinders:
+                reduced_list = [n for n in circuit_list if n not in locked_cylinders]
+                # força Q = 0 nas anchors dos cilindros travados
+                for node in locked_cylinders:
+                    for anchor in node.anchors.values():
+                        if anchor.domain == "hydraulic":
+                            anchor.flow = 0.0
+                sol = self._try_solve(index, reduced_list, anchor_to_pressure_var)
+
+        if sol is None:
+            self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+            return False
+
+        # captura valores antigos ANTES de escrever
+        old_pressures = {
+            anchor: anchor.pressure
+            for anchor, pvar in anchor_to_pressure_var.items()
+            if pvar in sol
+        }
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
 
-        # verifica se alguma relief valve deveria fechar
-        for node in circuit_list:
-            if not hasattr(node, "_open"):
-                continue
-            anchor = node.anchors.get("P")
-            if anchor and not isinstance(anchor.pressure, str):
-                should_open = anchor.pressure >= node.p_set
-                if should_open != node._open:
-                    node._open = should_open
-                    changed = True  # mudou estado — precisa rodar de novo
+        # compara com valores novos
+        for anchor, pvar in anchor_to_pressure_var.items():
+            if pvar in sol:
+                old_p = old_pressures.get(anchor)
+                new_p = sol[pvar]
+                old_val = old_p if not isinstance(old_p, str) else None
+                if old_val is None or abs(new_p - old_val) > 1e-10:
+                    changed = True
+                    break
 
         return changed
 
@@ -382,7 +402,7 @@ class SimulationEngine:
                     anchor.flow = sol[flow_var]
 
 
-    def _mark_circuit_fault(self, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
+    def _mark_circuit_fault(self, circuit_pvars, anchor_to_pressure_var):
         # procura em TODOS os nodes do grafo, não só os do circuito
         for node in self.nodes.values():
             node_hydraulic_anchors = {

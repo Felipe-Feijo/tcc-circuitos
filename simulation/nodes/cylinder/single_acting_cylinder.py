@@ -56,16 +56,16 @@ class SingleActingCylinder(Node):
         if self.domain != "hydraulic":
             return {}
 
-        # força líquida disponível para mover o pistão
+        if self.locked:
+            return {self.flow_var: 0.0}
+
         F_mola = self.spring_k * self.x
         F_net  = F_mola + self.external_force
 
         if F_net > 0 and self.area > 0:
-            # estima velocidade de recuo pela força disponível
-            # sem fricção, usa área como escala de referência
             denom = self.friction if self.friction > 0 else 1.0
             v_hint = F_net / denom
-            Q_hint = -v_hint * self.area  # negativo = saindo do cilindro
+            Q_hint = -v_hint * self.area
         else:
             Q_hint = 0.0
 

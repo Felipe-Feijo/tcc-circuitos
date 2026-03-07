@@ -138,11 +138,7 @@ class CylinderItem(NodeItem):
     # Desenho
     # --------------------------
     def paint(self, painter, option, widget=None):
-        painter.drawPixmap(
-            int(self.visual_offset.x()),
-            int(self.visual_offset.y()),
-            self.body_sprite
-        )
+        self.paint_body(painter)
 
         painter.setBrush(Qt.GlobalColor.white)
         painter.setPen(Qt.GlobalColor.white)
@@ -158,6 +154,14 @@ class CylinderItem(NodeItem):
             )
 
         self.paint_selection_feedback(painter)
+
+
+    def paint_body(self, painter):
+        painter.drawPixmap(
+            int(self.visual_offset.x()),
+            int(self.visual_offset.y()),
+            self.body_sprite
+        )
 
     # --------------------------
     # Atualização de estado

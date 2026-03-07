@@ -10,7 +10,7 @@ class SimulationEngine:
 
         self.outputs = {}        # dict[name, payload] 
 
-    def run_until_stable(self):
+    def run_until_stable(self, dt = 0.1):
         """
         Resolve until no domain propagation changes.
         Internal Node changes (FSM, timers, position) don't prevent stabilization.
@@ -40,13 +40,13 @@ class SimulationEngine:
                 break
 
         # 4) Pós-step (fora do loop de estabilização!)
-        self.compute_outputs(dt = 0.1)
+        self.compute_outputs(dt=dt)
         
     def compute_outputs(self, dt):
         self.outputs = {}
 
         for node in self.nodes.values():
-            node.post_step_update(dt)
+            node.post_step_update(dt=dt)
 
             node_outputs = getattr(node, "outputs", None)
             if not node_outputs:
@@ -304,36 +304,52 @@ class SimulationEngine:
         sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
-            # tenta abrir relief valves
             relief_valves = [
                 n for n in circuit_list
                 if hasattr(n, "open_relief") and not n._open
             ]
+            print(f"circuito {index}: falhou — {len(relief_valves)} relief valve(s) fechadas")
             if relief_valves:
                 for rv in relief_valves:
                     rv.open_relief()
+                    print(f"  abrindo relief {rv.id[:8]} p_set={rv.p_set}")
                 sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+                print(f"  segunda tentativa: {'convergiu' if sol else 'falhou'}")
 
         if sol is None:
-            # tenta excluir cilindros travados
             locked_cylinders = [
                 n for n in circuit_list
                 if getattr(n, "locked", False)
             ]
+            print(f"circuito {index}: {len(locked_cylinders)} cilindro(s) travado(s)")
             if locked_cylinders:
                 reduced_list = [n for n in circuit_list if n not in locked_cylinders]
-                # força Q = 0 nas anchors dos cilindros travados
                 for node in locked_cylinders:
                     for anchor in node.anchors.values():
                         if anchor.domain == "hydraulic":
                             anchor.flow = 0.0
                 sol = self._try_solve(index, reduced_list, anchor_to_pressure_var)
+                print(f"  terceira tentativa: {'convergiu' if sol else 'falhou'}")
+
+        if sol is None:
+            blocked_cylinders = [
+                n for n in circuit_list
+                if hasattr(n, "x") and n.x <= 0.0 and 
+                (n.spring_k * n.x + n.external_force) > 0
+            ]
+            if blocked_cylinders:
+                reduced_list = [n for n in circuit_list if n not in blocked_cylinders]
+                for node in blocked_cylinders:
+                    for anchor in node.anchors.values():
+                        if anchor.domain == "hydraulic":
+                            anchor.flow = 0.0
+                sol = self._try_solve(index, reduced_list, anchor_to_pressure_var)
+                print(f"  quarta tentativa sem cilindros bloqueados: {'convergiu' if sol else 'falhou'}")
 
         if sol is None:
             self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
             return False
 
-        # captura valores antigos ANTES de escrever
         old_pressures = {
             anchor: anchor.pressure
             for anchor, pvar in anchor_to_pressure_var.items()
@@ -342,7 +358,6 @@ class SimulationEngine:
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
 
-        # compara com valores novos
         for anchor, pvar in anchor_to_pressure_var.items():
             if pvar in sol:
                 old_p = old_pressures.get(anchor)
@@ -378,6 +393,14 @@ class SimulationEngine:
             return solver.solve(x0)
         except Exception as e:
             print(f"circuito {index}: falhou — {e}")
+            print(f"[resíduos]:")
+            for comp in solver.components:
+                eqs = comp.equations(solver.sol_array, solver.var_index)
+                name = getattr(comp, 'id', getattr(comp, 'pressure_var', str(comp)))
+                print(f"  {str(name)[-8:]}: {[f'{r:.4e}' for r in eqs]}")
+            print(f"[x0]:")
+            for var, val in x0.items():
+                print(f"  {var[-16:]} = {val:.4e}")
             return None
 
 

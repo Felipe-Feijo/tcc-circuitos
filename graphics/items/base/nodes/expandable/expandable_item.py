@@ -1,10 +1,11 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
-from PyQt6.QtWidgets import QMenu
+from PyQt6.QtWidgets import QMenu, QHBoxLayout, QLabel, QPushButton, QFrame
 
 from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
 from .....anchors.anchor import AnchorItem
+from graphics.utils.properties_dialog import PropertiesDialog
 
 class ExpandableItem(NodeItem):
     def __init__(self, *args, **kwargs):
@@ -233,3 +234,117 @@ class ExpandableItem(NodeItem):
                 rules_to_apply = anchor_rules.get("middle", {})
 
             anchor.set_exit_directions(rules_to_apply)
+
+    def build_properties_dialog(node) -> PropertiesDialog:
+        dialog = PropertiesDialog(title="Expandable — Properties")
+
+        current_total = len(node.anchor_list)
+        min_anchors = node.MIN_ANCHORS
+
+        # estado interno do dialog
+        deltas = {"left": 0, "right": 0}
+
+        # --- widgets ---
+        def make_counter_row(side: str):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            label = QLabel(f"{'Esquerda' if side == 'left' else 'Direita'}:")
+            label.setFixedWidth(70)
+            label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+            btn_minus = QPushButton("−")
+            btn_minus.setFixedSize(28, 28)
+
+            value_label = QLabel("0")
+            value_label.setFixedWidth(28)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            btn_plus = QPushButton("+")
+            btn_plus.setFixedSize(28, 28)
+
+            row.addWidget(label)
+            row.addWidget(btn_minus)
+            row.addWidget(value_label)
+            row.addWidget(btn_plus)
+            row.addStretch()
+
+            return row, btn_minus, value_label, btn_plus
+
+        row_left, btn_minus_left, val_left, btn_plus_left = make_counter_row("left")
+        row_right, btn_minus_right, val_right, btn_plus_right = make_counter_row("right")
+
+        # insere as rows no form layout (via addRow com widget container)
+        # como são QHBoxLayout, embrulhamos num QFrame
+        def wrap_layout(layout):
+            frame = QFrame()
+            frame.setLayout(layout)
+            return frame
+
+        dialog._form_layout.addRow(wrap_layout(row_left))
+        dialog._form_layout.addRow(wrap_layout(row_right))
+
+        def update_buttons():
+            dl = deltas["left"]
+            dr = deltas["right"]
+            total_delta = dl + dr
+
+            # se algum é positivo, bloqueia negativos
+            any_positive = dl > 0 or dr > 0
+            # se algum é negativo, bloqueia positivos
+            any_negative = dl < 0 or dr < 0
+
+            # remoção máxima respeitando MIN_ANCHORS
+            max_removable = current_total - min_anchors
+
+            btn_plus_left.setEnabled(not any_negative)
+            btn_plus_right.setEnabled(not any_negative)
+
+            btn_minus_left.setEnabled(
+                not any_positive and (-total_delta + 1) <= max_removable
+            )
+            btn_minus_right.setEnabled(
+                not any_positive and (-total_delta + 1) <= max_removable
+            )
+
+            val_left.setText(str(dl))
+            val_right.setText(str(dr))
+
+        def on_plus(side):
+            deltas[side] += 1
+            update_buttons()
+
+        def on_minus(side):
+            deltas[side] -= 1
+            update_buttons()
+
+        btn_plus_left.clicked.connect(lambda: on_plus("left"))
+        btn_minus_left.clicked.connect(lambda: on_minus("left"))
+        btn_plus_right.clicked.connect(lambda: on_plus("right"))
+        btn_minus_right.clicked.connect(lambda: on_minus("right"))
+
+        update_buttons()
+
+        # expõe deltas para apply_properties_from_dialog
+        dialog._deltas = deltas
+
+        return dialog
+
+
+    def apply_properties_from_dialog(node, dialog):
+        dl = dialog._deltas["left"]
+        dr = dialog._deltas["right"]
+
+        if dl > 0:
+            for _ in range(dl):
+                node.add_anchor_side("left")
+        elif dl < 0:
+            for _ in range(abs(dl)):
+                node.remove_anchor_side("left")
+
+        if dr > 0:
+            for _ in range(dr):
+                node.add_anchor_side("right")
+        elif dr < 0:
+            for _ in range(abs(dr)):
+                node.remove_anchor_side("right")

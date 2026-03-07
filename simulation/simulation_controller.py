@@ -2,6 +2,7 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from simulation.simulation_engine import SimulationEngine
 from collections import deque
 
+
 class SimulationController(QObject):
     state_changed = pyqtSignal()
     def __init__(self, engine: SimulationEngine, max_history=5):
@@ -20,6 +21,9 @@ class SimulationController(QObject):
         self.timer = QTimer()
         self.timer.timeout.connect(self._on_timer_tick)
         self.timer_interval = 1000  # Guarda o intervalo para poder resetar
+
+        self.dt = 0.1
+        self._speed_index = 0  # índice em SPEED_STEPS
 
         self.history = deque(maxlen=max_history)
 
@@ -75,13 +79,16 @@ class SimulationController(QObject):
 
         self._execute_step()
 
+    def set_dt(self, dt: float):
+        self.dt = dt
+
     def _execute_step(self):
         self.step_in_progress = True
         print("Executing simulation step...")
         self.pending_steps -= 1
 
         try:
-            self.engine.run_until_stable()
+            self.engine.run_until_stable(dt=self.dt)
             self._sync_view()
 
             # 📸 SEMPRE salva estado anterior

@@ -23,4 +23,10 @@ def create_toolbars(main_window, actions):
     toolbar.addAction(actions["step_back"])
     toolbar.addAction(actions["step_forward"])
 
+    toolbar.addSeparator()
+    toolbar.addAction(actions["speed"])
+    toolbar.addAction(actions["dt"])
+
     main_window.addToolBar(toolbar)
+
+    

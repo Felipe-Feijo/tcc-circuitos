@@ -59,6 +59,10 @@ class SingleActingCylinder(Node):
         if self.locked:
             return {self.flow_var: 0.0}
 
+        # se já está recuado, não chuta negativo
+        if self.x <= 0.0:
+            return {self.flow_var: 0.0}
+
         F_mola = self.spring_k * self.x
         F_net  = F_mola + self.external_force
 
@@ -89,6 +93,10 @@ class SingleActingCylinder(Node):
             if Q > 0:
                 return [Q]
             # se Q < 0, aplica física normal — cilindro pode recuar
+
+        # bloqueia saída quando já está completamente recuado
+        if self.x <= 0.0 and Q < 0:
+            return [Q]
         
         return [F_hidro - F_res]
     
@@ -141,15 +149,19 @@ class SingleActingCylinder(Node):
 
                     if self.x >= self.stroke:
                         self.locked = True
-        print("pos", self.position, "x", self.x, "locked", self.locked)
+
+                    # bloqueia em zero — não pode recuar mais
+                    if self.x <= 0.0:
+                        anchor.flow = max(0.0, anchor.flow)  # zera fluxo negativo
+            print("pos", self.position, "x", self.x, "locked", self.locked)
 
     # ------------------------------------------------------------------
     # Estado
     # ------------------------------------------------------------------
 
     def get_visual_state(self):
-        #if self.domain == "hydraulic" and self.stroke > 0:
-        #    return self.x / self.stroke
+        if self.domain == "hydraulic" and self.stroke > 0:
+            return self.x / self.stroke
         return self.position
 
     def get_state(self):

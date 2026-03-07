@@ -22,6 +22,11 @@ class SimulationSession:
         self.controller = None
         self.active = False
 
+        # configs persistentes entre sessões
+        self.dt = 0.1
+        self.timer_interval = 1000
+        self.speed_index = 0
+
     def start(self):
         if self.active:
             print("already running simulation")
@@ -40,6 +45,10 @@ class SimulationSession:
         self.controller = SimulationController(self.engine)
         self.controller.on_update_node = builder.node_map
         self.controller.on_update_connection = builder.connection_map
+
+        # restaura configs persistentes
+        self.controller.set_dt(self.dt)
+        self.controller.timer_interval = self.timer_interval
         
         self.active = True
         # 3️⃣ Bind graphical items to simulation

@@ -17,6 +17,8 @@ from .actions import create_actions
 from .ui.menus import create_menus
 from .ui.toolbars import create_toolbars
 
+from .actions.simulation_actions import SPEED_STEPS  # ajusta o import conforme sua estrutura
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -251,12 +253,33 @@ class MainWindow(QMainWindow):
         if self.simulation.controller.step_forward():
             self.update_simulation_actions()
 
-    def update_simulation_actions(self):
-        run = self.actions["run"]
-        step_back = self.actions["step_back"]
-        step_fwd = self.actions["step_forward"]
+    def on_dt_clicked(self):
+        from PyQt6.QtWidgets import QInputDialog
+        value, ok = QInputDialog.getDouble(
+            self, "Step size", "dt (s):",
+            self.simulation.dt,  # lê da session
+            0.001, 1.0, 3
+        )
+        if ok:
+            self.simulation.dt = value  # salva na session
+            if self.simulation.controller:
+                self.simulation.controller.set_dt(value)
+            self.actions["dt"].setText(f"dt: {value:.3f}s")
 
-        # fora do modo simulate → tudo apagado
+    def on_cycle_speed(self):
+        self.simulation.speed_index = (self.simulation.speed_index + 1) % len(SPEED_STEPS)
+        multiplier = SPEED_STEPS[self.simulation.speed_index]
+        self.simulation.timer_interval = 1000 // multiplier  # salva na session
+        if self.simulation.controller:
+            self.simulation.controller.set_timer_interval(self.simulation.timer_interval)
+        self.actions["speed"].setText(f"{multiplier}x")
+
+    def update_simulation_actions(self):
+        run       = self.actions["run"]
+        step_back = self.actions["step_back"]
+        step_fwd  = self.actions["step_forward"]
+        speed     = self.actions["speed"]
+
         if self.mode != "simulate" or not self.simulation or not self.simulation.active:
             run.setEnabled(False)
             run.setText("Run")
@@ -266,20 +289,12 @@ class MainWindow(QMainWindow):
 
         ctrl = self.simulation.controller
 
-        # Run / Pause
         run.setEnabled(True)
         run.setText("Pause" if ctrl.playing else "Run")
 
-        # Steps só quando pausado
         steps_enabled = not ctrl.playing
-
-        step_back.setEnabled(
-            steps_enabled and ctrl.can_step_back()
-        )
-
-        step_fwd.setEnabled(
-            steps_enabled
-        )
+        step_back.setEnabled(steps_enabled and ctrl.can_step_back())
+        step_fwd.setEnabled(steps_enabled)
 
     def _update_mode_actions(self, active_mode):
         for action in self.mode_group.actions():

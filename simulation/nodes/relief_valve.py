@@ -69,13 +69,9 @@ class DirectOperatedReliefValve(Node):
         self._open = True
 
     def update(self, outputs=None):
-        """Abre/fecha baseado na pressão do step anterior."""
         if self.domain != "hydraulic":
             return
-        anchor = self.anchors.get("P")
-        if anchor is None or isinstance(anchor.pressure, str):
-            return
-        self._open = anchor.pressure >= self.p_set
+        self._open = False
 
     def get_state(self):
         state = super().get_state()

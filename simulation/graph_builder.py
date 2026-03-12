@@ -10,6 +10,7 @@ from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 from simulation.nodes.ground import Ground
 from simulation.nodes.nodes import OrValve, PressureSource, Exhaust
 from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
+from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 from simulation.connections import Connection
 from simulation.nodes.pressure_line import PressureLine
 from simulation.nodes.coil import Coil
@@ -21,6 +22,7 @@ NODE_FACTORY = {
     "pressure_source": PressureSource,
     "exhaust": Exhaust,
     "single_acting_cylinder": SingleActingCylinder,
+    "double_acting_cylinder": DoubleActingCylinder,
     "or_valve": OrValve,
     "pressure_line": PressureLine,
     "voltage_source": VoltageSource,

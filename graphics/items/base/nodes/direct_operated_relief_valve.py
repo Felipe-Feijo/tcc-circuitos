@@ -25,8 +25,8 @@ class DirectOperatedReliefValve(NodeItem):
         self.height = self.pixmap.height()
 
         # Anchors do node
-        self.add_anchor(AnchorItem("T", QPointF(self.width*99/199, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom", "right", "left"]}))
-        self.add_anchor(AnchorItem("P", QPointF(self.width*99/199, 0), node=self, domain=self.domain, exit_directions={"external": ["top", "right", "left"]}))
+        self.add_anchor(AnchorItem("T", QPointF(self.width*99/199, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
+        self.add_anchor(AnchorItem("P", QPointF(self.width*99/199, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
 
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Relief Valve — Properties")

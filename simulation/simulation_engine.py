@@ -308,18 +308,23 @@ class SimulationEngine:
                 n for n in circuit_list
                 if hasattr(n, "open_relief") and not n._open
             ]
-            print(f"circuito {index}: falhou — {len(relief_valves)} relief valve(s) fechadas")
-            if relief_valves:
-                for rv in relief_valves:
-                    rv.open_relief()
-                    print(f"  abrindo relief {rv.id[:8]} p_set={rv.p_set}")
+            relief_valves_sorted = sorted(relief_valves, key=lambda v: v.p_set)
+            
+            for rv in relief_valves_sorted:
+                rv.open_relief()
+                print(f"  abrindo relief {rv.id[:8]} p_set={rv.p_set}")
                 sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+                print(f"  tentativa: {'convergiu' if sol else 'falhou'}")
+                if sol is not None:
+                    break  # convergiu com o mínimo de reliefs abertas
                 print(f"  segunda tentativa: {'convergiu' if sol else 'falhou'}")
 
         if sol is None:
             locked_cylinders = [
                 n for n in circuit_list
-                if getattr(n, "locked", False)
+                if getattr(n, "locked", False) or
+                getattr(n, "locked_fwd", False) or
+                getattr(n, "locked_bwd", False)
             ]
             print(f"circuito {index}: {len(locked_cylinders)} cilindro(s) travado(s)")
             if locked_cylinders:
@@ -334,8 +339,8 @@ class SimulationEngine:
         if sol is None:
             blocked_cylinders = [
                 n for n in circuit_list
-                if hasattr(n, "x") and n.x <= 0.0 and 
-                (n.spring_k * n.x + n.external_force) > 0
+                if hasattr(n, "x") and n.x <= 0.0 and
+                (getattr(n, "spring_k", 0.0) * n.x + getattr(n, "external_force", 0.0)) > 0
             ]
             if blocked_cylinders:
                 reduced_list = [n for n in circuit_list if n not in blocked_cylinders]
@@ -349,6 +354,33 @@ class SimulationEngine:
         if sol is None:
             self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
             return False
+
+        # verifica pressões excedendo p_set — abre apenas menor p_set por grupo
+        pressure_relief_valves = [
+            n for n in circuit_list
+            if hasattr(n, "open_relief") and not n._open
+            and n.anchors.get("P")
+            and n.anchors["P"].pressure_var
+            and n.anchors["P"].pressure_var in sol
+            and sol[n.anchors["P"].pressure_var] >= n.p_set
+        ]
+        if pressure_relief_valves:
+            relief_by_group = defaultdict(list)
+            for rv in pressure_relief_valves:
+                anchor = rv.anchors.get("P")
+                key = anchor.pressure_var if anchor and anchor.pressure_var else None
+                relief_by_group[key].append(rv)
+
+            for group, valves in relief_by_group.items():
+                best = min(valves, key=lambda v: v.p_set)
+                best.open_relief()
+                print(f"  abrindo relief por pressão {best.id[:8]} P={sol[best.anchors['P'].pressure_var]:.2e} p_set={best.p_set}")
+
+            sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+            print(f"  tentativa com relief por pressão: {'convergiu' if sol else 'falhou'}")
+            if sol is None:
+                self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+                return False
 
         old_pressures = {
             anchor: anchor.pressure
@@ -368,7 +400,6 @@ class SimulationEngine:
                     break
 
         return changed
-
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var):
         group_flows = defaultdict(list)

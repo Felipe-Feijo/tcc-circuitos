@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import QMessageBox
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
 from graphics.utils.properties_dialog import PropertiesDialog
-from .....anchors.anchor import AnchorItem
 
 SENSOR_DICT = {
     "reed": {

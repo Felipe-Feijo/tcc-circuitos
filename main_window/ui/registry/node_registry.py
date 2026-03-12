@@ -9,6 +9,7 @@ from graphics.items.base.nodes.or_valve import OrValve
 from graphics.items.base.nodes.expandable.pressure_line import PressureLine
 from graphics.items.base.nodes.pressure_source import PressureSource
 from graphics.items.base.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
+from graphics.items.base.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 from graphics.items.base.nodes.exhaust import Exhaust
 
 from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
@@ -53,6 +54,13 @@ def regsiter_pneumatic_nodes(palette, on_add_node):
             "resources/nodes/single_acting_cylinder/single_acting_cylinder_retracted.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(SingleActingCylinder, domain=domain))
+    )
+    pneumatic.add_node(
+        name="DoubleActingCylinder",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/double_acting_cylinder/double_acting_cylinder_retracted.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(DoubleActingCylinder, domain=domain))
     )
     pneumatic.add_node(
         name="Exhaust",
@@ -168,5 +176,12 @@ def register_hydraulic_nodes(palette, on_add_node):
             "resources/nodes/single_acting_cylinder/single_acting_cylinder_retracted.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(SingleActingCylinder, domain=domain))
+    )
+    hydraulic.add_node(
+        name="DoubleActingCylinder",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/double_acting_cylinder/double_acting_cylinder_retracted.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(DoubleActingCylinder, domain=domain))
     )
     # Adicione nós hidráulicos aqui usando hydraulic.add_node(...)

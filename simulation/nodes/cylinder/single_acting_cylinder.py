@@ -56,8 +56,8 @@ class SingleActingCylinder(Node):
         if self.domain != "hydraulic":
             return {}
 
-        if self.locked:
-            return {self.flow_var: 0.0}
+        #if self.locked:
+        #    return {self.flow_var: 0.0}
 
         # se já está recuado, não chuta negativo
         if self.x <= 0.0:

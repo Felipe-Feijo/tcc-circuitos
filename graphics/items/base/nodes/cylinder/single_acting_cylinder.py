@@ -41,7 +41,7 @@ class SingleActingCylinder(CylinderItem):
         if self.domain == "hydraulic":
             self.properties.setdefault("bore", 0.05)
             self.properties.setdefault("stroke", 0.1)
-            self.properties.setdefault("spring_k", 0.0)
+            self.properties.setdefault("spring_k", 0.01)
             self.properties.setdefault("external_force", 0.0)
             self.properties.setdefault("friction", 0.0)
 

@@ -22,7 +22,7 @@ class DoubleActingCylinder(Node):
             self.area_b = self.area_a - math.pi * (rod / 2) ** 2
             self.stroke         = self.properties["stroke"]
             self.external_force = self.properties["external_force"]
-            self.friction       = self.properties["friction"]
+            self.friction       = max(self.properties["friction"], 1e-3)
             self.x              = 0.0
             self.locked_fwd     = False  # travado no avanço (x >= stroke)
             self.locked_bwd     = False  # travado no recuo  (x <= 0)
@@ -50,8 +50,7 @@ class DoubleActingCylinder(Node):
         if self.locked_fwd or self.locked_bwd:
             return 0.0
         F_net = self.external_force
-        friction_eff = max(self.friction, 1e-3)
-        hint = abs(F_net / friction_eff * self.area_a)
+        hint = abs(F_net / self.friction * self.area_a)
         return hint if hint > 1e-10 else 0.0
 
     @property
@@ -72,9 +71,7 @@ class DoubleActingCylinder(Node):
             "A": self.flow_var_a,
             "B": self.flow_var_b,
         }
-    
-    def isolates_ports(self):
-        return True
+        
 
     def equations(self, x, idx):
         Q_a = x[idx[self.flow_var_a]]

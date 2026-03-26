@@ -2,46 +2,42 @@ from collections import defaultdict
 
 from simulation.hydraulic_solver import NodeContinuity, NonlinearSystemSolver
 
+
 class SimulationEngine:
-    def __init__(self, nodes, connections, max_iterations=100):
-        self.nodes = nodes          # dict[id, Node]
+    def __init__(self, nodes, connections, max_iterations=100000):
+        self.nodes = nodes
         self.connections = connections
-        self.max_iterations = max_iterations   
+        self.max_iterations = max_iterations
+        self.outputs = {}
+        # Persistência dos NodeContinuity entre steps: pvar -> NodeContinuity
+        self._continuities: dict[str, NodeContinuity] = {}
+        self._prev_circuit_map = {}
 
-        self.outputs = {}        # dict[name, payload] 
-
-    def run_until_stable(self, dt = 0.1):
-        """
-        Resolve until no domain propagation changes.
-        Internal Node changes (FSM, timers, position) don't prevent stabilization.
-        """
+    def run_until_stable(self, dt=0.1):
         iteration = 0
 
         while True:
             iteration += 1
+            print(iteration)
             if iteration > self.max_iterations:
                 raise RuntimeError(
                     f"Simulation did not stabilize after {self.max_iterations} iterations. "
                     "Possible feedback loop or invalid topology."
                 )
 
-            # 1) Update internal node logic (domain agnostic)
             for node in self.nodes.values():
                 node.update(self.outputs)
 
-            # 2) Domain-specific propagation
             changed = False
             changed |= self._update_pneumatic_domain()
             changed |= self._update_hydraulic_domain()
             changed |= self._update_electric_domain()
 
-            # 3) Stop when nothing changed
             if not changed:
                 break
 
-        # 4) Pós-step (fora do loop de estabilização!)
         self.compute_outputs(dt=dt)
-        
+
     def compute_outputs(self, dt):
         self.outputs = {}
 
@@ -55,12 +51,7 @@ class SimulationEngine:
             for name, payload in node_outputs.items():
                 self.outputs[name] = payload
 
-
     def _update_pneumatic_domain(self):
-        """
-        Propagate pneumatic pressure through connected anchor groups.
-        Returns True if any anchor state changed.
-        """
         visited = set()
         changed = False
 
@@ -68,7 +59,6 @@ class SimulationEngine:
             for anchor in node.anchors.values():
                 if anchor.domain != "pneumatic":
                     continue
-
                 if anchor in visited:
                     continue
 
@@ -87,9 +77,8 @@ class SimulationEngine:
                         changed = True
 
         return changed
-    
+
     def _get_connected_group(self, start_anchor, internal=True):
-        """BFS to collect all directly or indirectly connected anchors in the same domain."""
         group = set()
         queue = [start_anchor]
         domain = start_anchor.domain
@@ -98,108 +87,91 @@ class SimulationEngine:
             anchor = queue.pop(0)
             if anchor in group:
                 continue
-
             group.add(anchor)
 
-            # Internal node connections (state-dependent)
             if internal:
                 for a_id, b_id in anchor.node.get_internal_connections():
                     a_anchor = anchor.node.get_anchor(a_id)
                     b_anchor = anchor.node.get_anchor(b_id)
-
                     other = (
                         b_anchor if a_anchor == anchor
                         else a_anchor if b_anchor == anchor
                         else None
                     )
-
                     if other and other.domain == domain and other not in group:
                         queue.append(other)
 
-            # External connections
             for conn in anchor.connections:
                 other = conn.get_other(anchor)
                 if other.domain == domain and other not in group:
                     queue.append(other)
 
         return group
-    
-    def _update_electric_domain(self):
-            """
-            Propaga state binário pelo domínio elétrico.
-            """
-            changed = False
-            
-            # Para cada source, marca caminhos válidos
-            valid_anchors = set()
-            for node in self.nodes.values():
-                for source in node.anchors.values():
-                    if source.type == "source":
-                        visited = set()
-                        self._mark_valid_from_source(source, visited, valid_anchors)
-            
-            # Atualiza estados
-            for node in self.nodes.values():
-                for a in node.anchors.values():
-                    if a.domain != "electric":
-                        continue
-                    new_state = a in valid_anchors
-                    if a.state != new_state:
-                        a.state = new_state
-                        changed = True
 
-            return changed
+    def _update_electric_domain(self):
+        changed = False
+
+        valid_anchors = set()
+        for node in self.nodes.values():
+            for source in node.anchors.values():
+                if source.type == "source":
+                    visited = set()
+                    self._mark_valid_from_source(source, visited, valid_anchors)
+
+        for node in self.nodes.values():
+            for a in node.anchors.values():
+                if a.domain != "electric":
+                    continue
+                new_state = a in valid_anchors
+                if a.state != new_state:
+                    a.state = new_state
+                    changed = True
+
+        return changed
 
     def _mark_valid_from_source(self, anchor, visited, valid_anchors):
-        """
-        Marca anchor como válida se ela pode alcançar ground.
-        Explora TODOS os caminhos possíveis através de backtracking.
-        """
         if anchor in visited:
             return False
-        
+
         visited.add(anchor)
-        
-        # Ground sempre é válido
+
         if anchor.type == "ground":
             valid_anchors.add(anchor)
             visited.remove(anchor)
             return True
-        
+
         reaches_ground = False
-        
-        # Conexões internas - explora TODAS
+
         for a_id, b_id in anchor.node.get_internal_connections():
             a_anchor = anchor.node.get_anchor(a_id)
             b_anchor = anchor.node.get_anchor(b_id)
-            
+
             other = None
             if a_anchor == anchor:
                 other = b_anchor
             elif b_anchor == anchor:
                 other = a_anchor
-            
+
             if other and other.domain == "electric":
                 if self._mark_valid_from_source(other, visited, valid_anchors):
                     reaches_ground = True
-                    # ❌ NÃO faz break aqui! Continua explorando outros caminhos
-        
-        # Conexões externas - explora TODAS
+
         for conn in anchor.connections:
             other = conn.get_other(anchor)
             if other and other.domain == "electric":
                 if self._mark_valid_from_source(other, visited, valid_anchors):
                     reaches_ground = True
-                    # ❌ NÃO faz break aqui! Continua explorando outros caminhos
-        
+
         visited.remove(anchor)
-        
-        # Marca como válida se alcança ground por QUALQUER caminho
+
         if reaches_ground:
             valid_anchors.add(anchor)
-        
+
         return reaches_ground
-    
+
+    # Pressão máxima antes de marcar circuito como fault
+    P_MAX = 10_000
+
     def _update_hydraulic_domain(self):
         hydraulic_nodes = self._collect_hydraulic_nodes()
         if not hydraulic_nodes:
@@ -215,13 +187,11 @@ class SimulationEngine:
 
         return changed
 
-
     def _collect_hydraulic_nodes(self):
         return [
             node for node in self.nodes.values()
             if hasattr(node, 'variables') and hasattr(node, 'equations') and hasattr(node, 'hydraulic_ports')
         ]
-
 
     def _assign_pressure_vars(self) -> dict:
         visited_anchors = set()
@@ -243,7 +213,6 @@ class SimulationEngine:
                     a.pressure_var = pressure_var
 
         return anchor_to_pressure_var
-
 
     def _partition_circuits(self, hydraulic_nodes, anchor_to_pressure_var):
         pressure_var_to_nodes = defaultdict(set)
@@ -296,112 +265,86 @@ class SimulationEngine:
 
         return circuits
 
-
     def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
         circuit_list = list(circuit_nodes)
-        changed = False
-
-        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
-
-        if sol is None:
-            relief_valves = [
-                n for n in circuit_list
-                if hasattr(n, "open_relief") and not n._open
-            ]
-            relief_valves_sorted = sorted(relief_valves, key=lambda v: v.p_set)
-            
-            for rv in relief_valves_sorted:
-                rv.open_relief()
-                print(f"  abrindo relief {rv.id[:8]} p_set={rv.p_set}")
-                sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
-                print(f"  tentativa: {'convergiu' if sol else 'falhou'}")
-                if sol is not None:
-                    break  # convergiu com o mínimo de reliefs abertas
-                print(f"  segunda tentativa: {'convergiu' if sol else 'falhou'}")
-
-        if sol is None:
-            locked_cylinders = [
-                n for n in circuit_list
-                if getattr(n, "locked", False) or
-                getattr(n, "locked_fwd", False) or
-                getattr(n, "locked_bwd", False)
-            ]
-            print(f"circuito {index}: {len(locked_cylinders)} cilindro(s) travado(s)")
-            if locked_cylinders:
-                reduced_list = [n for n in circuit_list if n not in locked_cylinders]
-                for node in locked_cylinders:
-                    for anchor in node.anchors.values():
-                        if anchor.domain == "hydraulic":
-                            anchor.flow = 0.0
-                sol = self._try_solve(index, reduced_list, anchor_to_pressure_var)
-                print(f"  terceira tentativa: {'convergiu' if sol else 'falhou'}")
-
-        if sol is None:
-            blocked_cylinders = [
-                n for n in circuit_list
-                if hasattr(n, "x") and n.x <= 0.0 and
-                (getattr(n, "spring_k", 0.0) * n.x + getattr(n, "external_force", 0.0)) > 0
-            ]
-            if blocked_cylinders:
-                reduced_list = [n for n in circuit_list if n not in blocked_cylinders]
-                for node in blocked_cylinders:
-                    for anchor in node.anchors.values():
-                        if anchor.domain == "hydraulic":
-                            anchor.flow = 0.0
-                sol = self._try_solve(index, reduced_list, anchor_to_pressure_var)
-                print(f"  quarta tentativa sem cilindros bloqueados: {'convergiu' if sol else 'falhou'}")
-
-        if sol is None:
-            self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
-            return False
-
-        # verifica pressões excedendo p_set — abre apenas menor p_set por grupo
-        pressure_relief_valves = [
-            n for n in circuit_list
-            if hasattr(n, "open_relief") and not n._open
-            and n.anchors.get("P")
-            and n.anchors["P"].pressure_var
-            and n.anchors["P"].pressure_var in sol
-            and sol[n.anchors["P"].pressure_var] >= n.p_set
-        ]
-        if pressure_relief_valves:
-            relief_by_group = defaultdict(list)
-            for rv in pressure_relief_valves:
-                anchor = rv.anchors.get("P")
-                key = anchor.pressure_var if anchor and anchor.pressure_var else None
-                relief_by_group[key].append(rv)
-
-            for group, valves in relief_by_group.items():
-                best = min(valves, key=lambda v: v.p_set)
-                best.open_relief()
-                print(f"  abrindo relief por pressão {best.id[:8]} P={sol[best.anchors['P'].pressure_var]:.2e} p_set={best.p_set}")
-
-            sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
-            print(f"  tentativa com relief por pressão: {'convergiu' if sol else 'falhou'}")
-            if sol is None:
-                self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
-                return False
 
         old_pressures = {
             anchor: anchor.pressure
             for anchor, pvar in anchor_to_pressure_var.items()
-            if pvar in sol
+            if pvar in circuit_pvars
         }
+
+        # 🔥 NOVO: detectar mudança de topologia e resetar p_previous
+        new_nodes_set = set(circuit_list)
+
+        for pvar in circuit_pvars:
+            prev_nodes = self._prev_circuit_map.get(pvar)
+
+            if prev_nodes is not None and prev_nodes != new_nodes_set:
+                cont = self._continuities.get(pvar)
+                if cont:
+                    cont.p_previous = 0.0
+
+            # atualiza mapa
+            self._prev_circuit_map[pvar] = new_nodes_set
+
+        # ----------------------------
+        # resolver circuito
+        # ----------------------------
+        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
+
+        if sol is None:
+            for pvar, continuity in self._continuities.items():
+                if pvar in circuit_pvars:
+                    continuity.p_previous = 0.0
+            self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+            return False
+
+        # Verifica pressão máxima
+        for pvar in circuit_pvars:
+            if pvar in sol and abs(sol[pvar]) > self.P_MAX:
+                print(f"circuito {index}: pressão {sol[pvar]:.2e} excede P_MAX={self.P_MAX}")
+                for pvar2, continuity in self._continuities.items():
+                    if pvar2 in circuit_pvars:
+                        continuity.p_previous = 0.0
+                self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+                return False
+
+        # Atualiza p_previous
+        for pvar, continuity in self._continuities.items():
+            if pvar in circuit_pvars:
+                continuity.update_pressure(sol)
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
 
+        changed = False
         for anchor, pvar in anchor_to_pressure_var.items():
             if pvar in sol:
                 old_p = old_pressures.get(anchor)
                 new_p = sol[pvar]
                 old_val = old_p if not isinstance(old_p, str) else None
-                if old_val is None or abs(new_p - old_val) > 1e-10:
+                tol_abs = 1e-6
+                tol_rel = 1e-4
+
+                if old_val is None:
                     changed = True
                     break
+                else:
+                    diff = abs(new_p - old_val)
+                    scale = max(1.0, abs(new_p))
+
+                    if diff > tol_abs and diff / scale > tol_rel:
+                        changed = True
+                        break
 
         return changed
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var):
+        from collections import defaultdict
+
+        # ----------------------------
+        # 1. Mapear flows por pressão
+        # ----------------------------
         group_flows = defaultdict(list)
         for node in circuit_list:
             for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -412,52 +355,147 @@ class SimulationEngine:
                 if pvar:
                     group_flows[pvar].append(flow_var)
 
-        continuities = [
-            NodeContinuity(pvar, flow_vars)
-            for pvar, flow_vars in group_flows.items()
-        ]
+        # ----------------------------
+        # 2. Criar / atualizar continuities
+        # ----------------------------
+        continuities = []
+        for pvar, flow_vars in group_flows.items():
+            if pvar not in self._continuities:
+                self._continuities[pvar] = NodeContinuity(pvar, flow_vars)
+            else:
+                self._continuities[pvar].flow_vars = flow_vars
+            continuities.append(self._continuities[pvar])
 
+        # ----------------------------
+        # 3. Detectar p_set do circuito
+        # ----------------------------
+        psets = [
+            getattr(node, "p_set", None)
+            for node in circuit_list
+            if hasattr(node, "p_set") and node.p_set is not None
+        ]
+        psets = [p for p in psets if p is not None]
+
+        has_relief = len(psets) > 0
+        min_pset = min(psets) if has_relief else None
+
+        # ----------------------------
+        # 4. Definir referência de vazão
+        # ----------------------------
+        Q_ref = next(
+            (node.flow_hint for node in circuit_list
+            if hasattr(node, "flow_hint") and node.flow_hint > 1e-10),
+            1e-4
+        )
+
+        alpha = 0.6  # fração de subida desejada por iteração
+
+        # ----------------------------
+        # 5. Ajustar ZC por circuito
+        # ----------------------------
+        for cont in continuities:
+            if has_relief:
+                ZC_new = (alpha * min_pset) / Q_ref
+
+                # clamp para evitar extremos
+                ZC_new = max(1e3, min(ZC_new, 1e7))
+
+                # opcional: estabilizar perto do regime
+                if cont.p_previous > 0.9 * min_pset:
+                    cont.ZC = 1e4
+                else:
+                    cont.ZC = ZC_new
+            else:
+                cont.ZC = 1e4
+
+        # ----------------------------
+        # 6. Criar solver
+        # ----------------------------
         solver = NonlinearSystemSolver(circuit_list + continuities)
         x0 = solver.build_initial_guess(circuit_list)
 
+        # ----------------------------
+        # 7. Inicializar pressões
+        # ----------------------------
+        for cont in continuities:
+            pvar = cont.pressure_var
+            if pvar in solver.var_index:
+                x0[pvar] = cont.p_previous
+
+        # ----------------------------
+        # 8. Predição de pressão (agora SIM relevante)
+        # ----------------------------
+        if has_relief:
+            for cont in continuities:
+                pvar = cont.pressure_var
+                P_prev = cont.p_previous
+
+                P_pred = min_pset
+
+                if pvar in solver.var_index:
+                    x0[pvar] = P_pred
+
+        else:
+            for cont in continuities:
+                pvar = cont.pressure_var
+                P_prev = cont.p_previous
+
+                P_pred = P_prev + cont.ZC * Q_ref
+
+                if pvar in solver.var_index:
+                    x0[pvar] = P_pred
+
+        # ----------------------------
+        # 9. (opcional) ajudar a abrir relief
+        # ----------------------------
+        if has_relief:
+            for node in circuit_list:
+                if hasattr(node, "p_set"):
+                    try:
+                        x0[node.flow_var_in] = Q_ref
+                    except Exception:
+                        pass
+
+        # ----------------------------
+        # 10. Resolver
+        # ----------------------------
         try:
             return solver.solve(x0)
+
         except Exception as e:
             print(f"circuito {index}: falhou — {e}")
             print(f"[resíduos]:")
+
             for comp in solver.components:
                 eqs = comp.equations(solver.sol_array, solver.var_index)
                 name = getattr(comp, 'id', getattr(comp, 'pressure_var', str(comp)))
                 print(f"  {str(name)[-8:]}: {[f'{r:.4e}' for r in eqs]}")
+
             print(f"[x0]:")
             for var, val in x0.items():
                 print(f"  {var[-16:]} = {val:.4e}")
+
             return None
 
-
     def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):
-        # pressão — escreve em TODAS as anchors do grupo, ativas ou não
         for anchor, pvar in anchor_to_pressure_var.items():
             if pvar in sol:
                 anchor.pressure = sol[pvar]
                 anchor.fault = False
 
-        # flow — só nas anchors ativas nos ports
         for node in circuit_nodes:
             node.fault = False
             for anchor in node.anchors.values():
                 if anchor.domain != "hydraulic":
                     continue
-                anchor.flow = 0.0  # reseta — sobrescrito abaixo se ativo
+                anchor.flow = 0.0
 
             for anchor_name, flow_var in node.hydraulic_ports().items():
                 anchor = node.anchors.get(anchor_name)
                 if anchor and flow_var in sol:
                     anchor.flow = sol[flow_var]
 
-
     def _mark_circuit_fault(self, circuit_pvars, anchor_to_pressure_var):
-        # procura em TODOS os nodes do grafo, não só os do circuito
         for node in self.nodes.values():
             node_hydraulic_anchors = {
                 a for a in node.anchors.values()

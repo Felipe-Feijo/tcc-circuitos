@@ -22,7 +22,7 @@ class SingleActingCylinder(Node):
             self.stroke      = self.properties["stroke"]
             self.spring_k = self.properties["spring_k"]
             self.external_force = self.properties["external_force"]
-            self.friction       = self.properties["friction"]
+            self.friction = max(self.properties["friction"], 1e-3)
             self.x      = 0.0
             self.locked = False
             self.flow_var = f"Q_{self.id}"
@@ -45,8 +45,7 @@ class SingleActingCylinder(Node):
             return 0.0
         F_mola = self.spring_k * self.x
         F_net  = F_mola + self.external_force
-        friction_eff = max(self.friction, 1e-3)
-        v_hint = F_net / friction_eff
+        v_hint = F_net / self.friction
         hint = abs(v_hint * self.area)
         # fallback: se não há força, usa flow_rate da bomba ou valor mínimo
         return hint if hint > 1e-10 else 0.0  # retorna 0 — bomba vai fornecer o hint
@@ -56,49 +55,70 @@ class SingleActingCylinder(Node):
         if self.domain != "hydraulic":
             return {}
 
-        #if self.locked:
-        #    return {self.flow_var: 0.0}
+        anchor = self.anchors["A"]
+        P_prev = getattr(anchor, "pressure", 0.0)
+        if isinstance(P_prev, str):
+            P_prev = 0.0
 
-        # se já está recuado, não chuta negativo
-        if self.x <= 0.0:
+        EPS = self.stroke * 1e-4
+
+        # Nos batentes: chuta Q=0, deixa o FB resolver a pressão
+        if self.x <= EPS or self.x >= self.stroke - EPS:
             return {self.flow_var: 0.0}
 
+        # Interior: estima Q pelo equilíbrio de forças com P conhecido
         F_mola = self.spring_k * self.x
-        F_net  = F_mola + self.external_force
+        F_net  = P_prev * self.area - F_mola - self.external_force
+        v_eq   = F_net / max(self.friction, 1e-3)
+        Q_eq   = v_eq * self.area
 
-        if F_net > 0 and self.area > 0:
-            denom = self.friction if self.friction > 0 else 1.0
-            v_hint = F_net / denom
-            Q_hint = -v_hint * self.area
-        else:
-            Q_hint = 0.0
-
-        return {self.flow_var: Q_hint}
+        return {self.flow_var: Q_eq}
 
     def hydraulic_ports(self):
         if self.domain != "hydraulic":
             return {}
         return {"A": self.flow_var}
 
+    def _fb(self, a, b, eps=0):
+        """φ(a,b)=0  ⟺  a>=0, b>=0, a*b=0"""
+        return a + b - math.sqrt(a*a + b*b + eps)
+
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
         P = x[idx[self.anchors["A"].pressure_var]]
+
         v       = Q / self.area
         F_hidro = P * self.area
         F_mola  = self.spring_k * self.x
         F_res   = F_mola + self.external_force + self.friction * v
 
-        if self.locked:
-            # só bloqueia entrada (Q > 0), permite saída (Q < 0)
-            if Q > 0:
-                return [Q]
-            # se Q < 0, aplica física normal — cilindro pode recuar
+        # F_net > 0 → quer avançar, F_net < 0 → quer recuar
+        F_net   = F_hidro - F_res
+        F_scale = max(abs(F_hidro), abs(F_res), 1.0)
+        Q_scale = max(self.area * self.stroke, 1e-8)
 
-        # bloqueia saída quando já está completamente recuado
-        if self.x <= 0.0 and Q < 0:
-            return [Q]
-        
-        return [F_hidro - F_res]
+        f = F_net  / F_scale   # adimensional, pode ser + ou -
+        q = Q      / Q_scale   # adimensional, pode ser + ou -
+
+        EPS = self.stroke * 1e-4
+
+        if self.x <= EPS:
+            # Proibido: Q < 0
+            # Complementaridade: q >= 0  ⊥  f <= 0
+            # Reescreve: φ(q, -f) = 0
+            #   q=0 e f<=0: parado apoiado (pressão insuficiente)
+            #   q>0 e f=0:  avançando (equilíbrio dinâmico)
+            return [self._fb(q, -f)]
+
+        if self.x >= self.stroke - EPS:
+            # Proibido: Q > 0
+            # Complementaridade: (-q) >= 0  ⊥  f >= 0
+            # Reescreve: φ(-q, f) = 0
+            #   -q=0 e f>=0: parado no topo (força insuficiente pra recuar)
+            #   -q>0 e f=0:  recuando (equilíbrio dinâmico)
+            return [self._fb(-q, f)]
+
+        return [f]
     
 
     # ------------------------------------------------------------------
@@ -147,11 +167,11 @@ class SingleActingCylinder(Node):
 
                     self.position = round(self.x / self.stroke) if self.stroke > 0 else 0
 
-                    if self.x >= self.stroke:
+                    if self.x >= self.stroke * 0.99999:
                         self.locked = True
 
                     # bloqueia em zero — não pode recuar mais
-                    if self.x <= 0.0:
+                    if self.x <= 0:
                         anchor.flow = max(0.0, anchor.flow)  # zera fluxo negativo
             print("pos", self.position, "x", self.x, "locked", self.locked)
 

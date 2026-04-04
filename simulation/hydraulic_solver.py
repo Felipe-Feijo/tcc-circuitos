@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, least_squares
 
 
 class NonlinearSystemSolver:
@@ -33,15 +33,25 @@ class NonlinearSystemSolver:
                 x0[self.var_index[var]] = val
 
         system = self.build_equations()
-        sol_array, info, ier, msg = fsolve(system, x0, full_output=True)
-        self.sol_array = sol_array
-        residual = np.max(np.abs(info['fvec']))
 
-        if ier != 1 and residual > 100:
-            raise Exception(f"fsolve: {msg} | resíduo: {residual:.2e}")
+        result = least_squares(
+            system, x0,
+            method='trf',
+            x_scale='jac',
+            ftol=1e-10,
+            xtol=1e-10,
+            gtol=1e-10,
+            max_nfev=1000,
+        )
+
+        self.sol_array = result.x
+        residual = np.max(np.abs(result.fun))
+
+        if residual > 10000:
+            raise Exception(f"least_squares: {result.message} | resíduo: {residual:.2e}")
 
         return {
-            var: sol_array[idx]
+            var: result.x[idx]
             for var, idx in self.var_index.items()
         }
 
@@ -104,3 +114,4 @@ class NodeContinuity:
     def update_pressure(self, sol):
         if self.pressure_var in sol:
             self.p_previous = sol[self.pressure_var]
+

@@ -44,11 +44,11 @@ class SingleActingCylinder(Node):
         if self.locked:
             return 0.0
         F_mola = self.spring_k * self.x
-        F_net  = F_mola + self.external_force
+        F_net = F_mola + self.external_force  # força que empurra de volta
+        if F_net <= 0:
+            return 0.0  # mola não está comprimida — não há força de retorno
         v_hint = F_net / self.friction
-        hint = abs(v_hint * self.area)
-        # fallback: se não há força, usa flow_rate da bomba ou valor mínimo
-        return hint if hint > 1e-10 else 0.0  # retorna 0 — bomba vai fornecer o hint
+        return v_hint * self.area
     
     @property
     def initial_guess(self):
@@ -81,7 +81,7 @@ class SingleActingCylinder(Node):
 
     def _fb(self, a, b, eps=0):
         """φ(a,b)=0  ⟺  a>=0, b>=0, a*b=0"""
-        return a + b - math.sqrt(a*a + b*b + eps)
+        return a + b - math.sqrt(a*a + b*b)
 
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
@@ -100,7 +100,7 @@ class SingleActingCylinder(Node):
         f = F_net  / F_scale   # adimensional, pode ser + ou -
         q = Q      / Q_scale   # adimensional, pode ser + ou -
 
-        EPS = self.stroke * 1e-4
+        EPS = self.stroke * 1e-6
 
         if self.x <= EPS:
             # Proibido: Q < 0

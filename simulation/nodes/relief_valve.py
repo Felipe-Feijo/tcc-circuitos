@@ -40,7 +40,7 @@ class DirectOperatedReliefValve(Node):
         # → aberta:  P_in=p_set, Q_in ≥ 0
         a = self.p_set - P_in
         b = Q_in
-        eq_fb = a + b - math.sqrt(a**2 + b**2)
+        eq_fb = a + b - math.sqrt(a**2 + b**2 + 1e-8)
 
         return [eq_conservation, eq_fb]
 

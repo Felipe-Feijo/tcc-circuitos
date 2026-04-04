@@ -18,11 +18,9 @@ class SimulationEngine:
 
         while True:
             iteration += 1
-            print(iteration)
             if iteration > self.max_iterations:
                 raise RuntimeError(
-                    f"Simulation did not stabilize after {self.max_iterations} iterations. "
-                    "Possible feedback loop or invalid topology."
+                    f"Simulation did not stabilize after {self.max_iterations} iterations."
                 )
 
             for node in self.nodes.values():
@@ -30,8 +28,10 @@ class SimulationEngine:
 
             changed = False
             changed |= self._update_pneumatic_domain()
-            changed |= self._update_hydraulic_domain()
             changed |= self._update_electric_domain()
+
+            # hidráulico sempre roda, mas não vota no changed
+            self._update_hydraulic_domain()
 
             if not changed:
                 break
@@ -170,22 +170,66 @@ class SimulationEngine:
         return reaches_ground
 
     # Pressão máxima antes de marcar circuito como fault
-    P_MAX = 10_000
+    P_MAX = 10e6
+
+    def _get_Q_ref(self, hydraulic_nodes) -> float:
+        # prioridade 1: bomba de deslocamento fixo
+        for node in hydraulic_nodes:
+            if hasattr(node, 'properties') and 'Q' in getattr(node, 'properties', {}):
+                return node.properties['Q']
+        # prioridade 2: maior flow_hint disponível (ex: cilindro esvaziando)
+        hints = [
+            n.flow_hint for n in hydraulic_nodes
+            if hasattr(n, "flow_hint") and n.flow_hint > 1e-10
+        ]
+        return max(hints) if hints else 1e-4
+
+    def _check_flow_conservation(self, hydraulic_nodes, anchor_to_pressure_var) -> bool:
+        Q_ref = self._get_Q_ref(hydraulic_nodes)
+        tol = Q_ref * 1e-4
+        for pvar in self._continuities:
+            Q_sum = sum(
+                anchor.flow
+                for anchor, apvar in anchor_to_pressure_var.items()
+                if apvar == pvar and not isinstance(anchor.flow, (str, type(None)))
+            )
+            if abs(Q_sum) > tol:
+                return False
+        return True
+
+    def _reset_continuity(self, pvar: str):
+        cont = self._continuities.get(pvar)
+        if cont:
+            cont.p_previous = 0.0
+
+    def _reset_circuit_continuities(self, circuit_pvars):
+        for pvar in circuit_pvars:
+            if pvar in self._continuities:
+                self._reset_continuity(pvar)
 
     def _update_hydraulic_domain(self):
         hydraulic_nodes = self._collect_hydraulic_nodes()
         if not hydraulic_nodes:
-            return False
+            return
 
         anchor_to_pressure_var = self._assign_pressure_vars()
         circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
 
-        changed = False
-        for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
-            result = self._solve_circuit(i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var)
-            changed |= result
+        for iteration in range(20):
+            for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
+                self._solve_circuit(i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var)
 
-        return changed
+            if self._check_flow_conservation(hydraulic_nodes, anchor_to_pressure_var):
+                # debug — remove depois
+                Q_ref = self._get_Q_ref(hydraulic_nodes)
+                for pvar, cont in self._continuities.items():
+                    Q_sum = sum(
+                        anchor.flow
+                        for anchor, apvar in anchor_to_pressure_var.items()
+                        if apvar == pvar and not isinstance(anchor.flow, (str, type(None)))
+                    )
+                    print(f"  {pvar[-16:]} | ΣQ={Q_sum:.3e} | P={cont.p_previous:.3e}")
+                break
 
     def _collect_hydraulic_nodes(self):
         return [
@@ -268,83 +312,40 @@ class SimulationEngine:
     def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var):
         circuit_list = list(circuit_nodes)
 
-        old_pressures = {
-            anchor: anchor.pressure
-            for anchor, pvar in anchor_to_pressure_var.items()
-            if pvar in circuit_pvars
-        }
-
-        # 🔥 NOVO: detectar mudança de topologia e resetar p_previous
+        # detecta mudança de topologia
         new_nodes_set = set(circuit_list)
-
         for pvar in circuit_pvars:
             prev_nodes = self._prev_circuit_map.get(pvar)
-
             if prev_nodes is not None and prev_nodes != new_nodes_set:
-                cont = self._continuities.get(pvar)
-                if cont:
-                    cont.p_previous = 0.0
-
-            # atualiza mapa
+                self._reset_continuity(pvar)
             self._prev_circuit_map[pvar] = new_nodes_set
 
-        # ----------------------------
-        # resolver circuito
-        # ----------------------------
         sol = self._try_solve(index, circuit_list, anchor_to_pressure_var)
 
         if sol is None:
-            for pvar, continuity in self._continuities.items():
-                if pvar in circuit_pvars:
-                    continuity.p_previous = 0.0
+            self._reset_circuit_continuities(circuit_pvars)
             self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
-            return False
+            return
 
-        # Verifica pressão máxima
+        # verifica P_MAX
         for pvar in circuit_pvars:
             if pvar in sol and abs(sol[pvar]) > self.P_MAX:
                 print(f"circuito {index}: pressão {sol[pvar]:.2e} excede P_MAX={self.P_MAX}")
-                for pvar2, continuity in self._continuities.items():
-                    if pvar2 in circuit_pvars:
-                        continuity.p_previous = 0.0
+                self._reset_circuit_continuities(circuit_pvars)
                 self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
-                return False
+                return
 
-        # Atualiza p_previous
+        # atualiza p_previous e escreve resultados
         for pvar, continuity in self._continuities.items():
             if pvar in circuit_pvars:
                 continuity.update_pressure(sol)
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
 
-        changed = False
-        for anchor, pvar in anchor_to_pressure_var.items():
-            if pvar in sol:
-                old_p = old_pressures.get(anchor)
-                new_p = sol[pvar]
-                old_val = old_p if not isinstance(old_p, str) else None
-                tol_abs = 1e-6
-                tol_rel = 1e-4
-
-                if old_val is None:
-                    changed = True
-                    break
-                else:
-                    diff = abs(new_p - old_val)
-                    scale = max(1.0, abs(new_p))
-
-                    if diff > tol_abs and diff / scale > tol_rel:
-                        changed = True
-                        break
-
-        return changed
-
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var):
         from collections import defaultdict
 
-        # ----------------------------
-        # 1. Mapear flows por pressão
-        # ----------------------------
+        # 1. mapear flows por pressão
         group_flows = defaultdict(list)
         for node in circuit_list:
             for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -355,9 +356,7 @@ class SimulationEngine:
                 if pvar:
                     group_flows[pvar].append(flow_var)
 
-        # ----------------------------
-        # 2. Criar / atualizar continuities
-        # ----------------------------
+        # 2. criar / atualizar continuities
         continuities = []
         for pvar, flow_vars in group_flows.items():
             if pvar not in self._continuities:
@@ -366,115 +365,54 @@ class SimulationEngine:
                 self._continuities[pvar].flow_vars = flow_vars
             continuities.append(self._continuities[pvar])
 
-        # ----------------------------
-        # 3. Detectar p_set do circuito
-        # ----------------------------
+        # 3. detectar p_set
         psets = [
-            getattr(node, "p_set", None)
-            for node in circuit_list
+            node.p_set for node in circuit_list
             if hasattr(node, "p_set") and node.p_set is not None
         ]
-        psets = [p for p in psets if p is not None]
-
         has_relief = len(psets) > 0
         min_pset = min(psets) if has_relief else None
 
-        # ----------------------------
-        # 4. Definir referência de vazão
-        # ----------------------------
-        Q_ref = next(
-            (node.flow_hint for node in circuit_list
-            if hasattr(node, "flow_hint") and node.flow_hint > 1e-10),
-            1e-4
-        )
+        # 4. Q_ref
+        Q_ref = self._get_Q_ref(circuit_list)
 
-        alpha = 0.6  # fração de subida desejada por iteração
-
-        # ----------------------------
-        # 5. Ajustar ZC por circuito
-        # ----------------------------
+        # 5. ajustar ZC
         for cont in continuities:
             if has_relief:
-                ZC_new = (alpha * min_pset) / Q_ref
-
-                # clamp para evitar extremos
-                ZC_new = max(1e3, min(ZC_new, 1e7))
-
-                # opcional: estabilizar perto do regime
-                if cont.p_previous > 0.9 * min_pset:
-                    cont.ZC = 1e4
-                else:
-                    cont.ZC = ZC_new
+                ZC_new = max(1e3, min((0.6 * min_pset) / Q_ref, 1e7))
+                cont.ZC = 1e4 if cont.p_previous > 0.9 * min_pset else ZC_new
             else:
                 cont.ZC = 1e4
 
-        # ----------------------------
-        # 6. Criar solver
-        # ----------------------------
+        # 6. criar solver e chute inicial
         solver = NonlinearSystemSolver(circuit_list + continuities)
         x0 = solver.build_initial_guess(circuit_list)
 
-        # ----------------------------
-        # 7. Inicializar pressões
-        # ----------------------------
+        # 7. inicializar pressões
         for cont in continuities:
             pvar = cont.pressure_var
-            if pvar in solver.var_index:
+            if pvar not in solver.var_index:
+                continue
+            if cont.p_previous > 1.0:
                 x0[pvar] = cont.p_previous
+            else:
+                P0 = cont.ZC * Q_ref
+                if has_relief:
+                    P0 = min(P0, min_pset * 0.95)
+                x0[pvar] = P0
 
-        # ----------------------------
-        # 8. Predição de pressão (agora SIM relevante)
-        # ----------------------------
-        if has_relief:
-            for cont in continuities:
-                pvar = cont.pressure_var
-                P_prev = cont.p_previous
-
-                P_pred = min_pset
-
-                if pvar in solver.var_index:
-                    x0[pvar] = P_pred
-
-        else:
-            for cont in continuities:
-                pvar = cont.pressure_var
-                P_prev = cont.p_previous
-
-                P_pred = P_prev + cont.ZC * Q_ref
-
-                if pvar in solver.var_index:
-                    x0[pvar] = P_pred
-
-        # ----------------------------
-        # 9. (opcional) ajudar a abrir relief
-        # ----------------------------
-        if has_relief:
-            for node in circuit_list:
-                if hasattr(node, "p_set"):
-                    try:
-                        x0[node.flow_var_in] = Q_ref
-                    except Exception:
-                        pass
-
-        # ----------------------------
-        # 10. Resolver
-        # ----------------------------
+        # 8. resolver
         try:
             return solver.solve(x0)
-
         except Exception as e:
             print(f"circuito {index}: falhou — {e}")
-            print(f"[resíduos]:")
-
             for comp in solver.components:
                 eqs = comp.equations(solver.sol_array, solver.var_index)
                 name = getattr(comp, 'id', getattr(comp, 'pressure_var', str(comp)))
                 print(f"  {str(name)[-8:]}: {[f'{r:.4e}' for r in eqs]}")
-
             print(f"[x0]:")
             for var, val in x0.items():
                 print(f"  {var[-16:]} = {val:.4e}")
-
             return None
 
     def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):

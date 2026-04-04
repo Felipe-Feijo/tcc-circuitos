@@ -57,11 +57,30 @@ class DoubleActingCylinder(Node):
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
-        # chuta avanço por padrão — Q_a positivo, Q_b negativo (conservação)
-        Q_hint = self.flow_hint if self.flow_hint > 0 else 1e-4
+
+        anchor_a = self.anchors.get("A")
+        P_a = getattr(anchor_a, "pressure", 0.0) if anchor_a else 0.0
+        if isinstance(P_a, str):
+            P_a = 0.0
+
+        anchor_b = self.anchors.get("B")
+        P_b = getattr(anchor_b, "pressure", 0.0) if anchor_b else 0.0
+        if isinstance(P_b, str):
+            P_b = 0.0
+
+        EPS = self.stroke * 1e-4
+
+        if self.x <= EPS or self.x >= self.stroke - EPS:
+            return {self.flow_var_a: 0.0, self.flow_var_b: 0.0}
+
+        F_hidro = P_a * self.area_a - P_b * self.area_b
+        F_net   = F_hidro - self.external_force
+        v_eq    = F_net / self.friction
+        Q_eq    = v_eq * self.area_a
+
         return {
-            self.flow_var_a:  Q_hint,
-            self.flow_var_b: -Q_hint,
+            self.flow_var_a:  Q_eq,
+            self.flow_var_b: -Q_eq,
         }
 
     def hydraulic_ports(self):
@@ -73,6 +92,9 @@ class DoubleActingCylinder(Node):
         }
         
 
+    def _fb(self, a, b):
+        return a + b - math.sqrt(a*a + b*b)
+
     def equations(self, x, idx):
         Q_a = x[idx[self.flow_var_a]]
         Q_b = x[idx[self.flow_var_b]]
@@ -82,19 +104,30 @@ class DoubleActingCylinder(Node):
         v       = Q_a / self.area_a
         F_hidro = P_a * self.area_a - P_b * self.area_b
         F_res   = self.external_force + self.friction * v
+        F_net   = F_hidro - F_res
 
-        # trava avanço — só permite recuar (Q_a < 0)
-        if self.locked_fwd and Q_a > 0:
-            return [Q_a, Q_a + Q_b]
+        F_scale = max(abs(F_hidro), abs(F_res), 1.0)
+        Q_scale = max(self.area_a * self.stroke, 1e-8)
 
-        # trava recuo — só permite avançar (Q_a > 0)
-        if self.locked_bwd and Q_a < 0:
-            return [Q_a, Q_a + Q_b]
+        f = F_net / F_scale
+        q = Q_a   / Q_scale
 
-        return [
-            F_hidro - F_res,   # equilíbrio de forças
-            Q_a + Q_b,         # conservação de fluxo (incompressível)
-        ]
+        EPS = self.stroke * 1e-4
+
+        # Conservação sempre vale
+        eq_conservation = Q_a + Q_b
+
+        if self.x <= EPS:
+            # Proibido: Q_a < 0 (não pode recuar além do batente)
+            # φ(q, -f) = 0
+            return [self._fb(q, -f), eq_conservation]
+
+        if self.x >= self.stroke - EPS:
+            # Proibido: Q_a > 0 (não pode avançar além do batente)
+            # φ(-q, f) = 0
+            return [self._fb(-q, f), eq_conservation]
+
+        return [f, eq_conservation]
 
     # ------------------------------------------------------------------
     # Update lógico

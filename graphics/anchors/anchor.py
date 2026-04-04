@@ -99,10 +99,7 @@ class AnchorItem(QGraphicsEllipseItem):
         q = self.format_hydraulic_value(abs(self.flow), "m³/s")
         self._label_hydraulic.set_text(f"{p} | {q}")
 
-    def format_hydraulic_value(self,value: float, unit: str) -> str:
-        # trata ruído numérico como zero
+    def format_hydraulic_value(self, value: float, unit: str) -> str:
         if abs(value) < 1e-10:
             return f"0 {unit}"
-        if abs(value) < 0.01 or abs(value) >= 10000:
-            return f"{value:.2e} {unit}"
-        return f"{value:.3f} {unit}"
+        return f"{value:.3g} {unit}"

@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from scipy.optimize import fsolve, least_squares
+from scipy.optimize import least_squares
 
 
 class NonlinearSystemSolver:
@@ -90,16 +90,17 @@ class NonlinearSystemSolver:
 class NodeContinuity:
     """
     Equação de continuidade para cada grupo de pressão.
-    Com compressibilidade: ΣQ = (P - P_anterior) / Zc
-    Zc controla a rigidez do fluido. Zc grande → pressão sobe rápido com pouca vazão residual.
+    ΣQ = (P - P_anterior) / ZC
+
+    ZC único para todo o sistema — a pressão sobe naturalmente
+    a cada iteração até a conservação de vazão ser satisfeita.
     """
-    # Impedância característica — valor alto para pressão subir rápido dentro do loop
-    ZC = 1e4
+    ZC = 1e6
 
     def __init__(self, pressure_var, flow_vars):
         self.pressure_var = pressure_var
         self.flow_vars = flow_vars
-        self.p_previous = 0.0  # atualizado após cada step
+        self.p_previous = 0.0
 
     @property
     def variables(self):
@@ -108,10 +109,8 @@ class NodeContinuity:
     def equations(self, x, idx):
         P = x[idx[self.pressure_var]]
         Q_sum = -sum(x[idx[q]] for q in self.flow_vars if q in idx)
-        # ΣQ = (P - P_anterior) / Zc
         return [(Q_sum - (P - self.p_previous) / self.ZC) * 100]
 
     def update_pressure(self, sol):
         if self.pressure_var in sol:
             self.p_previous = sol[self.pressure_var]
-

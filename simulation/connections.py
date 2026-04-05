@@ -38,5 +38,7 @@ class Connection:
             p_b = self.anchor_b.pressure
             if isinstance(p_a, str) or isinstance(p_b, str):
                 return "ERR"
+            if self.anchor_a.pressurizing or self.anchor_b.pressurizing:
+                return "PRESSURIZING"
             avg = (p_a + p_b) / 2
             return 0.0 if abs(avg) < 1e-10 else avg

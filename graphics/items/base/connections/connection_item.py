@@ -101,6 +101,8 @@ class ConnectionItem(DiagramItemBase):
             elif self.domain == "hydraulic":
                 if self.state == "ERR":
                     pen = QPen(Qt.GlobalColor.red, 3)
+                elif self.state == "PRESSURIZING":
+                    pen = QPen(QColor(255, 140, 0), 3)  # laranja
                 elif self.state > 0:
                     pen = QPen(Qt.GlobalColor.blue, 3)
                 elif self.state < 0:

@@ -12,20 +12,15 @@ class Anchor:
         self.id = (node.id, name)
         self.connections: list["Connection"] = []
 
-        # novo: estado genérico do domínio
         self.state: bool = False
-
-        # ainda útil para driver/solenoides, bombas etc.
         self.is_driver: bool = False
 
-        # atributos específicos por domínio (opcional)
-        # elétrica
-        self.type: str | None = None  # "source", "ground", "regular"
-        # hidráulica
-        self.pressure: float = 0.0    # opcional, se quiser modelar pressão real
-        self.flow: float = 0.0        # opcional, se quiser modelar vazão
-        self.pressure_var: str | None = None  # nome da variável P_* no sistema, preenchido pela engine
+        self.type: str | None = None
+        self.pressure: float = 0.0
+        self.flow: float = 0.0
+        self.pressure_var: str | None = None
         self.fault = False
+        self.pressurizing = False  # conservação de vazão ainda não atingida
 
     def connect(self, connection: "Connection"):
         if connection not in self.connections:

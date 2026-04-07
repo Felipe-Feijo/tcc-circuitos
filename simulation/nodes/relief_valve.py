@@ -10,6 +10,10 @@ class DirectOperatedReliefValve(Node):
             self.flow_var_out = f"Q_{self.id}_out"
 
     @property
+    def p_hint(self) -> float:
+        return self.p_set
+
+    @property
     def variables(self) -> list:
         if self.domain != "hydraulic":
             return []
@@ -19,30 +23,42 @@ class DirectOperatedReliefValve(Node):
             if anchor and anchor.pressure_var:
                 vars_.append(anchor.pressure_var)
         return vars_
+    
+    @property
+    def bounds(self):
+        return {
+            self.flow_var_in:  (0.0, None),  # 🔥 não permite fluxo reverso
+            self.flow_var_out: (None, 0.0)
+        }
 
     def hydraulic_ports(self) -> dict:
         if self.domain != "hydraulic":
             return {}
         return {"P": self.flow_var_in, "T": self.flow_var_out}
+    
+    def _fb(self, a, b):
+        """FB normalizada — evita insensibilidade quando a >> b"""
+        norm = max(abs(a), abs(b), 1.0)
+        a_n, b_n = a / norm, b / norm
+        return (a_n + b_n - math.sqrt(a_n**2 + b_n**2)) * norm
 
-    def equations(self, x, idx) -> list:
+    def equations(self, x, idx):
         Q_in  = x[idx[self.flow_var_in]]
         Q_out = x[idx[self.flow_var_out]]
         P_in  = x[idx[self.anchors["P"].pressure_var]]
-        P_out = x[idx[self.anchors["T"].pressure_var]]
 
-        # Conservação de vazão
         eq_conservation = Q_in + Q_out
 
-        # Fischer-Burmeister: φ(p_set - P_in, Q_in) = 0
-        # garante: (p_set - P_in ≥ 0) ⊥ (Q_in ≥ 0)
-        # → fechada: Q_in=0, P_in ≤ p_set
-        # → aberta:  P_in=p_set, Q_in ≥ 0
-        a = self.p_set - P_in
-        b = Q_in
-        eq_fb = a + b - math.sqrt(a**2 + b**2 + 1e-8)
+        # normaliza cada argumento pela sua própria escala
+        p_scale = max(self.p_set, 1.0)
+        q_scale = max(Q_in, 1e-12)  # escala dinâmica — o próprio Q atual
 
-        return [eq_conservation, eq_fb]
+        a = (self.p_set - P_in) / p_scale   # adimensional, ~[-1, 1]
+        b = Q_in / q_scale                  # adimensional, ~[-1, 0]
+
+        eq_open = self._fb(a, b)
+
+        return [eq_conservation, eq_open]
 
     @property
     def initial_guess(self) -> dict:

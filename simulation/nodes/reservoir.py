@@ -15,7 +15,11 @@ class Reservoir(Node):
     def flow_hint(self) -> float:
         # reservoir sempre pode fornecer/absorver fluxo
         # usa um valor padrão pequeno como referência de escala
-        return 1e-4
+        return 0
+    
+    @property
+    def p_hint(self) -> float:
+        return self.pressure  # normalmente 0
 
     def hydraulic_ports(self):
         return {"T": self.flow_var}  # participa da continuidade do grupo

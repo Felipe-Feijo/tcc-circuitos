@@ -5,21 +5,29 @@ class FixedDisplacementPump(Node):
         super().__init__(node_id, "fixed_displacement_pump", **kwargs)
         self.flow_in_var  = f"Q_{self.id}_P"   # sucção (P = inlet)
         self.flow_out_var = f"Q_{self.id}_S"   # descarga (S = outlet)
+        self.Q_set = self.properties["Q"]
 
     @property
     def flow_hint(self) -> float:
-        return self.properties["Q"]
+        return self.Q_set
 
     @property
     def variables(self):
         return [self.flow_in_var, self.flow_out_var]
     
     @property
-    def initial_guess(self):
-        Q = self.properties["Q"]
+    def bounds(self):
+        eps = self.Q_set * 1e-6
         return {
-            self.flow_in_var:  Q,
-            self.flow_out_var: -Q,
+            self.flow_in_var:  (-self.Q_set - eps, -self.Q_set + eps),
+            self.flow_out_var: (self.Q_set - eps, self.Q_set + eps)
+        }
+    
+    @property
+    def initial_guess(self):
+        return {
+            self.flow_in_var:  self.Q_set,
+            self.flow_out_var: -self.Q_set,
         }
 
     def hydraulic_ports(self):
@@ -31,13 +39,12 @@ class FixedDisplacementPump(Node):
     def equations(self, x, idx):
         Q_in  = x[idx[self.flow_in_var]]
         Q_out = x[idx[self.flow_out_var]]
-        Q_set = self.properties["Q"]
 
         # Conservação interna: o que entra sai
         # Imposição de vazão: a saída é Q_set
         # Convenção: Q_in positivo = entrando na bomba, Q_out positivo = saindo
         return [
             Q_in + Q_out,        # Q_in = -Q_out (conservação)
-            Q_out - Q_set,       # Q_out = Q_set (bomba fixa)
+            Q_out - self.Q_set,       # Q_out = Q_set (bomba fixa)
         ]
     

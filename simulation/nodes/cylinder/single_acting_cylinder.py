@@ -50,6 +50,11 @@ class SingleActingCylinder(Node):
         v_hint = F_net / self.friction
         return v_hint * self.area
     
+    @property  
+    def p_hint(self) -> float:
+        F = self.spring_k * self.x + self.external_force
+        return F / self.area if self.area > 0 else 0.0
+    
     @property
     def initial_guess(self):
         if self.domain != "hydraulic":
@@ -79,9 +84,19 @@ class SingleActingCylinder(Node):
             return {}
         return {"A": self.flow_var}
 
-    def _fb(self, a, b, eps=0):
-        """φ(a,b)=0  ⟺  a>=0, b>=0, a*b=0"""
-        return a + b - math.sqrt(a*a + b*b)
+    @property
+    def bounds(self):
+        if self.domain != "hydraulic":
+            return {}
+
+        EPS = self.stroke * 1e-6
+
+        if self.x <= EPS:
+            return {self.flow_var: (0.0, None)}   # só avança
+        elif self.x >= self.stroke - EPS:
+            return {self.flow_var: (None, 0.0)}   # só recua
+
+        return {}
 
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
@@ -91,34 +106,12 @@ class SingleActingCylinder(Node):
         F_hidro = P * self.area
         F_mola  = self.spring_k * self.x
         F_res   = F_mola + self.external_force + self.friction * v
-
-        # F_net > 0 → quer avançar, F_net < 0 → quer recuar
         F_net   = F_hidro - F_res
+
         F_scale = max(abs(F_hidro), abs(F_res), 1.0)
-        Q_scale = max(self.area * self.stroke, 1e-8)
 
-        f = F_net  / F_scale   # adimensional, pode ser + ou -
-        q = Q      / Q_scale   # adimensional, pode ser + ou -
-
-        EPS = self.stroke * 1e-6
-
-        if self.x <= EPS:
-            # Proibido: Q < 0
-            # Complementaridade: q >= 0  ⊥  f <= 0
-            # Reescreve: φ(q, -f) = 0
-            #   q=0 e f<=0: parado apoiado (pressão insuficiente)
-            #   q>0 e f=0:  avançando (equilíbrio dinâmico)
-            return [self._fb(q, -f)]
-
-        if self.x >= self.stroke - EPS:
-            # Proibido: Q > 0
-            # Complementaridade: (-q) >= 0  ⊥  f >= 0
-            # Reescreve: φ(-q, f) = 0
-            #   -q=0 e f>=0: parado no topo (força insuficiente pra recuar)
-            #   -q>0 e f=0:  recuando (equilíbrio dinâmico)
-            return [self._fb(-q, f)]
-
-        return [f]
+        # nos batentes o bound já bloqueia Q — só impõe equilíbrio de forças
+        return [F_net / F_scale]
     
 
     # ------------------------------------------------------------------
@@ -170,9 +163,9 @@ class SingleActingCylinder(Node):
                     if self.x >= self.stroke * 0.99999:
                         self.locked = True
 
-                    # bloqueia em zero — não pode recuar mais
-                    if self.x <= 0:
-                        anchor.flow = max(0.0, anchor.flow)  # zera fluxo negativo
+                    # # bloqueia em zero — não pode recuar mais
+                    # if self.x <= 0:
+                    #     anchor.flow = max(0.0, anchor.flow)  # zera fluxo negativo
             print("pos", self.position, "x", self.x, "locked", self.locked)
 
     # ------------------------------------------------------------------

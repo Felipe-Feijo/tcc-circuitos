@@ -16,6 +16,24 @@ class NonlinearSystemSolver:
                     self.var_index[var] = len(self.index_var)
                     self.index_var.append(var)
 
+    def build_bounds(self):
+        lower = np.full(len(self.index_var), -np.inf)
+        upper = np.full(len(self.index_var),  np.inf)
+
+        for comp in self.components:
+            if not hasattr(comp, 'bounds'):
+                continue
+            for var, (lo, hi) in comp.bounds.items():
+                if var not in self.var_index:
+                    continue
+                idx = self.var_index[var]
+                if lo is not None:
+                    lower[idx] = lo
+                if hi is not None:
+                    upper[idx] = hi
+
+        return lower, upper
+
     def build_equations(self):
         def system(x):
             eqs = []
@@ -24,7 +42,7 @@ class NonlinearSystemSolver:
             return eqs
         return system
 
-    def solve(self, x0_dict):
+    def solve(self, x0_dict, q_ref=0, p_ref=0):
         self.register_variables()
 
         x0 = np.zeros(len(self.index_var))
@@ -32,11 +50,17 @@ class NonlinearSystemSolver:
             if var in self.var_index:
                 x0[self.var_index[var]] = val
 
+        lower, upper = self.build_bounds()
+
+        # clipa x0 para dentro dos bounds
+        x0 = np.clip(x0, lower, upper)
+
         system = self.build_equations()
 
         result = least_squares(
             system, x0,
             method='trf',
+            bounds=(lower, upper),
             x_scale='jac',
             ftol=1e-10,
             xtol=1e-10,
@@ -44,16 +68,16 @@ class NonlinearSystemSolver:
             max_nfev=1000,
         )
 
-        self.sol_array = result.x
         residual = np.max(np.abs(result.fun))
+        q_ref_safe = max(q_ref, 1e-12)
 
-        if residual > 10000:
-            raise Exception(f"least_squares: {result.message} | resíduo: {residual:.2e}")
+        if residual > 10000: #q_ref_safe * 1e-2:
+            raise Exception(
+                f"least_squares: {result.message} | "
+                f"resíduo: {residual:.2e} | Q_ref: {q_ref_safe:.2e}"
+            )
 
-        return {
-            var: result.x[idx]
-            for var, idx in self.var_index.items()
-        }
+        return {var: result.x[idx] for var, idx in self.var_index.items()}
 
     def build_initial_guess(self, hydraulic_nodes) -> dict:
         x0 = {var: 0.0 for node in hydraulic_nodes for var in node.variables}
@@ -88,29 +112,42 @@ class NonlinearSystemSolver:
 
 
 class NodeContinuity:
-    """
-    Equação de continuidade para cada grupo de pressão.
-    ΣQ = (P - P_anterior) / ZC
-
-    ZC único para todo o sistema — a pressão sobe naturalmente
-    a cada iteração até a conservação de vazão ser satisfeita.
-    """
-    ZC = 1e6
-
-    def __init__(self, pressure_var, flow_vars):
+    def __init__(self, pressure_var, flow_vars, zc=1e4):
         self.pressure_var = pressure_var
         self.flow_vars = flow_vars
         self.p_previous = 0.0
+        self.zc = zc  # instância, não classe
 
     @property
     def variables(self):
         return [self.pressure_var]
+    
+    @property
+    def bounds(self):
+        return {
+            self.pressure_var: (0.0, None)  # pressão nunca negativa
+        }
 
     def equations(self, x, idx):
         P = x[idx[self.pressure_var]]
         Q_sum = -sum(x[idx[q]] for q in self.flow_vars if q in idx)
-        return [(Q_sum - (P - self.p_previous) / self.ZC) * 100]
+        # normalizado por Q_ref — vem de fora via set_scale
+        return [(Q_sum - (P - self.p_previous) / self.zc) / self.q_ref]
+    
+
+    def set_scale(self, p_ref, q_ref, zc_gain=10.0):
+        if q_ref < 1e-12 or p_ref < 1e-12:
+            self.zc = 1.0
+            self.q_ref = 1.0
+        else:
+            self.zc = (p_ref / q_ref) * zc_gain
+            self.q_ref = q_ref
 
     def update_pressure(self, sol):
         if self.pressure_var in sol:
-            self.p_previous = sol[self.pressure_var]
+            new_p = sol[self.pressure_var]
+            # se pressão é ruído numérico, não acumula
+            if new_p < self.q_ref * self.zc * 1e-6:
+                self.p_previous = 0.0
+            else:
+                self.p_previous = new_p

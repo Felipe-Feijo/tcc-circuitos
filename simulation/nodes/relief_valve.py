@@ -11,7 +11,9 @@ class DirectOperatedReliefValve(Node):
 
     @property
     def p_hint(self) -> float:
-        return self.p_set
+        anchor_p = self.anchors.get("P")
+        p_hint = anchor_p.pressure if isinstance(anchor_p.pressure, (int, float)) and anchor_p.pressure >= self.p_set else 0.0
+        return p_hint
 
     @property
     def variables(self) -> list:
@@ -23,42 +25,39 @@ class DirectOperatedReliefValve(Node):
             if anchor and anchor.pressure_var:
                 vars_.append(anchor.pressure_var)
         return vars_
-    
+
     @property
     def bounds(self):
         return {
-            self.flow_var_in:  (0.0, None),  # 🔥 não permite fluxo reverso
-            self.flow_var_out: (None, 0.0)
+            self.flow_var_in: (0.0, None),   # Q_in nunca negativo
+            self.flow_var_out: (None, 0.0),  # Q_out nunca positivo
         }
 
     def hydraulic_ports(self) -> dict:
         if self.domain != "hydraulic":
             return {}
         return {"P": self.flow_var_in, "T": self.flow_var_out}
-    
-    def _fb(self, a, b):
-        """FB normalizada — evita insensibilidade quando a >> b"""
-        norm = max(abs(a), abs(b), 1.0)
-        a_n, b_n = a / norm, b / norm
-        return (a_n + b_n - math.sqrt(a_n**2 + b_n**2)) * norm
 
     def equations(self, x, idx):
         Q_in  = x[idx[self.flow_var_in]]
         Q_out = x[idx[self.flow_var_out]]
         P_in  = x[idx[self.anchors["P"].pressure_var]]
+        P_out = x[idx[self.anchors["T"].pressure_var]]
 
-        eq_conservation = Q_in + Q_out
+        # ---- escalas
+        Q_scale = self.q_ref
+        P_scale = self.p_ref
 
-        # normaliza cada argumento pela sua própria escala
-        p_scale = max(self.p_set, 1.0)
-        q_scale = max(Q_in, 1e-12)  # escala dinâmica — o próprio Q atual
+        # ---- conservação (igual à válvula direcional)
+        eq_conservation = (Q_in + Q_out) / Q_scale
 
-        a = (self.p_set - P_in) / p_scale   # adimensional, ~[-1, 1]
-        b = Q_in / q_scale                  # adimensional, ~[-1, 0]
+        # ---- FB ESCALADA
+        a = (self.p_set - P_in) / P_scale
+        b = Q_in / Q_scale
 
-        eq_open = self._fb(a, b)
+        eq_fb = a + b - math.sqrt(a*a + b*b)
 
-        return [eq_conservation, eq_open]
+        return [eq_conservation, eq_fb]
 
     @property
     def initial_guess(self) -> dict:
@@ -82,3 +81,7 @@ class DirectOperatedReliefValve(Node):
 
     def set_state(self, state):
         super().set_state(state)
+
+    def set_scale(self, p_ref, q_ref):
+        self.p_ref = max(p_ref, 1e-3)
+        self.q_ref = max(q_ref, 1e-12)

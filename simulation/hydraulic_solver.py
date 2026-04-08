@@ -62,15 +62,15 @@ class NonlinearSystemSolver:
             method='trf',
             bounds=(lower, upper),
             x_scale='jac',
-            ftol=1e-10,
-            xtol=1e-10,
-            gtol=1e-10,
-            max_nfev=1000,
+            ftol=1e-8,
+            xtol=1e-8,
+            gtol=1e-8,
+            max_nfev=6000,
         )
 
         residual = np.max(np.abs(result.fun))
         q_ref_safe = max(q_ref, 1e-12)
-
+        print(f"least_squares: {result.message} | residual: {residual:.2e} | Q_ref: {q_ref_safe:.2e} | p_ref: {p_ref:.2e}")
         if residual > 10000: #q_ref_safe * 1e-2:
             raise Exception(
                 f"least_squares: {result.message} | "
@@ -137,10 +137,10 @@ class NodeContinuity:
 
     def set_scale(self, p_ref, q_ref, zc_gain=10.0):
         if q_ref < 1e-12 or p_ref < 1e-12:
-            self.zc = 1.0
+            self.zc = 1
             self.q_ref = 1.0
         else:
-            self.zc = (p_ref / q_ref) * zc_gain
+            self.zc = (p_ref / q_ref) * zc_gain 
             self.q_ref = q_ref
 
     def update_pressure(self, sol):

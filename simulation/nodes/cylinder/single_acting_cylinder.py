@@ -5,30 +5,63 @@ class SingleActingCylinder(Node):
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id, "single_acting_cylinder", **kwargs)
 
-        # Estado lógico (pneumático)
         self.position = 0
 
         self.sensors = self.properties.get("sensors", {
             "retracted": {"type": None, "name": ""},
-            "extended": {"type": None, "name": ""}
+            "extended":  {"type": None, "name": ""}
         })
 
         self.outputs = {}
 
-        # Estado hidráulico (só inicializa se domínio for hidráulico)
         if self.domain == "hydraulic":
-            bore             = self.properties["bore"]
-            self.area        = math.pi * (bore / 2) ** 2
-            self.stroke      = self.properties["stroke"]
-            self.spring_k = self.properties["spring_k"]
-            self.external_force = self.properties["external_force"]
-            self.friction = max(self.properties["friction"], 1e-3)
-            self.x      = 0.0
-            self.locked = False
-            self.flow_var = f"Q_{self.id}"
+            bore                 = self.properties["bore"]
+            self.area            = math.pi * (bore / 2) ** 2
+            self.stroke          = self.properties["stroke"]
+            self.spring_k        = self.properties["spring_k"]
+            self.external_force  = self.properties["external_force"]
+            self.friction        = max(self.properties["friction"], 1e-3)
+            self.x               = 0.0
+            self.flow_var        = f"Q_{self.id}"
+
+            # Batente spring-damper
+            F_worst = max(
+                abs(self.external_force),
+                self.spring_k * self.stroke,
+                1.0
+            )
+            self.k_end = self.properties.get(
+                "k_end",
+                max(
+                    self.spring_k * 1e4,
+                    F_worst / (self.stroke * 1e-6),
+                    1e8
+                )
+            )
+            self.c_end = self.properties.get(
+                "c_end",
+                2.0 * math.sqrt(self.k_end * self.area ** 2 / self.friction)
+            )
 
     # ------------------------------------------------------------------
-    # Contrato hidráulico (só exposto se domain == "hydraulic")
+    # Helpers de batente
+    # ------------------------------------------------------------------
+
+    def _contact_force(self, x, v) -> float:
+        """Força de contato nos batentes (sempre empurra de volta para o stroke)."""
+        pen_ret = max(0.0, -x)                    # penetração no batente retraído
+        pen_ext = max(0.0, x - self.stroke)       # penetração no batente estendido
+
+        F = 0.0
+        if pen_ret > 0:
+            F += self.k_end * pen_ret - self.c_end * min(v, 0.0)   # v negativo = entrando
+        if pen_ext > 0:
+            F -= self.k_end * pen_ext - self.c_end * max(v, 0.0)   # v positivo = entrando
+
+        return F
+
+    # ------------------------------------------------------------------
+    # Contrato hidráulico
     # ------------------------------------------------------------------
 
     @property
@@ -38,45 +71,31 @@ class SingleActingCylinder(Node):
         anchor = self.anchors["A"]
         pvar = getattr(anchor, "pressure_var", None) if anchor else None
         return ([pvar] if pvar else []) + [self.flow_var]
-    
+
     @property
     def flow_hint(self) -> float:
-        if self.locked:
-            return 0.0
         F_mola = self.spring_k * self.x
-        F_net = F_mola + self.external_force  # força que empurra de volta
+        F_net  = F_mola + self.external_force
         if F_net <= 0:
-            return 0.0  # mola não está comprimida — não há força de retorno
-        v_hint = F_net / self.friction
-        return v_hint * self.area
-    
-    @property  
+            return 0.0
+        return (F_net / self.friction) * self.area
+
+    @property
     def p_hint(self) -> float:
         F = self.spring_k * self.x + self.external_force
         return F / self.area if self.area > 0 else 0.0
-    
+
     @property
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
-
-        anchor = self.anchors["A"]
-        P_prev = getattr(anchor, "pressure", 0.0)
+        anchor  = self.anchors["A"]
+        P_prev  = getattr(anchor, "pressure", 0.0)
         if isinstance(P_prev, str):
             P_prev = 0.0
-
-        EPS = self.stroke * 1e-4
-
-        # Nos batentes: chuta Q=0, deixa o FB resolver a pressão
-        if self.x <= EPS or self.x >= self.stroke - EPS:
-            return {self.flow_var: 0.0}
-
-        # Interior: estima Q pelo equilíbrio de forças com P conhecido
         F_mola = self.spring_k * self.x
         F_net  = P_prev * self.area - F_mola - self.external_force
-        v_eq   = F_net / max(self.friction, 1e-3)
-        Q_eq   = v_eq * self.area
-
+        Q_eq   = (F_net / max(self.friction, 1e-3)) * self.area
         return {self.flow_var: Q_eq}
 
     def hydraulic_ports(self):
@@ -89,12 +108,12 @@ class SingleActingCylinder(Node):
         if self.domain != "hydraulic":
             return {}
 
-        EPS = self.stroke * 1e-6
+        EPS = self.stroke * 1e-3
 
         if self.x <= EPS:
-            return {self.flow_var: (0.0, None)}   # só avança
+            return {self.flow_var: (0.0, None)}    # só avança
         elif self.x >= self.stroke - EPS:
-            return {self.flow_var: (None, 0.0)}   # só recua
+            return {self.flow_var: (None, 0.0)}    # só recua
 
         return {}
 
@@ -106,13 +125,23 @@ class SingleActingCylinder(Node):
         F_hidro = P * self.area
         F_mola  = self.spring_k * self.x
         F_res   = F_mola + self.external_force + self.friction * v
-        F_net   = F_hidro - F_res
 
-        F_scale = max(abs(F_hidro), abs(F_res), 1.0)
+        # no batente retraído com força empurrando para fora
+        if self.x <= 0 and F_hidro <= F_res:
+            F_scale = max(abs(F_res), 1.0)
+            return [Q / (self.area * F_scale)]  # força Q → 0
 
-        # nos batentes o bound já bloqueia Q — só impõe equilíbrio de forças
+        # no batente estendido com força empurrando para dentro
+        if self.x >= self.stroke and F_hidro >= F_res:
+            F_scale = max(abs(F_hidro), 1.0)
+            return [Q / (self.area * F_scale)]  # força Q → 0
+
+        # zona livre — equilíbrio de forças normal
+        F_contact = self._contact_force(self.x, v)
+        F_res     = F_res - F_contact
+        F_net     = F_hidro - F_res
+        F_scale   = max(abs(F_hidro), abs(F_res), 1.0)
         return [F_net / F_scale]
-    
 
     # ------------------------------------------------------------------
     # Update lógico
@@ -122,7 +151,6 @@ class SingleActingCylinder(Node):
         if self.domain != "hydraulic":
             self.position = 1 if self.anchors["A"].state else 0
 
-
     # ------------------------------------------------------------------
     # Post step
     # ------------------------------------------------------------------
@@ -130,43 +158,52 @@ class SingleActingCylinder(Node):
     def post_step_update(self, dt=None):
         super().post_step_update(dt=dt)
 
-        # sensores — independente do domínio
+        # sensores
         if self.sensors["retracted"]["type"]:
             name = self.sensors["retracted"]["name"]
-            self.outputs[name] = {
-                "type": "signal",
-                "value": self.position == 0
-            }
+            self.outputs[name] = {"type": "signal", "value": self.position == 0}
 
         if self.sensors["extended"]["type"]:
             name = self.sensors["extended"]["name"]
-            self.outputs[name] = {
-                "type": "signal",
-                "value": self.position == 1
-            }
+            self.outputs[name] = {"type": "signal", "value": self.position == 1}
 
-        # integração hidráulica
         if self.domain == "hydraulic" and dt is not None:
             anchor = self.anchors["A"]
             if anchor and not isinstance(anchor.flow, str):
+                self.x += (anchor.flow / self.area) * dt
+                # x pode flutuar levemente fora de [0, stroke] — o batente
+                # spring-damper traz de volta; não clipamos aqui
 
-                # desbloqueia se há fluxo saindo — fora do guard de locked
-                if self.locked and anchor.flow < 0:
-                    self.locked = False
+                # position: 0 ou 1 com threshold de 1% do stroke
+                if self.stroke > 0:
+                    ratio = self.x / self.stroke
+                    if ratio < 0.01:
+                        self.position = 0
+                    elif ratio > 0.99:
+                        self.position = 1
+                    else:
+                        self.position = round(ratio)
+            print(self.x, self.position)
 
-                if not self.locked:
-                    self.x += (anchor.flow / self.area) * dt
-                    self.x  = max(0.0, min(self.x, self.stroke))
+    # ------------------------------------------------------------------
+    # dt sugerido (preparação para etapa 2)
+    # ------------------------------------------------------------------
 
-                    self.position = round(self.x / self.stroke) if self.stroke > 0 else 0
-
-                    if self.x >= self.stroke * 0.99999:
-                        self.locked = True
-
-                    # # bloqueia em zero — não pode recuar mais
-                    # if self.x <= 0:
-                    #     anchor.flow = max(0.0, anchor.flow)  # zera fluxo negativo
-            print("pos", self.position, "x", self.x, "locked", self.locked)
+    @property
+    def dt_suggested(self) -> float | None:
+        """
+        Retorna dt máximo recomendado quando o pistão está em contato com
+        um batente. Quando livre, retorna None (sem restrição).
+        Τ = c_end / k_end  →  dt_safe = Τ / 10
+        """
+        if self.domain != "hydraulic":
+            return None
+        EPS = self.stroke * 1e-3
+        in_contact = self.x < EPS or self.x > self.stroke - EPS
+        if not in_contact:
+            return None
+        tau = self.c_end / self.k_end
+        return tau / 10.0
 
     # ------------------------------------------------------------------
     # Estado
@@ -174,20 +211,18 @@ class SingleActingCylinder(Node):
 
     def get_visual_state(self):
         if self.domain == "hydraulic" and self.stroke > 0:
-            return self.x / self.stroke
+            return max(0.0, min(1.0, self.x / self.stroke))
         return self.position
 
     def get_state(self):
         state = super().get_state()
         state["position"] = self.position
         if self.domain == "hydraulic":
-            state["x"]      = self.x
-            state["locked"] = self.locked
+            state["x"] = self.x
         return state
 
     def set_state(self, state):
         super().set_state(state)
         self.position = state.get("position", self.position)
         if self.domain == "hydraulic":
-            self.x      = state.get("x", self.x)
-            self.locked = state.get("locked", self.locked)
+            self.x = state.get("x", self.x)

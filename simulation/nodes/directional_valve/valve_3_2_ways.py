@@ -54,6 +54,7 @@ class Valve_3_2_Ways(DirectionalValve):
                 "R": self.flow_var_out,
             }
 
+
     def equations(self, x, idx):
         Q_in  = x[idx[self.flow_var_in]]
         Q_out = x[idx[self.flow_var_out]]
@@ -67,8 +68,19 @@ class Valve_3_2_Ways(DirectionalValve):
 
         delta_p = P_in - P_out
 
-        return [
-            Q_in + Q_out,
-            delta_p - math.copysign((Q_in / self.k) ** 2, Q_in)
-        ]
+        # ---- escalas globais (mesma lógica do resto do sistema)
+        Q_scale = max(self.q_ref, 1e-12)
+        P_scale = max(self.p_ref, 1e-3)
 
+        # ---- equação 1: conservação de vazão (AGORA FORTE)
+        eq_flow = (Q_in + Q_out) / Q_scale
+
+        # ---- equação 2: relação ΔP–Q (normalizada)
+        eq_dp = (delta_p - math.copysign((Q_in / self.k) ** 2, Q_in)) / P_scale
+
+        return [eq_flow, eq_dp]
+
+
+    def set_scale(self, p_ref, q_ref):
+        self.p_ref = p_ref
+        self.q_ref = q_ref

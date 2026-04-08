@@ -10,6 +10,9 @@ class SimulationEngine:
         self.outputs = {}
         self._continuities: dict[str, NodeContinuity] = {}
         self._prev_circuit_map = {}
+        self._hydraulic_iteration = 0
+
+        self._hydraulic_max_iterations = 12
 
     def run_until_stable(self, dt=0.1):
         iteration = 0
@@ -27,8 +30,7 @@ class SimulationEngine:
             changed = False
             changed |= self._update_pneumatic_domain()
             changed |= self._update_electric_domain()
-
-            self._update_hydraulic_domain()
+            changed |= self._update_hydraulic_domain()
 
             if not changed:
                 break
@@ -219,29 +221,40 @@ class SimulationEngine:
             if pvar in self._continuities:
                 self._reset_continuity(pvar)
 
-    def _update_hydraulic_domain(self):
+    def _update_hydraulic_domain(self) -> bool:
         hydraulic_nodes = self._collect_hydraulic_nodes()
         if not hydraulic_nodes:
-            return
+            return False
 
         anchor_to_pressure_var = self._assign_pressure_vars()
         circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
 
-        for iteration in range(10):
-            zc_gain = min(5 * (2 ** iteration), 1e6)
-            is_last = iteration == 9
-            
-            converged = self._check_flow_conservation(hydraulic_nodes, anchor_to_pressure_var)
-            
-            for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
-                self._solve_circuit(
-                    i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var,
-                    zc_gain=zc_gain,
-                    debug=is_last or converged
-                )
+        
 
-            if converged:
-                break
+        zc_gain = 10 * (3 ** self._hydraulic_iteration)
+        is_last = self._hydraulic_iteration >= self._hydraulic_max_iterations - 1
+
+        for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
+            self._solve_circuit(
+                i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var,
+                zc_gain=zc_gain,
+                debug= False#is_last or converged
+            )
+
+        converged = self._check_flow_conservation(hydraulic_nodes, anchor_to_pressure_var)
+
+        if converged:
+            self._hydraulic_iteration = 0  # reseta para próximo timestep
+            return False
+
+        self._hydraulic_iteration += 1
+
+        if self._hydraulic_iteration >= self._hydraulic_max_iterations:
+            self._hydraulic_iteration = 0
+            print(f"Hydraulic domain did not converge after {self._hydraulic_max_iterations} iterations.")
+            return False
+
+        return True
 
     def _collect_hydraulic_nodes(self):
         return [
@@ -400,6 +413,9 @@ class SimulationEngine:
 
             self._continuities[pvar].set_scale(P_ref, Q_ref, zc_gain=zc_gain)
             continuities.append(self._continuities[pvar])
+            for node in circuit_list:
+                if hasattr(node, "set_scale"):
+                    node.set_scale(P_ref, Q_ref)
 
         solver = NonlinearSystemSolver(circuit_list + continuities)
         x0 = solver.build_initial_guess(circuit_list)

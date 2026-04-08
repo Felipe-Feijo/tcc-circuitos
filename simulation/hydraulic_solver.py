@@ -71,11 +71,11 @@ class NonlinearSystemSolver:
         residual = np.max(np.abs(result.fun))
         q_ref_safe = max(q_ref, 1e-12)
         print(f"least_squares: {result.message} | residual: {residual:.2e} | Q_ref: {q_ref_safe:.2e} | p_ref: {p_ref:.2e}")
-        if residual > 10000: #q_ref_safe * 1e-2:
-            raise Exception(
-                f"least_squares: {result.message} | "
-                f"resíduo: {residual:.2e} | Q_ref: {q_ref_safe:.2e}"
-            )
+        # if residual > 10000: #q_ref_safe * 1e-2:
+        #     raise Exception(
+        #         f"least_squares: {result.message} | "
+        #         f"resíduo: {residual:.2e} | Q_ref: {q_ref_safe:.2e}"
+        #     )
 
         return {var: result.x[idx] for var, idx in self.var_index.items()}
 

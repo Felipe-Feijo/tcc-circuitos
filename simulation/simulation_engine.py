@@ -170,12 +170,17 @@ class SimulationEngine:
 
     P_MAX = 10e8
 
-    def _get_Q_ref(self, hydraulic_nodes) -> float:
+    def _get_Q_ref(self, hydraulic_nodes, mode = "highest") -> float:
         hints = [
             n.flow_hint for n in hydraulic_nodes
             if hasattr(n, "flow_hint") and n.flow_hint > 1e-10
         ]
-        return max(hints) if hints else 0.0  # 0 = circuito parado
+        if mode == "highest":
+            return max(hints) if hints else 0.0  # 0 = circuito parado
+        elif mode == "lowest":
+            return min(hints) if hints else 0.0  # 0 = circuito parado
+        else:
+            raise ValueError("Invalid mode. Use 'highest' or 'lowest'.")
 
     def _get_P_ref(self, hydraulic_nodes) -> float:
         hints = [
@@ -189,7 +194,7 @@ class SimulationEngine:
         hydraulic_nodes,
         anchor_to_pressure_var
     ) -> bool:
-        Q_ref = self._get_Q_ref(hydraulic_nodes)
+        Q_ref = self._get_Q_ref(hydraulic_nodes, mode="lowest")
         tol = Q_ref * 1e-4
         all_conserved = True
 
@@ -231,7 +236,7 @@ class SimulationEngine:
 
         
 
-        zc_gain = 10 * (3 ** self._hydraulic_iteration)
+        zc_gain = 10e4 * (5 ** self._hydraulic_iteration)
         is_last = self._hydraulic_iteration >= self._hydraulic_max_iterations - 1
 
         for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):

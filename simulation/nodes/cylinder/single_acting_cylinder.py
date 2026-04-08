@@ -120,19 +120,19 @@ class SingleActingCylinder(Node):
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
         P = x[idx[self.anchors["A"].pressure_var]]
-
+        EPS = self.stroke * 1e-3
         v       = Q / self.area
         F_hidro = P * self.area
         F_mola  = self.spring_k * self.x
         F_res   = F_mola + self.external_force + self.friction * v
 
         # no batente retraído com força empurrando para fora
-        if self.x <= 0 and F_hidro <= F_res:
+        if self.x <= EPS and F_hidro <= F_res:
             F_scale = max(abs(F_res), 1.0)
             return [Q / (self.area * F_scale)]  # força Q → 0
 
         # no batente estendido com força empurrando para dentro
-        if self.x >= self.stroke and F_hidro >= F_res:
+        if self.x >= self.stroke - EPS and F_hidro >= F_res:
             F_scale = max(abs(F_hidro), 1.0)
             return [Q / (self.area * F_scale)]  # força Q → 0
 
@@ -185,25 +185,6 @@ class SingleActingCylinder(Node):
                         self.position = round(ratio)
             print(self.x, self.position)
 
-    # ------------------------------------------------------------------
-    # dt sugerido (preparação para etapa 2)
-    # ------------------------------------------------------------------
-
-    @property
-    def dt_suggested(self) -> float | None:
-        """
-        Retorna dt máximo recomendado quando o pistão está em contato com
-        um batente. Quando livre, retorna None (sem restrição).
-        Τ = c_end / k_end  →  dt_safe = Τ / 10
-        """
-        if self.domain != "hydraulic":
-            return None
-        EPS = self.stroke * 1e-3
-        in_contact = self.x < EPS or self.x > self.stroke - EPS
-        if not in_contact:
-            return None
-        tau = self.c_end / self.k_end
-        return tau / 10.0
 
     # ------------------------------------------------------------------
     # Estado

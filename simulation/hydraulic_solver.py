@@ -43,8 +43,11 @@ class NonlinearSystemSolver:
         return system
 
     def solve(self, x0_dict, q_ref=0, p_ref=0):
+        from scipy.optimize import fsolve
+
         self.register_variables()
 
+        # monta vetor inicial a partir do dicionário
         x0 = np.zeros(len(self.index_var))
         for var, val in x0_dict.items():
             if var in self.var_index:
@@ -52,30 +55,67 @@ class NonlinearSystemSolver:
 
         lower, upper = self.build_bounds()
 
-        # clipa x0 para dentro dos bounds
+        # garante que x0 já começa dentro dos bounds
         x0 = np.clip(x0, lower, upper)
 
         system = self.build_equations()
+        q_ref_safe = max(q_ref, 1e-12)
+
+        # ------------------------------------------------------------------ #
+        #  TENTATIVA RÁPIDA — fsolve (Newton-Raphson)                         #
+        #  Mais rápido que least_squares, mas não respeita bounds.            #
+        #  Só aceitamos o resultado se passar em todos os critérios abaixo.   #
+        # ------------------------------------------------------------------ #
+        x_for_ls = x0.copy()  # fallback: x0 original caso fsolve estrague tudo
+
+        try:
+            x_fast, info, ier, msg = fsolve(system, x0.copy(), full_output=True)
+            residual_fast = np.max(np.abs(info['fvec']))
+
+            within_bounds = (
+                np.all(x_fast >= lower - 1e-10) and
+                np.all(x_fast <= upper + 1e-10)
+            )
+            converged     = ier == 1
+            residual_ok   = residual_fast < q_ref_safe * 1e-3
+            sane_values   = np.all(np.abs(x_fast) < 1e12)  # sem explosão numérica
+
+            if converged and residual_ok and within_bounds and sane_values:
+                # solução boa — retorna direto sem chamar least_squares
+                print(f"fsolve: convergiu | residual: {residual_fast:.2e}")
+                return {var: x_fast[idx] for var, idx in self.var_index.items()}
+
+            if sane_values:
+                # fsolve não convergiu formalmente, mas chegou em valores razoáveis
+                # usa como warm start pro least_squares — pode ajudar nas transições
+                x_for_ls = x_fast
+            # se não é sane (explodiu), x_for_ls continua sendo x0 original
+
+        except Exception as e:
+            # fsolve pode levantar exceção em casos degenerados — ignora e segue
+            print(f"fsolve: exceção — {e}")
+
+        # ------------------------------------------------------------------ #
+        #  FALLBACK ROBUSTO — least_squares (TRF)                            #
+        #  Respeita bounds, mais estável, mas mais caro.                      #
+        #  Recebe como x0 o melhor palpite disponível: resultado do fsolve    #
+        #  se foi razoável, ou o x0 original caso contrário.                  #
+        # ------------------------------------------------------------------ #
+        x_for_ls = np.clip(x_for_ls, lower, upper)  # garante bounds mesmo no warm start
 
         result = least_squares(
-            system, x0,
+            system, x_for_ls,
             method='trf',
             bounds=(lower, upper),
             x_scale='jac',
-            ftol=1e-8,
-            xtol=1e-8,
-            gtol=1e-8,
+            ftol=1e-10,
+            xtol=1e-10,
+            gtol=1e-10,
             max_nfev=6000,
         )
 
         residual = np.max(np.abs(result.fun))
-        q_ref_safe = max(q_ref, 1e-12)
         print(f"least_squares: {result.message} | residual: {residual:.2e} | Q_ref: {q_ref_safe:.2e} | p_ref: {p_ref:.2e}")
-        # if residual > 10000: #q_ref_safe * 1e-2:
-        #     raise Exception(
-        #         f"least_squares: {result.message} | "
-        #         f"resíduo: {residual:.2e} | Q_ref: {q_ref_safe:.2e}"
-        #     )
 
         return {var: result.x[idx] for var, idx in self.var_index.items()}
 

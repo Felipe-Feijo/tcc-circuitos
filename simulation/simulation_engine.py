@@ -12,7 +12,7 @@ class SimulationEngine:
         self._prev_circuit_map = {}
         self._hydraulic_iteration = 0
 
-        self._hydraulic_max_iterations = 12
+        self._hydraulic_max_iterations = 15
 
     def run_until_stable(self, dt=0.1):
         iteration = 0

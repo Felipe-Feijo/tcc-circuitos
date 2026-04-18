@@ -11,9 +11,10 @@ class DirectOperatedReliefValve(Node):
 
     @property
     def p_hint(self) -> float:
-        anchor_p = self.anchors.get("P")
-        p_hint = anchor_p.pressure if isinstance(anchor_p.pressure, (int, float)) and anchor_p.pressure >= self.p_set else 0.0
-        return p_hint
+        return self.p_set
+        # anchor_p = self.anchors.get("P")
+        # p_hint = anchor_p.pressure if isinstance(anchor_p.pressure, (int, float)) and anchor_p.pressure >= self.p_set else 0.0
+        # return p_hint
 
     @property
     def variables(self) -> list:
@@ -44,18 +45,18 @@ class DirectOperatedReliefValve(Node):
         P_in  = x[idx[self.anchors["P"].pressure_var]]
         P_out = x[idx[self.anchors["T"].pressure_var]]
 
-        # ---- escalas
         Q_scale = self.q_ref
         P_scale = self.p_ref
 
-        # ---- conservação (igual à válvula direcional)
         eq_conservation = (Q_in + Q_out) / Q_scale
 
-        # ---- FB ESCALADA
-        a = (self.p_set - P_in) / P_scale
-        b = Q_in / Q_scale
-
-        eq_fb = a + b - math.sqrt(a*a + b*b)
+        # regime passivo: fluxo reverso de pressão com vazão positiva
+        if P_out > P_in and Q_in > 0:
+            eq_fb = (P_in - P_out) / P_scale
+        else:
+            a = (self.p_set - P_in) / P_scale
+            b = Q_in / Q_scale
+            eq_fb = a + b - math.sqrt(a*a + b*b)
 
         return [eq_conservation, eq_fb]
 

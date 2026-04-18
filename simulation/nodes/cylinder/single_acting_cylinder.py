@@ -171,8 +171,10 @@ class SingleActingCylinder(Node):
             anchor = self.anchors["A"]
             if anchor and not isinstance(anchor.flow, str):
                 self.x += (anchor.flow / self.area) * dt
-                # x pode flutuar levemente fora de [0, stroke] — o batente
-                # spring-damper traz de volta; não clipamos aqui
+                if self.x > self.stroke:
+                    self.x = self.stroke
+                elif self.x < 0:
+                    self.x = 0
 
                 # position: 0 ou 1 com threshold de 1% do stroke
                 if self.stroke > 0:

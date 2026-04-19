@@ -3,7 +3,7 @@ from PyQt6.QtCore import QPointF, QRectF
 
 
 from graphics.items.base.nodes.node_item import NodeItem
-from ....anchors.anchor import AnchorItem
+from .....anchors.anchor import AnchorItem
 
 
 class OrValve(NodeItem):

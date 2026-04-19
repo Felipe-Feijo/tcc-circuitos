@@ -8,7 +8,9 @@ from simulation.nodes.switch.button_switch import ButtonSwitch
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
 from simulation.nodes.ground import Ground
-from simulation.nodes.nodes import OrValve, PressureSource, Exhaust
+from simulation.nodes.logic_valve.or_valve import OrValve
+from simulation.nodes.logic_valve.and_valve import AndValve
+from simulation.nodes.nodes import PressureSource, Exhaust
 from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
 from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 from simulation.connections import Connection
@@ -24,6 +26,7 @@ NODE_FACTORY = {
     "single_acting_cylinder": SingleActingCylinder,
     "double_acting_cylinder": DoubleActingCylinder,
     "or_valve": OrValve,
+    "and_valve": AndValve,
     "pressure_line": PressureLine,
     "voltage_source": VoltageSource,
     "ground": Ground,

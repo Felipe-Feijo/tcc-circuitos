@@ -5,7 +5,8 @@ from graphics.items.base.nodes.fixed_displacement_pump import FixedDisplacementP
 from graphics.items.base.nodes.direct_operated_relief_valve import DirectOperatedReliefValve
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor
 
-from graphics.items.base.nodes.or_valve import OrValve
+from graphics.items.base.nodes.logic_valve.or_valve import OrValve
+from graphics.items.base.nodes.logic_valve.and_valve import AndValve
 from graphics.items.base.nodes.expandable.pressure_line import PressureLine
 from graphics.items.base.nodes.pressure_source import PressureSource
 from graphics.items.base.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
@@ -89,6 +90,13 @@ def regsiter_pneumatic_nodes(palette, on_add_node):
             "resources/nodes/or_valve/or_valve_x_side.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(OrValve, domain=domain))
+    )
+    pneumatic.add_node(
+        name="AndValve",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/and_valve/and_valve_default.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(AndValve, domain=domain))
     )
 
 def register_electric_nodes(palette, on_add_node):

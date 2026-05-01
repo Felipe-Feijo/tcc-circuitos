@@ -1,6 +1,7 @@
 from pathlib import Path
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QGraphicsItem
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor
 from editor.clipboard_manager import ClipboardManager
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
@@ -20,8 +21,12 @@ from .ui.toolbars import create_toolbars
 from .actions.simulation_actions import SPEED_STEPS  # ajusta o import conforme sua estrutura
 
 class MainWindow(QMainWindow):
+    theme_changed = pyqtSignal(bool)
+
     def __init__(self):
         super().__init__()
+        
+
 
         self.setWindowTitle("Simulador – Editor Gráfico")
 
@@ -35,6 +40,8 @@ class MainWindow(QMainWindow):
 
         self._init_node_palette()
         self._init_actions_ui()
+
+        self.set_light_theme(False)
 
 
         
@@ -299,3 +306,20 @@ class MainWindow(QMainWindow):
     def _update_mode_actions(self, active_mode):
         for action in self.mode_group.actions():
             action.setChecked(action.data() == active_mode)
+
+    def set_light_theme(self, enabled: bool):
+        self.use_light_theme = enabled
+
+        # 🔹 muda fundo
+        if not enabled:
+            self.view.setBackgroundBrush(QBrush(QColor(30, 30, 30)))  # cinza escuro
+        else:
+            self.view.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # branco
+
+        # 🔹 notifica nodes
+        self.theme_changed.emit(enabled)
+
+        # 🔹 atualiza texto botão
+        self.actions["toggle_theme"].setText(
+            "Light Theme" if enabled else "Dark Theme"
+        )

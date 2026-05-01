@@ -1,4 +1,5 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
+from PyQt6.QtCore import QPointF
 
 
 class Ground(ExpandableItem):
@@ -31,8 +32,7 @@ class Ground(ExpandableItem):
     def paint_symbol(self, painter):
         if not self.pixmap_left:
             return
-
-        painter.drawPixmap(0, 0, self.pixmap_left)
+        self.draw_pixmap(painter, QPointF(0, 0), self.pixmap_left)
 
     def layout_anchors(self):
         x0 = self.pix_w * 0.5

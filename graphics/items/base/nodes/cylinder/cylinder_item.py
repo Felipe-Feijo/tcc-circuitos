@@ -156,11 +156,7 @@ class CylinderItem(NodeItem):
 
 
     def paint_body(self, painter):
-        painter.drawPixmap(
-            int(self.visual_offset.x()),
-            int(self.visual_offset.y()),
-            self.body_sprite
-        )
+        self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y()),), self.body_sprite)
 
     # --------------------------
     # Atualização de estado

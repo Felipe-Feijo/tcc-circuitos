@@ -125,11 +125,7 @@ class DirectionalValveItem(NodeItem):
     # --------------------------
     def paint(self, painter, option, widget=None):
         # desenha o corpo
-        painter.drawPixmap(
-            int(self.visual_offset.x()),
-            int(self.visual_offset.y()),
-            self.body_sprite
-        )
+        self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y()),), self.body_sprite)
 
         # desenha atuadores
         for side, rect in self.actuator_rects.items():
@@ -139,11 +135,7 @@ class DirectionalValveItem(NodeItem):
 
             sprite = visuals["active"] if self.bits.get(side, 0) else visuals["inactive"]
 
-            painter.drawPixmap(
-                int(rect.x() + self.visual_offset.x()),
-                int(rect.y() + self.visual_offset.y()),
-                sprite
-            )
+            self.draw_pixmap(painter, QPointF(int(rect.x() + self.visual_offset.x()), int(rect.y() + self.visual_offset.y()),), sprite)
 
         self.paint_selection_feedback(painter)
 

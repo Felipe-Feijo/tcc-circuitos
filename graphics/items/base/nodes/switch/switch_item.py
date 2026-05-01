@@ -84,11 +84,7 @@ class SwitchItem(NodeItem):
         self.update()
 
     def paint(self, painter, option, widget=None):
-        painter.drawPixmap(
-            int(self.visual_offset.x()),
-            int(self.visual_offset.y()),
-            self.body_sprite
-        )
+        self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y())), self.body_sprite)
 
         self.paint_selection_feedback(painter)
 

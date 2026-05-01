@@ -16,6 +16,10 @@ def create_menus(main_window, actions):
     edit_menu.addAction(actions["paste"])
 
     view_menu = menubar.addMenu("View")
+    view_menu.addAction(actions["toggle_theme"])
+    view_menu.addAction(actions["zoom_in"])
+    view_menu.addAction(actions["zoom_out"])
+    view_menu.addAction(actions["zoom_fit"])
 
     help_menu = menubar.addMenu("Help")
     help_menu.addAction(actions["about"])

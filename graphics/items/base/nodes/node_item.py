@@ -3,7 +3,7 @@ from cProfile import label
 import uuid
 from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
-from PyQt6.QtGui import QPainter, QPixmap
+from PyQt6.QtGui import QPainter, QPixmap, QColor
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
@@ -34,6 +34,8 @@ class NodeItem(DiagramItemBase):
 
 
         self.simulation_mode = False
+
+        self.use_light_theme = False
 
         self.pixmap: QPixmap | None = None
         self.draw_selection = True
@@ -112,7 +114,24 @@ class NodeItem(DiagramItemBase):
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             self.update_connections()
+
+        elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
+            if self.editor and hasattr(self.editor, "theme_changed"):
+                try:
+                    self.editor.theme_changed.disconnect(self.on_theme_changed)
+                except TypeError:
+                    pass
+                self.editor.theme_changed.connect(self.on_theme_changed)
+
         return super().itemChange(change, value)
+    
+    def on_theme_changed(self, is_light):
+        self.use_light_theme = is_light
+
+        if hasattr(self, "_pixmap_cache"):
+            self._pixmap_cache.clear()
+
+        self.update()
         
     def update_connections(self):
         for conn in self.connections[:]:  # iterando sobre uma cópia
@@ -158,12 +177,35 @@ class NodeItem(DiagramItemBase):
                 (self.width - scaled.width()) / 2,
                 (self.height - scaled.height()) / 2
             )
-            painter.drawPixmap(pos, scaled)
+            self.draw_pixmap(painter, pos, scaled)
 
         # feedback de seleção (bordas, highlight, etc.)
         self.paint_selection_feedback(painter)
 
         painter.restore()  # restaura estado original, remove o translate
+
+
+    def draw_pixmap(self, painter, pos, pixmap):
+        if not pixmap or pixmap.isNull():
+            return
+
+        if not self.use_light_theme:
+            painter.drawPixmap(pos, pixmap)
+            return
+
+        from PyQt6.QtGui import QPainter, QPixmap
+        from PyQt6.QtCore import Qt
+
+        colored = QPixmap(pixmap.size())
+        colored.fill(Qt.GlobalColor.transparent)
+
+        p = QPainter(colored)
+        p.drawPixmap(0, 0, pixmap)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(colored.rect(), QColor(0, 0, 0))
+        p.end()
+
+        painter.drawPixmap(pos, colored)
 
     def getVisualOffset(self):
         return self._visual_offset

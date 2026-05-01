@@ -74,12 +74,12 @@ class DoubleActingCylinder(CylinderItem):
         oy = int(self.visual_offset.y())
 
         # 1. Carcaça (fixa)
-        painter.drawPixmap(ox, oy, self._body_pixmap)
+        self.draw_pixmap(painter, QPointF(ox, oy), self._body_pixmap)
 
         # 2. Haste — translada para a direita conforme t aumenta
         rod_x = int(_ROD_OFFSET.x() + _ROD_X_RETRACTED + t * _ROD_DELTA)
         rod_y = int(_ROD_OFFSET.y())
-        painter.drawPixmap(ox + rod_x, oy + rod_y, self._rod_pixmap)
+        self.draw_pixmap(painter, QPointF(ox + rod_x, oy + rod_y), self._rod_pixmap)
 
     # ── propriedades ──────────────────────────────────────────────────────────
 

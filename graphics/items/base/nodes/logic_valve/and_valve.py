@@ -39,6 +39,16 @@ class AndValve(NodeItem):
         elif state == "Y":
             self.pixmap = self.icon_y_side
         self.update()
+
+    def reset_visual_state(self):
+        """
+        Retorna o item gráfico ao estado default (fora de simulação).
+        """
+        self.simulation_mode = False
+
+        self.pixmap = self.icon_default
+
+        self.update()
             
         
 

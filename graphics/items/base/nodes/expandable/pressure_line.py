@@ -1,4 +1,5 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
+from PyQt6.QtCore import QPointF
 
 
 class PressureLine(ExpandableItem):
@@ -30,14 +31,14 @@ class PressureLine(ExpandableItem):
         if not self.pixmap_left:
             return
 
-        painter.drawPixmap(0, 0, self.pixmap_left)
+        self.draw_pixmap(painter, QPointF(0, 0), self.pixmap_left)
 
         if self.pixmap_right:
             n = len(self.anchor_list)
             last_anchor_center = self.pix_w * 0.5 + (n - 1) * self.spacing
             pixmap_right_x = last_anchor_center - self.pix_w * 0.5
 
-            painter.drawPixmap(int(pixmap_right_x), 0, self.pixmap_right)
+            self.draw_pixmap(painter, QPointF(int(pixmap_right_x), 0), self.pixmap_right)
 
     def layout_anchors(self):
         x0 = self.pix_w * 0.5

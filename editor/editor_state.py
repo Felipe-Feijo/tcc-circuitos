@@ -21,6 +21,7 @@ class EditorState(QObject):
 
     add_node_requested = pyqtSignal(float, float)
     scene_rect_update_requested = pyqtSignal()
+    theme_changed = pyqtSignal(bool)
 
     def __init__(self):
         super().__init__()

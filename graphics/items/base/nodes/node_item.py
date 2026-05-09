@@ -1,5 +1,4 @@
 
-from cProfile import label
 import uuid
 from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
@@ -58,7 +57,6 @@ class NodeItem(DiagramItemBase):
         if existing:
             # reaproveita a anchor existente
             existing.setPos(anchor.pos())
-            print("Reusing existing anchor", anchor.name)
             return
 
         anchor.setParentItem(self)
@@ -88,7 +86,6 @@ class NodeItem(DiagramItemBase):
         # remove da cena
         if anchor.scene():
             anchor.scene().removeItem(anchor)
-        print("Removed anchor", name)
 
     def add_label(self, key: str, label, special=False):
         """
@@ -122,10 +119,10 @@ class NodeItem(DiagramItemBase):
             self.update_connections()
 
         elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
-            if self.editor and hasattr(self.editor, "theme_changed"):
+            if self.editor:
                 try:
                     self.editor.theme_changed.disconnect(self.on_theme_changed)
-                except TypeError:
+                except (TypeError, RuntimeError):
                     pass
                 self.editor.theme_changed.connect(self.on_theme_changed)
 
@@ -143,7 +140,6 @@ class NodeItem(DiagramItemBase):
         for conn in self.connections[:]:  # iterando sobre uma cópia
             # ignora conexões órfãs
             if conn.source_anchor.scene() is None or conn.target_anchor.scene() is None:
-                print(f"Ignorando conexão órfã: {conn.source_anchor.name} <-> {conn.target_anchor.name}")
                 continue
 
             conn.prepareGeometryChange()
@@ -198,9 +194,6 @@ class NodeItem(DiagramItemBase):
         if not self.use_light_theme:
             painter.drawPixmap(pos, pixmap)
             return
-
-        from PyQt6.QtGui import QPainter, QPixmap
-        from PyQt6.QtCore import Qt
 
         colored = QPixmap(pixmap.size())
         colored.fill(Qt.GlobalColor.transparent)

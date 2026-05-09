@@ -23,7 +23,6 @@ from .ui.toolbars import create_toolbars
 from .actions.simulation_actions import SPEED_STEPS  # ajusta o import conforme sua estrutura
 
 class MainWindow(QMainWindow):
-    theme_changed = pyqtSignal(bool)
 
     def __init__(self):
         super().__init__()
@@ -329,7 +328,7 @@ class MainWindow(QMainWindow):
             self.view.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # branco
 
         # 🔹 notifica nodes
-        self.theme_changed.emit(enabled)
+        self.state.theme_changed.emit(enabled)
 
         # 🔹 atualiza texto botão
         self.actions["toggle_theme"].setText(

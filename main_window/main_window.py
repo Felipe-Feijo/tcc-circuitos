@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
 
         self._init_node_palette()
         self._init_actions_ui()
+        self._wire_state_callbacks()
 
         self.set_light_theme(False)
 

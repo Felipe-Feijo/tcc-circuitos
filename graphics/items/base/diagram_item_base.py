@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt
 class DiagramItemBase(QGraphicsObject):
     def __init__(self):
         super().__init__()
-        self.editor = None
+        self.editor = None  # Set to EditorState after adding to scene
         self.draw_selection = True
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)

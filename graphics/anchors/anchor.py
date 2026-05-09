@@ -47,10 +47,10 @@ class AnchorItem(QGraphicsEllipseItem):
 
     def hoverEnterEvent(self, event):
 
-        is_source_anchor = (self.node.editor.view._connecting and self.node.editor.view._conn_source_anchor is self)
+        is_source_anchor = (self.node.editor._connecting and self.node.editor._conn_source_anchor is self)
         
         if self.node.editor and self.node.editor.mode == "connect" and not is_source_anchor:
-            source = self.node.editor.view._conn_source_anchor
+            source = self.node.editor._conn_source_anchor
 
             if source and source.domain != self.domain:
                 return
@@ -64,7 +64,7 @@ class AnchorItem(QGraphicsEllipseItem):
         if self.node.editor.hover_anchor is self:
             self.node.editor.hover_anchor = None
 
-        is_source_anchor = (self.node.editor.view._connecting and self.node.editor.view._conn_source_anchor is self)
+        is_source_anchor = (self.node.editor._connecting and self.node.editor._conn_source_anchor is self)
 
         if not is_source_anchor:
                 self.setBrush(Qt.GlobalColor.transparent)

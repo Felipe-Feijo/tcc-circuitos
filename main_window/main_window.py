@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from editor.clipboard_manager import ClipboardManager
+from editor.editor_state import EditorState
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -32,11 +33,11 @@ class MainWindow(QMainWindow):
 
         self.current_file: str | None = None
 
-        self._init_state()
+        self.state = EditorState()
         self._init_editor()
 
         self.simulation = SimulationSession(self.scene)
-        self.file_session = SceneFileSession(self.scene, self)
+        self.file_session = SceneFileSession(self.scene, self, self.state)
 
         self._init_node_palette()
         self._init_actions_ui()
@@ -46,19 +47,13 @@ class MainWindow(QMainWindow):
 
         
 
-    def _init_state(self):
-        self.mode = None
-        self.pending_node = None
-        self.active_context_menu = None
-        self.hover_anchor = None
-
     def _init_editor(self):
         self.scene = GraphicsScene()
         self.editor_controller = EditorController(self.scene)
         self.delete_manager = DeleteManager(self.scene)
         self.clipboard_manager = ClipboardManager()
 
-        self.view = GraphicsView(self, self.scene)
+        self.view = GraphicsView(self.state, self.scene)
         self.setCentralWidget(self.view)
 
     def _init_node_palette(self):
@@ -72,6 +67,11 @@ class MainWindow(QMainWindow):
         # estado inicial explícito
         self.actions["mode_select"].setChecked(True)
 
+    def _wire_state_callbacks(self):
+        self.state.on_add_node = self.add_node_at
+        self.state.on_scene_rect_update = self.update_scene_rect
+        self.state.actions = self.actions
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.cancel_current_mode()
@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
     def cancel_current_mode(self):
         # 1. modo lógico
         self.set_mode(None)
-        self.pending_node = None
+        self.state.pending_node = None
 
         # 2. sincroniza ações (UI)
         self.actions["mode_select"].setChecked(True)
@@ -105,16 +105,16 @@ class MainWindow(QMainWindow):
         
         self.view.setScene(self.scene)
         self.simulation = SimulationSession(self.scene)
-        self.file_session = SceneFileSession(self.scene, self)
+        self.file_session = SceneFileSession(self.scene, self, self.state)
         self.setWindowTitle("Simulador – Editor Gráfico")
         self.update_scene_rect()
 
 
     def set_mode(self, mode: str | None, node_desc=None):
-        self.mode = mode
+        self.state.mode = mode
         self.view.cleanup_node_preview()
         self.view.cleanup_temp_connection()
-        self.pending_node = node_desc
+        self.state.pending_node = node_desc
 
         if mode != "add":
             self.node_palette.clear_selection()
@@ -164,13 +164,13 @@ class MainWindow(QMainWindow):
 
 
     def add_node_at(self, x, y):
-        if not self.pending_node:
+        if not self.state.pending_node:
             return
 
-        item = self.pending_node.cls(
-            domain=self.pending_node.domain,
+        item = self.state.pending_node.cls(
+            domain=self.state.pending_node.domain,
             sensor_registry=self.scene.sensor_registry)
-        item.editor = self
+        item.editor = self.state
 
         w = item.boundingRect().width()
         h = item.boundingRect().height()
@@ -215,9 +215,9 @@ class MainWindow(QMainWindow):
 
     def delete_selected_items(self):
         # UI concern
-        if self.active_context_menu:
-            self.active_context_menu.close()
-            self.active_context_menu = None
+        if self.state.active_context_menu:
+            self.state.active_context_menu.close()
+            self.state.active_context_menu = None
 
         # domain/editor concern
         deleted = self.delete_manager.delete_selection()
@@ -245,7 +245,7 @@ class MainWindow(QMainWindow):
         self.file_session.open()
 
     def toggle_play(self):
-        if self.mode != "simulate":
+        if self.state.mode != "simulate":
             self.set_mode("simulate")
 
         self.simulation.toggle_play()
@@ -287,7 +287,7 @@ class MainWindow(QMainWindow):
         step_fwd  = self.actions["step_forward"]
         speed     = self.actions["speed"]
 
-        if self.mode != "simulate" or not self.simulation or not self.simulation.active:
+        if self.state.mode != "simulate" or not self.simulation or not self.simulation.active:
             run.setEnabled(False)
             run.setText("Run")
             step_back.setEnabled(False)

@@ -11,9 +11,9 @@ class GraphicsView(QGraphicsView):
     ZOOM_IN_FACTOR = 1.25
     ZOOM_OUT_FACTOR = 0.8
 
-    def __init__(self, editor, *args):
+    def __init__(self, editor_state, *args):
         super().__init__(*args)
-        self.editor = editor
+        self.editor = editor_state  # EditorState
 
         self._panning = False
         self._pan_start = None
@@ -21,6 +21,8 @@ class GraphicsView(QGraphicsView):
         self._connecting = False
         self._conn_source_item = None
         self._conn_source_anchor = None
+        self.editor._connecting = False
+        self.editor._conn_source_anchor = None
         self._temp_connection = None
 
         self._preview_node = None
@@ -163,6 +165,8 @@ class GraphicsView(QGraphicsView):
         self._connecting = True
         self._conn_source_item = anchor.node
         self._conn_source_anchor = anchor
+        self.editor._connecting = True
+        self.editor._conn_source_anchor = anchor
 
         self.start_temp_connection(anchor.node, anchor)
 
@@ -219,6 +223,8 @@ class GraphicsView(QGraphicsView):
         self._connecting = False
         self._conn_source_item = None
         self._conn_source_anchor = None
+        self.editor._connecting = False
+        self.editor._conn_source_anchor = None
 
     def start_node_preview(self):
         if self._preview_node:

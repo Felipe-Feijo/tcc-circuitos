@@ -12,9 +12,10 @@ class SceneFileSession:
     UI-aware, but persistence-agnostic.
     """
 
-    def __init__(self, scene, parent_window):
+    def __init__(self, scene, parent_window, editor_state=None):
         self.scene = scene
         self.parent = parent_window
+        self.editor_state = editor_state or getattr(parent_window, 'state', None)
         self.current_file: str | None = None
 
     # ----------------------
@@ -57,7 +58,7 @@ class SceneFileSession:
         try:
             from persistence.serializer import load_from_file
 
-            load_from_file(self.scene, path, self.parent)
+            load_from_file(self.scene, path, self.editor_state)
             self.current_file = path
             self._update_window_title()
 

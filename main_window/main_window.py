@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from editor.clipboard_manager import ClipboardManager
 from editor.editor_state import EditorState
+from editor.mode import EditorMode
 from editor.delete_manager import DeleteManager
 from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -69,8 +70,17 @@ class MainWindow(QMainWindow):
         self.actions["mode_select"].setChecked(True)
 
     def _wire_state_callbacks(self):
-        self.state.on_add_node = self.add_node_at
-        self.state.on_scene_rect_update = self.update_scene_rect
+        # Disconnect first to avoid duplicate connections on new_scene()
+        try:
+            self.state.add_node_requested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            self.state.scene_rect_update_requested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self.state.add_node_requested.connect(self.add_node_at)
+        self.state.scene_rect_update_requested.connect(self.update_scene_rect)
         self.state.actions = self.actions
 
     def keyPressEvent(self, event):
@@ -83,7 +93,7 @@ class MainWindow(QMainWindow):
 
     def cancel_current_mode(self):
         # 1. modo lógico
-        self.set_mode(None)
+        self.set_mode(EditorMode.SELECT)
         self.state.pending_node = None
 
         # 2. sincroniza ações (UI)
@@ -99,28 +109,29 @@ class MainWindow(QMainWindow):
         self.view.unsetCursor()
 
     def new_scene(self):
-        self.set_mode(None)
+        self.set_mode(EditorMode.SELECT)
         self.scene = GraphicsScene()
 
         self.delete_manager.scene = self.scene
-        
+
         self.view.setScene(self.scene)
         self.simulation = SimulationSession(self.scene)
         self.file_session = SceneFileSession(self.scene, self, self.state)
+        self._wire_state_callbacks()
         self.setWindowTitle("Simulador – Editor Gráfico")
         self.update_scene_rect()
 
 
-    def set_mode(self, mode: str | None, node_desc=None):
+    def set_mode(self, mode: EditorMode, node_desc=None):
         self.state.mode = mode
         self.view.cleanup_node_preview()
         self.view.cleanup_temp_connection()
         self.state.pending_node = node_desc
 
-        if mode != "add":
+        if mode != EditorMode.ADD:
             self.node_palette.clear_selection()
 
-        is_select_mode = (mode is None)
+        is_select_mode = (mode == EditorMode.SELECT)
 
         for item in self.scene.items():
             # Tudo no diagrama pode ser selecionado
@@ -137,7 +148,7 @@ class MainWindow(QMainWindow):
                     is_select_mode
                 )
 
-        if mode == "simulate":
+        if mode == EditorMode.SIMULATE:
             self.start_simulation()
         else:
             self.stop_simulation()
@@ -183,7 +194,7 @@ class MainWindow(QMainWindow):
 
         self.scene.addItem(item)
         self.update_scene_rect()
-        self.set_mode(None)
+        self.set_mode(EditorMode.SELECT)
 
     def update_scene_rect(self):
         view = self.view
@@ -242,12 +253,12 @@ class MainWindow(QMainWindow):
         self.file_session.save_as()
 
     def open_scene(self):
-        self.set_mode(None)
+        self.set_mode(EditorMode.SELECT)
         self.file_session.open()
 
     def toggle_play(self):
-        if self.state.mode != "simulate":
-            self.set_mode("simulate")
+        if self.state.mode != EditorMode.SIMULATE:
+            self.set_mode(EditorMode.SIMULATE)
 
         self.simulation.toggle_play()
         self.update_simulation_actions()
@@ -288,7 +299,7 @@ class MainWindow(QMainWindow):
         step_fwd  = self.actions["step_forward"]
         speed     = self.actions["speed"]
 
-        if self.state.mode != "simulate" or not self.simulation or not self.simulation.active:
+        if self.state.mode != EditorMode.SIMULATE or not self.simulation or not self.simulation.active:
             run.setEnabled(False)
             run.setText("Run")
             step_back.setEnabled(False)

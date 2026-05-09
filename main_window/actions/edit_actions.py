@@ -21,12 +21,21 @@ def create_edit_actions(main_window):
     actions["paste"] = QAction("Paste", main_window)
     actions["paste"].setShortcut(QKeySequence.StandardKey.Paste)  # Ctrl+V
     actions["paste"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
-    actions["paste"].triggered.connect(
-        lambda: main_window.clipboard_manager.paste(
-            main_window.scene,
-            main_window
-        )
-    )
+
+    def _do_paste():
+        from PyQt6.QtWidgets import QMessageBox
+        from editor.mode import EditorMode
+        if main_window.state.mode == EditorMode.SIMULATE:
+            QMessageBox.information(
+                main_window,
+                "Simulação em execução",
+                "Pare a simulação para editar o diagrama.",
+            )
+            return
+        main_window.clipboard_manager.paste(main_window.scene, main_window.state)
+        main_window.cancel_current_mode()
+
+    actions["paste"].triggered.connect(_do_paste)
 
     actions["open_palette"] = QAction("Add", main_window)
     actions["open_palette"].setCheckable(True)

@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPen
 
 from graphics.items.base.connections.connection_item import ConnectionItem
+from editor.mode import EditorMode
 from graphics.items.base.nodes.node_item import NodeItem
 
 class GraphicsView(QGraphicsView):
@@ -18,11 +19,6 @@ class GraphicsView(QGraphicsView):
         self._panning = False
         self._pan_start = None
 
-        self._connecting = False
-        self._conn_source_item = None
-        self._conn_source_anchor = None
-        self.editor._connecting = False
-        self.editor._conn_source_anchor = None
         self._temp_connection = None
 
         self._preview_node = None
@@ -72,7 +68,7 @@ class GraphicsView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "add" and self.editor.pending_node:
+        if event.button() == Qt.MouseButton.LeftButton and self.editor.mode == EditorMode.ADD and self.editor.pending_node:
             scene_pos = self.mapToScene(event.pos())
             self.cleanup_node_preview()
             self.editor.add_node_at(scene_pos.x(), scene_pos.y())
@@ -86,14 +82,16 @@ class GraphicsView(QGraphicsView):
             event.accept()
             return
         
-        if (event.button() == Qt.MouseButton.LeftButton and self.editor.mode == "connect"):
-            if self._connecting:
+        if (event.button() == Qt.MouseButton.LeftButton and self.editor.mode == EditorMode.CONNECT):
+            if self.editor._connecting:
                 target_anchor = self.editor.hover_anchor
-
-                if target_anchor and target_anchor.node is not self._conn_source_item:
-                    self.create_connection(target_anchor.node, target_anchor)
+                source_anchor = self.editor._conn_source_anchor
+                source_item = source_anchor.node if source_anchor else None
 
                 self.cleanup_temp_connection()
+
+                if target_anchor and source_item and target_anchor.node is not source_item:
+                    self.create_connection(source_item, source_anchor, target_anchor.node, target_anchor)
             else:
                 self.handle_connect_press(event)
             return
@@ -114,17 +112,17 @@ class GraphicsView(QGraphicsView):
             event.accept()
             return
         
-        if self.editor.mode == "connect":
+        if self.editor.mode == EditorMode.CONNECT:
             if self.editor.hover_anchor:
                 self.setCursor(Qt.CursorShape.CrossCursor)
             else:
                 self.unsetCursor()
-            if self._connecting:
+            if self.editor._connecting:
                 if self._temp_connection and self._temp_connection.scene():
                     scene_pos = self.mapToScene(event.pos())
                     self._temp_connection.update_temp_endpoint(scene_pos)
 
-        if self.editor.mode == "add" and self.editor.pending_node:
+        if self.editor.mode == EditorMode.ADD and self.editor.pending_node:
             scene_pos = self.mapToScene(event.pos())
 
             if not self._preview_node:
@@ -162,18 +160,14 @@ class GraphicsView(QGraphicsView):
         if not anchor:
             return
 
-        self._connecting = True
-        self._conn_source_item = anchor.node
-        self._conn_source_anchor = anchor
         self.editor._connecting = True
         self.editor._conn_source_anchor = anchor
 
         self.start_temp_connection(anchor.node, anchor)
 
 
-    def create_connection(self, target_item, target_anchor):
-        source = self._conn_source_item
-        source_anchor = self._conn_source_anchor
+    def create_connection(self, source_item, source_anchor, target_item, target_anchor):
+        source = source_item
 
         # 🔒 PROTEÇÃO DE DUPLICATA
         for conn in source.connections:
@@ -216,15 +210,13 @@ class GraphicsView(QGraphicsView):
             self.scene().removeItem(self._temp_connection)
             self._temp_connection = None
 
-        if self._conn_source_anchor:
-            self._conn_source_anchor.setBrush(Qt.GlobalColor.transparent)
-            self._conn_source_anchor.update()
+        if self.editor._conn_source_anchor:
+            self.editor._conn_source_anchor.setBrush(Qt.GlobalColor.transparent)
+            self.editor._conn_source_anchor.update()
 
-        self._connecting = False
-        self._conn_source_item = None
-        self._conn_source_anchor = None
         self.editor._connecting = False
         self.editor._conn_source_anchor = None
+
 
     def start_node_preview(self):
         if self._preview_node:
@@ -233,7 +225,8 @@ class GraphicsView(QGraphicsView):
         if not self.editor.pending_node:
             return
 
-        item = self.editor.pending_node.cls()
+        desc = self.editor.pending_node
+        item = desc.cls(domain=desc.domain)
         item.apply_preview_constraints()
 
         self._preview_node = item

@@ -3,6 +3,7 @@ from PyQt6.QtCore import Qt, QPointF, QRectF
 from PyQt6.QtGui import QPen, QPainterPath
 
 from graphics.labels.label import LabelItem
+from editor.mode import EditorMode
 
 class AnchorItem(QGraphicsEllipseItem):
     def __init__(self, name: str, pos: QPointF, radius: float = 6, node=None, domain=None, exit_directions=None, margin=None):
@@ -49,7 +50,7 @@ class AnchorItem(QGraphicsEllipseItem):
 
         is_source_anchor = (self.node.editor._connecting and self.node.editor._conn_source_anchor is self)
         
-        if self.node.editor and self.node.editor.mode == "connect" and not is_source_anchor:
+        if self.node.editor and self.node.editor.mode == EditorMode.CONNECT and not is_source_anchor:
             source = self.node.editor._conn_source_anchor
 
             if source and source.domain != self.domain:

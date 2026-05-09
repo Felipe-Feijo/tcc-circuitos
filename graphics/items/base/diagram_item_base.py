@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QGraphicsItem, QMenu, QGraphicsObject
+from editor.mode import EditorMode
 from PyQt6.QtGui import QPen
 from PyQt6.QtCore import Qt
 
@@ -21,7 +22,7 @@ class DiagramItemBase(QGraphicsObject):
         if not self.editor:
             return
 
-        if self.editor.mode is not None:
+        if self.editor.mode != EditorMode.SELECT:
             event.ignore()
             return
 

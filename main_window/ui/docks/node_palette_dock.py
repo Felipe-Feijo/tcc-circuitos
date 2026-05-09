@@ -1,4 +1,6 @@
+from editor.mode import EditorMode
 from PyQt6.QtWidgets import QDockWidget
+from editor.mode import EditorMode
 from PyQt6.QtCore import Qt
 from main_window.ui.palette.node_palette import NodePalette
 from main_window.ui.registry.node_registry import register_nodes
@@ -26,6 +28,6 @@ def create_node_palette(main_window):
 
     dock.hide()
 
-    register_nodes(palette, lambda node_desc: main_window.set_mode("add", node_desc=node_desc))
+    register_nodes(palette, lambda node_desc: main_window.set_mode(EditorMode.ADD, node_desc=node_desc))
 
     return palette, dock

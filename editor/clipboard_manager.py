@@ -1,6 +1,5 @@
 import copy
 import uuid
-from PyQt6.QtWidgets import QMessageBox
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.connections.connection_item import ConnectionItem
 from persistence.serializer import serialize_scene, deserialize_scene
@@ -25,16 +24,15 @@ class ClipboardManager:
     def has_data(self) -> bool:
         return self._data is not None
 
-    def paste(self, scene, editor, offset=(20, 20)):
+    def paste(self, scene, editor_state, offset=(20, 20)):
+        """Paste copied nodes into scene.
+
+        Args:
+            scene: GraphicsScene
+            editor_state: EditorState (NOT MainWindow)
+            offset: pixel offset applied to pasted nodes
+        """
         if not self._data:
-            return
-        
-        if editor.mode == "simulate":
-            QMessageBox.information(
-                editor,
-                "Simulação em execução",
-                "Pare a simulação para editar o diagrama."
-            )
             return
 
         data = copy.deepcopy(self._data)
@@ -57,12 +55,10 @@ class ClipboardManager:
             conn["target"]["node"] = id_map[conn["target"]["node"]]
 
         # 3. desserializa
-        created_items = deserialize_scene(data, scene, editor, clear_scene=False)
+        created_items = deserialize_scene(data, scene, editor_state, clear_scene=False)
 
         # 4. seleção
         scene.clearSelection()
 
         for item in created_items:
             item.setSelected(True)
-
-        editor.cancel_current_mode()

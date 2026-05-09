@@ -1,7 +1,7 @@
-from typing import Callable
+from PyQt6.QtCore import QObject, pyqtSignal
 
 
-class EditorState:
+class EditorState(QObject):
     """
     Holds the mutable interaction state of the diagram editor.
 
@@ -9,36 +9,37 @@ class EditorState:
     and AnchorItem so they don't need a direct reference to the window.
 
     Attributes:
-        mode          -- current editor mode: None | "connect" | "add" | "simulate"
-        pending_node  -- NodeDescriptor selected in the palette (only in "add" mode)
-        hover_anchor  -- AnchorItem currently under the cursor (only in "connect" mode)
+        mode          -- current editor mode (EditorMode enum)
+        pending_node  -- NodeDescriptor selected in the palette (only in ADD mode)
+        hover_anchor  -- AnchorItem currently under the cursor (only in CONNECT mode)
         active_context_menu -- QMenu currently open, used to close it on delete
 
-    Callbacks (set by MainWindow after construction):
-        on_add_node(x, y)  -- place the pending node at scene coordinates
-        on_scene_rect_update() -- recalculate and update the scene rect
-        actions            -- dict of QActions, for context menus
+    Signals:
+        add_node_requested(x, y)         -- user clicked to place a node
+        scene_rect_update_requested()    -- scene rect should recalculate
     """
 
+    add_node_requested = pyqtSignal(float, float)
+    scene_rect_update_requested = pyqtSignal()
+
     def __init__(self):
+        super().__init__()
+
         self.mode = None
         self.pending_node = None
         self.hover_anchor = None
         self.active_context_menu = None
 
-        # Connection drag state (mirrors GraphicsView._connecting/_conn_source_anchor)
-        # Updated by GraphicsView so AnchorItem doesn't need a view reference
+        # Connection drag state — owned here, read by GraphicsView and AnchorItem
         self._connecting: bool = False
         self._conn_source_anchor = None
 
-        # Set by MainWindow after construction
-        self.on_add_node: Callable[[float, float], None] = lambda x, y: None
-        self.on_scene_rect_update: Callable[[], None] = lambda: None
+        # dict of QActions for context menus — set by MainWindow after construction
         self.actions: dict = {}
 
     # Convenience wrappers so call sites read naturally
     def add_node_at(self, x: float, y: float) -> None:
-        self.on_add_node(x, y)
+        self.add_node_requested.emit(x, y)
 
     def update_scene_rect(self) -> None:
-        self.on_scene_rect_update()
+        self.scene_rect_update_requested.emit()

@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
+from simulation.nodes.logic_valve.and_valve import AndValve as AndValveNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -7,12 +8,13 @@ from .....anchors.anchor import AnchorItem
 
 
 class AndValve(NodeItem):
+    node_type = "and_valve"
+    simulation_cls = AndValveNode
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-        self.node_type = "and_valve"
 
         self.icon_default = QPixmap("resources/nodes/and_valve/and_valve_default.png")
         self.icon_x_side = QPixmap("resources/nodes/and_valve/and_valve_right.png")

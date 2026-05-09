@@ -1,43 +1,4 @@
-# domain/graph_builder.py
-
-from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
-from simulation.nodes.reservoir import Reservoir
-from simulation.nodes.relief_valve import DirectOperatedReliefValve
-from simulation.nodes.switch.relay_switch import RelaySwitch
-from simulation.nodes.switch.button_switch import ButtonSwitch
-from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
-from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
-from simulation.nodes.ground import Ground
-from simulation.nodes.logic_valve.or_valve import OrValve
-from simulation.nodes.logic_valve.and_valve import AndValve
-from simulation.nodes.nodes import PressureSource, Exhaust
-from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
-from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 from simulation.connections import Connection
-from simulation.nodes.pressure_line import PressureLine
-from simulation.nodes.coil import Coil
-from simulation.nodes.voltage_source import VoltageSource
-
-NODE_FACTORY = {
-    "valve_3_2_ways": Valve_3_2_Ways,
-    "valve_4_2_ways": Valve_4_2_Ways,
-    "pressure_source": PressureSource,
-    "exhaust": Exhaust,
-    "single_acting_cylinder": SingleActingCylinder,
-    "double_acting_cylinder": DoubleActingCylinder,
-    "or_valve": OrValve,
-    "and_valve": AndValve,
-    "pressure_line": PressureLine,
-    "voltage_source": VoltageSource,
-    "ground": Ground,
-    "button_switch": ButtonSwitch,
-    "relay_switch": RelaySwitch,
-    "solenoid_coil": Coil,
-    "relay_coil": Coil,
-    "reservoir": Reservoir,
-    "fixed_displacement_pump": FixedDisplacementPump,
-    "direct_operated_relief_valve": DirectOperatedReliefValve,
-}
 
 class GraphBuilder:
     def __init__(self):
@@ -47,7 +8,12 @@ class GraphBuilder:
         self.connection_map = {}  # ConnectionItem -> DomainConnection
 
     def add_node_from_item(self, node_item):
-        node_cls = NODE_FACTORY[node_item.node_type]
+        node_cls = node_item.simulation_cls
+        if node_cls is None:
+            raise ValueError(
+                f"{type(node_item).__name__} não define 'simulation_cls'. "
+                "Declare o atributo de classe na subclasse de NodeItem."
+            )
 
         kwargs = {}
         if hasattr(node_item, "properties"):

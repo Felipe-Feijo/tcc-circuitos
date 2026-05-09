@@ -1,6 +1,7 @@
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu
+from simulation.nodes.switch.relay_switch import RelaySwitch as RelaySwitchNode
 
 from graphics.items.base.nodes.switch.switch_item import SwitchItem
 from graphics.labels.label import LabelItem
@@ -8,6 +9,8 @@ from .....anchors.anchor import AnchorItem
 
 
 class RelaySwitch(SwitchItem):
+    node_type = "relay_switch"
+    simulation_cls = RelaySwitchNode
     SWITCH_VISUALS = {
         "NO": {
             0: {
@@ -33,7 +36,6 @@ class RelaySwitch(SwitchItem):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.node_type = "relay_switch"
         self.properties.setdefault("relay_sensor", None)
         self._init_label()
         # conecta sinais do sensor_registry

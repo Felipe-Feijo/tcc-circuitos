@@ -2,6 +2,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.nodes.cylinder.cylinder_item import CylinderItem
+from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder as DoubleActingCylinderNode
 
 _BASE_PATH = "resources/nodes/double_acting_cylinder"
 
@@ -15,6 +16,8 @@ _ROD_OFFSET = QPointF(0, 0)
 
 
 class DoubleActingCylinder(CylinderItem):
+    node_type = "double_acting_cylinder"
+    simulation_cls = DoubleActingCylinderNode
 
     BODY_VISUALS = {
         0: {
@@ -30,7 +33,6 @@ class DoubleActingCylinder(CylinderItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "double_acting_cylinder"
 
         if self.domain == "hydraulic":
             self.properties.setdefault("bore", 0.05)

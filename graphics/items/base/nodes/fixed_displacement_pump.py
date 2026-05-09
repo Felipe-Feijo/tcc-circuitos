@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
+from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -8,10 +9,11 @@ from ....anchors.anchor import AnchorItem
 
 
 class FixedDisplacementPump(NodeItem):
+    node_type = "fixed_displacement_pump"
+    simulation_cls = FixedDisplacementPumpNode
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "fixed_displacement_pump"
 
         self.properties = {
             "Q": 1e-4  # default flow rate

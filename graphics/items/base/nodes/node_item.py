@@ -15,8 +15,14 @@ class NodeItem(DiagramItemBase):
     class_registry = {}
     command = pyqtSignal(str, dict) #node_id, command
 
-    def __init_subclass__(cls):
-            super().__init_subclass__()
+    # Subclasses devem declarar:
+    #   node_type     : str  — chave de serialização (ex: "valve_3_2_ways")
+    #   simulation_cls: type — classe de domínio correspondente
+    node_type: str = None
+    simulation_cls: type = None
+
+    def __init_subclass__(cls, **kwargs):
+            super().__init_subclass__(**kwargs)
             NodeItem.class_registry[cls.__name__] = cls
 
     def __init__(self, *args, domain=None, sensor_registry: SensorRegistry | None = None,  **kwargs):

@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
+from simulation.nodes.nodes import PressureSource as PressureSourceNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -7,10 +8,11 @@ from ....anchors.anchor import AnchorItem
 
 
 class PressureSource(NodeItem):
+    node_type = "pressure_source"
+    simulation_cls = PressureSourceNode
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "pressure_source"
         
 
         self.pixmap = QPixmap("resources/nodes/pressure_source/pressure_source.png")

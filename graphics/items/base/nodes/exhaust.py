@@ -1,6 +1,7 @@
 import os
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
+from simulation.nodes.nodes import Exhaust as ExhaustNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -8,10 +9,11 @@ from ....anchors.anchor import AnchorItem
 
 
 class Exhaust(NodeItem):
+    node_type = "exhaust"
+    simulation_cls = ExhaustNode
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "exhaust"
 
         self.pixmap = QPixmap("resources/nodes/exhaust/exhaust.png")
     

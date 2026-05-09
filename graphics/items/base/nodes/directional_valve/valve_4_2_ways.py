@@ -1,10 +1,13 @@
 from PyQt6.QtCore import QPointF
+from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways as Valve_4_2_WaysNode
 
 from graphics.items.base.nodes.directional_valve.directional_valve_item import DirectionalValveItem
 from .....anchors.anchor import AnchorItem
 
 
 class Valve_4_2_Ways(DirectionalValveItem):
+    node_type = "valve_4_2_ways"
+    simulation_cls = Valve_4_2_WaysNode
     BODY_VISUALS = {
         0: {  # repouso
             "sprite": "resources/nodes/valve_4_2_ways/valve_4_2_body_right.png",
@@ -18,7 +21,6 @@ class Valve_4_2_Ways(DirectionalValveItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "valve_4_2_ways"
 
 
     def initialize_anchors(self):

@@ -1,10 +1,13 @@
 from PyQt6.QtCore import QPointF
+from simulation.nodes.switch.button_switch import ButtonSwitch as ButtonSwitchNode
 
 from graphics.items.base.nodes.switch.switch_item import SwitchItem
 from .....anchors.anchor import AnchorItem
 
 
 class ButtonSwitch(SwitchItem):
+    node_type = "button_switch"
+    simulation_cls = ButtonSwitchNode
 
     SWITCH_VISUALS = {
         "NO": {
@@ -31,7 +34,6 @@ class ButtonSwitch(SwitchItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "button_switch"
 
 
     def initialize_anchors(self):

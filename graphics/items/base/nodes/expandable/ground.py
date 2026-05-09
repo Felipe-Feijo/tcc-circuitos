@@ -1,8 +1,11 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
+from simulation.nodes.ground import Ground as GroundNode
 
 
 class Ground(ExpandableItem):
+    node_type = "ground"
+    simulation_cls = GroundNode
     TERMINAL_VISUALS = {
         "left":  "resources/nodes/ground/ground_terminal.png",
     }
@@ -27,7 +30,6 @@ class Ground(ExpandableItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "ground"
 
     def paint_symbol(self, painter):
         if not self.pixmap_left:

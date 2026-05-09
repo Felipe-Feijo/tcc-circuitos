@@ -1,8 +1,11 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
+from simulation.nodes.pressure_line import PressureLine as PressureLineNode
 
 
 class PressureLine(ExpandableItem):
+    node_type = "pressure_line"
+    simulation_cls = PressureLineNode
     TERMINAL_VISUALS = {
         "left":  "resources/nodes/pressure_line/pressure_line_terminal.png",
         "right": "resources/nodes/pressure_line/pressure_line_terminal.png"
@@ -25,7 +28,6 @@ class PressureLine(ExpandableItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "pressure_line"
 
     def paint_symbol(self, painter):
         if not self.pixmap_left:

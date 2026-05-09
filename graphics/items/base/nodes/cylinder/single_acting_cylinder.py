@@ -2,6 +2,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.nodes.cylinder.cylinder_item import CylinderItem
+from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder as SingleActingCylinderNode
 
 _BASE_PATH = "resources/nodes/single_acting_cylinder"
 
@@ -21,6 +22,8 @@ _SPRING_OFFSET = QPointF(85, 0)
 
 
 class SingleActingCylinder(CylinderItem):
+    node_type = "single_acting_cylinder"
+    simulation_cls = SingleActingCylinderNode
 
     BODY_VISUALS = {
         0: {
@@ -36,7 +39,6 @@ class SingleActingCylinder(CylinderItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "single_acting_cylinder"
 
         if self.domain == "hydraulic":
             self.properties.setdefault("bore", 0.05)

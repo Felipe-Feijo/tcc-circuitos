@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
+from simulation.nodes.logic_valve.or_valve import OrValve as OrValveNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -7,12 +8,13 @@ from .....anchors.anchor import AnchorItem
 
 
 class OrValve(NodeItem):
+    node_type = "or_valve"
+    simulation_cls = OrValveNode
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-        self.node_type = "or_valve"
 
         self.icon_x_side = QPixmap("resources/nodes/or_valve/or_valve_x_side.png")
         self.icon_y_side = QPixmap("resources/nodes/or_valve/or_valve_y_side.png")

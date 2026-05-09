@@ -1,7 +1,10 @@
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
+from simulation.nodes.voltage_source import VoltageSource as VoltageSourceNode
 
 class VoltageSource(ExpandableItem):
+    node_type = "voltage_source"
+    simulation_cls = VoltageSourceNode
     TERMINAL_VISUALS = {
         "left":  "resources/nodes/voltage_source/voltage_source_terminal.png",
     }
@@ -26,7 +29,6 @@ class VoltageSource(ExpandableItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "voltage_source"
 
     def paint_symbol(self, painter):
         if not self.pixmap_left:

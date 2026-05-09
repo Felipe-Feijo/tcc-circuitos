@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
+from simulation.nodes.relief_valve import DirectOperatedReliefValve as DirectOperatedReliefValveNode
 
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -8,10 +9,11 @@ from ....anchors.anchor import AnchorItem
 
 
 class DirectOperatedReliefValve(NodeItem):
+    node_type = "direct_operated_relief_valve"
+    simulation_cls = DirectOperatedReliefValveNode
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.node_type = "direct_operated_relief_valve"
 
         self.properties = {
             "p_set": 100

@@ -1,5 +1,15 @@
 from collections import defaultdict
-from simulation.hydraulic_solver import NodeContinuity, NonlinearSystemSolver
+
+from simulation.hydraulic import (
+    HydraulicNode,
+    NodeContinuity,
+    NonlinearSystemSolver,
+    ScaleContext,
+    ScaleManager,
+    ZcScheduler,
+    ConvergenceMonitor,
+    ConvergenceResult,
+)
 
 
 class SimulationEngine:
@@ -13,6 +23,10 @@ class SimulationEngine:
         self._hydraulic_iteration = 0
 
         self._hydraulic_max_iterations = 15
+
+        self._scale_manager = ScaleManager()
+        self._zc_scheduler  = ZcScheduler()
+        self._conv_monitor  = ConvergenceMonitor()
 
     def run_until_stable(self, dt=0.1):
         iteration = 0
@@ -170,51 +184,18 @@ class SimulationEngine:
 
     P_MAX = 10e8
 
-    def _get_Q_ref(self, hydraulic_nodes, mode = "highest") -> float:
-        hints = [
-            n.flow_hint for n in hydraulic_nodes
-            if hasattr(n, "flow_hint") and n.flow_hint > 1e-10
-        ]
-        if mode == "highest":
-            return max(hints) if hints else 0.0  # 0 = circuito parado
-        elif mode == "lowest":
-            return min(hints) if hints else 0.0  # 0 = circuito parado
-        else:
-            raise ValueError("Invalid mode. Use 'highest' or 'lowest'.")
-
-    def _get_P_ref(self, hydraulic_nodes) -> float:
-        hints = [
-            n.p_hint for n in hydraulic_nodes
-            if hasattr(n, "p_hint") and n.p_hint > 1e-10
-        ]
-        return max(hints) if hints else 0.0
-
     def _check_flow_conservation(
         self,
-        hydraulic_nodes,
-        anchor_to_pressure_var
+        circuit_nodes: list,
+        anchor_to_pressure_var: dict,
     ) -> bool:
-        Q_ref = self._get_Q_ref(hydraulic_nodes, mode="lowest")
-        tol = Q_ref * 1e-4
-        all_conserved = True
-
-        for pvar, cont in self._continuities.items():
-            Q_sum = sum(
-                anchor.flow
-                for anchor, apvar in anchor_to_pressure_var.items()
-                if apvar == pvar and not isinstance(anchor.flow, (str, type(None)))
-            )
-            conserved = abs(Q_sum) <= tol
-
-            # marca/desmarca pressurizing em todas as âncoras desse nó de pressão
-            for anchor, apvar in anchor_to_pressure_var.items():
-                if apvar == pvar and anchor.domain == "hydraulic":
-                    anchor.pressurizing = not conserved
-
-            if not conserved:
-                all_conserved = False
-
-        return all_conserved
+        """Delega verificação ao ConvergenceMonitor."""
+        _, q_ref = self._scale_manager.estimate(circuit_nodes)
+        result = self._conv_monitor.check(
+            self._continuities, anchor_to_pressure_var, q_ref
+        )
+        self._conv_monitor.apply_pressurizing_flags(result, anchor_to_pressure_var)
+        return result.converged
 
     def _reset_continuity(self, pvar: str):
         cont = self._continuities.get(pvar)
@@ -234,22 +215,22 @@ class SimulationEngine:
         anchor_to_pressure_var = self._assign_pressure_vars()
         circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
 
-        
-
-        zc_gain = 10e4 * (5 ** self._hydraulic_iteration)
-        is_last = self._hydraulic_iteration >= self._hydraulic_max_iterations - 1
-
         for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
+            ctx = self._scale_manager.build_context(
+                list(circuit_nodes),
+                self._hydraulic_iteration,
+                self._zc_scheduler,
+            )
             self._solve_circuit(
                 i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var,
-                zc_gain=zc_gain,
-                debug= False#is_last or converged
+                ctx=ctx,
+                debug=False,
             )
 
         converged = self._check_flow_conservation(hydraulic_nodes, anchor_to_pressure_var)
 
         if converged:
-            self._hydraulic_iteration = 0  # reseta para próximo timestep
+            self._hydraulic_iteration = 0
             return False
 
         self._hydraulic_iteration += 1
@@ -261,11 +242,8 @@ class SimulationEngine:
 
         return True
 
-    def _collect_hydraulic_nodes(self):
-        return [
-            node for node in self.nodes.values()
-            if hasattr(node, 'variables') and hasattr(node, 'equations') and hasattr(node, 'hydraulic_ports')
-        ]
+    def _collect_hydraulic_nodes(self) -> list:
+            return [n for n in self.nodes.values() if isinstance(n, HydraulicNode)]
 
     def _assign_pressure_vars(self) -> dict:
         visited_anchors = set()
@@ -342,12 +320,12 @@ class SimulationEngine:
 
         return circuits
 
-    def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var, zc_gain, debug=False):
+    def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var, ctx: ScaleContext, debug=False):
         circuit_list = list(circuit_nodes)
         new_nodes_set = set(circuit_list)
 
         # circuito morto — nem chama o solver
-        if self._get_Q_ref(circuit_list) < 1e-10:
+        if ctx.q_ref < 1e-10:
             sol = {}
             for node in circuit_list:
                 for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -371,7 +349,7 @@ class SimulationEngine:
                 self._reset_continuity(pvar)
             self._prev_circuit_map[pvar] = new_nodes_set
 
-        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var, zc_gain=zc_gain)
+        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var, ctx=ctx)
 
         if debug and sol:
             _print_circuit_state(index, circuit_list, anchor_to_pressure_var, sol)
@@ -393,7 +371,7 @@ class SimulationEngine:
 
         self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
 
-    def _try_solve(self, index, circuit_list, anchor_to_pressure_var, zc_gain):
+    def _try_solve(self, index, circuit_list, anchor_to_pressure_var, ctx: ScaleContext):
         from collections import defaultdict
 
         group_flows = defaultdict(list)
@@ -406,9 +384,6 @@ class SimulationEngine:
                 if pvar:
                     group_flows[pvar].append(flow_var)
 
-        Q_ref = self._get_Q_ref(circuit_list)
-        P_ref = self._get_P_ref(circuit_list)
-
         continuities = []
         for pvar, flow_vars in group_flows.items():
             if pvar not in self._continuities:
@@ -416,24 +391,25 @@ class SimulationEngine:
             else:
                 self._continuities[pvar].flow_vars = flow_vars
 
-            self._continuities[pvar].set_scale(P_ref, Q_ref, zc_gain=zc_gain)
+            self._continuities[pvar].apply_context(ctx)
             continuities.append(self._continuities[pvar])
-            for node in circuit_list:
-                if hasattr(node, "set_scale"):
-                    node.set_scale(P_ref, Q_ref)
+
+        for node in circuit_list:
+            if hasattr(node, "set_scale"):
+                node.set_scale(ctx.p_ref, ctx.q_ref)
 
         solver = NonlinearSystemSolver(circuit_list + continuities)
-        x0 = solver.build_initial_guess(circuit_list)
+        x0 = solver.build_initial_guess(circuit_list, ctx)
 
         for cont in continuities:
             pvar = cont.pressure_var
             if pvar in solver.var_index:
-                x0[pvar] = cont.p_previous if cont.p_previous > 1.0 else cont.zc * Q_ref
+                x0[pvar] = cont.p_previous if cont.p_previous > 1.0 else ctx.zc * ctx.q_ref
 
         try:
-            return solver.solve(x0, q_ref=Q_ref, p_ref=P_ref)
+            return solver.solve(x0, ctx)
         except Exception as e:
-            print(f"circuito {index}: falhou — {e}")
+            print(f"  circuito {index}: falhou — {e}")
             return None
 
     def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):

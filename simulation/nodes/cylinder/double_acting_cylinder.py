@@ -1,8 +1,8 @@
 import math
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
-
-class DoubleActingCylinder(Node):
+class DoubleActingCylinder(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "double_acting_cylinder", domain=domain, properties=properties)
 

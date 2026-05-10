@@ -1,7 +1,8 @@
 import math
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
-class DirectOperatedReliefValve(Node):
+class DirectOperatedReliefValve(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "direct_operated_relief_valve", domain=domain, properties=properties)
         if self.domain == "hydraulic":
@@ -83,6 +84,6 @@ class DirectOperatedReliefValve(Node):
     def set_state(self, state):
         super().set_state(state)
 
-    def set_scale(self, p_ref, q_ref):
-        self.p_ref = max(p_ref, 1e-3)
-        self.q_ref = max(q_ref, 1e-12)
+    def set_scale(self, p_ref: float, q_ref: float) -> None:
+        self.p_ref = max(p_ref, 1e5)   # mínimo 1 bar — escala realista
+        self.q_ref = max(q_ref, 1e-10)

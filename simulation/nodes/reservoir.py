@@ -1,6 +1,7 @@
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
-class Reservoir(Node):
+class Reservoir(Node, HydraulicMixin):
 
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "reservoir", domain=domain, properties=properties)

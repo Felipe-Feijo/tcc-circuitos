@@ -1,6 +1,7 @@
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
-class FixedDisplacementPump(Node):
+class FixedDisplacementPump(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "fixed_displacement_pump", domain=domain, properties=properties)
         self.flow_in_var  = f"Q_{self.id}_P"   # sucção (P = inlet)

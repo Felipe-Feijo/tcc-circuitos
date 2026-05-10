@@ -1,7 +1,8 @@
 import math
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
-class SingleActingCylinder(Node):
+class SingleActingCylinder(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "single_acting_cylinder", domain=domain, properties=properties)
 
@@ -185,7 +186,6 @@ class SingleActingCylinder(Node):
                         self.position = 1
                     else:
                         self.position = round(ratio)
-            print(self.x, self.position)
 
 
     # ------------------------------------------------------------------

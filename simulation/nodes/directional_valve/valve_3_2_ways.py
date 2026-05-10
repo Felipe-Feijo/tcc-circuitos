@@ -1,9 +1,8 @@
 import math
-
 from simulation.nodes.directional_valve.directional_valve import DirectionalValve
+from simulation.hydraulic import HydraulicMixin
 
-
-class Valve_3_2_Ways(DirectionalValve):
+class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "valve_3_2_ways", domain=domain, properties=properties)
 
@@ -81,6 +80,6 @@ class Valve_3_2_Ways(DirectionalValve):
         return [eq_flow, eq_dp]
 
 
-    def set_scale(self, p_ref, q_ref):
-        self.p_ref = p_ref
-        self.q_ref = q_ref
+    def set_scale(self, p_ref: float, q_ref: float) -> None:
+        self.p_ref = max(p_ref, 1e5)   # mínimo 1 bar
+        self.q_ref = max(q_ref, 1e-10)

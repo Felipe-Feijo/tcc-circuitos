@@ -11,22 +11,12 @@ from ....anchors.anchor import AnchorItem
 class DirectOperatedReliefValve(NodeItem):
     node_type = "direct_operated_relief_valve"
     simulation_cls = DirectOperatedReliefValveNode
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-        self.properties = {
-            "p_set": 100
-        }
-        
-
+    def setup(self) -> None:
+        self.properties = {"p_set": 100}
         self.pixmap = QPixmap("resources/nodes/direct_operated_relief_valve/direct_operated_relief_valve.png")
-        
-
-        self.width = self.pixmap.width()
+        self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        # Anchors do node
         self.add_anchor(AnchorItem("T", QPointF(self.width*99/199, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
         self.add_anchor(AnchorItem("P", QPointF(self.width*99/199, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
 

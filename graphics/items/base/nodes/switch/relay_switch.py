@@ -34,11 +34,12 @@ class RelaySwitch(SwitchItem):
         }
     }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setup(self) -> None:
+        super().setup()  # SwitchItem.setup()
         self.properties.setdefault("relay_sensor", None)
         self._init_label()
-        # conecta sinais do sensor_registry
+
+    def register_sensors(self) -> None:
         if self.sensor_registry:
             self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
             self.sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)

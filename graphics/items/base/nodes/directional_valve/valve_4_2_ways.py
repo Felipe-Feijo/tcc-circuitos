@@ -18,11 +18,6 @@ class Valve_4_2_Ways(DirectionalValveItem):
             "offset": QPointF(147, 0),
         }
     }
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-
     def initialize_anchors(self):
         # Anchors nos cantos do body
         self.add_anchor(AnchorItem("P", QPointF(self.width*191/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))        

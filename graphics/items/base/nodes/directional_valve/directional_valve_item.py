@@ -53,34 +53,28 @@ ACTUATOR_DICT = {
 
 class DirectionalValveItem(NodeItem):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    def setup(self) -> None:
         self.properties = {
-            "actuators": {
-                "left": None,
-                "right": None
-            }
+            "actuators": {"left": None, "right": None}
         }
         if self.domain == "hydraulic":
             self.properties.setdefault("k", 1e-4)
 
-        if self.sensor_registry:
-            self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
-            self.sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
-            self.sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
-
         self.actuators = {}
-        self.actuator_visuals = {}  # sprites carregados
+        self.actuator_visuals = {}
         self.actuator_rects = {}
-
-        # Bits dos atuadores
         self.bits = {"left": 0, "right": 0}
-
 
         self.initialize_body_visuals()
         self.initialize_anchors()
         self.initialize_actuators()
+
+    def register_sensors(self) -> None:
+        # Connect to sensor registry for solenoid actuator name updates
+        if self.sensor_registry:
+            self.sensor_registry.sensor_added.connect(self._on_sensor_registry_changed)
+            self.sensor_registry.sensor_removed.connect(self._on_sensor_registry_changed)
+            self.sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
 
     @property
     def body_rect(self):

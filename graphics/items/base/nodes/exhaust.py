@@ -11,13 +11,9 @@ from ....anchors.anchor import AnchorItem
 class Exhaust(NodeItem):
     node_type = "exhaust"
     simulation_cls = ExhaustNode
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
+    def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/exhaust/exhaust.png")
-    
-        self.width = self.pixmap.width()
+        self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
         # Anchors do node

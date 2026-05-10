@@ -7,15 +7,9 @@ from .....anchors.anchor import AnchorItem
 from graphics.labels.label import LabelItem
 
 class SwitchItem(NodeItem):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.properties = {
-            "contact_type": "NO"  # ou "NC"
-        }
-
-        self.body_state = 0  # estado lógico atual (0 ou 1)
-
+    def setup(self) -> None:
+        self.properties = {"contact_type": "NO"}
+        self.body_state = 0
         self.initialize_body_visuals()
         self.initialize_anchors()
 

@@ -36,17 +36,14 @@ class SingleActingCylinder(CylinderItem):
         }
     }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
+    def setup(self) -> None:
+        super().setup()  # CylinderItem.setup() builds sensors and base visuals
         if self.domain == "hydraulic":
             self.properties.setdefault("bore", 0.05)
             self.properties.setdefault("stroke", 0.1)
             self.properties.setdefault("spring_k", 0.01)
             self.properties.setdefault("external_force", 0.0)
             self.properties.setdefault("friction", 0.0)
-
             self._rod_pixmap    = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_rod.png")
             self._body_pixmap   = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_body.png")
             self._spring_pixmap = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_spring.png")

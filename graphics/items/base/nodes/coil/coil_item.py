@@ -11,24 +11,21 @@ class CoilItem(NodeItem):
     """
     Classe base para bobinas, parametrizável para sprite, prefixo e tipo de sinal.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setup(self) -> None:
         self.properties = {
-            "sensor": {
-                "coil": {
-                    "name": ""
-                }
-            }
+            "sensor": {"coil": {"name": ""}}
         }
-
         self.sensors = self.properties["sensor"]
-
         self.initialize_body_visuals()
         self.initialize_anchors()
         self.initialize_label()
 
-        if getattr(self, "sensor_registry", None) and not getattr(self, "is_preview", False):
+    def register_sensors(self) -> None:
+        if self.sensor_registry:
             self._register_sensor()
+
+    def unregister_sensors(self) -> None:
+        self._unregister_sensor()
 
     # --------------------------
     # Inicialização

@@ -8,20 +8,14 @@ from .....anchors.anchor import AnchorItem
 from graphics.utils.properties_dialog import PropertiesDialog
 
 class ExpandableItem(NodeItem):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    def setup(self) -> None:
         self.properties = {
             "anchors": list(getattr(self, "DEFAULT_ANCHORS", []))
         }
-
-        self.initialize_terminal_visuals()
-
         self.spacing = 120
         self.internal_connections = []
-
         self.anchor_list = []
-
+        self.initialize_terminal_visuals()
         self.initialize_anchors()
 
     @property

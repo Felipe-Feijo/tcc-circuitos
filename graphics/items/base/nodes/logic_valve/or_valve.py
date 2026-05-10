@@ -11,23 +11,23 @@ class OrValve(NodeItem):
     node_type = "or_valve"
     simulation_cls = OrValveNode
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-
+    def setup(self) -> None:
         self.icon_x_side = QPixmap("resources/nodes/or_valve/or_valve_x_side.png")
         self.icon_y_side = QPixmap("resources/nodes/or_valve/or_valve_y_side.png")
 
         self.pixmap = self.icon_x_side
-
-        self.width = self.pixmap.width()
+        self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        # Anchors do node
-        self.add_anchor(AnchorItem("X", QPointF(0, self.height*0.5429), node=self, domain=self.domain, exit_directions={"external": ["left"]}))
-        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height*0.5429), node=self, domain=self.domain, exit_directions={"external": ["right"]}))
-        self.add_anchor(AnchorItem("A", QPointF(self.width*0.5039, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("X", QPointF(0, self.height * 0.5429), node=self, domain=self.domain, exit_directions={"external": ["left"]}))
+        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height * 0.5429), node=self, domain=self.domain, exit_directions={"external": ["right"]}))
+        self.add_anchor(AnchorItem("A", QPointF(self.width * 0.5039, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+
+    def reset_visual_state(self) -> None:
+        # OrValve has no icon_default — x_side is the resting state
+        super().reset_visual_state()
+        self.pixmap = self.icon_x_side
+        self.update()
 
 
     def update_from_domain(self, domain_node):

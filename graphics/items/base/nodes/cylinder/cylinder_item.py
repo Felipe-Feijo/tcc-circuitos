@@ -22,28 +22,24 @@ class CylinderItem(NodeItem):
 
     BODY_VISUALS = {}  # definido pela subclasse
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    def setup(self) -> None:
         self.properties = {
             "sensors": {
-                "retracted": {
-                    "type": None,
-                    "name": "",
-                },
-                "extended": {
-                    "type": None,
-                    "name": "",
-                },
+                "retracted": {"type": None, "name": ""},
+                "extended":  {"type": None, "name": ""},
             }
         }
-
         self.sensors = {}
         self.sensor_rects = {}
-
         self.initialize_body_visuals()
         self.initialize_anchors()
         self.initialize_sensors()
+
+    def register_sensors(self) -> None:
+        for pos in ("retracted", "extended"):
+            sensor = self.properties["sensors"].get(pos)
+            if sensor and sensor.get("type") is not None:
+                self._register_sensor(pos)
 
     # --------------------------
     # Inicialização
@@ -178,19 +174,11 @@ class CylinderItem(NodeItem):
         self.update_connections()
         self.update()
 
-    def apply_properties(self):
-        # remove qualquer registro antigo desse node
-        for pos in ["retracted", "extended"]:
+    def apply_properties(self) -> None:
+        for pos in ("retracted", "extended"):
             self._unregister_sensor(pos)
-
         self.initialize_sensors()
-
-        # registra sensores carregados
-        for pos in ["retracted", "extended"]:
-            sensor = self.properties["sensors"].get(pos)
-            if sensor and sensor.get("type") is not None:
-                self._register_sensor(pos)
-
+        self.register_sensors()
         self.update()
 
     def update_body_visuals(self):

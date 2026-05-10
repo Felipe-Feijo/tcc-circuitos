@@ -25,10 +25,6 @@ class PressureLine(ExpandableItem):
             "internal": ["left"]
         }
     }
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
     def paint_symbol(self, painter):
         if not self.pixmap_left:
             return

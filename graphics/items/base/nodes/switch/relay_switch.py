@@ -24,11 +24,11 @@ class RelaySwitch(SwitchItem):
         },
         "NC": {
             0: {
-                "sprite": "resources/nodes/button_switch/button_switch_closed.png",
+                "sprite": "resources/nodes/relay_switch/relay_switch_nc_closed.png",
                 "offset": QPointF(0, 0),
             },
             1: {
-                "sprite": "resources/nodes/button_switch/button_switch_open.png",
+                "sprite": "resources/nodes/relay_switch/relay_switch_nc_open.png",
                 "offset": QPointF(0, 0),
             },
         }
@@ -75,6 +75,34 @@ class RelaySwitch(SwitchItem):
     # --------------------------
     # Menu específico para relay
     # --------------------------
+
+    def build_properties_dialog(self):
+        from graphics.utils.properties_dialog import PropertiesDialog
+        dialog = PropertiesDialog(title="Relay Switch — Properties")
+
+        current_type = self.properties.get("contact_type", "NO")
+        dialog._combo_contact = dialog.add_combo_field(
+            "Tipo de contato", ["NO", "NC"], current=current_type
+        )
+
+        relay_signals = []
+        if self.sensor_registry:
+            relay_signals = self.sensor_registry.list_names(sensor_type="relay_coil")
+
+        current_sensor = self.properties.get("relay_sensor") or ""
+        options = ["(nenhum)"] + relay_signals
+        current_option = current_sensor if current_sensor in relay_signals else "(nenhum)"
+        dialog._combo_relay = dialog.add_combo_field(
+            "Sensor de relé", options, current=current_option
+        )
+
+        return dialog
+
+    def apply_properties_from_dialog(self, dialog):
+        self.set_contact_type(dialog._combo_contact.currentText())
+        selected = dialog._combo_relay.currentText()
+        self.set_relay_sensor(None if selected == "(nenhum)" else selected)
+
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
 

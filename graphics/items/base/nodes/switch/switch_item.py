@@ -63,6 +63,19 @@ class SwitchItem(NodeItem):
             return
         super().mousePressEvent(event)
 
+
+    def build_properties_dialog(self):
+        from graphics.utils.properties_dialog import PropertiesDialog
+        dialog = PropertiesDialog(title="Switch — Properties")
+        current = self.properties.get("contact_type", "NO")
+        dialog._combo_contact = dialog.add_combo_field(
+            "Tipo de contato", ["NO", "NC"], current=current
+        )
+        return dialog
+
+    def apply_properties_from_dialog(self, dialog):
+        self.set_contact_type(dialog._combo_contact.currentText())
+
     def extend_context_menu(self, menu: QMenu):
         menu.addSeparator()
 

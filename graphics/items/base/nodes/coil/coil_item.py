@@ -94,6 +94,23 @@ class CoilItem(NodeItem):
     # Desenho
     # --------------------------
 
+
+    def build_properties_dialog(self):
+        from graphics.utils.properties_dialog import PropertiesDialog
+        dialog = PropertiesDialog(title="Coil — Properties")
+        current_name = self.properties["sensor"]["coil"].get("name", "")
+        dialog._name_field = dialog.add_text_field(
+            "Nome do sensor",
+            placeholder=f"ex: {self.PREFIX}1",
+            value=current_name,
+        )
+        return dialog
+
+    def apply_properties_from_dialog(self, dialog):
+        new_name = dialog._name_field.text().strip()
+        if new_name:
+            self._set_sensor_name(new_name)
+
     def update_from_domain(self, domain_node) -> None:
         """Update visual from domain Coil state (called each sim step)."""
         super().update_from_domain(domain_node)

@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class AndValve(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id=node_id, node_type="and_valve", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "and_valve", domain=domain, properties=properties)
 
         # Estado interno (shuttle com memória)
         self.active_input: str = "default"  # estado inicial

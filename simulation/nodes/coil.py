@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class Coil(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "coil", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "coil", domain=domain, properties=properties)
 
         # Estado interno: 0 = desligado, 1 = energizado
         self.energized = 0

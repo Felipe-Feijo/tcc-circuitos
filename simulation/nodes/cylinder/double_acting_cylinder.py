@@ -3,8 +3,8 @@ from simulation.nodes.nodes import Node
 
 
 class DoubleActingCylinder(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "double_acting_cylinder", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "double_acting_cylinder", domain=domain, properties=properties)
 
         self.position = 0
 

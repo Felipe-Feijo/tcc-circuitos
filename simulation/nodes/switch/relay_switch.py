@@ -2,8 +2,8 @@ from simulation.nodes.nodes import Node
 
 
 class RelaySwitch(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "relay_switch", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "relay_switch", domain=domain, properties=properties)
 
         self.state = 0  # 0 = repouso, 1 = acionado
         self.relay_sensor_name = self.properties.get("relay_sensor")

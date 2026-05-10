@@ -2,8 +2,8 @@ from simulation.nodes.nodes import Node
 
 class Reservoir(Node):
 
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "reservoir", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "reservoir", domain=domain, properties=properties)
         self.pressure = self.properties.get("pressure", 0.0)
         self.flow_var = f"Q_{self.id}"  # Q livre, absorve/fornece o que precisar
 

@@ -28,13 +28,29 @@ class Anchor:
 
 
 class Node:
-    def __init__(self, node_id, node_type, **kwargs):
+    """Base class for all domain (simulation) nodes.
+
+    Subclasses declare their node_type as a class attribute and
+    call super().__init__ before accessing self.properties.
+
+    Simulation contract
+    -------------------
+    update(outputs)       called each iteration until stable
+    post_step_update(dt)  called once after convergence
+    handle_command(cmd)   receives dict from NodeItem.command signal
+    get_state() / set_state()  used by history (step_backward)
+    get_internal_connections() returns [(anchor_a, anchor_b), ...]
+    """
+
+    def __init__(self, node_id: str, node_type: str, *,
+                 domain: str | None = None,
+                 properties: dict | None = None,
+                 **kwargs):
         self.id = node_id
         self.type = node_type
-        self.anchors = {}
-
-        self.domain = kwargs.pop("domain", None)
-        self.properties = kwargs.pop("properties", {}) or {}
+        self.anchors: dict = {}
+        self.domain: str | None = domain
+        self.properties: dict = properties or {}
 
     def add_anchor(self, name, domain) -> Anchor:
         anchor = Anchor(name, self, domain)

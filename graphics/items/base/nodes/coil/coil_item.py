@@ -16,6 +16,7 @@ class CoilItem(NodeItem):
             "sensor": {"coil": {"name": ""}}
         }
         self.sensors = self.properties["sensor"]
+        self.energized: int = 0
         self.initialize_body_visuals()
         self.initialize_anchors()
         self.initialize_label()
@@ -92,6 +93,20 @@ class CoilItem(NodeItem):
     # --------------------------
     # Desenho
     # --------------------------
+
+    def update_from_domain(self, domain_node) -> None:
+        """Update visual from domain Coil state (called each sim step)."""
+        super().update_from_domain(domain_node)
+        self.energized = getattr(domain_node, "energized", 0)
+        self.update()
+
+    def on_simulation_activated(self) -> None:
+        self.energized = 0
+        self.update()
+
+    def reset_visual_state(self) -> None:
+        self.energized = 0
+        super().reset_visual_state()
 
     def paint(self, painter, option, widget=None):
         self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y())), self.body_sprite)

@@ -53,6 +53,16 @@ class SwitchItem(NodeItem):
         self.body_sprite = visual["sprite"]
         self.visual_offset = visual["offset"]
 
+    def mousePressEvent(self, event) -> None:
+        """Toggle switch state on click in simulation mode."""
+        from PyQt6.QtCore import Qt
+        if self.simulation_mode and event.button() == Qt.MouseButton.LeftButton:
+            new_state = 0 if self.body_state else 1
+            self.command.emit(self.id, {"type": "switch", "value": new_state})
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def extend_context_menu(self, menu: QMenu):
         menu.addSeparator()
 

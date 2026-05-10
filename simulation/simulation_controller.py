@@ -1,165 +1,126 @@
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+import logging
+from PyQt6.QtCore import QObject, pyqtSignal
 from simulation.simulation_engine import SimulationEngine
-from collections import deque
+from simulation.step_scheduler import StepScheduler
+from simulation.view_sync import ViewSync
+from simulation.history_manager import HistoryManager
+
+logger = logging.getLogger(__name__)
 
 
 class SimulationController(QObject):
+    """Orchestrates a running simulation.
+
+    Delegates to three focused helpers:
+      StepScheduler   — timer, play/pause, step queue
+      ViewSync        — push domain state into graphical items
+      HistoryManager  — snapshots for step_backward
+
+    The public API is unchanged from the previous monolithic version so
+    SimulationSession and UI code require no updates.
+    """
+
     state_changed = pyqtSignal()
-    def __init__(self, engine: SimulationEngine, max_history=5):
+
+    def __init__(self, engine: SimulationEngine, max_history: int = 5):
         super().__init__()
 
         self.engine = engine
+        self.dt: float = 0.1
 
-        self.on_update_node = None      # dict[NodeItem, DomainNode]
-        self.on_update_connection = None  # dict[ConnectionItem, Connection]
+        self._scheduler = StepScheduler()
+        self._scheduler.step_requested.connect(self._execute_step)
 
-        # ───────── Controle de execução ─────────
-        self.pending_steps = 0
-        self.step_in_progress = False
-        self.playing = False
+        self._view_sync = ViewSync()
+        self._history = HistoryManager(max_history)
 
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._on_timer_tick)
-        self.timer_interval = 1000  # Guarda o intervalo para poder resetar
+    # ── Compatibility properties (Session / UI read these directly) ──────────
 
-        self.dt = 0.1
-        self._speed_index = 0  # índice em SPEED_STEPS
+    @property
+    def playing(self) -> bool:
+        return self._scheduler.playing
 
-        self.history = deque(maxlen=max_history)
+    @property
+    def timer_interval(self) -> int:
+        return self._scheduler.timer_interval
 
-    # ───────────── API pública (UI chama isso) ─────────────
+    @timer_interval.setter
+    def timer_interval(self, value: int) -> None:
+        self._scheduler.timer_interval = value
 
-    def play(self):
-        if self.playing:
-            return
-        self.playing = True
-        self.timer.start(self.timer_interval)
+    @property
+    def on_update_node(self) -> dict:
+        return self._view_sync.node_map
 
-    def pause(self):
-        self.playing = False
-        self.timer.stop()
+    @on_update_node.setter
+    def on_update_node(self, value: dict) -> None:
+        self._view_sync.node_map = value or {}
 
-    def request_step(self, n: int = 1, reset_timer: bool = False):
-        """
-        Solicita n steps.
-        
-        Args:
-            n: número de steps a executar
-            reset_timer: se True e playing=True, reinicia o timer para evitar
-                        steps muito próximos
-        """
-        self.pending_steps += n
-        
-        # 🔄 RESET DO TIMER se solicitado e em modo play
-        if reset_timer and self.playing:
-            self.timer.stop()
-            self.timer.start(self.timer_interval)
-        
-        self._try_consume_steps()
+    @property
+    def on_update_connection(self) -> dict:
+        return self._view_sync.connection_map
 
-    def command(self, node_id: str, cmd: str):
-        node = self.engine.nodes.get(node_id)
-        if not node:
-            print(f"Node {node_id} not found")
-            return
+    @on_update_connection.setter
+    def on_update_connection(self, value: dict) -> None:
+        self._view_sync.connection_map = value or {}
 
-        node.handle_command(cmd)
+    # ── Public API ───────────────────────────────────────────────────────────
 
-        # ✅ Solicita step E reseta o timer
-        self.request_step(1, reset_timer=True)
+    def play(self) -> None:
+        self._scheduler.play()
 
-    # ───────────── Interno ─────────────
+    def pause(self) -> None:
+        self._scheduler.pause()
 
-    def _on_timer_tick(self):
-        self.request_step(1)
-
-    def _try_consume_steps(self):
-        if self.step_in_progress or self.pending_steps <= 0:
-            return
-
-        self._execute_step()
-
-    def set_dt(self, dt: float):
+    def set_dt(self, dt: float) -> None:
         self.dt = dt
 
-    def _execute_step(self):
-        self.step_in_progress = True
-        print("Executing simulation step...")
-        self.pending_steps -= 1
+    def set_timer_interval(self, ms: int) -> None:
+        self._scheduler.set_timer_interval(ms)
 
-        try:
-            self.engine.run_until_stable(dt=self.dt)
-            self._sync_view()
+    def request_step(self, n: int = 1, reset_timer: bool = False) -> None:
+        self._scheduler.request_step(n, reset_timer=reset_timer)
 
-            # 📸 SEMPRE salva estado anterior
-            self._push_snapshot()
+    def command(self, node_id: str, cmd: dict) -> None:
+        node = self.engine.nodes.get(node_id)
+        if not node:
+            logger.warning("command: node %s not found", node_id)
+            return
+        node.handle_command(cmd)
+        self._scheduler.request_step(1, reset_timer=True)
 
-        finally:
-            print("Step complete.")
-            self.step_in_progress = False
-            self.state_changed.emit()
-
-        self._try_consume_steps()
-
-    def _sync_view(self):
-        if self.on_update_node:
-            for node_item, domain_node in self.on_update_node.items():
-                node_item.update_from_domain(domain_node)
-
-        if self.on_update_connection:
-            for conn_item, domain_conn in self.on_update_connection.items():
-                conn_item.set_state(domain_conn.get_state())
-
-    # -----------------------
-    # State snapshot helpers
-    # -----------------------
-
-    def _snapshot(self):
-        return {
-            node_id: node.get_state()
-            for node_id, node in self.engine.nodes.items()
-        }
-
-    def _restore(self, snapshot):
-        for node_id, state in snapshot.items():
-            self.engine.nodes[node_id].set_state(state)
-
-    def step_forward(self):
-        if self.playing:
+    def step_forward(self) -> bool:
+        if self._scheduler.playing:
             return False
-
-        self.request_step(1)
+        self._scheduler.request_step(1)
         return True
 
-    def step_backward(self):
-        if self.playing or not self.can_step_back():
+    def step_backward(self) -> bool:
+        if self._scheduler.playing:
             return False
-
-        self.history.pop()
-        self._restore(self.history[-1])
-
-        # 🔹 reconstroi outputs derivados
-        self.engine.compute_outputs(dt = 0)
-
-        self._sync_view()
+        if not self._history.can_go_back():
+            return False
+        self._history.pop_and_restore(self.engine.nodes)
+        self.engine.compute_outputs(dt=0)
+        self._view_sync.sync()
         self.state_changed.emit()
         return True
-    
-    def can_step_back(self):
-        return len(self.history) > 1
-    
-    def _push_snapshot(self):
-        snap = self._snapshot()
 
-        if self.history and snap == self.history[-1]:
-            return False
+    def can_step_back(self) -> bool:
+        return self._history.can_go_back()
 
-        self.history.append(snap)
-        return True
-    
-    def set_timer_interval(self, ms: int):
-        """Permite ajustar a velocidade do modo play"""
-        self.timer_interval = ms
-        if self.playing:
-            self.timer.stop()
-            self.timer.start(self.timer_interval)
+    # ── Internal ─────────────────────────────────────────────────────────────
+
+    def _execute_step(self) -> None:
+        self._scheduler.mark_step_started()
+        logger.debug("simulation step started")
+        try:
+            self.engine.run_until_stable(dt=self.dt)
+            self._view_sync.sync()
+            self._history.push(self.engine.nodes)
+        except Exception:
+            logger.exception("error during simulation step")
+        finally:
+            logger.debug("simulation step done")
+            self._scheduler.mark_step_done()
+            self.state_changed.emit()

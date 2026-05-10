@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class DirectionalValve(Node):
-    def __init__(self, node_id, node_type, **kwargs):
-        super().__init__(node_id, node_type, **kwargs)
+    def __init__(self, node_id: str, node_type: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, node_type, domain=domain, properties=properties)
 
         # Bits do item gráfico
         self.bits = {"left": 0, "right": 0}

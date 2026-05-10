@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class PressureLine(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "pressure_line", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "pressure_line", domain=domain, properties=properties)
 
     def get_internal_connections(self):
         """

@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class FixedDisplacementPump(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "fixed_displacement_pump", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "fixed_displacement_pump", domain=domain, properties=properties)
         self.flow_in_var  = f"Q_{self.id}_P"   # sucção (P = inlet)
         self.flow_out_var = f"Q_{self.id}_S"   # descarga (S = outlet)
         self.Q_set = self.properties["Q"]

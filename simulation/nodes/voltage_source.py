@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class VoltageSource(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "voltage_source", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "voltage_source", domain=domain, properties=properties)
 
     def update(self, outputs=None):
         # marca todas as anchors como voltage_source + electric

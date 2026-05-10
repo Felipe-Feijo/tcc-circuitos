@@ -2,8 +2,8 @@ from simulation.nodes.nodes import Node
 
 
 class ButtonSwitch(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "button_switch", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "button_switch", domain=domain, properties=properties)
 
         self.state = 0  # 0 = repouso, 1 = acionado
         self.contact_type = self.properties.get("contact_type", "NO")

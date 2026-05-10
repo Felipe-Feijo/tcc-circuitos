@@ -4,6 +4,23 @@ from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.connections.connection_item import ConnectionItem
 from persistence.serializer import serialize_scene, deserialize_scene
 
+def _clear_sensor_names(nodes_data: list) -> None:
+    """Clear sensor/actuator names from copied node data.
+
+    Prevents duplicate sensor names when pasting — the registry will
+    assign new unique names during register_sensors().
+    """
+    for node in nodes_data:
+        props = node.get("properties", {})
+        # cylinder pattern: {"sensors": {"retracted": {"name": ...}, ...}}
+        for sensor in props.get("sensors", {}).values():
+            if isinstance(sensor, dict):
+                sensor["name"] = ""
+        # coil pattern: {"sensor": {"coil": {"name": ...}}}
+        for sensor in props.get("sensor", {}).values():
+            if isinstance(sensor, dict):
+                sensor["name"] = ""
+
 class ClipboardManager:
     def __init__(self):
         self._data = None
@@ -54,7 +71,10 @@ class ClipboardManager:
             conn["source"]["node"] = id_map[conn["source"]["node"]]
             conn["target"]["node"] = id_map[conn["target"]["node"]]
 
-        # 3. desserializa
+        # 3. limpa nomes de sensores para evitar duplicatas no registry
+        _clear_sensor_names(data["nodes"])
+
+        # 4. desserializa
         created_items = deserialize_scene(data, scene, editor_state, clear_scene=False)
 
         # 4. seleção

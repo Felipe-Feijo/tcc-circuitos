@@ -79,6 +79,7 @@ class SimulationSession:
                 continue
 
             item.simulation_mode = True
+            item.on_simulation_activated()
             item.command.connect(self.controller.command)
 
     def _deactivate_node_items(self):

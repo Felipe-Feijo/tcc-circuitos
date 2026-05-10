@@ -332,6 +332,11 @@ class CylinderItem(NodeItem):
             node=self
         )
 
+        # Sync label text — may have been created before name was assigned
+        label = self.special_labels.get(f"sensor_{position}")
+        if label:
+            label.set_text(name)
+
 
     def _unregister_sensor(self, position):
         sensor = self.properties["sensors"][position]
@@ -345,6 +350,19 @@ class CylinderItem(NodeItem):
 
         sensor_options = ["None"] + [desc["label"] for desc in SENSOR_DICT.values()]
         dialog._sensor_label_to_key = {desc["label"]: key for key, desc in SENSOR_DICT.items()}
+
+        # Tracks names already assigned within this dialog session so that
+        # auto-generated names for multiple sensors don't collide.
+        pending_names: set[str] = set()
+
+        def next_name() -> str:
+            """Next available name, skipping names already pending in dialog."""
+            i = 1
+            while True:
+                candidate = f"A{i}"
+                if not self.sensor_registry.exists(candidate) and candidate not in pending_names:
+                    return candidate
+                i += 1
 
         def make_side_widgets(pos):
             sensor = self.properties["sensors"].get(pos)
@@ -360,9 +378,18 @@ class CylinderItem(NodeItem):
                 is_none = label == "None"
                 name_field.setEnabled(not is_none)
                 if not is_none and not name_field.text().strip():
-                    name_field.setText(self.sensor_registry.next_available_name("A"))
+                    name = next_name()
+                    pending_names.add(name)
+                    name_field.setText(name)
+
+            def on_name_changed(text):
+                # Keep pending_names in sync as user types
+                pending_names.discard(name_field.property("_last_pending"))
+                pending_names.add(text)
+                name_field.setProperty("_last_pending", text)
 
             combo.currentTextChanged.connect(on_type_changed)
+            name_field.textChanged.connect(on_name_changed)
             return combo, name_field
 
         dialog._combo_retracted, dialog._name_retracted = make_side_widgets("retracted")

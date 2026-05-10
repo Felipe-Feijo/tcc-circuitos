@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class OrValve(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id=node_id, node_type="or_valve", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "or_valve", domain=domain, properties=properties)
 
         # Estado interno (shuttle com memória)
         self.active_input: str = "X"  # estado inicial

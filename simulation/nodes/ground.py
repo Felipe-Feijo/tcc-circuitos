@@ -1,8 +1,8 @@
 from simulation.nodes.nodes import Node
 
 class Ground(Node):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "ground", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "ground", domain=domain, properties=properties)
 
     def update(self, outputs=None):
         # marca apenas a primeira anchor como ground

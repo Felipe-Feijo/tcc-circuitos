@@ -15,12 +15,11 @@ class GraphBuilder:
                 "Declare o atributo de classe na subclasse de NodeItem."
             )
 
-        kwargs = {}
-        if hasattr(node_item, "properties"):
-            kwargs["properties"] = node_item.properties
-        kwargs["domain"] = node_item.domain
-
-        node = node_cls(node_item.id, **kwargs)
+        node = node_cls(
+            node_item.id,
+            domain=node_item.domain,
+            properties=getattr(node_item, "properties", {}),
+        )
 
         # Determina a ordem das anchors
         if hasattr(node_item, "anchor_list"):

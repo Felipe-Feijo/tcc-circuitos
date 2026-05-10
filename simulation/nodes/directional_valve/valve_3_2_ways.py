@@ -4,8 +4,8 @@ from simulation.nodes.directional_valve.directional_valve import DirectionalValv
 
 
 class Valve_3_2_Ways(DirectionalValve):
-    def __init__(self, node_id, **kwargs):
-        super().__init__(node_id, "valve_3_2_ways", **kwargs)
+    def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
+        super().__init__(node_id, "valve_3_2_ways", domain=domain, properties=properties)
 
         if self.domain == "hydraulic":
             self.k     = self.properties["k"]     # condutância

@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from simulation.hydraulic import (
     HydraulicNode,
@@ -93,11 +93,11 @@ class SimulationEngine:
 
     def _get_connected_group(self, start_anchor, internal=True):
         group = set()
-        queue = [start_anchor]
+        queue = deque([start_anchor])
         domain = start_anchor.domain
 
         while queue:
-            anchor = queue.pop(0)
+            anchor = queue.popleft()
             if anchor in group:
                 continue
             group.add(anchor)
@@ -200,7 +200,7 @@ class SimulationEngine:
     def _reset_continuity(self, pvar: str):
         cont = self._continuities.get(pvar)
         if cont:
-            cont.p_previous = 0.0
+            cont.reset()
 
     def _reset_circuit_continuities(self, circuit_pvars):
         for pvar in circuit_pvars:
@@ -339,7 +339,7 @@ class SimulationEngine:
                     sol[flow_var] = 0.0
             if debug:
                 _print_circuit_state(index, circuit_list, anchor_to_pressure_var, sol)
-            self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
+            self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
             return
 
         # circuito ativo — verifica mudança de topologia
@@ -356,24 +356,22 @@ class SimulationEngine:
 
         if sol is None:
             self._reset_circuit_continuities(circuit_pvars)
-            self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+            self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
             return
 
         for pvar in circuit_pvars:
             if pvar in sol and abs(sol[pvar]) > self.P_MAX:
                 self._reset_circuit_continuities(circuit_pvars)
-                self._mark_circuit_fault(circuit_pvars, anchor_to_pressure_var)
+                self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
                 return
 
         for pvar, continuity in self._continuities.items():
             if pvar in circuit_pvars:
                 continuity.update_pressure(sol)
 
-        self._write_circuit_results(circuit_list, anchor_to_pressure_var, sol)
+        self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var, ctx: ScaleContext):
-        from collections import defaultdict
-
         group_flows = defaultdict(list)
         for node in circuit_list:
             for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -412,8 +410,10 @@ class SimulationEngine:
             print(f"  circuito {index}: falhou — {e}")
             return None
 
-    def _write_circuit_results(self, circuit_nodes, anchor_to_pressure_var, sol):
+    def _write_circuit_results(self, circuit_nodes, circuit_pvars, anchor_to_pressure_var, sol):
         for anchor, pvar in anchor_to_pressure_var.items():
+            if pvar not in circuit_pvars:
+                continue
             if pvar in sol:
                 anchor.pressure = sol[pvar]
                 anchor.fault = False
@@ -431,8 +431,8 @@ class SimulationEngine:
                 if anchor and flow_var in sol:
                     anchor.flow = sol[flow_var]
 
-    def _mark_circuit_fault(self, circuit_pvars, anchor_to_pressure_var):
-        for node in self.nodes.values():
+    def _mark_circuit_fault(self, circuit_list, circuit_pvars, anchor_to_pressure_var):
+        for node in circuit_list:
             node_hydraulic_anchors = {
                 a for a in node.anchors.values()
                 if a.domain == "hydraulic"

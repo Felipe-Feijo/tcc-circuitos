@@ -12,7 +12,7 @@ class DirectOperatedReliefValve(NodeItem):
     node_type = "direct_operated_relief_valve"
     simulation_cls = DirectOperatedReliefValveNode
     def setup(self) -> None:
-        self.properties = {"p_set": 100}
+        self.properties = {}
         self.pixmap = QPixmap("resources/nodes/direct_operated_relief_valve/direct_operated_relief_valve.png")
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
@@ -23,10 +23,13 @@ class DirectOperatedReliefValve(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Relief Valve — Properties")
         if self.domain == "hydraulic":
-            dialog._field_p_set = dialog.add_number_field("P set (Pa)", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("p_set"))
+            dialog._field_p_set = dialog.add_number_field(
+                "Pressão de abertura (Pa)", placeholder="ex: 1.5e7  (= 150 bar)",
+                value=self.properties.get("p_set"),
+                required=True,
+            )
         else:
             dialog._field_p_set = None
-
         return dialog
 
     def apply_properties_from_dialog(self, dialog):

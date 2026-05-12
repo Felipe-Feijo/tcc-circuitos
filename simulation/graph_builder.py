@@ -4,8 +4,9 @@ class GraphBuilder:
     def __init__(self):
         self.nodes = {}
         self.connections = {}
-        self.node_map = {}        # NodeItem -> DomainNode
-        self.connection_map = {}  # ConnectionItem -> DomainConnection
+        self.node_map = {}
+        self.connection_map = {}
+        self._errors: list[str] = []   # acumula erros de props obrigatórias
 
     def add_node_from_item(self, node_item):
         node_cls = node_item.simulation_cls
@@ -15,11 +16,35 @@ class GraphBuilder:
                 "Declare o atributo de classe na subclasse de NodeItem."
             )
 
-        node = node_cls(
-            node_item.id,
-            domain=node_item.domain,
-            properties=getattr(node_item, "properties", {}),
-        )
+        try:
+            node = node_cls(
+                node_item.id,
+                domain=node_item.domain,
+                properties=getattr(node_item, "properties", {}),
+            )
+        except ValueError as e:
+            self._errors.append(str(e))
+            return None
+
+        if hasattr(node_item, "anchor_list"):
+            anchor_items = node_item.anchor_list
+        else:
+            anchor_items = node_item.anchors.values()
+
+        for anchor_item in anchor_items:
+            node.add_anchor(
+                name=anchor_item.name,
+                domain=anchor_item.domain
+            )
+
+        self.nodes[node.id] = node
+        self.node_map[node_item] = node
+        return node
+
+    def raise_if_errors(self):
+        """Lança ValueError consolidado se algum nó teve props faltando."""
+        if self._errors:
+            raise ValueError("\n".join(self._errors))
 
         # Determina a ordem das anchors
         if hasattr(node_item, "anchor_list"):

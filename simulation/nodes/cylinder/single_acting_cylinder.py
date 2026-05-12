@@ -16,33 +16,28 @@ class SingleActingCylinder(Node, HydraulicMixin):
         self.outputs = {}
 
         if self.domain == "hydraulic":
-            bore                 = self.properties["bore"]
+            for key in ("bore", "stroke", "spring_k"):
+                if self.properties.get(key) is None:
+                    raise ValueError(
+                        f"SingleActingCylinder '{self.id}': propriedade obrigatória '{key}' não preenchida."
+                    )
+            bore                 = float(self.properties["bore"])
             self.area            = math.pi * (bore / 2) ** 2
-            self.stroke          = self.properties["stroke"]
-            self.spring_k        = self.properties["spring_k"]
-            self.external_force  = self.properties["external_force"]
-            self.friction        = max(self.properties["friction"], 1e-3)
+            self.stroke          = float(self.properties["stroke"])
+            self.spring_k        = float(self.properties["spring_k"])
+            self.external_force  = float(self.properties.get("external_force") or 0.0)
+            self.friction        = 1e-3   # oculto — valor mínimo para fechar a conta
             self.x               = 0.0
             self.flow_var        = f"Q_{self.id}"
 
-            # Batente spring-damper
-            F_worst = max(
-                abs(self.external_force),
-                self.spring_k * self.stroke,
-                1.0
+            # Batente spring-damper (parâmetros internos, não expostos)
+            F_worst = max(abs(self.external_force), self.spring_k * self.stroke, 1.0)
+            self.k_end = max(
+                self.spring_k * 1e4,
+                F_worst / (self.stroke * 1e-6),
+                1e8,
             )
-            self.k_end = self.properties.get(
-                "k_end",
-                max(
-                    self.spring_k * 1e4,
-                    F_worst / (self.stroke * 1e-6),
-                    1e8
-                )
-            )
-            self.c_end = self.properties.get(
-                "c_end",
-                2.0 * math.sqrt(self.k_end * self.area ** 2 / self.friction)
-            )
+            self.c_end = 2.0 * math.sqrt(self.k_end * self.area ** 2 / self.friction)
 
     # ------------------------------------------------------------------
     # Helpers de batente

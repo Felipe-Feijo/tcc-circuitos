@@ -33,11 +33,8 @@ class DoubleActingCylinder(CylinderItem):
     def setup(self) -> None:
         super().setup()
         if self.domain == "hydraulic":
-            self.properties.setdefault("bore", 0.05)
-            self.properties.setdefault("rod_diameter", 0.025)
-            self.properties.setdefault("stroke", 0.1)
+            # friction não aparece no dialog — fixo em 0 no nó de simulação
             self.properties.setdefault("external_force", 0.0)
-            self.properties.setdefault("friction", 0.0)
             self._rod_pixmap  = QPixmap(f"{_BASE_PATH}/double_acting_cylinder_rod.png")
             self._body_pixmap = QPixmap(f"{_BASE_PATH}/double_acting_cylinder_body.png")
 
@@ -86,15 +83,22 @@ class DoubleActingCylinder(CylinderItem):
         dialog = super().build_properties_dialog()
 
         if self.domain == "hydraulic":
-            dialog._field_bore      = dialog.add_number_field("Diâmetro do furo (m)",  placeholder="ex: 0.05", value=self.properties.get("bore"))
-            dialog._field_rod = dialog.add_number_field("Diâmetro da haste (m)", placeholder="ex: 0.025", value=self.properties.get("rod_diameter"))
-            dialog._field_stroke    = dialog.add_number_field("Curso (m)",              placeholder="ex: 0.1",  value=self.properties.get("stroke"))
-            dialog._field_ext_force = dialog.add_number_field("Carga externa (N)",     placeholder="ex: 0.0",  value=self.properties.get("external_force"))
-            dialog._field_friction  = dialog.add_number_field("Fricção (N·s/m)",       placeholder="ex: 0.0",  value=self.properties.get("friction"))
+            dialog._field_bore      = dialog.add_number_field(
+                "Diâmetro do furo (m)",  placeholder="ex: 0.05",
+                value=self.properties.get("bore"), required=True)
+            dialog._field_rod       = dialog.add_number_field(
+                "Diâmetro da haste (m)", placeholder="ex: 0.025",
+                value=self.properties.get("rod_diameter"), required=True)
+            dialog._field_stroke    = dialog.add_number_field(
+                "Curso (m)",             placeholder="ex: 0.5",
+                value=self.properties.get("stroke"), required=True)
+            dialog._field_ext_force = dialog.add_number_field(
+                "Carga externa (N)",     placeholder="ex: 0.0",
+                value=self.properties.get("external_force", 0.0))
         else:
             dialog._field_bore = dialog._field_stroke = None
-            dialog._field_rod = None
-            dialog._field_ext_force = dialog._field_friction = None
+            dialog._field_rod  = None
+            dialog._field_ext_force = None
 
         return dialog
 
@@ -104,10 +108,9 @@ class DoubleActingCylinder(CylinderItem):
         if dialog._field_bore is not None:
             for field, key in [
                 (dialog._field_bore,      "bore"),
-                (dialog._field_rod, "rod_diameter"),
+                (dialog._field_rod,       "rod_diameter"),
                 (dialog._field_stroke,    "stroke"),
                 (dialog._field_ext_force, "external_force"),
-                (dialog._field_friction,  "friction"),
             ]:
                 text = field.text().strip()
                 self.properties[key] = float(text) if text else None

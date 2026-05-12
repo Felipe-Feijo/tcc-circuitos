@@ -27,20 +27,31 @@ class SimulationSession:
         self.timer_interval = 1000
         self.speed_index = 0
 
-    def start(self):
+    def start(self) -> str | None:
+        """
+        Inicia a simulação.
+
+        Retorna None se iniciou com sucesso, ou uma string de erro
+        se algum componente tem propriedades obrigatórias não preenchidas.
+        O chamador é responsável por exibir a mensagem ao usuário.
+        """
         if self.active:
             print("already running simulation")
-            return
+            return None
 
         # 1️⃣ Build domain graph
         editor = EditorController(self.scene)
         builder = editor.build_graph()
 
-        # 2️⃣ Create engine + controller
-        self.engine = SimulationEngine(
-            nodes=builder.nodes,
-            connections=builder.connections
-        )
+        # 2️⃣ Create engine — pode lançar ValueError se props obrigatórias faltam
+        try:
+            builder.raise_if_errors()
+            self.engine = SimulationEngine(
+                nodes=builder.nodes,
+                connections=builder.connections
+            )
+        except ValueError as e:
+            return str(e)
 
         self.controller = SimulationController(self.engine)
         self.controller.on_update_node = builder.node_map
@@ -56,6 +67,7 @@ class SimulationSession:
 
         # 4️⃣ Initial solve
         self.controller.request_step(1)
+        return None
 
        
 

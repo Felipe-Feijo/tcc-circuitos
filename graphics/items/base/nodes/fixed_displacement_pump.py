@@ -12,7 +12,7 @@ class FixedDisplacementPump(NodeItem):
     node_type = "fixed_displacement_pump"
     simulation_cls = FixedDisplacementPumpNode
     def setup(self) -> None:
-        self.properties = {"Q": 1e-4}
+        self.properties = {}
         self.pixmap = QPixmap("resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png")
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
@@ -23,10 +23,13 @@ class FixedDisplacementPump(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Fixed Displacement Pump — Properties")
         if self.domain == "hydraulic":
-            dialog._field_Q = dialog.add_number_field("Q (m³/s)", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("Q"))
+            dialog._field_Q = dialog.add_number_field(
+                "Vazão (m³/s)", placeholder="ex: 8.3e-4  (= 50 L/min)",
+                value=self.properties.get("Q"),
+                required=True,
+            )
         else:
             dialog._field_Q = None
-
         return dialog
 
     def apply_properties_from_dialog(self, dialog):

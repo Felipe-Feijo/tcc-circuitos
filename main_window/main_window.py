@@ -149,6 +149,12 @@ class MainWindow(QMainWindow):
 
         if mode == EditorMode.SIMULATE:
             self.start_simulation()
+            if not self.simulation.active:
+                # start falhou (props faltando) — volta para SELECT sem recursar
+                self.state.mode = EditorMode.SELECT
+                self._update_mode_actions(EditorMode.SELECT)
+                self.update_simulation_actions()
+                return
         else:
             self.stop_simulation()
 
@@ -239,7 +245,10 @@ class MainWindow(QMainWindow):
         self.palette_dock.setVisible(checked)
 
     def start_simulation(self):
-        self.simulation.start()
+        error = self.simulation.start()
+        if error:
+            QMessageBox.warning(self, "Propriedades incompletas", error)
+            return
         self.simulation.controller.state_changed.connect(self.update_simulation_actions)
 
     def stop_simulation(self):

@@ -57,8 +57,7 @@ class DirectionalValveItem(NodeItem):
         self.properties = {
             "actuators": {"left": None, "right": None}
         }
-        if self.domain == "hydraulic":
-            self.properties.setdefault("k", 1e-4)
+        # k não tem default — obrigatório se domínio hidráulico
 
         self.actuators = {}
         self.actuator_visuals = {}
@@ -526,7 +525,11 @@ class DirectionalValveItem(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Directional Valve — Properties")
         if self.domain == "hydraulic":
-            dialog._field_k = dialog.add_number_field("k", placeholder="ex: 0.85 ou 1.5e-3", value=self.properties.get("k"))
+            dialog._field_k = dialog.add_number_field(
+                "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
+                value=self.properties.get("k"),
+                required=True,
+            )
         else:
             dialog._field_k = None
 

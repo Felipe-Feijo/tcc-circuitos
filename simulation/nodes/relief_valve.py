@@ -6,7 +6,10 @@ class DirectOperatedReliefValve(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "direct_operated_relief_valve", domain=domain, properties=properties)
         if self.domain == "hydraulic":
-            self.p_set        = self.properties.get("p_set", 10)
+            p_set = self.properties.get("p_set")
+            if p_set is None:
+                raise ValueError(f"DirectOperatedReliefValve '{self.id}': propriedade obrigatória 'p_set' não preenchida.")
+            self.p_set        = float(p_set)
             self.flow_var_in  = f"Q_{self.id}_in"
             self.flow_var_out = f"Q_{self.id}_out"
 

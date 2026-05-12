@@ -72,40 +72,79 @@ class PropertiesDialog(QDialog):
         self._main_layout.insertWidget(2, msg)  # após separador
         self._ok_btn.setEnabled(False)
 
-    def add_number_field(self, label: str, placeholder: str = "", value: float | None = None) -> QLineEdit:
+    def add_number_field(
+        self,
+        label: str,
+        placeholder: str = "",
+        value: float | None = None,
+        required: bool = False,
+    ) -> QLineEdit:
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
         if value is not None:
             field.setText(str(value))
 
+        field._is_number_field = True
+        field._is_required = required
+
+        field.textChanged.connect(self._refresh_ok_button)
+
         def on_edit_finished():
-            text = field.text().strip()
-            if not text:
-                field.setStyleSheet("")
-                return
-            try:
-                float(text)
-                field.setStyleSheet("")
-            except ValueError:
-                field.setStyleSheet("border: 1px solid red;")
+            self._validate_field(field)
 
         field.editingFinished.connect(on_edit_finished)
-        field._is_number_field = True  # marca para validação no OK
         self._form_layout.addRow(label, field)
+
+        # valida estado inicial (campo vazio obrigatório já começa com borda)
+        self._validate_field(field)
+        self._refresh_ok_button()
+
         return field
-    
+
+    def _validate_field(self, field: QLineEdit) -> bool:
+        """Valida um campo individualmente. Retorna True se ok."""
+        text = field.text().strip()
+        required = getattr(field, "_is_required", False)
+
+        if not text:
+            if required:
+                field.setStyleSheet("border: 1px solid red;")
+                return False
+            field.setStyleSheet("")
+            return True
+
+        try:
+            float(text)
+            field.setStyleSheet("")
+            return True
+        except ValueError:
+            field.setStyleSheet("border: 1px solid red;")
+            return False
+
+    def _refresh_ok_button(self):
+        """Habilita OK só quando todos os campos obrigatórios estão preenchidos e válidos."""
+        for i in range(self._form_layout.rowCount()):
+            item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
+            if not item:
+                continue
+            widget = item.widget()
+            if not isinstance(widget, QLineEdit):
+                continue
+            if not getattr(widget, "_is_number_field", False):
+                continue
+            if not self._validate_field(widget):
+                self._ok_btn.setEnabled(False)
+                return
+        self._ok_btn.setEnabled(True)
+
     def _validate_and_accept(self):
+        # segunda linha de defesa: valida tudo antes de fechar
         for i in range(self._form_layout.rowCount()):
             item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
             if not item:
                 continue
             widget = item.widget()
             if isinstance(widget, QLineEdit) and getattr(widget, "_is_number_field", False):
-                text = widget.text().strip()
-                if text:
-                    try:
-                        float(text)
-                    except ValueError:
-                        widget.setStyleSheet("border: 1px solid red;")
-                        return  # não fecha
+                if not self._validate_field(widget):
+                    return  # não fecha
         self.accept()

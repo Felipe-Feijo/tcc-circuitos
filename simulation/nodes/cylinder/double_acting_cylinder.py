@@ -16,16 +16,21 @@ class DoubleActingCylinder(Node, HydraulicMixin):
         self.outputs = {}
 
         if self.domain == "hydraulic":
-            bore     = self.properties["bore"]
-            rod      = self.properties["rod_diameter"]
+            for key in ("bore", "rod_diameter", "stroke"):
+                if self.properties.get(key) is None:
+                    raise ValueError(
+                        f"DoubleActingCylinder '{self.id}': propriedade obrigatória '{key}' não preenchida."
+                    )
+            bore     = float(self.properties["bore"])
+            rod      = float(self.properties["rod_diameter"])
             self.area_a = math.pi * (bore / 2) ** 2
             self.area_b = self.area_a - math.pi * (rod / 2) ** 2
-            self.stroke         = self.properties["stroke"]
-            self.external_force = self.properties["external_force"]
-            self.friction       = max(self.properties["friction"], 1e-3)
+            self.stroke         = float(self.properties["stroke"])
+            self.external_force = float(self.properties.get("external_force") or 0.0)
+            self.friction       = 1e-3   # oculto — valor mínimo para fechar a conta
             self.x              = 0.0
-            self.locked_fwd     = False  # travado no avanço (x >= stroke)
-            self.locked_bwd     = False  # travado no recuo  (x <= 0)
+            self.locked_fwd     = False
+            self.locked_bwd     = False
             self.flow_var_a     = f"Q_{self.id}_a"
             self.flow_var_b     = f"Q_{self.id}_b"
 

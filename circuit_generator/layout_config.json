@@ -1,0 +1,32 @@
+{
+  "_comment": "Todos os valores em pixels. Edite aqui para ajustar o espaçamento do circuito gerado.",
+
+  "origin": {
+    "x": 120,
+    "y": 60
+  },
+
+  "columns": {
+    "cylinder_group_width": 460,
+    "step_module_width": 230,
+    "infra_button_offset_x": 150,
+    "infra_and_offset_x": 320,
+    "relay_switch_half_offset": 0.5
+  },
+
+  "rows": {
+    "cylinder":   0,
+    "main_valve": 230,
+    "infra":      400,
+    "memory":     560,
+    "steps":      560,
+    "signals":    760,
+    "electric":   900
+  },
+
+  "offsets": {
+    "exhaust_dx": 80,
+    "exhaust_dy": 60,
+    "ground_dx": 100
+  }
+}

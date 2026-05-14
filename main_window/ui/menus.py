@@ -8,6 +8,8 @@ def create_menus(main_window, actions):
     file_menu.addAction(actions["save"])
     file_menu.addAction(actions["save_as"])
     file_menu.addSeparator()
+    file_menu.addAction(actions["new_from_sequence"])
+    file_menu.addSeparator()
     file_menu.addAction(actions["exit"])
 
     edit_menu = menubar.addMenu("Edit")

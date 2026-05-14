@@ -15,6 +15,7 @@ from graphics.items.base.nodes.exhaust import Exhaust
 
 from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from graphics.items.base.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
+from graphics.items.base.nodes.directional_valve.valve_5_2_ways import Valve_5_2_Ways
 
 
 from graphics.items.base.nodes.coil.solenoid_coil import SolenoidCoil
@@ -48,6 +49,13 @@ def regsiter_pneumatic_nodes(palette, on_add_node):
             "resources/nodes/valve_4_2_ways/valve_4_2_body_right.png"
         ),
         callback=lambda: on_add_node(NodeDescriptor(Valve_4_2_Ways, domain=domain))
+    )
+    pneumatic.add_node(
+        name="Valve_5_2_Ways",
+        pixmap=generate_pixmap_for_palette(
+            "resources/nodes/valve_5_2_ways/valve_5_2_body_right.png"
+        ),
+        callback=lambda: on_add_node(NodeDescriptor(Valve_5_2_Ways, domain=domain))
     )
     pneumatic.add_node(
         name="SingleActingCylinder",

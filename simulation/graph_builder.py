@@ -45,24 +45,6 @@ class GraphBuilder:
         """Lança ValueError consolidado se algum nó teve props faltando."""
         if self._errors:
             raise ValueError("\n".join(self._errors))
-
-        # Determina a ordem das anchors
-        if hasattr(node_item, "anchor_list"):
-            # usa a lista ordenada
-            anchor_items = node_item.anchor_list
-        else:
-            # fallback: dict.values(), ordem arbitrária
-            anchor_items = node_item.anchors.values()
-
-        for anchor_item in anchor_items:
-            node.add_anchor(
-                name=anchor_item.name,
-                domain=anchor_item.domain
-            )
-
-        self.nodes[node.id] = node
-        self.node_map[node_item] = node
-        return node
     
     def add_connection_from_item(self, connection_item):
         """

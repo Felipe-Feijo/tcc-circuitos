@@ -346,7 +346,7 @@ class NodeItem(DiagramItemBase):
             self.update_connections()
 
         elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
-            if self.editor:
+            if self.editor and hasattr(self.editor, "theme_changed"):
                 try:
                     self.editor.theme_changed.disconnect(self.on_theme_changed)
                 except (TypeError, RuntimeError):

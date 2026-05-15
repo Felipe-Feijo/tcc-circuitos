@@ -22,5 +22,5 @@ def _open_dialog(main_window):
             dialog.method,
             dialog.sub_type,
             main_window.scene,
-            main_window.editor_controller,
+            main_window.state,
         )

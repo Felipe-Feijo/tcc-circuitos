@@ -29,7 +29,7 @@ class ConnectionItem(DiagramItemBase):
 
         # Pens para cada domínio
         if self.domain == "pneumatic":
-            self.pen = QPen(Qt.GlobalColor.black, 3)
+            self.pen = QPen(Qt.GlobalColor.white, 3)
         elif self.domain == "electric":
             self.pen = QPen(Qt.GlobalColor.white, 3)
         elif self.domain == "hydraulic":

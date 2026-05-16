@@ -410,7 +410,10 @@ def apply(data: dict) -> dict:
             x = prev_x + MC_CHAIN_OFFSET
 
         mc_x_by_idx[n_idx] = x
-        y = rows["memory"] + n_idx * cols.get("memory_gap_y", 300)
+        n_mc_total = len(deferred_mc)
+        gap = cols.get("memory_gap_y", 400)
+        # mc[0] é o mais baixo (maior y), mc[n_mc-1] é o mais alto (menor y)
+        y = rows["memory"] + (n_mc_total - 1 - n_idx) * gap
         node["position"] = {"x": x, "y": y}
         node_pos[nid] = (x, y)
         node.pop("_role", None)

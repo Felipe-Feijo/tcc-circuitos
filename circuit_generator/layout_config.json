@@ -22,7 +22,7 @@
     "sig_pilot_offset_PL": -50,
     "sig_pilot_offset_PR": 50,
     "sig_pilot_offset_y": 300,
-    "memory_gap_y": 300
+    "memory_gap_y": 400
   },
   "rows": {
     "cylinder": -220,

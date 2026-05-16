@@ -13,7 +13,7 @@ from simulation.hydraulic import (
 
 
 class SimulationEngine:
-    def __init__(self, nodes, connections, max_iterations=100000):
+    def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes
         self.connections = connections
         self.max_iterations = max_iterations

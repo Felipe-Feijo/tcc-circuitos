@@ -118,9 +118,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(exh_v42, "R", f"gen-v42-{letter}", "P")
         connect(ps_v42,  "P", f"gen-v42-{letter}", "R")
 
-    # ── 3. Infraestrutura principal ──────────────────────────────────────────
-
-    add_node("gen-ps", "PressureSource", "pressure_source")
+    # ── 3. Botão de início ───────────────────────────────────────────────────
 
     add_node("gen-btn", "Valve_3_2_Ways", "button",
              properties={
@@ -133,11 +131,15 @@ def generate(events: list[tuple[str, str]]) -> dict:
     connect(exh_btn, "R", "gen-btn", "R")
 
     # ── 4. Memórias (valve_5_2_ways) ─────────────────────────────────────────
+    #
+    # Indexação: mc[0] = mais baixo (recebe btn), mc[N-2] = mais alto
+    # mem_ids[i] corresponde a mc[i]
 
-    mem_ids = [f"gen-mc-grp{i+1}-grp{i+2}" for i in range(n_groups - 1)]
+    mem_ids = [f"gen-mc-{i}" for i in range(n_groups - 1)]
+    n_mc    = len(mem_ids)
 
-    for mem_id in mem_ids:
-        add_node(mem_id, "Valve_5_2_Ways", f"memory:{mem_ids.index(mem_id)}",
+    for i, mem_id in enumerate(mem_ids):
+        add_node(mem_id, "Valve_5_2_Ways", f"memory:{i}",
                  properties={
                      "actuators": {
                          "left":  {"type": "pilot"},
@@ -151,22 +153,13 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(mem_id, "R1", exh1, "R")
         connect(mem_id, "R2", exh2, "R")
 
-    if mem_ids:
-        connect("gen-ps", "P", mem_ids[-1], "P")
-        for i in range(len(mem_ids) - 1, 0, -1):
-            connect(mem_ids[i], "B", mem_ids[i - 1], "P")
-
     # ── 5. Linhas de pressão de grupo ────────────────────────────────────────
-    #
-    # Cada PressureLine recebe (n_cyls * _ANCHORS_PER_ACTUATOR) anchors,
-    # numerados X1, X2, ..., Xn.
-    # next_anchor(pl_id) entrega o próximo em ordem crescente — sem magic numbers.
 
     n_pl_anchors = n_cyls * _ANCHORS_PER_ACTUATOR
     all_anchors  = [f"X{i}" for i in range(1, n_pl_anchors + 1)]
 
     pl_grp_ids: list[str] = []
-    _pl_counter: dict[str, int] = {}  # pl_id → próximo índice (começa em 1)
+    _pl_counter: dict[str, int] = {}
 
     for g in range(n_groups):
         pl_id = f"gen-pl-grp{g + 1}"
@@ -176,7 +169,6 @@ def generate(events: list[tuple[str, str]]) -> dict:
                  properties={"anchors": all_anchors.copy()})
 
     def next_anchor(pl_id: str) -> str:
-        """Retorna o próximo anchor livre da PressureLine, em ordem crescente."""
         idx = _pl_counter[pl_id]
         _pl_counter[pl_id] = idx + 1
         if idx > n_pl_anchors:
@@ -186,28 +178,69 @@ def generate(events: list[tuple[str, str]]) -> dict:
             )
         return f"X{idx}"
 
-    # Conecta memórias / botão às pl-grp
+    # ── 5b. Encadeamento de pressão ───────────────────────────────────────────
+    #
+    # Topologia cascata (mc[0]=mais baixo, mc[N-2]=mais alto, pl[0]=primeira):
+    #
+    #   btn.A    → mc[0].P
+    #   mc[i].A  → mc[i+1].P          para i = 0..N-3
+    #   mc[N-2].A → pl[0]             (mais alto alimenta primeira pl)
+    #   mc[i].B  → pl[N-1-i]          mc[0].B→pl[N-1], mc[1].B→pl[N-2], ...
+    #
+    # Pilots:
+    #   mc[0].PL  ← btn.A
+    #   pl[i].Xi  → mc[N-2-i].PR      comuta mc correspondente
+    #   pl[i].Xi  → mc[N-2-i-1].PL   seta mc abaixo para posição A (exceto i=N-2)
+
     if mem_ids:
+        # mc[0].P ← PressureSource dedicado
+        ps_mc = add_ps("pressure_source:mc0")
+        connect(ps_mc, "P", mem_ids[0], "P")
+        # mc[i].A → mc[i+1].P
+        for i in range(n_mc - 1):
+            connect(mem_ids[i], "A", mem_ids[i + 1], "P")
+        # mc[N-2].A → pl[0]
+        connect(mem_ids[-1], "A", pl_grp_ids[0], next_anchor(pl_grp_ids[0]))
+        # mc[i].B → pl[N-1-i]
         for i, mem_id in enumerate(mem_ids):
-            connect(mem_id, "A", pl_grp_ids[i], next_anchor(pl_grp_ids[i]))
-        connect(mem_ids[0], "B", pl_grp_ids[-1], next_anchor(pl_grp_ids[-1]))
+            pl_idx = n_groups - 1 - i
+            connect(mem_id, "B", pl_grp_ids[pl_idx], next_anchor(pl_grp_ids[pl_idx]))
+        # mc[0].PL ← btn.A  (feito na seção 7)
     else:
-        # Circuito de 1 grupo: botão alimenta direto a pl-grp[0]
+        # 1 grupo: btn alimenta pl[0] direto
         connect("gen-btn", "A", pl_grp_ids[0], next_anchor(pl_grp_ids[0]))
 
     # ── 6. Válvulas de sinalização por evento ────────────────────────────────
+    #
+    # Arquitetura cascata correta:
+    #
+    #   Para cada grupo g com eventos [E0, E1, ..., En]:
+    #     pl_grp[g] → v42-E0.pilot      (barramento aciona o 1º cilindro direto)
+    #     pl_grp[g] → sig_E0.P          (sig_E0 confirma que E0 terminou)
+    #     sig_E0.A  → v42-E1.pilot      (sig_E0 aciona o próximo)
+    #     pl_grp[g] → sig_E1.P
+    #     sig_E1.A  → v42-E2.pilot
+    #     ...
+    #     sig_En.A  → mc[g].PR          (última sig → troca de grupo)
+    #               ou btn.P            (se for o último grupo → fecha ciclo)
 
     all_events_flat = [(g_idx, e_idx, letter, direction)
                        for g_idx, group in enumerate(groups)
                        for e_idx, (letter, direction) in enumerate(group)]
 
     for flat_idx, (g_idx, e_idx, letter, direction) in enumerate(all_events_flat):
-        is_last_event = (e_idx == len(groups[g_idx]) - 1)
-        is_last_group = (g_idx == n_groups - 1)
-        s_id          = sig_id(letter, direction)
-        sensor        = confirm_sensor(letter, direction)
-        v42_pilot     = "PL" if direction == "+" else "PR"
-        pl_current    = pl_grp_ids[g_idx]
+        is_first_event = (e_idx == 0)
+        is_last_event  = (e_idx == len(groups[g_idx]) - 1)
+        is_last_group  = (g_idx == n_groups - 1)
+        s_id           = sig_id(letter, direction)
+        sensor         = confirm_sensor(letter, direction)
+        v42_pilot      = "PL" if direction == "+" else "PR"
+        pl_current     = pl_grp_ids[g_idx]
+
+        # Primeiro evento do grupo: barramento aciona o cilindro diretamente
+        if is_first_event:
+            connect(pl_current, next_anchor(pl_current),
+                    f"gen-v42-{letter}", v42_pilot)
 
         add_node(s_id, "Valve_3_2_Ways", f"signal_valve:{g_idx * 100 + e_idx}",
                  properties={
@@ -220,39 +253,47 @@ def generate(events: list[tuple[str, str]]) -> dict:
         exh_sig = add_exhaust(f"exhaust:sig-{g_idx * 100 + e_idx}")
         connect(exh_sig, "R", s_id, "R")
 
-        if is_last_event and not is_last_group:
-            # ── Transição de grupo ───────────────────────────────────────────
-            # sig.P ← barramento atual; sig.A → mc.PR (dispara troca de grupo)
-            connect(pl_current, next_anchor(pl_current), s_id, "P")
-            connect(s_id, "A", mem_ids[g_idx], "PR")
+        # Barramento alimenta a sig (todos os casos)
+        connect(pl_current, next_anchor(pl_current), s_id, "P")
 
-            # Pilot do PRIMEIRO evento do grupo seguinte via barramento seguinte
-            next_letter, next_dir = all_events_flat[flat_idx + 1][2:4]
-            next_pilot = "PL" if next_dir == "+" else "PR"
-            pl_next = pl_grp_ids[g_idx + 1]
-            connect(pl_next, next_anchor(pl_next), f"gen-v42-{next_letter}", next_pilot)
+        if is_last_event and not is_last_group:
+            # ── Última sig do grupo → mc.PR ──────────────────────────────────
+            # A sig confirma o fim do último movimento do grupo e comuta a
+            # memória correspondente: mc[n_mc - 1 - g_idx].PR
+            connect(s_id, "A", mem_ids[n_mc - 1 - g_idx], "PR")
 
         elif is_last_event and is_last_group:
-            # ── Fechamento do ciclo ──────────────────────────────────────────
-            # sig.P ← barramento atual; sig.A → btn.P (fecha o ciclo)
-            connect(pl_current, next_anchor(pl_current), s_id, "P")
+            # ── Última sig do último grupo → fecha ciclo ──────────────────────
             if mem_ids:
                 connect(s_id, "A", "gen-btn", "P")
 
         else:
-            # ── Evento normal ────────────────────────────────────────────────
-            # sig.P ← barramento; sig.A → pilot do próximo v42
-            connect(pl_current, next_anchor(pl_current), s_id, "P")
+            # ── Evento normal: sig aciona o PRÓXIMO cilindro do grupo ─────────
             next_letter, next_dir = all_events_flat[flat_idx + 1][2:4]
             next_pilot = "PL" if next_dir == "+" else "PR"
             connect(s_id, "A", f"gen-v42-{next_letter}", next_pilot)
 
-            # Pilot do cilindro atual via barramento do grupo atual
-            connect(pl_current, next_anchor(pl_current), f"gen-v42-{letter}", v42_pilot)
-
-    # ── 7. Start: btn.A → mc[0].PL ──────────────────────────────────────────
+    # ── 7. Pilots PL/PR das memórias via PressureLines ───────────────────────
+    #
+    # pl[i] pilota mc[N-2-i].PR  (comuta para B → próxima pl ativa)
+    # pl[i] também seta mc[N-2-i-1].PL (prepara mc abaixo para posição A)
+    # exceto pl[N-2] que só pilota mc[0].PR (não há mc[-1])
+    #
+    # Esses connects usam next_anchor das pl correspondentes, e serão
+    # reatribuídos pelo nearest-anchor da fase 3 do layout engine.
+    # Pilots PL das memórias via pressure lines:
+    #   mc[0].PL ← btn.A
+    #   mc[i].PL ← pl[n_mc-i]   para i > 0
+    # Pilots PR: conectados pelas sigs de fim de grupo (seção 6)
     if mem_ids:
+        # mc[0].PL ← btn (sempre)
         connect("gen-btn", "A", mem_ids[0], "PL")
+        # mc[i>0].PL ← pl[n_mc-i]
+        for i, mem_id in enumerate(mem_ids):
+            if i > 0:
+                pl_pl_idx = n_mc - i
+                connect(pl_grp_ids[pl_pl_idx], next_anchor(pl_grp_ids[pl_pl_idx]),
+                        mem_id, "PL")
 
     return {
         "version":     1,

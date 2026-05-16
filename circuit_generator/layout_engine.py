@@ -59,6 +59,9 @@ _ANCHOR_LOCAL: dict[str, dict[str, tuple[float, float]]] = {
         "B":  (450 * 405/450,   0),
         "R1": (450 * 271/450, 180),
         "R2": (450 * 405/450, 180),
+        # Pilots: mesmo padrão da 4/2 — pilot sprite 100px
+        "PL": (-100, 180 * 0.6222),
+        "PR": (550,  180 * 0.6222),
     },
 }
 
@@ -146,6 +149,7 @@ def apply(data: dict) -> dict:
     # O filho (Exhaust/PS) pode ser source ou target.
     child_parent: dict[str, tuple[str, str]] = {}  # child_id → (parent_id, parent_anchor)
     sig_to_v42_pilot: dict[str, tuple[str, str]] = {}  # sig_id → (v42_id, 'PL'|'PR')
+    mc_to_pl: dict[str, str] = {}                        # mc_id → pl_id alimentada por mc.A
 
     for conn in data.get("connections", []):
         src_id  = conn["source"]["node"]
@@ -168,8 +172,14 @@ def apply(data: dict) -> dict:
                 node_type_map.get(tgt_id) == "Valve_4_2_Ways" and tgt_anc in ("PL", "PR")):
             sig_to_v42_pilot[src_id] = (tgt_id, tgt_anc)
 
+        # Mapear memory → pl-grp alimentada por mc.A (usada para centralizar mc)
+        if (node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "A" and
+                node_type_map.get(tgt_id) == "PressureLine"):
+            mc_to_pl[src_id] = tgt_id
+
     # ── Fase 1: posicionar nós primários ─────────────────────────────────────
-    deferred: list[dict] = []  # Exhaust / PS que serão posicionados na fase 2
+    deferred: list[dict] = []     # Exhaust / PS → posicionados na fase 2
+    deferred_mc: list[dict] = []  # Valve_5_2_Ways → posicionados na fase 2.5
 
     for node in data["nodes"]:
         role: str = node.get("_role", "")
@@ -222,10 +232,10 @@ def apply(data: dict) -> dict:
             y = rows["main_valve"]
 
         # ── Memórias 5/2 ─────────────────────────────────────────────────────
+        # Diferido para fase 2.5 — precisa da PressureLine já posicionada.
         elif role.startswith("memory:"):
-            n = int(role.split(":", 1)[1])
-            x = memory_x + n * cyl_group_w
-            y = rows["memory"]
+            deferred_mc.append(node)
+            continue
 
         # ── Linhas de pressão de grupo ────────────────────────────────────────
         elif role.startswith("pressure_line_group:"):
@@ -313,48 +323,101 @@ def apply(data: dict) -> dict:
 
     # ── Fase 2: posicionar Exhaust / PressureSource ancorados ao pai ──────────
     #
-    # Para cada filho diferido:
-    #   1. Obtém posição do pai (já em node_pos).
-    #   2. Calcula posição de cena do anchor pai:
-    #        anchor_scene = parent_pos + anchor_local_offset
-    #   3. Calcula posição do filho tal que seu próprio anchor de conexão
-    #      fique alinhado horizontalmente com anchor pai, e imediatamente
-    #      abaixo (+ gap):
-    #        child.x = anchor_scene_x - child_anchor_local_x
-    #        child.y = anchor_scene_y + gap
+    # Se o pai ainda não foi posicionado (ex: Exhaust de mc, que é diferido para
+    # fase 2.5), o nó vai para deferred_late e é processado após a fase 2.5.
 
-    for node in deferred:
+    def _position_child(node: dict) -> bool:
+        """Tenta posicionar um filho. Retorna True se conseguiu, False se o pai
+        ainda não está em node_pos."""
         nid   = node["id"]
         ntype = node["type"]
-        role  = node.get("_role", "")
 
         parent_id, parent_anc = child_parent[nid]
+        if parent_id not in node_pos:
+            return False  # pai ainda não posicionado
+
         parent_ntype = node_type_map.get(parent_id, "")
+        px, py = node_pos[parent_id]
 
-        # Posição do pai (pode não estar em node_pos se também foi diferido — improvável)
-        px, py = node_pos.get(parent_id, (0.0, 0.0))
-
-        # Offset local do anchor do pai
         parent_anc_local = _anchor_local(parent_ntype, parent_anc)
         if parent_anc_local is None:
-            # Tipo de pai desconhecido → fallback simples
             x, y = px, py + 100
         else:
             anc_x = px + parent_anc_local[0]
             anc_y = py + parent_anc_local[1]
-
-            # Offset local do próprio anchor de conexão do filho
             child_anc_name  = _CHILD_CONNECT_ANCHOR[ntype]
             child_anc_local = _anchor_local(ntype, child_anc_name)
             child_dx = child_anc_local[0] if child_anc_local else 0.0
-
             x = anc_x - child_dx
             y = anc_y + gap
 
         node["position"] = {"x": x, "y": y}
         node_pos[nid] = (x, y)
         node.pop("_role", None)
+        return True
 
+    deferred_late: list[dict] = []
+    for node in deferred:
+        if not _position_child(node):
+            deferred_late.append(node)
+
+
+    # ── Fase 2.5: posicionar memórias 5/2 centradas sobre a PressureLine ────────
+    #
+    # Cada memória é centralizada pela PL que ela alimenta via mc.A → pl.
+    # Centro da PL: pl.x + PL_PIX_W/2 + (n_anchors - 1) * PL_SPACING / 2
+    # Centro do sprite v52: 225 (width=450 / 2)
+    # → mc.x = pl_center - 225
+    #
+    # O encadeamento mc[n].B → mc[n-1].P é tratado pela fase 3 (anchor mais próximo).
+
+    MC_PL_PIX_W   = 71
+    MC_PL_SPACING = 120
+    V52_SPRITE_CX = 225  # 450 / 2
+
+    pl_node_by_id = {n["id"]: n for n in data["nodes"] if n["type"] == "PressureLine"}
+
+    # V52 anchor local x — usados para alinhar o encadeamento mc[n].B → mc[n-1].P
+    # B_x=405, P_x=338 → mc[n].x = mc[n-1].x + (P_x - B_x) = mc[n-1].x - 67
+    V52_B_X = 450 * 405/450   # 405.0
+    V52_P_X = 450 * 338/450   # 338.0
+    MC_CHAIN_OFFSET = V52_P_X - V52_B_X  # -67.0
+
+    # Ordenar deferred_mc por n_idx para processar mc[0] antes de mc[1], etc.
+    deferred_mc.sort(key=lambda nd: int(nd.get("_role","memory:0").split(":",1)[1]))
+
+    mc_x_by_idx: dict[int, float] = {}  # n_idx → x calculado
+
+    for node in deferred_mc:
+        nid   = node["id"]
+        role  = node.get("_role", "")
+        n_idx = int(role.split(":", 1)[1]) if role.startswith("memory:") else 0
+
+        if n_idx == 0:
+            # mc[0]: centralizado sobre a PL que alimenta
+            pl_id = mc_to_pl.get(nid)
+            if pl_id and pl_id in node_pos and pl_id in pl_node_by_id:
+                pl_node = pl_node_by_id[pl_id]
+                n_anch  = len(pl_node["properties"]["anchors"])
+                pl_x    = node_pos[pl_id][0]
+                pl_center = pl_x + MC_PL_PIX_W / 2 + (n_anch - 1) * MC_PL_SPACING / 2
+                x = pl_center - V52_SPRITE_CX
+            else:
+                x = memory_x  # fallback
+        else:
+            # mc[n]: x alinhado para que mc[n].B fique sobre mc[n-1].P
+            prev_x = mc_x_by_idx.get(n_idx - 1, memory_x + n_idx * cyl_group_w)
+            x = prev_x + MC_CHAIN_OFFSET
+
+        mc_x_by_idx[n_idx] = x
+        y = rows["memory"] + n_idx * cols.get("memory_gap_y", 300)
+        node["position"] = {"x": x, "y": y}
+        node_pos[nid] = (x, y)
+        node.pop("_role", None)
+
+    # ── Fase 2.5 late: posicionar filhos cujo pai era uma memória ───────────────
+    for node in deferred_late:
+        _position_child(node)  # pai já está em node_pos agora
 
     # ── Fase 3: reatribuir anchors das PressureLines pelo vizinho mais próximo ──
     #

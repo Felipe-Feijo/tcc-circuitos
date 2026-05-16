@@ -283,15 +283,19 @@ def generate(events: list[tuple[str, str]]) -> dict:
     # reatribuídos pelo nearest-anchor da fase 3 do layout engine.
     # Pilots PL das memórias via pressure lines:
     #   mc[0].PL ← btn.A
-    #   mc[i].PL ← pl[n_mc-i]   para i > 0
+    #   mc[i].PL ← pl[n_mc-i+1]   para i > 0
+    #
+    # Raciocínio: mc[i].B → pl[N-1-i], portanto a PL que ativa mc[i] de volta
+    # (via PL) é a linha imediatamente abaixo (índice maior) = pl[N-1-i+1] = pl[N-i].
+    # Com n_mc = N-1: pl[N-i] = pl[n_mc-i+1].
     # Pilots PR: conectados pelas sigs de fim de grupo (seção 6)
     if mem_ids:
         # mc[0].PL ← btn (sempre)
         connect("gen-btn", "A", mem_ids[0], "PL")
-        # mc[i>0].PL ← pl[n_mc-i]
+        # mc[i>0].PL ← pl[n_mc-i+1]
         for i, mem_id in enumerate(mem_ids):
             if i > 0:
-                pl_pl_idx = n_mc - i
+                pl_pl_idx = n_mc - i + 1
                 connect(pl_grp_ids[pl_pl_idx], next_anchor(pl_grp_ids[pl_pl_idx]),
                         mem_id, "PL")
 

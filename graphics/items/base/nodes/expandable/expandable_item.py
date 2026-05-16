@@ -135,7 +135,6 @@ class ExpandableItem(NodeItem):
                 self.internal_connections.append(conn)
 
         # passo 3: atualiza visual de todas as conexões
-        print(len(self.internal_connections), "conexões internas")
         self.update_connections()
 
 

@@ -44,10 +44,14 @@ _ANCHOR_LOCAL: dict[str, dict[str, tuple[float, float]]] = {
         "P": (300 * 254/300, 180),
     },
     "Valve_4_2_Ways": {
-        "P": (300 * 191/300, 180),
-        "A": (300 * 191/300,   0),
-        "B": (300 * 256/300,   0),
-        "R": (300 * 256/300, 180),
+        "P":  (300 * 191/300, 180),
+        "A":  (300 * 191/300,   0),
+        "B":  (300 * 256/300,   0),
+        "R":  (300 * 256/300, 180),
+        # Pilots: body.left() - pilot_w e body.right() + pilot_w; y = height*0.6222
+        # pilot sprite = 100×180 → PL.x = 0 - 100 = -100; PR.x = 300 + 100 = 400
+        "PL": (-100, 180 * 0.6222),
+        "PR": (400,  180 * 0.6222),
     },
     "Valve_5_2_Ways": {
         "P":  (450 * 338/450, 180),
@@ -141,6 +145,7 @@ def apply(data: dict) -> dict:
     # conn = { source: {node, anchor}, target: {node, anchor} }
     # O filho (Exhaust/PS) pode ser source ou target.
     child_parent: dict[str, tuple[str, str]] = {}  # child_id → (parent_id, parent_anchor)
+    sig_to_v42_pilot: dict[str, tuple[str, str]] = {}  # sig_id → (v42_id, 'PL'|'PR')
 
     for conn in data.get("connections", []):
         src_id  = conn["source"]["node"]
@@ -157,6 +162,11 @@ def apply(data: dict) -> dict:
                 # Só registra se ainda não foi atribuído
                 if child_id not in child_parent:
                     child_parent[child_id] = (parent_id, parent_anc)
+
+        # Mapear sig_valve → v42 pilot: sig.A → v42.PL ou v42.PR
+        if (node_type_map.get(src_id) == "Valve_3_2_Ways" and src_anc == "A" and
+                node_type_map.get(tgt_id) == "Valve_4_2_Ways" and tgt_anc in ("PL", "PR")):
+            sig_to_v42_pilot[src_id] = (tgt_id, tgt_anc)
 
     # ── Fase 1: posicionar nós primários ─────────────────────────────────────
     deferred: list[dict] = []  # Exhaust / PS que serão posicionados na fase 2
@@ -224,16 +234,49 @@ def apply(data: dict) -> dict:
             y = rows["pl_grp_base"] + n * rows["pl_grp_gap"]
 
         # ── Válvulas de sinalização ───────────────────────────────────────────
+        # Se a sig está ligada diretamente ao pilot de uma v42 (sig.A → v42.PL/PR),
+        # posiciona ela alinhada ao pilot + offset lateral configurável.
+        #
+        #   PL (esquerdo):  v42.PL está em v42.x - 100 (local x=-100)
+        #     sig.A está em sig.x + 254 (local)
+        #     → sig.x = v42.x + PL_x - sig_A_x + offset_esquerda
+        #             = v42.x - 100 - 254 + offset_PL
+        #   PR (direito):   v42.PR está em v42.x + 400 (local x=400)
+        #     → sig.x = v42.x + 400 - 254 + offset_PR
+        #
+        # offset_PL e offset_PR estão em layout_config.json como
+        # "sig_pilot_offset_PL" e "sig_pilot_offset_PR" (ajuste fino visual).
         elif role.startswith("signal_valve:"):
             code  = int(role.split(":", 1)[1])
             g_idx = code // 100
             e_idx = code % 100
-            if g_idx == 0:
-                x = cyl_first_x + e_idx * (cyl_group_w // max(1, 2))
-                y = rows["v42_ps_exh"] - 10
+            nid = node["id"]
+
+            if nid in sig_to_v42_pilot:
+                v42_id, pilot_anc = sig_to_v42_pilot[nid]
+                v42_pos = node_pos.get(v42_id)
+                if v42_pos is not None:
+                    v42_x_pos = v42_pos[0]
+                    pl_local_x, pl_local_y = _ANCHOR_LOCAL["Valve_4_2_Ways"][pilot_anc]  # PL=-100 ou PR=400
+                    sig_A_local_x = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]              # 254
+                    if pilot_anc == "PL":
+                        offset = cols.get("sig_pilot_offset_PL", -50)
+                    else:
+                        offset = cols.get("sig_pilot_offset_PR", 50)
+                    x = v42_x_pos + pl_local_x - sig_A_local_x + offset
+                    y = rows["main_valve"] + cols.get("sig_pilot_offset_y", 0)
+                else:
+                    # v42 ainda não posicionada (não deveria acontecer)
+                    x = cyl_first_x + e_idx * (cyl_group_w // max(1, 2))
+                    y = rows["v42_ps_exh"] - 10
             else:
-                x = memory_x + (e_idx - 1) * (cyl_group_w // 2) + 330
-                y = rows["memory"] + g_idx * 185
+                # sig não conecta a pilot de v42 → posição legacy
+                if g_idx == 0:
+                    x = cyl_first_x + e_idx * (cyl_group_w // max(1, 2))
+                    y = rows["v42_ps_exh"] - 10
+                else:
+                    x = memory_x + (e_idx - 1) * (cyl_group_w // 2) + 330
+                    y = rows["memory"] + g_idx * 185
 
         # ── Elétrico (legacy) ─────────────────────────────────────────────────
         elif role.startswith("step_module:"):
@@ -311,5 +354,76 @@ def apply(data: dict) -> dict:
         node["position"] = {"x": x, "y": y}
         node_pos[nid] = (x, y)
         node.pop("_role", None)
+
+
+    # ── Fase 3: reatribuir anchors das PressureLines pelo vizinho mais próximo ──
+    #
+    # Para cada conexão pl.Xi → nó_destino, calcula a posição X do anchor do
+    # destino em cena e encontra o Xi da PressureLine com menor distância
+    # horizontal, reescrevendo source.anchor.
+    #
+    # Analogamente, para conexões nó_origem → pl.Xi (ex: mc.A → pl), faz o
+    # mesmo pelo lado target.
+    #
+    # Fórmula de posição local do anchor Xi da PressureLine:
+    #   x_local(Xi) = PL_PIX_W / 2 + (i - 1) * PL_SPACING
+    # onde PL_PIX_W = 71 (terminal sprite) e PL_SPACING = 120.
+
+    PL_PIX_W   = 71    # largura do terminal sprite (pressure_line_terminal.png)
+    PL_SPACING = 120   # espaçamento entre anchors (expandable_item.py)
+
+    def pl_anchor_scene_x(pl_id: str, anchor_name: str) -> float | None:
+        """Retorna a posição X em cena do anchor Xi de uma PressureLine."""
+        pl_x, _ = node_pos.get(pl_id, (None, None))
+        if pl_x is None:
+            return None
+        idx = int(anchor_name[1:])  # "X3" → 3
+        return pl_x + PL_PIX_W / 2 + (idx - 1) * PL_SPACING
+
+    def nearest_pl_anchor(pl_node: dict, target_scene_x: float) -> str:
+        """Retorna o nome do anchor Xi mais próximo de target_scene_x."""
+        anchors = pl_node["properties"]["anchors"]
+        pl_x, _ = node_pos[pl_node["id"]]
+        best_name = anchors[0]
+        best_dist = float("inf")
+        for name in anchors:
+            idx = int(name[1:])
+            ax = pl_x + PL_PIX_W / 2 + (idx - 1) * PL_SPACING
+            d  = abs(ax - target_scene_x)
+            if d < best_dist:
+                best_dist = d
+                best_name = name
+        return best_name
+
+    def anchor_scene_x(node_id: str, anchor_name: str) -> float | None:
+        """Posição X em cena de um anchor de qualquer nó já posicionado."""
+        ntype = node_type_map.get(node_id, "")
+        npos  = node_pos.get(node_id)
+        if npos is None:
+            return None
+        local = _anchor_local(ntype, anchor_name)
+        if local is None:
+            return npos[0]  # fallback: x do nó
+        return npos[0] + local[0]
+
+    pl_node_map = {n["id"]: n for n in data["nodes"] if n["type"] == "PressureLine"}
+
+    for conn in data.get("connections", []):
+        src_id  = conn["source"]["node"]
+        tgt_id  = conn["target"]["node"]
+        src_anc = conn["source"]["anchor"]
+        tgt_anc = conn["target"]["anchor"]
+
+        # caso 1: PressureLine → qualquer nó
+        if src_id in pl_node_map and src_anc.startswith("X"):
+            tgt_x = anchor_scene_x(tgt_id, tgt_anc)
+            if tgt_x is not None:
+                conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+
+        # caso 2: qualquer nó → PressureLine
+        elif tgt_id in pl_node_map and tgt_anc.startswith("X"):
+            src_x = anchor_scene_x(src_id, src_anc)
+            if src_x is not None:
+                conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
 
     return data

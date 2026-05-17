@@ -175,10 +175,10 @@ class ConnectionItem(DiagramItemBase):
         else:
             return [p1]
 
-        is_internal = (self.target_anchor and
-                       self.source_anchor.node == self.target_anchor.node)
+        is_internal = (target_anchor and
+                       source_anchor.node == target_anchor.node)
         exit_key = "internal" if is_internal else "external"
-        source_dirs = self.source_anchor.exit_directions.get(exit_key, ["right"])
+        source_dirs = source_anchor.exit_directions.get(exit_key, ["right"])
         exit_dir = self._choose_best_exit_direction(p1, p2, source_dirs)
 
         source_margin, _ = self._compute_margins(p1, p2)
@@ -193,7 +193,7 @@ class ConnectionItem(DiagramItemBase):
             points.append(p2)
             return points
 
-        target_dirs = self.target_anchor.exit_directions.get(exit_key, ["left"])
+        target_dirs = target_anchor.exit_directions.get(exit_key, ["left"])
         entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
         _, target_margin = self._compute_margins(p1, p2)
         p2_in = self._apply_margin(p2, entry_dir, target_margin)
@@ -243,6 +243,7 @@ class ConnectionItem(DiagramItemBase):
         return point
 
     def _get_exit_direction(self) -> str:
+        """Returns the exit direction from the source anchor toward the target."""
         if not self.source_anchor:
             return "right"
         is_internal = (self.target_anchor and
@@ -254,6 +255,29 @@ class ConnectionItem(DiagramItemBase):
             p2 = self.target_anchor.scenePos()
             return self._choose_best_exit_direction(p1, p2, dirs)
         return dirs[0] if dirs else "right"
+
+    def _compute_exit_entry(self):
+        """
+        Returns (p1, p2, p1_out, p2_in, exit_dir, entry_dir) for the current
+        source/target anchors. Assumes both anchors exist and are in the scene.
+        """
+        p1 = self.source_anchor.scenePos()
+        p2 = self.target_anchor.scenePos()
+
+        is_internal = self.source_anchor.node == self.target_anchor.node
+        exit_key = "internal" if is_internal else "external"
+
+        source_dirs = self.source_anchor.exit_directions.get(exit_key, ["right"])
+        exit_dir    = self._choose_best_exit_direction(p1, p2, source_dirs)
+
+        target_dirs = self.target_anchor.exit_directions.get(exit_key, ["left"])
+        entry_dir   = self._choose_best_exit_direction(p2, p1, target_dirs)
+
+        source_margin, target_margin = self._compute_margins(p1, p2)
+        p1_out = self._apply_margin(p1, exit_dir,  source_margin)
+        p2_in  = self._apply_margin(p2, entry_dir, target_margin)
+
+        return p1, p2, p1_out, p2_in, exit_dir, entry_dir
 
     # =========================================================================
     # Routing helpers
@@ -268,10 +292,12 @@ class ConnectionItem(DiagramItemBase):
         exit_conflict_v  = (exit_dir  == "top"    and dy > 0) or (exit_dir  == "bottom" and dy < 0)
         entry_conflict_h = (entry_dir == "left"   and dx < 0) or (entry_dir == "right"  and dx > 0)
         entry_conflict_v = (entry_dir == "top"    and dy < 0) or (entry_dir == "bottom" and dy > 0)
+
         def four_seg(p1, p2):
             if dy != 0:
                 return self._hvhv(p1, p2) if dy > 0 else self._vhvh(p1, p2)
             return self._hvhv(p1, p2) if dx > 0 else self._vhvh(p1, p2)
+
         if is_exit_h:
             if exit_conflict_h:
                 return four_seg(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
@@ -315,113 +341,50 @@ class ConnectionItem(DiagramItemBase):
         self.update()
 
     def adjust_waypoints_for_node_move(self) -> None:
-        """Repair any non-orthogonal segments after a node move.
-
-        This is a generic, position-agnostic pass over the entire inner
-        path  [p1_out, wp0, wp1, …, wpN, p2_in].  It does NOT try to guess
-        which waypoints are "stubs" or "interior" — it simply walks every
-        consecutive pair and, if a segment is diagonal, inserts one
-        L-corner to make it axis-aligned.
-
-        Algorithm
-        ---------
-        For each pair of consecutive points (A, B) in the inner list:
-          • If already ortho → leave them alone.
-          • Otherwise → replace B with an L-corner C so that A→C is
-            axis-aligned, and set the *next* point to be fixed against C.
-
-        The corner orientation is chosen to continue the incoming axis:
-          • If A came from a horizontal segment, keep Y of A → corner at
-            (B.x, A.y), then the next segment goes vertical.
-          • If A came from a vertical   segment, keep X of A → corner at
-            (A.x, B.y), then the next segment goes horizontal.
-
-        The first segment direction is seeded by exit_dir (horizontal /
-        vertical).  Boundary points p1_out and p2_in are never modified
-        (they are locked to the anchor margins).
-
-        After the forward pass the list is re-assigned as self.waypoints
-        (everything except p1_out and p2_in, which are computed on the fly).
-        """
         if getattr(self, '_being_deleted', False):
             return
-        if not self._waypoints_initialized:
+        if not self._waypoints_initialized or not self.waypoints:
             return
         if not self.source_anchor or not self.target_anchor:
             return
         if not self.source_anchor.scene() or not self.target_anchor.scene():
             return
-        if not self.waypoints:
-            return
 
-        p1 = self.source_anchor.scenePos()
-        p2 = self.target_anchor.scenePos()
+        _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
+        wps = [QPointF(wp) for wp in self.waypoints]
 
-        is_internal   = self.source_anchor.node == self.target_anchor.node
-        exit_key      = "internal" if is_internal else "external"
-
-        source_dirs   = self.source_anchor.exit_directions.get(exit_key, ["right"])
-        exit_dir      = self._choose_best_exit_direction(p1, p2, source_dirs)
-        source_margin, target_margin = self._compute_margins(p1, p2)
-        p1_out = self._apply_margin(p1, exit_dir, source_margin)
-
-        target_dirs   = self.target_anchor.exit_directions.get(exit_key, ["left"])
-        entry_dir     = self._choose_best_exit_direction(p2, p1, target_dirs)
-        p2_in  = self._apply_margin(p2, entry_dir, target_margin)
-
-        SNAP = 0.5  # pixels — threshold for "already ortho"
-
-        def is_ortho(a: QPointF, b: QPointF) -> bool:
-            return abs(a.x() - b.x()) < SNAP or abs(a.y() - b.y()) < SNAP
-
-        # Build the mutable inner list: p1_out is fixed; waypoints are mutable;
-        # p2_in is fixed.
-        inner: list[QPointF] = [p1_out] + [QPointF(wp) for wp in self.waypoints] + [p2_in]
-
-        # Track whether the last good segment was horizontal or vertical.
-        # Seed from exit_dir.
-        last_h: bool = exit_dir in ("left", "right")
-
-        new_inner: list[QPointF] = [inner[0]]  # p1_out always stays
-
-        for i in range(1, len(inner)):
-            prev = new_inner[-1]
-            curr = inner[i]
-            is_last = (i == len(inner) - 1)  # curr is p2_in
-
-            if is_ortho(prev, curr):
-                # Already aligned — update last_h correctly:
-                # horizontal segment = same Y; vertical segment = same X
-                last_h = abs(prev.y() - curr.y()) < SNAP
-                new_inner.append(curr)
+        if wps:
+            first = wps[0]
+            if exit_dir in ("left", "right"):
+                first.setY(p1_out.y())
             else:
-                if is_last:
-                    # curr is p2_in (fixed).  Insert a corner before it so
-                    # that prev→corner is ortho AND corner→p2_in is ortho.
-                    if last_h:
-                        # We were going horizontal → now go vertical to p2_in.y,
-                        # then horizontal to p2_in.x
-                        corner = QPointF(prev.x(), curr.y())
-                    else:
-                        corner = QPointF(curr.x(), prev.y())
-                    new_inner.append(corner)
-                    new_inner.append(curr)
-                    last_h = not last_h
-                else:
-                    # curr is a waypoint (mutable).  Snap it to stay ortho
-                    # with prev by continuing the incoming axis direction.
-                    if last_h:
-                        # incoming was horizontal → snap curr to prev's Y
-                        curr = QPointF(curr.x(), prev.y())
-                    else:
-                        # incoming was vertical   → snap curr to prev's X
-                        curr = QPointF(prev.x(), curr.y())
-                    new_inner.append(curr)
-                    # last_h flips because next segment will be perpendicular
-                    last_h = not last_h
+                first.setX(p1_out.x())
+            wps[0] = first
 
-        # Extract waypoints (everything between p1_out and p2_in)
-        self.waypoints = new_inner[1:-1]
+            last = wps[-1]
+            if entry_dir in ("left", "right"):
+                last.setY(p2_in.y())
+            else:
+                last.setX(p2_in.x())
+            wps[-1] = last
+
+        pts = [p1_out] + wps + [p2_in]
+        repaired = [pts[0]]
+
+        for curr in pts[1:]:
+            prev = repaired[-1]
+            dx = abs(curr.x() - prev.x())
+            dy = abs(curr.y() - prev.y())
+            if dx < 0.5 or dy < 0.5:
+                repaired.append(curr)
+                continue
+            corner = QPointF(curr.x(), prev.y()) if dx > dy else QPointF(prev.x(), curr.y())
+            repaired.append(corner)
+            repaired.append(curr)
+
+        self.waypoints = repaired[1:-1]
+        self.prepareGeometryChange()
+        self.update()
 
     # =========================================================================
     # Waypoints — constants
@@ -455,21 +418,6 @@ class ConnectionItem(DiagramItemBase):
         return best_i
 
     def _seg_hit_at(self, scene_pos: QPointF):
-        """
-        Returns (seg_index, seg_a, seg_b) for the closest inner segment.
-
-        Path:  pts[0]=p1  pts[1]=p1_out  [waypoints...]  pts[-2]=p2_in  pts[-1]=p2
-        Inner: pts[1:-1] = [p1_out, wp0, wp1, ..., p2_in]
-
-        Segment i of inner connects inner[i] to inner[i+1].
-          inner[0]   = p1_out        → not a waypoint
-          inner[1]   = waypoints[0]
-          inner[k]   = waypoints[k-1]
-          inner[-1]  = p2_in         → not a waypoint
-
-        So:  seg_a = inner[i]   is a waypoint when i >= 1   → waypoints[i-1]
-             seg_b = inner[i+1] is a waypoint when i+1 <= len(inner)-2 → waypoints[i]
-        """
         pts = self.get_path_points()
         if len(pts) < 2:
             return None
@@ -533,12 +481,20 @@ class ConnectionItem(DiagramItemBase):
     # Waypoints — mutation
     # =========================================================================
 
-    def _delete_waypoint(self, idx: int):
-        if len(self.waypoints) <= 2:
+    def _reroute_waypoints(self):
+        """Discards current waypoints and recomputes the route from scratch."""
+        if not self.source_anchor or not self.target_anchor:
             return
+        if not self.source_anchor.scene() or not self.target_anchor.scene():
+            return
+        _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
+        self.waypoints = [QPointF(pt) for pt in
+                          self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
+        self.prepareGeometryChange()
+
+    def _delete_waypoint(self, idx: int):
         if not (0 <= idx < len(self.waypoints)):
             return
-
         self.prepareGeometryChange()
         self.waypoints.pop(idx)
 
@@ -548,10 +504,24 @@ class ConnectionItem(DiagramItemBase):
             self._selected_wp -= 1
         self._hovered_wp = None
 
-        # Re-run the generic orthogonality repair so removing a waypoint
-        # never leaves diagonal segments behind.
-        self.adjust_waypoints_for_node_move()
+        self._reroute_waypoints()
         self.update()
+
+    def _insert_waypoint_at_segment(self, scene_pos: QPointF):
+        """
+        Inserts a single waypoint on the segment closest to *scene_pos*.
+        Returns the insertion index, or None if no segment was hit.
+        """
+        hit = self._seg_hit_at(scene_pos)
+        if hit is None:
+            return None
+        ins_idx, seg_a, seg_b = hit
+        is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
+        wp = QPointF(scene_pos.x(), seg_a.y()) if is_horizontal else QPointF(seg_a.x(), scene_pos.y())
+        self.prepareGeometryChange()
+        self.waypoints.insert(ins_idx, wp)
+        self.update()
+        return ins_idx
 
     def _reset_drag_state(self):
         self._drag_mode = None
@@ -569,8 +539,6 @@ class ConnectionItem(DiagramItemBase):
         if event.button() == Qt.MouseButton.RightButton:
             idx = self._wp_index_at(sp)
             if idx is not None:
-                # Select this waypoint (so Delete works after the context menu)
-                # but keep the connection itself deselected.
                 self._selected_wp = idx
                 self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
                 self.setSelected(False)
@@ -590,13 +558,9 @@ class ConnectionItem(DiagramItemBase):
 
         self._reset_drag_state()
 
-        # ── Hit on existing waypoint ──────────────────────────────────────
         idx = self._wp_index_at(sp)
         if idx is not None:
             self._selected_wp = None if self._selected_wp == idx else idx
-            # Temporarily disable selectability so Qt's default press
-            # handling cannot select the connection while we're operating
-            # on a waypoint.
             self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
             self.setSelected(False)
             self._drag_mode = 'waypoint'
@@ -610,25 +574,13 @@ class ConnectionItem(DiagramItemBase):
             self._selected_wp = None
             self.update()
 
-        # ── Hit on a segment ──────────────────────────────────────────────
-        # inner = [p1_out, wp0, ..., p2_in]
-        # Segment i: inner[i] → inner[i+1]
-        #   seg_a = inner[i]   is waypoints[i-1]   when i >= 1
-        #   seg_b = inner[i+1] is waypoints[i]     when i+1 <= len(inner)-2
-        #
-        # Strategy: insert two new waypoints AT the segment endpoints,
-        # then drag them together as a pair (segment drag mode).
-        # This is the only approach that stays ortho regardless of which
-        # segment is hit (including those adjacent to source/target).
         hit = self._seg_hit_at(sp)
         if hit is not None:
             ins_idx, seg_a, seg_b = hit
             is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
             self._drag_is_horizontal = is_horizontal
             self.prepareGeometryChange()
-            # ins_idx is the index in inner[]. inner[0]=p1_out is not a waypoint,
-            # so waypoint insert position = ins_idx (inserts before waypoints[ins_idx]).
-            self.waypoints.insert(ins_idx, QPointF(seg_a))
+            self.waypoints.insert(ins_idx,     QPointF(seg_a))
             self.waypoints.insert(ins_idx + 1, QPointF(seg_b))
             self._drag_mode = 'segment'
             self._drag_wp_index = ins_idx
@@ -641,7 +593,6 @@ class ConnectionItem(DiagramItemBase):
     def mouseMoveEvent(self, event):
         sp = event.scenePos()
 
-        # ── Waypoint drag ─────────────────────────────────────────────────
         if self._drag_mode == 'waypoint':
             i = self._drag_wp_index
             if i is not None and 0 <= i < len(self._drag_original_wps):
@@ -671,7 +622,6 @@ class ConnectionItem(DiagramItemBase):
             event.accept()
             return
 
-        # ── Segment drag ──────────────────────────────────────────────────
         if self._drag_mode == 'segment':
             i = self._drag_wp_index
             if i is not None and i + 1 < len(self.waypoints):
@@ -688,7 +638,6 @@ class ConnectionItem(DiagramItemBase):
             event.accept()
             return
 
-        # ── Passive hover ─────────────────────────────────────────────────
         idx = self._wp_index_at(sp)
         if idx != self._hovered_wp:
             self._hovered_wp = idx
@@ -700,31 +649,25 @@ class ConnectionItem(DiagramItemBase):
         if self._drag_mode == 'segment':
             self._collapse_segment_corners()
         self._reset_drag_state()
-        # Re-enable selectability that was suspended during waypoint interaction
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         super().mouseReleaseEvent(event)
-        # super() may have re-selected the connection (Qt default behaviour);
-        # ensure it stays deselected after a waypoint click/drag.
         if was_waypoint_drag and self.isSelected():
             self.setSelected(False)
 
     def _collapse_segment_corners(self):
-        # Remove waypoints that are collinear with both neighbours.
-        # This cleans up the two inserted corners after a segment drag
-        # if they ended up overlapping existing waypoints.
-        if len(self.waypoints) < 3:
+        if not self.waypoints:
             return
         pts = self.get_path_points()
         p1_out = pts[1]  if len(pts) > 1 else None
         p2_in  = pts[-2] if len(pts) > 1 else None
 
         def neighbour(i):
-            if i < 0:               return p1_out
+            if i < 0:                    return p1_out
             if i >= len(self.waypoints): return p2_in
             return self.waypoints[i]
 
         changed = True
-        while changed and len(self.waypoints) > 2:
+        while changed and self.waypoints:
             changed = False
             i = 0
             while i < len(self.waypoints):
@@ -747,23 +690,11 @@ class ConnectionItem(DiagramItemBase):
         self.adjust_waypoints_for_node_move()
 
     def mouseDoubleClickEvent(self, event):
+        """Double-click on a segment inserts a waypoint at that position."""
         if event.button() != Qt.MouseButton.LeftButton:
             super().mouseDoubleClickEvent(event)
             return
-        sp = event.scenePos()
-        idx = self._wp_index_at(sp)
-        if idx is not None and 0 <= idx < len(self.waypoints):
-            self._delete_waypoint(idx)
-            event.accept()
-            return
-        hit = self._seg_hit_at(sp)
-        if hit is not None:
-            ins_idx, seg_a, seg_b = hit
-            is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
-            wp = QPointF(sp.x(), seg_a.y()) if is_horizontal else QPointF(seg_a.x(), sp.y())
-            self.prepareGeometryChange()
-            self.waypoints.insert(ins_idx, wp)
-            self.update()
+        if self._insert_waypoint_at_segment(event.scenePos()) is not None:
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
@@ -807,10 +738,6 @@ class ConnectionItem(DiagramItemBase):
         if getattr(self, '_being_deleted', False):
             return value
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
-            # Never select the connection while the user is interacting with
-            # a waypoint — the waypoint hit handler disables ItemIsSelectable,
-            # but itemChange is a belt-and-suspenders guard for any Qt path
-            # that bypasses the flag check.
             if value and self._drag_mode == 'waypoint':
                 return False
             self.update()

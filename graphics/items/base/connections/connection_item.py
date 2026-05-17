@@ -24,6 +24,20 @@ class ConnectionItem(DiagramItemBase):
         self.temp_target_pos = None
         self._being_deleted = False  # Flag para evitar loops de atualização durante deleção
 
+        # Waypoints manuais em coordenadas de cena.
+        # Vazio = roteamento geométrico automático (comportamento original).
+        self.waypoints: list[QPointF] = []
+        self._waypoints_initialized: bool = False  # True após primeira inicialização automática
+        self._hovered_wp: int | None = None
+        self._drag_mode = None
+        self._drag_wp_index: int | None = None
+        self._drag_is_horizontal: bool = True
+        self._drag_original_wps: list = []
+        self._pending_seg_hit = None
+        self._pending_press_pos: QPointF = QPointF()
+        self._last_exit_dir:  str = "right"
+        self._last_entry_dir: str = "left"
+
         self.setPos(0, 0)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
 
@@ -38,6 +52,7 @@ class ConnectionItem(DiagramItemBase):
         
         self.setZValue(-10)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setAcceptHoverEvents(True)
         self.update()
 
     @property
@@ -246,8 +261,20 @@ class ConnectionItem(DiagramItemBase):
         # Segmento de entrada no target
         p2_in = self._apply_margin(p2, entry_dir, target_margin)
 
-        # Conecta p1_out até p2_in
-        middle_points = self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)
+        # Guarda dirs para uso no mouseReleaseEvent
+        self._last_exit_dir  = exit_dir
+        self._last_entry_dir = entry_dir
+
+        # ── Inicializa waypoints a partir do caminho geométrico (primeira vez) ─
+        if not self._waypoints_initialized:
+            self._waypoints_initialized = True
+            middle_points = self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)
+            # Salva todos os pontos do caminho completo como waypoints
+            # (p1_out e p2_in são os extremos fixos, não ficam nos waypoints)
+            self.waypoints = [QPointF(pt) for pt in middle_points]
+
+        # ── Usa waypoints para construir o caminho ──────────────────────
+        middle_points = self._build_ortho_points(p1_out, p2_in, exit_dir, entry_dir)
         points.extend(middle_points)
 
         # Adiciona o segmento final
@@ -410,6 +437,396 @@ class ConnectionItem(DiagramItemBase):
         self.prepareGeometryChange()
         self.update()
 
+    # =========================================================================
+    # Waypoints — pontos livres em coordenadas de cena
+    # =========================================================================
+    # Cada waypoint é um QPointF livre. O _build_ortho_points faz Ls entre eles.
+    # Hover mostra losango vermelho. Drag cria/move. Duplo-clique remove.
+    # =========================================================================
+
+    _WP_HIT_RADIUS  = 10  # px — raio de snap/hover
+    _WP_HOVER_RANGE = 20  # px — range de detecção de hover (maior que hit radius)
+    _SEG_HIT_DIST   = 8   # px — distância para detectar clique em segmento
+    _DRAG_THRESHOLD = 4   # px — mínimo de movimento para criar waypoint por drag
+
+    @staticmethod
+    def _dist_point_to_seg(px, py, ax, ay, bx, by) -> float:
+        dx, dy = bx - ax, by - ay
+        if dx == 0 and dy == 0:
+            return ((px-ax)**2 + (py-ay)**2) ** 0.5
+        t = max(0.0, min(1.0, ((px-ax)*dx + (py-ay)*dy) / (dx*dx+dy*dy)))
+        return ((px-ax-t*dx)**2 + (py-ay-t*dy)**2) ** 0.5
+
+    def _wp_index_at(self, scene_pos: QPointF, radius: int | None = None) -> int | None:
+        """Índice do waypoint mais próximo dentro do raio dado, ou None."""
+        r = radius if radius is not None else self._WP_HIT_RADIUS
+        r2 = r ** 2
+        best, best_i = r2, None
+        for i, wp in enumerate(self.waypoints):
+            d2 = (scene_pos.x()-wp.x())**2 + (scene_pos.y()-wp.y())**2
+            if d2 < best:
+                best, best_i = d2, i
+        return best_i
+
+    def _seg_hit_at(self, scene_pos: QPointF):
+        """
+        Segmento interno mais próximo dentro de _SEG_HIT_DIST.
+        Retorna (insert_index, a, b) onde a e b são os extremos do segmento, ou None.
+        """
+        pts = self.get_path_points()
+        if len(pts) < 2:
+            return None
+        px, py = scene_pos.x(), scene_pos.y()
+        inner = pts[1:-1]  # exclui stubs source/target
+        best_d, result = self._SEG_HIT_DIST + 1, None
+        for i in range(len(inner) - 1):
+            a, b = inner[i], inner[i+1]
+            d = self._dist_point_to_seg(px, py, a.x(), a.y(), b.x(), b.y())
+            if d < best_d:
+                best_d = d
+                result = (i, QPointF(a), QPointF(b))
+        return result
+
+    def _build_ortho_points(self, p1_out: QPointF, p2_in: QPointF,
+                            exit_dir: str, entry_dir: str) -> list[QPointF]:
+        """
+        Conecta p1_out → waypoints → p2_in mantendo ortogonalidade.
+        Se dois pontos consecutivos já estão alinhados (H ou V), conecta direto.
+        Se estão desalinhados (diagonal), insere um corner para fazer o L.
+        O corner é escolhido para ser consistente com a direção de chegada.
+        """
+        if not self.waypoints:
+            return self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)
+
+        result = []
+        all_pts = [p1_out] + self.waypoints + [p2_in]
+
+        for i in range(len(all_pts) - 1):
+            a = all_pts[i]
+            b = all_pts[i + 1]
+            already_h = abs(a.y() - b.y()) < 0.5
+            already_v = abs(a.x() - b.x()) < 0.5
+
+            if already_h or already_v:
+                # já ortogonal — conecta direto
+                result.append(b)
+            else:
+                # diagonal — precisa de corner
+                # olha de onde viemos para decidir a direção do L
+                if i == 0:
+                    prefer_h = exit_dir in ("left", "right")
+                else:
+                    prev = all_pts[i - 1]
+                    came_h = abs(prev.y() - a.y()) < 0.5
+                    prefer_h = not came_h  # alterna: se veio H, faz V primeiro
+
+                if prefer_h:
+                    result.append(QPointF(b.x(), a.y()))
+                else:
+                    result.append(QPointF(a.x(), b.y()))
+                result.append(b)
+
+        return result
+
+    def _reset_drag_state(self):
+        self._drag_mode = None
+        self._drag_wp_index = None
+        self._drag_is_horizontal = True
+        self._drag_original_wps = []
+        self._pending_seg_hit = None
+        self._pending_press_pos = QPointF()
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        self._reset_drag_state()
+        sp = event.scenePos()
+
+        idx = self._wp_index_at(sp)
+        if idx is not None:
+            self._drag_mode = 'waypoint'
+            self._drag_wp_index = idx
+            self._drag_original_wps = [QPointF(p) for p in self.waypoints]
+            event.accept()
+            return
+
+        hit = self._seg_hit_at(sp)
+        if hit is not None:
+            self._drag_mode = 'pending'
+            self._pending_seg_hit = hit
+            self._pending_press_pos = sp
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        sp = event.scenePos()
+
+        # ── Drag de waypoint individual ──────────────────────────────────
+        if self._drag_mode == 'waypoint':
+            i = self._drag_wp_index
+            if i is not None and 0 <= i < len(self._drag_original_wps):
+                # Trabalha sempre a partir do snapshot original
+                wps = [QPointF(p) for p in self._drag_original_wps]
+                orig = wps[i]
+                wps[i] = sp
+
+                # Vizinho anterior alinhado H → move junto em Y
+                if i > 0:
+                    nb = wps[i-1]
+                    if abs(nb.y() - orig.y()) < 0.5:
+                        wps[i-1] = QPointF(nb.x(), sp.y())
+
+                # Vizinho posterior alinhado H → move junto em Y
+                if i < len(wps) - 1:
+                    nb = wps[i+1]
+                    if abs(nb.y() - orig.y()) < 0.5:
+                        wps[i+1] = QPointF(nb.x(), sp.y())
+
+                # Vizinho anterior alinhado V → move junto em X
+                if i > 0:
+                    nb = wps[i-1]
+                    if abs(nb.x() - orig.x()) < 0.5:
+                        wps[i-1] = QPointF(sp.x(), nb.y())
+
+                # Vizinho posterior alinhado V → move junto em X
+                if i < len(wps) - 1:
+                    nb = wps[i+1]
+                    if abs(nb.x() - orig.x()) < 0.5:
+                        wps[i+1] = QPointF(sp.x(), nb.y())
+
+                self.waypoints = wps
+                self._hovered_wp = i
+                self.prepareGeometryChange()
+                self.update()
+            event.accept()
+            return
+
+        # ── Drag de segmento — aguarda threshold e cria 2 waypoints ──────
+        if self._drag_mode == 'pending':
+            delta = sp - self._pending_press_pos
+            if (delta.x()**2 + delta.y()**2)**0.5 >= self._DRAG_THRESHOLD:
+                ins_idx, seg_a, seg_b = self._pending_seg_hit
+                self._pending_seg_hit = None
+                self.prepareGeometryChange()
+
+                is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
+
+                if is_horizontal:
+                    # segmento horizontal → dois waypoints com Y do mouse,
+                    # X fixos nas extremidades do segmento
+                    wp_a = QPointF(seg_a.x(), sp.y())
+                    wp_b = QPointF(seg_b.x(), sp.y())
+                else:
+                    # segmento vertical → dois waypoints com X do mouse,
+                    # Y fixos nas extremidades do segmento
+                    wp_a = QPointF(sp.x(), seg_a.y())
+                    wp_b = QPointF(sp.x(), seg_b.y())
+
+                self.waypoints.insert(ins_idx,     wp_a)
+                self.waypoints.insert(ins_idx + 1, wp_b)
+                # draga os dois juntos — índice do "par"
+                self._drag_mode = 'segment_pair'
+                self._drag_wp_index = ins_idx  # i e i+1
+                self._drag_is_horizontal = is_horizontal
+                self._hovered_wp = ins_idx
+                self.update()
+            event.accept()
+            return
+
+        # ── Drag de par de waypoints (segmento inteiro) ──────────────────
+        if self._drag_mode == 'segment_pair':
+            i = self._drag_wp_index
+            if i is not None and i + 1 < len(self.waypoints):
+                self.prepareGeometryChange()
+                if self._drag_is_horizontal:
+                    self.waypoints[i]   = QPointF(self.waypoints[i].x(),   sp.y())
+                    self.waypoints[i+1] = QPointF(self.waypoints[i+1].x(), sp.y())
+                else:
+                    self.waypoints[i]   = QPointF(sp.x(), self.waypoints[i].y())
+                    self.waypoints[i+1] = QPointF(sp.x(), self.waypoints[i+1].y())
+                self._hovered_wp = i
+                self.update()
+            event.accept()
+            return
+
+        # ── Hover passivo ─────────────────────────────────────────────────
+        idx = self._wp_index_at(sp)
+        if idx != self._hovered_wp:
+            self._hovered_wp = idx
+            self.update()
+
+        super().mouseMoveEvent(event)
+
+    @staticmethod
+    def _approx_eq(a: QPointF, b: QPointF, tol: float = 0.5) -> bool:
+        return abs(a.x()-b.x()) < tol and abs(a.y()-b.y()) < tol
+
+    def _insert_u_for_diagonals(self, p1_out: QPointF, p2_in: QPointF):
+        """
+        Percorre os segmentos entre p1_out → waypoints → p2_in.
+        Para cada segmento diagonal (não H nem V), insere 2 waypoints
+        no meio formando um U ortogonal.
+        """
+        all_pts = [p1_out] + self.waypoints + [p2_in]
+        result = []
+        changed = False
+
+        for i in range(len(all_pts) - 1):
+            a, b = all_pts[i], all_pts[i+1]
+            is_h = abs(a.y() - b.y()) < 0.5
+            is_v = abs(a.x() - b.x()) < 0.5
+
+            # Só adiciona waypoints dos pontos intermediários (não p1_out nem p2_in)
+            if i > 0:
+                result.append(QPointF(a))
+
+            if not is_h and not is_v:
+                # Segmento diagonal — insere U no meio
+                # O U vai no ponto médio do segmento
+                mid_x = (a.x() + b.x()) / 2
+                mid_y = (a.y() + b.y()) / 2
+                # Decide orientação do U baseada no segmento: H primeiro
+                result.append(QPointF(mid_x, a.y()))
+                result.append(QPointF(mid_x, b.y()))
+                changed = True
+
+        if changed:
+            # Adiciona último waypoint antes de p2_in se existir
+            if len(all_pts) > 2:
+                result.append(QPointF(all_pts[-2]))
+            self.waypoints = result
+
+    def mouseReleaseEvent(self, event):
+        if self._drag_mode == 'waypoint':
+            pts = self.get_path_points()
+            if len(pts) >= 4:
+                self.prepareGeometryChange()
+                self._insert_u_for_diagonals(pts[1], pts[-2])
+                self.update()
+
+        self._reset_drag_state()
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mouseDoubleClickEvent(event)
+            return
+        idx = self._wp_index_at(event.scenePos())
+        if idx is not None and 0 <= idx < len(self.waypoints):
+            self.prepareGeometryChange()
+            self.waypoints.pop(idx)
+            self._hovered_wp = None
+            self.update()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def _draw_waypoint_handles(self, painter: QPainter):
+        """
+        Cinza claro em todos os waypoints quando há hover próximo.
+        Vermelho apenas no waypoint sendo arrastado.
+        Nada visível quando o mouse não está perto.
+        """
+        if self._hovered_wp is None and self._drag_mode is None:
+            return
+        r = self._WP_HIT_RADIUS
+        dragging_idx = self._drag_wp_index if self._drag_mode in ('waypoint', 'segment_pair') else None
+
+        for i, wp in enumerate(self.waypoints):
+            is_dragging = (dragging_idx is not None and
+                           (i == dragging_idx or
+                            (self._drag_mode == 'segment_pair' and i == dragging_idx + 1)))
+            if is_dragging:
+                fill   = QColor(220, 40, 40)
+                border = QColor(255, 120, 120)
+            elif self._hovered_wp is not None:
+                fill   = QColor(200, 200, 200, 200)
+                border = QColor(255, 255, 255, 220)
+            else:
+                continue  # sem hover e sem drag: não desenha
+
+            painter.setPen(QPen(border, 1))
+            painter.setBrush(fill)
+            diamond = QPainterPath()
+            diamond.moveTo(wp.x(),     wp.y() - r)
+            diamond.lineTo(wp.x() + r, wp.y())
+            diamond.lineTo(wp.x(),     wp.y() + r)
+            diamond.lineTo(wp.x() - r, wp.y())
+            diamond.closeSubpath()
+            painter.drawPath(diamond)
+
+    def hoverMoveEvent(self, event):
+        idx = self._wp_index_at(event.scenePos(), self._WP_HOVER_RANGE)
+        if idx != self._hovered_wp:
+            self._hovered_wp = idx
+            self.update()
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        if self._hovered_wp is not None:
+            self._hovered_wp = None
+            self.update()
+        super().hoverLeaveEvent(event)
+
+    def paint(self, painter: QPainter, option, widget=None):
+        points = self.get_path_points()
+        if len(points) < 2:
+            return
+
+        if self.isSelected():
+            pen = QPen(Qt.GlobalColor.blue, 3)
+        else:
+            if self.domain == "pneumatic" and self.state == 1:
+                pen = QPen(Qt.GlobalColor.green, 3)
+            elif self.domain == "electric" and self.state == 1:
+                pen = QPen(Qt.GlobalColor.yellow, 3)
+            elif self.domain == "hydraulic":
+                if self.state == "ERR":
+                    pen = QPen(Qt.GlobalColor.red, 3)
+                elif self.state == "PRESSURIZING":
+                    pen = QPen(QColor(255, 140, 0), 3)
+                elif self.state > 0:
+                    pen = QPen(Qt.GlobalColor.blue, 3)
+                elif self.state < 0:
+                    pen = QPen(QColor(100, 180, 255), 3)
+                else:
+                    pen = QPen(Qt.GlobalColor.cyan, 3)
+            else:
+                pen = self.pen
+
+        painter.setPen(pen)
+        for start, end in zip(points, points[1:]):
+            painter.drawLine(start, end)
+
+        # Losangos dos waypoints — sempre visíveis quando há waypoints
+        if self.waypoints:
+            self._draw_waypoint_handles(painter)
+
+        if self.domain == "hydraulic" and self.state != "ERR" and not self.isSelected():
+            if len(points) >= 3:
+                arrow_offset = 4
+
+                flow_a = getattr(self.source_anchor, "flow", 0.0)
+                if not isinstance(flow_a, str) and abs(flow_a) > 1e-10:
+                    p1_out = points[1]
+                    exit_dir = self._get_exit_direction()
+                    p1_arrow = self._apply_margin(p1_out, exit_dir, -arrow_offset)
+                    self._draw_arrow_at(painter, p1_arrow, exit_dir, flow_a, pen)
+
+                if self.target_anchor:
+                    flow_b = getattr(self.target_anchor, "flow", 0.0)
+                    if not isinstance(flow_b, str) and abs(flow_b) > 1e-10:
+                        p2_in = points[-2]
+                        is_internal = self.source_anchor.node == self.target_anchor.node
+                        exit_key = "internal" if is_internal else "external"
+                        entry_dirs = self.target_anchor.exit_directions.get(exit_key, ["left"])
+                        entry_dir = self._choose_best_exit_direction(points[-1], points[0], entry_dirs)
+                        p2_arrow = self._apply_margin(p2_in, entry_dir, -arrow_offset)
+                        self._draw_arrow_at(painter, p2_arrow, entry_dir, flow_b, pen)
+
     def itemChange(self, change, value):
         """Detecta mudanças e força atualização adequada"""
         if getattr(self, '_being_deleted', False):
@@ -439,29 +856,25 @@ class ConnectionItem(DiagramItemBase):
         self.prepareGeometryChange()
 
     def to_dict(self):
-        return {
-            "source": {
-                "node": self.source.id,
-                "anchor": self.source_anchor.name
-            },
-            "target": {
-                "node": self.target.id,
-                "anchor": self.target_anchor.name
-            }
+        d = {
+            "source": {"node": self.source.id, "anchor": self.source_anchor.name},
+            "target": {"node": self.target.id, "anchor": self.target_anchor.name},
         }
-    
+        if self.waypoints:
+            d["waypoints"] = [{"x": wp.x(), "y": wp.y()} for wp in self.waypoints]
+        return d
+
     @classmethod
     def from_dict(cls, data: dict, node_index: dict):
-        source_data = data["source"]
-        target_data = data["target"]
-
-        source_node = node_index[source_data["node"]]
-        target_node = node_index[target_data["node"]]
-
-        source_anchor = source_node.anchors[source_data["anchor"]]
-        target_anchor = target_node.anchors[target_data["anchor"]]
+        source_node   = node_index[data["source"]["node"]]
+        target_node   = node_index[data["target"]["node"]]
+        source_anchor = source_node.anchors[data["source"]["anchor"]]
+        target_anchor = target_node.anchors[data["target"]["anchor"]]
 
         conn = cls(source_node, source_anchor, target_node, target_anchor)
+        for wp in data.get("waypoints", []):
+            conn.waypoints.append(QPointF(wp["x"], wp["y"]))
+        conn._waypoints_initialized = True  # não sobrescreve waypoints carregados
 
         source_node.connections.append(conn)
         target_node.connections.append(conn)

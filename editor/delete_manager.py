@@ -12,17 +12,23 @@ class DeleteManager:
         self.scene = scene
 
     def delete_selection(self):
-        
+        # Waypoints têm prioridade: varrer todos os itens da cena (não só
+        # os selecionados) pois a conexão fica deselecionada ao clicar num waypoint.
+        for item in self.scene.items():
+            if isinstance(item, ConnectionItem) and getattr(item, '_selected_wp', None) is not None:
+                item._delete_waypoint(item._selected_wp)
+                return True
+
         # Obtém todos os itens selecionados na cena
         items = list(self.scene.selectedItems())
-        
+
         if not items:
             return False
 
-        # Separa conexões e nodes
+        # Separa conexões, nodes e labels
         connections = {i for i in items if isinstance(i, ConnectionItem)}
-        nodes = [i for i in items if isinstance(i, NodeItem)]
-        labels = [i for i in items if isinstance(i, LabelItem)]
+        nodes       = [i for i in items if isinstance(i, NodeItem)]
+        labels      = [i for i in items if isinstance(i, LabelItem)]
 
         # Adiciona conexões de nodes selecionados
         for node in nodes:

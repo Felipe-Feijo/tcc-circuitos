@@ -76,6 +76,14 @@ class GraphicsView(QGraphicsView):
             return
 
         if event.button() == Qt.MouseButton.RightButton:
+            # If the cursor is over a waypoint on a connection, let the
+            # event reach the item instead of starting a pan.
+            scene_pos = self.mapToScene(event.pos())
+            for item in self.scene().items(scene_pos):
+                if isinstance(item, ConnectionItem):
+                    if item._wp_index_at(scene_pos) is not None:
+                        super().mousePressEvent(event)
+                        return
             self._panning = True
             self._pan_start = event.pos()
             self.setCursor(Qt.CursorShape.ClosedHandCursor)

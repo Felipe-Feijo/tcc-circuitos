@@ -641,6 +641,20 @@ def apply(data: dict) -> dict:
         anchors_with_x.sort()
         return anchors_with_x[0][1]
 
+    def nearest_pl_anchor_right_of(pl_node: dict, target_x: float) -> str:
+        """
+        Retorna o anchor Xi mais próximo de target_x à direita.
+        Se não houver, retorna o mais à direita.
+        """
+        anchors = pl_node["properties"]["anchors"]
+        right_anchors = [(abs(_anchor_scene_x_for_pl(pl_node, n) - target_x), n)
+                         for n in anchors if _anchor_scene_x_for_pl(pl_node, n) > target_x]
+        if right_anchors:
+            return min(right_anchors)[1]
+        anchors_with_x = [(int(n[1:]), n) for n in anchors]
+        anchors_with_x.sort(reverse=True)
+        return anchors_with_x[0][1]
+
     def best_pl_anchor_for_u_shape(pl_node: dict, sig_P_x: float,
                                     min_sep: float = 100.0) -> str:
         """
@@ -768,6 +782,12 @@ def apply(data: dict) -> dict:
                             pl_node_map[src_id], tgt_x, pl_y, sig_P_y)
                     else:
                         conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+                elif tgt_anc == "PL":
+                    # Pilot esquerdo: anchor com x MENOR que o pilot (vem pela esquerda)
+                    conn["source"]["anchor"] = nearest_pl_anchor_left_of(pl_node_map[src_id], tgt_x)
+                elif tgt_anc == "PR":
+                    # Pilot direito: anchor com x MAIOR que o pilot (vem pela direita)
+                    conn["source"]["anchor"] = nearest_pl_anchor_right_of(pl_node_map[src_id], tgt_x)
                 else:
                     conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
 

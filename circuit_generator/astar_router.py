@@ -297,6 +297,27 @@ def route_connection(
             {"x": round(tgt_px[0], 1), "y": round(tgt_px[1], 1)},
         ]
 
+    # ── mc.A/B → PL: rota determinística de 2 waypoints ─────────────────────
+    # mc.A e mc.B ficam no topo da 5/2 (exit UP) e a PL está ACIMA da memória.
+    # Rota: sobe 20px do anchor de origem (mesmo x), depois vai horizontal
+    # até o x do anchor de destino na mesma y intermediária.
+    #   wp1 = (src_x,       src_y - 20)   ← sobe um pouco saindo do anchor
+    #   wp2 = (tgt_x, src_y - 20)         ← alinha horizontalmente com o destino
+    # O trecho wp2 → tgt é vertical, chegando direto no anchor da PL.
+    _MC_EXIT_GAP = 20
+    if src_type == "Valve_5_2_Ways" and tgt_type == "PressureLine":
+        mid_y = round(src_px[1] - _MC_EXIT_GAP, 1)
+        return [
+            {"x": round(src_px[0], 1), "y": mid_y},
+            {"x": round(tgt_px[0], 1), "y": mid_y},
+        ]
+    if src_type == "PressureLine" and tgt_type == "Valve_5_2_Ways":
+        mid_y = round(tgt_px[1] - _MC_EXIT_GAP, 1)
+        return [
+            {"x": round(src_px[0], 1), "y": mid_y},
+            {"x": round(tgt_px[0], 1), "y": mid_y},
+        ]
+
     # ── Direção de saída contextual ───────────────────────────────────────────
     # Para anchors verticais (UP/DOWN), usar a direção que aponta PARA o destino.
     # Para PressureLine (src ou tgt), a direção nominal é sempre "UP" (emissão),

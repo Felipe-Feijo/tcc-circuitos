@@ -282,40 +282,69 @@ def route_connection(
     if abs(src_px[0] - tgt_px[0]) < 3 or abs(src_px[1] - tgt_px[1]) < 3:
         return None
 
-    # ── PL → pilot (PL/PR de v42 ou mc): rota determinística de 2 segmentos ──
-    # A rota é sempre: subir/descer até o y do pilot → ir horizontal até o pilot.
-    # Não usa A* (que causa "rabinhos" de ~10px no final).
-    # Só se aplica quando src é PressureLine e tgt sai para LEFT ou RIGHT.
-    if src_type == "PressureLine" and tgt_dir in ("LEFT", "RIGHT"):
-        # Subir/descer da PL até a altura do pilot, depois ir horizontal
-        # wp1: mesmo x da PL, y do pilot  → segmento vertical PL→pilot_height
-        # wp2: mesmo y do pilot, x do pilot → segmento horizontal até o pilot
-        # (o editor conecta: PL_anchor → wp1 → wp2 → pilot_anchor)
-        # wp1 só é necessário se PL.y ≠ pilot.y (sempre, pois PL está abaixo do v42)
+    # ── Offset unificado na direção de entrada do target ─────────────────────
+    # O editor aplica um margin de 6-18px na saída/entrada de cada anchor.
+    # Nos blocos determinísticos, empurramos o último wp 20px além do anchor
+    # na direção de entrada, para o fio chegar limpo sem rabinho.
+    _OFFSET = 20
+    _OFF = {
+        "UP":    ( 0, -_OFFSET),
+        "DOWN":  ( 0, +_OFFSET),
+        "LEFT":  (-_OFFSET,  0),
+        "RIGHT": (+_OFFSET,  0),
+    }
+
+    def src_off(d):
+        dx, dy = _OFF[d]
+        return (round(src_px[0] + dx, 1), round(src_px[1] + dy, 1))
+
+    def tgt_off(d):
+        dx, dy = _OFF[d]
+        return (round(tgt_px[0] + dx, 1), round(tgt_px[1] + dy, 1))
+
+    def wp(x, y): return {"x": round(x, 1), "y": round(y, 1)}
+
+    # ── pilot (PL/PR) → PressureLine ─────────────────────────────────────────
+    # Sai horizontal do pilot → desce/sobe até y da PL → entra na PL.
+    if src_dir in ("LEFT", "RIGHT") and tgt_type == "PressureLine":
         return [
-            {"x": round(src_px[0], 1), "y": round(tgt_px[1], 1)},
-            {"x": round(tgt_px[0], 1), "y": round(tgt_px[1], 1)},
+            wp(tgt_px[0], src_px[1]),
         ]
 
-    # ── mc.A/B → PL: rota determinística de 2 waypoints ─────────────────────
-    # mc.A e mc.B ficam no topo da 5/2 (exit UP) e a PL está ACIMA da memória.
-    # Rota: sobe 20px do anchor de origem (mesmo x), depois vai horizontal
-    # até o x do anchor de destino na mesma y intermediária.
-    #   wp1 = (src_x,       src_y - 20)   ← sobe um pouco saindo do anchor
-    #   wp2 = (tgt_x, src_y - 20)         ← alinha horizontalmente com o destino
-    # O trecho wp2 → tgt é vertical, chegando direto no anchor da PL.
-    _MC_EXIT_GAP = 20
-    if src_type == "Valve_5_2_Ways" and tgt_type == "PressureLine":
-        mid_y = round(src_px[1] - _MC_EXIT_GAP, 1)
+    # ── PressureLine → Valve_3_2_Ways.P (sig.P) ──────────────────────────────
+    # anchor P fica na base (DOWN). Chega por baixo com offset.
+    if src_type == "PressureLine" and tgt_type == "Valve_3_2_Ways" and tgt_dir == "DOWN":
+        ox, oy = tgt_off("DOWN")
         return [
-            {"x": round(src_px[0], 1), "y": mid_y},
-            {"x": round(tgt_px[0], 1), "y": mid_y},
+            wp(src_px[0], oy),
+            wp(tgt_px[0], oy),
         ]
-    if src_type == "PressureLine" and tgt_type == "Valve_5_2_Ways":
-        mid_y = round(tgt_px[1] - _MC_EXIT_GAP, 1)
+
+    # ── Valve_4_2_Ways.A/B → DoubleActingCylinder ────────────────────────────
+    # A/B saem UP do topo da v42, pistão recebe DOWN na base.
+    # Chega no pistão por baixo com offset.
+    if src_type == "Valve_4_2_Ways" and tgt_type == "DoubleActingCylinder":
+        ox, oy = tgt_off("DOWN")
         return [
-            {"x": round(src_px[0], 1), "y": mid_y},
-            {"x": round(tgt_px[0], 1), "y": mid_y},
+            wp(src_px[0], oy),
+            wp(tgt_px[0], oy),
+        ]
+
+    # ── Valve_5_2_Ways.A/B → PressureLine ────────────────────────────────────
+    # Sobe do anchor UP da 5/2, vai horizontal até x da PL, desce até PL.
+    if src_type == "Valve_5_2_Ways" and tgt_type == "PressureLine":
+        ox, oy = src_off("UP")
+        return [
+            wp(src_px[0], oy),
+            wp(tgt_px[0], oy),
+        ]
+
+    # ── PressureLine → Valve_5_2_Ways ────────────────────────────────────────
+    if src_type == "PressureLine" and tgt_type == "Valve_5_2_Ways":
+        ox, oy = tgt_off("UP")
+        return [
+            wp(src_px[0], oy),
+            wp(tgt_px[0], oy),
         ]
 
     # ── Direção de saída contextual ───────────────────────────────────────────

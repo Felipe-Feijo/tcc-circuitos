@@ -795,7 +795,13 @@ def apply(data: dict) -> dict:
         elif tgt_id in pl_node_map and tgt_anc.startswith("X"):
             src_x = anchor_scene_x(src_id, src_anc)
             if src_x is not None:
-                conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
+                _PILOT_PL_OFFSET = 10
+                if src_anc == "PL":
+                    conn["target"]["anchor"] = nearest_pl_anchor_left_of(pl_node_map[tgt_id], src_x - _PILOT_PL_OFFSET)
+                elif src_anc == "PR":
+                    conn["target"]["anchor"] = nearest_pl_anchor_right_of(pl_node_map[tgt_id], src_x + _PILOT_PL_OFFSET)
+                else:
+                    conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
 
     # ── Fase 4: roteamento A* ────────────────────────────────────────────────────
     #

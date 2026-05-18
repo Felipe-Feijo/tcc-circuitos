@@ -239,8 +239,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
 
         # Primeiro evento do grupo: barramento aciona o cilindro diretamente
         if is_first_event:
-            connect(pl_current, next_anchor(pl_current),
-                    f"gen-v42-{letter}", v42_pilot)
+            connect(f"gen-v42-{letter}", v42_pilot,
+                    pl_current, next_anchor(pl_current))
 
         add_node(s_id, "Valve_3_2_Ways", f"signal_valve:{g_idx * 100 + e_idx}",
                  properties={
@@ -296,8 +296,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         for i, mem_id in enumerate(mem_ids):
             if i > 0:
                 pl_pl_idx = n_mc - i + 1
-                connect(pl_grp_ids[pl_pl_idx], next_anchor(pl_grp_ids[pl_pl_idx]),
-                        mem_id, "PL")
+                connect(mem_id, "PL",
+                        pl_grp_ids[pl_pl_idx], next_anchor(pl_grp_ids[pl_pl_idx]))
 
     return {
         "version":     1,

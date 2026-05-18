@@ -298,31 +298,62 @@ def route_connection(
         ]
 
     # ── Direção de saída contextual ───────────────────────────────────────────
-    # Para anchors verticais (UP/DOWN), usar a direção que aponta PARA o destino
+    # Para anchors verticais (UP/DOWN), usar a direção que aponta PARA o destino.
+    # Para PressureLine (src ou tgt), a direção nominal é sempre "UP" (emissão),
+    # mas o roteamento precisa da direção CONTEXTUAL (em relação ao destino).
     dy_total = tgt_px[1] - src_px[1]   # + = tgt abaixo, - = tgt acima
     dx_total = tgt_px[0] - src_px[0]
 
     sdx, sdy = DIR_VEC[src_dir]
     tdx, tdy = DIR_VEC[tgt_dir]
 
-    # Src vertical: apontar na direção do destino
-    if src_dir in ("UP", "DOWN"):
+    # FIX Bug 2 (rabinhos): src_dir corrigido ANTES de calcular o exit point,
+    # para que exit point e direção inicial do A* sempre concordem.
+    #
+    # Anchors UP/DOWN: apontar para o destino contextualmente.
+    # PressureLine como src: idem — seu anchor Xi é nominal UP mas deve rotear
+    # para baixo quando o destino está abaixo.
+    if src_dir in ("UP", "DOWN") or src_type == "PressureLine":
         sdy = 1 if dy_total >= 0 else -1
         sdx = 0
 
-    # Tgt: manter direção nominal (exit do tgt é na direção de saída do anchor)
-    # O A* termina no exit point do tgt; último segmento exit→anchor é reto
+    # FIX Bug 1 (loops na PL): quando PressureLine é TARGET, o exit point de
+    # chegada deve estar do lado de onde a conexão vem, não no lado de emissão.
+    # tgt_dir_used controla onde _find_free_exit posiciona o exit point:
+    #   src ABAIXO da PL (dy_total < 0) → viaja UP → exit point ABAIXO da PL → DOWN (+1)
+    #   src ACIMA  da PL (dy_total > 0) → viaja DOWN → exit point ACIMA da PL → UP  (-1)
+    if tgt_type == "PressureLine":
+        tdy = 1 if dy_total <= 0 else -1
+        tdx = 0
 
-    # Guardar direções usadas para passar ao _exit_point_for_anchor
+    # Guardar direções finais para passar ao _exit_point_for_anchor
     src_dir_used = {(0,-1):"UP",(0,1):"DOWN",(-1,0):"LEFT",(1,0):"RIGHT"}.get((sdx,sdy), src_dir)
-    tgt_dir_used = tgt_dir  # tgt mantém nominal
+    tgt_dir_used = {(0,-1):"UP",(0,1):"DOWN",(-1,0):"LEFT",(1,0):"RIGHT"}.get((tdx,tdy), tgt_dir)
 
     # ── Células dos anchors ───────────────────────────────────────────────────
     sx_c, sy_c = grid.px_to_cell(src_px[0], src_px[1])
     tx_c, ty_c = grid.px_to_cell(tgt_px[0], tgt_px[1])
 
-    # Calcular exit points usando borda do bloco (não o anchor em si)
-    s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
+    # Calcular exit points usando borda do bloco (não o anchor em si).
+    # Para PressureLine como src: _find_free_exit retorna i=0 (própria célula,
+    # pois PL não tem bloco de obstáculo). Isso faz o exit point ficar na célula
+    # de grade arredondada (≠ anchor real), causando um mini-segmento "rabinho"
+    # antes do A* virar na direção correta. Fix: forçar EXIT_PX na direção correta.
+    if src_type == "PressureLine":
+        ddx, ddy = DIR_VEC[src_dir_used]
+        ax, ay = grid.px_to_cell(src_px[0], src_px[1])
+        # Avançar ao menos 1 célula além do anchor para garantir saída limpa
+        steps = max(1, EXIT_PX // CELL)
+        s_exit = None
+        for i in range(1, steps + 3):
+            nx, ny = ax + ddx * i, ay + ddy * i
+            if grid.in_bounds(nx, ny) and grid.cost(nx, ny) < 1e6:
+                s_exit = (nx, ny)
+                break
+        if s_exit is None:
+            s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
+    else:
+        s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
     t_exit = _exit_point_for_anchor(grid, tgt_id, tgt_px, tgt_dir_used)
 
     if s_exit is None or t_exit is None:
@@ -331,9 +362,12 @@ def route_connection(
     # Para chegada vertical (tdx=0): forçar t_exit.x = anchor.x (mesma coluna)
     # Para chegada horizontal (tdy=0): forçar t_exit.y = anchor.y (mesma linha)
     if tgt_type == "PressureLine":
-        # PL: o A* deve terminar DIRETAMENTE no anchor (sem exit forçado)
-        # PL não tem bloco, então o anchor está livre
-        t_exit = (tx_c, ty_c)
+        # PL não tem bloco — chegar na mesma coluna do anchor com o y calculado
+        # pelo _exit_point_for_anchor (que já usou tgt_dir_used contextual).
+        t_exit = (tx_c, t_exit[1])
+        # Fallback: se a célula estiver bloqueada, usar direto o anchor
+        if not grid.in_bounds(t_exit[0], t_exit[1]) or grid.cost(t_exit[0], t_exit[1]) >= 1e6:
+            t_exit = (tx_c, ty_c)
     elif tdx == 0:
         t_exit = (tx_c, t_exit[1])
         if not grid.in_bounds(t_exit[0], t_exit[1]) or grid.cost(t_exit[0], t_exit[1]) >= 1e6:

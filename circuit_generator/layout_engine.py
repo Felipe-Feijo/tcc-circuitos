@@ -693,6 +693,54 @@ def apply(data: dict) -> dict:
         all_anchors.sort(reverse=True)
         return all_anchors[0][1]
 
+    def _best_pl_anchor_clear_column(pl_node: dict, target_x: float,
+                                       pl_y: float, sig_y: float) -> str:
+        """
+        Escolhe o anchor da PL cuja coluna vertical está mais livre de obstáculos
+        entre pl_y e sig_y. Se nenhuma estiver livre, usa o mais próximo de target_x.
+        Verifica apenas os blocos conhecidos (node_pos + SPRITE_SIZES + MH).
+        """
+        from circuit_generator.astar_router import SPRITE_SIZES as _SS
+        MH = 80
+        anchors = pl_node["properties"]["anchors"]
+
+        # Coletar blocos que interceptam a faixa vertical [pl_y, sig_y]
+        blocking_ranges = []  # lista de (x_min, x_max) de blocos no caminho
+        for nid2, npos2 in node_pos.items():
+            ntype2 = node_type_map.get(nid2, "")
+            if ntype2 in ("PressureLine", "Exhaust", "PressureSource"):
+                continue
+            w2, h2 = _SS.get(ntype2, (0, 0))
+            if w2 == 0:
+                continue
+            margin2 = MH if ntype2 in ("Valve_4_2_Ways","Valve_5_2_Ways","Valve_3_2_Ways") else 30
+            bx2 = npos2[0] - margin2
+            bx2_end = npos2[0] + w2 + margin2
+            by2 = npos2[1]
+            by2_end = npos2[1] + h2
+            # Intercepta a faixa vertical?
+            if by2_end > pl_y and by2 < sig_y:
+                blocking_ranges.append((bx2, bx2_end))
+
+        def col_is_clear(ax: float) -> bool:
+            for bx2, bx2_end in blocking_ranges:
+                if bx2 <= ax <= bx2_end:
+                    return False
+            return True
+
+        # Candidatos: ordenados por proximidade a target_x
+        candidates = []
+        for name in anchors:
+            idx = int(name[1:])
+            ax = pl_node_map[pl_node["id"]] and node_pos[pl_node["id"]][0] or 0
+            pl_x = node_pos[pl_node["id"]][0]
+            ax = pl_x + PL_PIX_W / 2 + (idx - 1) * PL_SPACING
+            clear = col_is_clear(ax)
+            candidates.append((abs(ax - target_x), not clear, name))  # sort: distância, bloqueado por último
+
+        candidates.sort(key=lambda c: (c[1], c[0]))  # livre primeiro, depois mais próximo
+        return candidates[0][2]
+
     for conn in data.get("connections", []):
         src_id  = conn["source"]["node"]
         tgt_id  = conn["target"]["node"]
@@ -705,10 +753,23 @@ def apply(data: dict) -> dict:
         if src_id in pl_node_map and src_anc.startswith("X"):
             tgt_x = anchor_scene_x(tgt_id, tgt_anc)
             if tgt_x is not None:
-                # Para todos os casos, usar o anchor mais próximo horizontalmente.
-                # O A* cuida automaticamente do desvio — não há necessidade de
-                # separação mínima artificial que força anchors distantes.
-                conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+                # Para PL→sig.P quando sig está ABAIXO da PL:
+                # preferir o anchor cuja coluna vertical esteja livre de obstáculos
+                # entre a PL e o destino. Se todas estiverem bloqueadas, usar a
+                # mais próxima (o A* contorna).
+                if (tgt_ntype_p3 == "Valve_3_2_Ways" and tgt_anc == "P"):
+                    tgt_pos_n = node_pos.get(tgt_id)
+                    pl_pos_n  = node_pos.get(src_id)
+                    sig_P_y   = (tgt_pos_n[1] + 180) if tgt_pos_n else 0
+                    pl_y      = pl_pos_n[1] if pl_pos_n else 0
+                    if sig_P_y > pl_y:
+                        # Sig abaixo da PL: escolher anchor cuja coluna está livre
+                        conn["source"]["anchor"] = _best_pl_anchor_clear_column(
+                            pl_node_map[src_id], tgt_x, pl_y, sig_P_y)
+                    else:
+                        conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+                else:
+                    conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
 
         # caso 2: qualquer nó → PressureLine
         elif tgt_id in pl_node_map and tgt_anc.startswith("X"):

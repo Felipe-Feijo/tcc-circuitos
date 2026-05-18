@@ -194,18 +194,49 @@ class ConnectionItem(DiagramItemBase):
             return points
 
         target_dirs = target_anchor.exit_directions.get(exit_key, ["left"])
-        entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
         _, target_margin = self._compute_margins(p1, p2)
-        p2_in = self._apply_margin(p2, entry_dir, target_margin)
+
+        if not self._waypoints_initialized:
+            entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
+            p2_in = self._apply_margin(p2, entry_dir, target_margin)
+            self._waypoints_initialized = True
+            self.waypoints = [QPointF(pt) for pt in
+                              self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
+        else:
+            # Waypoints já existem (gerados pelo A* ou por edição manual).
+            # Derivar entry_dir e exit_dir a partir dos waypoints reais,
+            # para que p1_out e p2_in sejam coerentes com eles.
+            if self.waypoints:
+                first_wp = self.waypoints[0]
+                dx0 = first_wp.x() - p1.x()
+                dy0 = first_wp.y() - p1.y()
+                if abs(dy0) >= abs(dx0):
+                    exit_dir = "bottom" if dy0 > 0 else "top"
+                else:
+                    exit_dir = "right" if dx0 > 0 else "left"
+                p1_out = self._apply_margin(p1, exit_dir, source_margin)
+
+                last_wp = self.waypoints[-1]
+                dx1 = p2.x() - last_wp.x()
+                dy1 = p2.y() - last_wp.y()
+                # entry_dir = direção de onde a linha CHEGA em p2.
+                # p2_in = _apply_margin(p2, entry_dir) deve ficar entre last_wp e p2,
+                # então entry_dir é oposto ao vetor last_wp→p2:
+                # se dy1>0 (linha vem de cima, desce até p2) → entry_dir=top (p2_in acima de p2)
+                # se dy1<0 (linha vem de baixo, sobe até p2)  → entry_dir=bottom
+                if abs(dy1) >= abs(dx1):
+                    entry_dir = "top" if dy1 > 0 else "bottom"
+                else:
+                    entry_dir = "left" if dx1 > 0 else "right"
+            else:
+                entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
+
+            p2_in = self._apply_margin(p2, entry_dir, target_margin)
 
         self._last_exit_dir  = exit_dir
         self._last_entry_dir = entry_dir
 
-        if not self._waypoints_initialized:
-            self._waypoints_initialized = True
-            self.waypoints = [QPointF(pt) for pt in
-                              self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
-
+        points[-1] = p1_out  # atualizar p1_out após possível recálculo
         points.extend(self.waypoints)
         points.append(p2_in)
         points.append(p2)

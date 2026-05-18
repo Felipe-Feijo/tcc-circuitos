@@ -317,25 +317,14 @@ def route_connection(
         sdy = 1 if dy_total >= 0 else -1
         sdx = 0
 
-    # FIX (loops/voltas): quando tgt_dir aponta na mesma direção que a viagem
-    # src→tgt, o exit point fica ALÉM do anchor (o A* ultrapassa o destino e
-    # tem que voltar), gerando as "voltas por cima/baixo".
-    #
-    # Regra: o exit point do TARGET deve estar do lado de ONDE A CONEXÃO CHEGA.
-    # Se a rota viaja verticalmente (tdx==0), o exit deve estar oposto à viagem:
-    #   viaja DOWN (dy>0) mas tgt_dir=DOWN → exit além → corrigir: tdy=UP (-1)
-    #   viaja UP   (dy<0) mas tgt_dir=UP   → exit além → corrigir: tdy=DOWN (+1)
-    # Isso era aplicado só para PressureLine; agora generalizado para qualquer target.
-    if tdx == 0:  # anchor vertical (UP ou DOWN)
-        if dy_total > 0 and tdy > 0:   # viajando DOWN, tgt sai DOWN → exit está abaixo: corrigir para UP
-            tdy = -1
-        elif dy_total < 0 and tdy < 0: # viajando UP, tgt sai UP → exit está acima: corrigir para DOWN
-            tdy = 1
-    elif tdy == 0:  # anchor horizontal (LEFT ou RIGHT)
-        if dx_total > 0 and tdx > 0:   # viajando RIGHT, tgt sai RIGHT → exit à direita: corrigir para LEFT
-            tdx = -1
-        elif dx_total < 0 and tdx < 0: # viajando LEFT, tgt sai LEFT → exit à esquerda: corrigir para RIGHT
-            tdx = 1
+    # FIX Bug 1 (loops na PL): quando PressureLine é TARGET, o exit point de
+    # chegada deve estar do lado de onde a conexão vem, não no lado de emissão.
+    # tgt_dir_used controla onde _find_free_exit posiciona o exit point:
+    #   src ABAIXO da PL (dy_total < 0) → viaja UP → exit point ABAIXO da PL → DOWN (+1)
+    #   src ACIMA  da PL (dy_total > 0) → viaja DOWN → exit point ACIMA da PL → UP  (-1)
+    if tgt_type == "PressureLine":
+        tdy = 1 if dy_total <= 0 else -1
+        tdx = 0
 
     # Guardar direções finais para passar ao _exit_point_for_anchor
     src_dir_used = {(0,-1):"UP",(0,1):"DOWN",(-1,0):"LEFT",(1,0):"RIGHT"}.get((sdx,sdy), src_dir)
@@ -365,7 +354,35 @@ def route_connection(
             s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
     else:
         s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
-    t_exit = _exit_point_for_anchor(grid, tgt_id, tgt_px, tgt_dir_used)
+    # FIX Bug PressureLine como TARGET:
+    # _find_free_exit começa em i=0 (própria célula) e como a PL está em SKIP_TYPES
+    # (sem bloco de obstáculo), retorna imediatamente o próprio anchor, ignorando
+    # tgt_dir_used. O A* sempre termina no topo da PL.
+    # Fix: calcular t_exit avançando explicitamente na direção correta, igual ao
+    # tratamento de PressureLine como src.
+    if tgt_type == "PressureLine":
+        ddx_t, ddy_t = DIR_VEC[tgt_dir_used]
+        # Andar na direção OPOSTA à chegada para posicionar o exit point
+        # do lado de onde a conexão vem:
+        #   tgt_dir_used="UP"   → chegada vindo de baixo  → exit deve estar ABAIXO → ddy_t=-1 → oposto=+1
+        #   tgt_dir_used="DOWN" → chegada vindo de cima   → exit deve estar ACIMA  → ddy_t=+1 → oposto=-1
+        # Mas o exit point é onde o A* TERMINA, portanto deve estar do lado de onde
+        # a conexão chega. Se src está abaixo (tgt_dir_used="UP", viajamos UP),
+        # o A* vem de baixo e termina logo abaixo da PL, então exit y > ty_c.
+        # Usamos a direção oposta para posicionar o exit point abaixo da PL quando
+        # a conexão sobe, ou acima quando a conexão desce.
+        opp_ddy = -ddy_t  # oposto: se tgt_dir_used=UP(ddy=-1) → opp=+1 (abaixo da PL)
+        t_exit = None
+        steps = max(1, EXIT_PX // CELL)
+        for i in range(1, steps + 3):
+            nx, ny = tx_c + 0 * i, ty_c + opp_ddy * i
+            if grid.in_bounds(nx, ny) and grid.cost(nx, ny) < 1e6:
+                t_exit = (tx_c, ny)
+                break
+        if t_exit is None:
+            t_exit = (tx_c, ty_c)  # fallback: próprio anchor
+    else:
+        t_exit = _exit_point_for_anchor(grid, tgt_id, tgt_px, tgt_dir_used)
 
     if s_exit is None or t_exit is None:
         return None
@@ -373,12 +390,7 @@ def route_connection(
     # Para chegada vertical (tdx=0): forçar t_exit.x = anchor.x (mesma coluna)
     # Para chegada horizontal (tdy=0): forçar t_exit.y = anchor.y (mesma linha)
     if tgt_type == "PressureLine":
-        # PL não tem bloco — chegar na mesma coluna do anchor com o y calculado
-        # pelo _exit_point_for_anchor (que já usou tgt_dir_used contextual).
-        t_exit = (tx_c, t_exit[1])
-        # Fallback: se a célula estiver bloqueada, usar direto o anchor
-        if not grid.in_bounds(t_exit[0], t_exit[1]) or grid.cost(t_exit[0], t_exit[1]) >= 1e6:
-            t_exit = (tx_c, ty_c)
+        pass  # t_exit já calculado acima com x=tx_c e y correto
     elif tdx == 0:
         t_exit = (tx_c, t_exit[1])
         if not grid.in_bounds(t_exit[0], t_exit[1]) or grid.cost(t_exit[0], t_exit[1]) >= 1e6:
@@ -432,66 +444,35 @@ def route_connection(
     if not wps_px:
         return None
 
-    # Snap inicial: propagar coordenada do src para o trecho de saída.
-    #
-    # CAUSA RAIZ DO RABINHO: para saída vertical (sdx==0), o snap propaga
-    # src_px[0] (x) corretamente, mas o y do primeiro ponto fica em
-    # grid.cell_to_px(s_exit).y — um múltiplo de CELL, não src_px[1].
-    # Isso cria um mini-segmento src(y_anchor) → wp0(y_grade) na direção
-    # errada antes de o A* virar. Fix: após propagar x, também fixar
-    # o y do primeiro ponto (e de todos que estejam na mesma coluna que
-    # o src) para src_px[1].  Idem para saída horizontal com src_px[1]/[0].
-    if sdx == 0:  # saída vertical → fixar x = src.x; y do primeiro pt = src.y
+    # Snap inicial: propagar coordenada do src para o trecho de saída
+    if sdx == 0:  # saída vertical → fixar x = src.x em todos os pts iniciais mesma coluna
         ref_x = wps_px[0][0]
-        first_in_col = True
         for i in range(len(wps_px)):
             if abs(wps_px[i][0] - ref_x) < CELL:
-                if first_in_col:
-                    # Primeiro ponto na coluna de saída: fixar AMBOS x e y ao anchor
-                    wps_px[i] = (src_px[0], src_px[1])
-                    first_in_col = False
-                else:
-                    wps_px[i] = (src_px[0], wps_px[i][1])
+                wps_px[i] = (src_px[0], wps_px[i][1])
             else:
                 break
-    else:  # saída horizontal → fixar y = src.y; x do primeiro pt = src.x
+    else:  # saída horizontal → fixar y = src.y
         ref_y = wps_px[0][1]
-        first_in_row = True
         for i in range(len(wps_px)):
             if abs(wps_px[i][1] - ref_y) < CELL:
-                if first_in_row:
-                    wps_px[i] = (src_px[0], src_px[1])
-                    first_in_row = False
-                else:
-                    wps_px[i] = (wps_px[i][0], src_px[1])
+                wps_px[i] = (wps_px[i][0], src_px[1])
             else:
                 break
 
-    # Snap final: propagar coordenada do tgt para o trecho de chegada.
-    # Mesma lógica: o último ponto na coluna/linha de chegada é fixado
-    # com AMBAS as coordenadas do anchor de destino.
-    if tdx == 0:  # chegada vertical → fixar x = tgt.x; y do último pt = tgt.y
+    # Snap final: propagar coordenada do tgt para o trecho de chegada
+    if tdx == 0:  # chegada vertical → fixar x = tgt.x
         ref_x = wps_px[-1][0]
-        last_in_col = True
         for i in range(len(wps_px)-1, -1, -1):
             if abs(wps_px[i][0] - ref_x) < CELL:
-                if last_in_col:
-                    wps_px[i] = (tgt_px[0], tgt_px[1])
-                    last_in_col = False
-                else:
-                    wps_px[i] = (tgt_px[0], wps_px[i][1])
+                wps_px[i] = (tgt_px[0], wps_px[i][1])
             else:
                 break
-    else:  # chegada horizontal → fixar y = tgt.y; x do último pt = tgt.x
+    else:  # chegada horizontal → fixar y = tgt.y
         ref_y = wps_px[-1][1]
-        last_in_row = True
         for i in range(len(wps_px)-1, -1, -1):
             if abs(wps_px[i][1] - ref_y) < CELL:
-                if last_in_row:
-                    wps_px[i] = (tgt_px[0], tgt_px[1])
-                    last_in_row = False
-                else:
-                    wps_px[i] = (wps_px[i][0], tgt_px[1])
+                wps_px[i] = (wps_px[i][0], tgt_px[1])
             else:
                 break
 
@@ -519,36 +500,12 @@ def route_connection(
     all_pts = [src_px] + wps_px + [tgt_px]
     fixed = enforce_ortho(all_pts)
 
-    # Extrair apenas os intermediários (sem src e tgt) e remover:
-    # - duplicados consecutivos (distância < 2px)
-    # - pontos coincidentes com src ou tgt (gerados pelo snap duplo)
+    # Extrair apenas os intermediários (sem src e tgt) e remover duplicados
     interior = fixed[1:-1]
     clean = []
     for px, py in interior:
-        # Pular se igual ao src
-        if abs(px - src_px[0]) < 2 and abs(py - src_px[1]) < 2:
-            continue
-        # Pular se igual ao tgt
-        if abs(px - tgt_px[0]) < 2 and abs(py - tgt_px[1]) < 2:
-            continue
-        # Pular se duplicado do anterior
         if clean and abs(px - clean[-1]["x"]) < 2 and abs(py - clean[-1]["y"]) < 2:
             continue
         clean.append({"x": round(px, 1), "y": round(py, 1)})
 
-    # Simplificar: remover pontos colineares com seus vizinhos
-    def _simplify_wps(pts, s, t):
-        all_ = [s] + [(p["x"], p["y"]) for p in pts] + [t]
-        out = [all_[0]]
-        for i in range(1, len(all_) - 1):
-            px_, py_ = out[-1]; cx_, cy_ = all_[i]; nx_, ny_ = all_[i+1]
-            same_col = abs(cx_ - px_) < 2 and abs(nx_ - cx_) < 2
-            same_row = abs(cy_ - py_) < 2 and abs(ny_ - cy_) < 2
-            if same_col or same_row:
-                continue  # ponto colinear — remover
-            out.append((cx_, cy_))
-        out.append(all_[-1])
-        return [{"x": round(p[0],1), "y": round(p[1],1)} for p in out[1:-1]]
-
-    clean = _simplify_wps(clean, src_px, tgt_px)
     return clean if clean else None

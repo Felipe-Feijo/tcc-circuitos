@@ -645,23 +645,50 @@ def apply(data: dict) -> dict:
                                     min_sep: float = 100.0) -> str:
         """
         Para conexões PL→sig.P onde sig está abaixo da PL (U-shape necessário),
-        escolhe o anchor que garante separação horizontal mínima |dx| >= min_sep.
-        Prefere o anchor mais próximo que satisfaça esse critério.
-        Se nenhum satisfizer, usa o mais afastado disponível.
+        escolhe o anchor da PL que minimiza o comprimento total da rota em U.
+        
+        A rota tem forma de U invertido: desce da PL, vai horizontal, desce até sig.P.
+        O comprimento horizontal do U é |anchor_x - sig_P_x|.
+        
+        Critério: preferir anchor que esteja do mesmo lado que sig.P (dx com sinal
+        consistente) e com |dx| >= min_sep para caber o desvio lateral.
+        Entre os candidatos válidos, escolher o de menor |dx| (rota mais curta).
+        
+        Exemplo corrigido: se sig.P está à DIREITA do anchor X1 (dx > 0),
+        prefere um anchor à esquerda de sig.P (também dx < 0) — NÃO X1 que está
+        ainda mais à esquerda. Isso evita a rota ir na direção oposta e voltar.
         """
         anchors = pl_node["properties"]["anchors"]
-        # Candidatos com |dx| suficiente, ordenados por distância (menor primeiro)
-        good = []
+        
+        # Separar anchors por lado em relação a sig_P_x
+        left_anchors  = []  # anchor à ESQUERDA de sig.P (dx < 0 → PL sai pela esquerda)
+        right_anchors = []  # anchor à DIREITA de sig.P  (dx > 0)
+        
         for name in anchors:
             ax = _anchor_scene_x_for_pl(pl_node, name)
             dx = ax - sig_P_x
             if abs(dx) >= min_sep:
-                good.append((abs(dx), name))
-        if good:
-            # O mais próximo que satisfaz o critério (menor |dx| mas >= min_sep)
-            good.sort()
-            return good[0][1]
-        # Fallback: o anchor mais afastado de sig.P.x
+                if dx < 0:
+                    left_anchors.append((abs(dx), name))
+                else:
+                    right_anchors.append((abs(dx), name))
+        
+        # Preferir o lado com menor deslocamento total (rota mais curta)
+        # Entre candidatos do mesmo lado, pegar o mais próximo (menor |dx|)
+        left_anchors.sort()
+        right_anchors.sort()
+        
+        candidates = []
+        if left_anchors:
+            candidates.append(left_anchors[0])   # melhor da esquerda
+        if right_anchors:
+            candidates.append(right_anchors[0])  # melhor da direita
+        
+        if candidates:
+            candidates.sort()  # escolher o de menor |dx| total
+            return candidates[0][1]
+        
+        # Fallback: nenhum satisfaz min_sep — usar o mais afastado disponível
         all_anchors = [(abs(_anchor_scene_x_for_pl(pl_node, n) - sig_P_x), n) for n in anchors]
         all_anchors.sort(reverse=True)
         return all_anchors[0][1]
@@ -678,23 +705,10 @@ def apply(data: dict) -> dict:
         if src_id in pl_node_map and src_anc.startswith("X"):
             tgt_x = anchor_scene_x(tgt_id, tgt_anc)
             if tgt_x is not None:
-                # Caso especial: PL→sig.P quando sig está ABAIXO da PL
-                # → usar anchor à ESQUERDA de sig.P para permitir o desvio lateral
-                if (tgt_ntype_p3 == "Valve_3_2_Ways" and tgt_anc == "P"):
-                    tgt_pos = node_pos.get(tgt_id)
-                    pl_pos  = node_pos.get(src_id)
-                    sig_P_y = (tgt_pos[1] + 180) if tgt_pos else 0
-                    sig_P_x = (tgt_pos[0] + 254) if tgt_pos else 0
-                    pl_y    = pl_pos[1] if pl_pos else 0
-                    if sig_P_y > pl_y:
-                        # sig ABAIXO da PL: escolher anchor com separação mínima 150px
-                        # para garantir espaço para o U-shape lateral
-                        conn["source"]["anchor"] = best_pl_anchor_for_u_shape(
-                            pl_node_map[src_id], sig_P_x, min_sep=150.0)
-                    else:
-                        conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
-                else:
-                    conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+                # Para todos os casos, usar o anchor mais próximo horizontalmente.
+                # O A* cuida automaticamente do desvio — não há necessidade de
+                # separação mínima artificial que força anchors distantes.
+                conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
 
         # caso 2: qualquer nó → PressureLine
         elif tgt_id in pl_node_map and tgt_anc.startswith("X"):

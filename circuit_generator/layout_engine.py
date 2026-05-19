@@ -514,17 +514,22 @@ def apply(data: dict) -> dict:
             continue  # já posicionado
 
         if nid in sig_to_mc_pilot:
-            # Sig → mc.PR: x alinhado ao anchor B do último v42 (cyl_last)
-            # sig.A.x = v42_last.B.scene.x - sig_pilot_offset_PR
-            # sig.x   = v42_last.x + v42.B.local_x - offset_PR - sig.A.local_x
-            #         = v42_last.x + 256 - offset_PR - 254
-            v42_align  = cols.get("v42_align_offset_x", 65)
-            v42_last_x = cyl_last_x + v42_align
-            sig_pr_off = cols.get("sig_pilot_offset_PR", 50)
-            sig_x = v42_last_x + 256 - sig_pr_off - 254  # ≈ v42_last_x - 48
-
+            # Sig → mc.PR: x alinhado ao anchor PR da própria mc que ela pilota
+            # sig.A.x = mc.x + V52_PR_local_x + sig_pilot_offset_PR
+            # sig.x   = mc.x + V52_PR_local_x - sig.A.local_x + sig_pilot_offset_PR
+            #         = mc.x + 405 - 254 + offset_PR
+            sig_pr_off = cols.get("sig_pilot_offset_PR", 59)
             mc_id, _ = sig_to_mc_pilot[nid]
             mc_pos = node_pos.get(mc_id)
+            V52_PR_local_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0]  # 405
+            SIG_A_local_x  = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]   # 254
+            if mc_pos is not None:
+                sig_x = mc_pos[0] + V52_PR_local_x - SIG_A_local_x + sig_pr_off
+            else:
+                v42_align  = cols.get("v42_align_offset_x", 65)
+                v42_last_x = cyl_last_x + v42_align
+                sig_x = v42_last_x + 256 - sig_pr_off - 254  # fallback antigo
+
             if mc_pos is not None:
                 mc_idx = next((i for i, pos in mc_y_by_idx.items()
                                if abs(pos - mc_pos[1]) < 1), None)

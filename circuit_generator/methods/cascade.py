@@ -260,8 +260,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         # sig-ext monitora a1 → ativo se cilindro começa estendido
         # sig-ret monitora a0 → ativo se cilindro começa retraído
         sig_default_side = "left" if (
-            (direction == "+" and not starts_extended[letter]) or
-            (direction == "-" and starts_extended[letter])
+            (direction == "+" and starts_extended[letter]) or
+            (direction == "-" and not starts_extended[letter])
         ) else "right"
 
         add_node(s_id, "Valve_3_2_Ways", f"signal_valve:{g_idx * 100 + e_idx}",

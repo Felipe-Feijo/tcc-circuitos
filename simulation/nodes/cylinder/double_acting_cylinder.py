@@ -6,7 +6,8 @@ class DoubleActingCylinder(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "double_acting_cylinder", domain=domain, properties=properties)
 
-        self.position = 0
+        default = self.properties.get("default_state", "retracted")
+        self.position = 1 if default == "extended" else 0
 
         self.sensors = self.properties.get("sensors", {
             "retracted": {"type": None, "name": ""},
@@ -28,7 +29,8 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             self.stroke         = float(self.properties["stroke"])
             self.external_force = float(self.properties.get("external_force") or 0.0)
             self.friction       = 1e-3   # oculto — valor mínimo para fechar a conta
-            self.x              = 0.0
+            stroke = float(self.properties["stroke"])
+            self.x = stroke if default == "extended" else 0.0
             self.locked_fwd     = False
             self.locked_bwd     = False
             self.flow_var_a     = f"Q_{self.id}_a"

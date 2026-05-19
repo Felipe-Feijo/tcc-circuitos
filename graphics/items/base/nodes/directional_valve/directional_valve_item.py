@@ -55,7 +55,8 @@ class DirectionalValveItem(NodeItem):
 
     def setup(self) -> None:
         self.properties = {
-            "actuators": {"left": None, "right": None}
+            "actuators": {"left": None, "right": None},
+            "default_side": "right",  # "right" = body_state 0, "left" = body_state 1
         }
         # k não tem default — obrigatório se domínio hidráulico
 
@@ -248,9 +249,10 @@ class DirectionalValveItem(NodeItem):
             for visual in self.body_visuals.values()
         )
 
-        self.body_state = 0
-        self.body_sprite = self.body_visuals[0]["sprite"]
-        self.visual_offset = self.body_visuals[0]["offset"]
+        default_side = self.properties.get("default_side", "right")
+        self.body_state = 1 if default_side == "left" else 0
+        self.body_sprite = self.body_visuals[self.body_state]["sprite"]
+        self.visual_offset = self.body_visuals[self.body_state]["offset"]
 
         # Dimensões do body
         self.width = self.body_sprite.width()
@@ -268,7 +270,7 @@ class DirectionalValveItem(NodeItem):
         self.actuator_visuals.clear()
         self.actuator_rects.clear()
 
-        body = self.body_rect
+        body = QRectF(0, 0, self.width, self.height)
 
         self.actuators = self.properties["actuators"]
 
@@ -353,6 +355,7 @@ class DirectionalValveItem(NodeItem):
 
 
     def apply_properties(self):
+        self.initialize_body_visuals()
         self.initialize_actuators()
         self.update()
 
@@ -366,7 +369,13 @@ class DirectionalValveItem(NodeItem):
         self._populate_actuator_menu(left_menu, side="left")
         self._populate_actuator_menu(right_menu, side="right")
 
-        
+        menu.addSeparator()
+        rest_menu = menu.addMenu("Posição de repouso")
+        for opt, label in [("right", "Direita (0)"), ("left", "Esquerda (1)")]:
+            action = QAction(label, menu, checkable=True)
+            action.setChecked(self.properties.get("default_side", "right") == opt)
+            action.triggered.connect(lambda _, o=opt: self._set_default_side(o))
+            rest_menu.addAction(action)
 
     def _populate_actuator_menu(self, menu: QMenu, side: str):
         current = self.actuators.get(side)
@@ -434,6 +443,16 @@ class DirectionalValveItem(NodeItem):
                         lambda _, s=side, n=sensor_name: self.set_actuator(s, "solenoid", n)
                     )
                     menu.addAction(action)
+
+    def _set_default_side(self, side: str):
+        if self.properties.get("default_side") == side:
+            return
+        self.properties["default_side"] = side
+        if not self.simulation_mode:
+            self.body_state = 1 if side == "left" else 0
+            self.update_body_visuals()
+            self.update_connections()
+            self.update()
 
     def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None,):
         current = self.properties["actuators"].get(side)
@@ -556,6 +575,12 @@ class DirectionalValveItem(NodeItem):
         dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_label("left"))
         dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_label("right"))
 
+        dialog._combo_default_side = dialog.add_combo_field(
+            "Posição de repouso",
+            ["right", "left"],
+            current=self.properties.get("default_side", "right"),
+        )
+
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
@@ -573,4 +598,12 @@ class DirectionalValveItem(NodeItem):
                 if info:
                     actuator_type = "limit_switch" if info.sensor_type == "cylinder_end" else "solenoid"
                     self.set_actuator(side, actuator_type, selected)
+
+        self.properties["default_side"] = dialog._combo_default_side.currentText()
+        side = self.properties["default_side"]
+        if not self.simulation_mode:
+            self.body_state = 1 if side == "left" else 0
+            self.update_body_visuals()
+            self.update_connections()
+            self.update()
 

@@ -6,7 +6,8 @@ class SingleActingCylinder(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "single_acting_cylinder", domain=domain, properties=properties)
 
-        self.position = 0
+        default = self.properties.get("default_state", "retracted")
+        self.position = 1 if default == "extended" else 0
 
         self.sensors = self.properties.get("sensors", {
             "retracted": {"type": None, "name": ""},
@@ -27,7 +28,8 @@ class SingleActingCylinder(Node, HydraulicMixin):
             self.spring_k        = float(self.properties["spring_k"])
             self.external_force  = float(self.properties.get("external_force") or 0.0)
             self.friction        = 1e-3   # oculto — valor mínimo para fechar a conta
-            self.x               = 0.0
+            stroke_val = float(self.properties["stroke"])
+            self.x = stroke_val if default == "extended" else 0.0
             self.flow_var        = f"Q_{self.id}"
 
             # Batente spring-damper (parâmetros internos, não expostos)

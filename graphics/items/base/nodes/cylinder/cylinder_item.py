@@ -27,7 +27,8 @@ class CylinderItem(NodeItem):
             "sensors": {
                 "retracted": {"type": None, "name": ""},
                 "extended":  {"type": None, "name": ""},
-            }
+            },
+            "default_state": "retracted",  # "retracted" = 0, "extended" = 1
         }
         self.sensors = {}
         self.sensor_rects = {}
@@ -53,8 +54,9 @@ class CylinderItem(NodeItem):
             for state, desc in self.BODY_VISUALS.items()
         }
 
-        # estado inicial
-        self.body_state = min(self.body_visuals.keys())
+        # estado inicial respeitando default_state
+        default = self.properties.get("default_state", "retracted")
+        self.body_state = 1 if default == "extended" else 0
         visual = self.body_visuals[self.body_state]
 
         self.body_sprite = visual["sprite"]
@@ -175,6 +177,7 @@ class CylinderItem(NodeItem):
         self.update()
 
     def apply_properties(self) -> None:
+        self.initialize_body_visuals()
         for pos in ("retracted", "extended"):
             self._unregister_sensor(pos)
         self.initialize_sensors()
@@ -272,6 +275,24 @@ class CylinderItem(NodeItem):
 
         self._populate_sensor_menu(r_menu, "retracted")
         self._populate_sensor_menu(e_menu, "extended")
+
+        menu.addSeparator()
+        state_menu = menu.addMenu("Estado inicial")
+        for opt, label in [("retracted", "Retraído"), ("extended", "Estendido")]:
+            action = QAction(label, menu, checkable=True)
+            action.setChecked(self.properties.get("default_state", "retracted") == opt)
+            action.triggered.connect(lambda _, o=opt: self._set_default_state(o))
+            state_menu.addAction(action)
+
+    def _set_default_state(self, state: str):
+        if self.properties.get("default_state") == state:
+            return
+        self.properties["default_state"] = state
+        if not self.simulation_mode:
+            self.body_state = 1 if state == "extended" else 0
+            self.update_body_visuals()
+            self.update_connections()
+            self.update()
 
         
 
@@ -395,6 +416,12 @@ class CylinderItem(NodeItem):
         dialog._combo_retracted, dialog._name_retracted = make_side_widgets("retracted")
         dialog._combo_extended, dialog._name_extended = make_side_widgets("extended")
 
+        dialog._combo_default_state = dialog.add_combo_field(
+            "Estado inicial",
+            ["retracted", "extended"],
+            current=self.properties.get("default_state", "retracted"),
+        )
+
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
@@ -411,3 +438,6 @@ class CylinderItem(NodeItem):
             self.set_sensor(pos, sensor_type)
             if sensor_type and name:
                 self._set_sensor_name(pos, name)
+
+        self.properties["default_state"] = dialog._combo_default_state.currentText()
+        self.apply_properties()

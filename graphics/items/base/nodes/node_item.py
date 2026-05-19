@@ -174,7 +174,13 @@ class NodeItem(DiagramItemBase):
             self.initialize_actuators()
 
         if hasattr(self, "update_body_visuals"):
-            self.body_state = 0
+            props = getattr(self, "properties", {})
+            if "default_side" in props:
+                self.body_state = 1 if props["default_side"] == "left" else 0
+            elif "default_state" in props:
+                self.body_state = 1 if props["default_state"] == "extended" else 0
+            else:
+                self.body_state = 0
             self.update_body_visuals()
 
         if hasattr(self, "update_anchor_positions"):

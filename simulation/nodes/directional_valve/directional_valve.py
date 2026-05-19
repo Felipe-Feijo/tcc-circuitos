@@ -10,7 +10,8 @@ class DirectionalValve(Node):
         # Nova estrutura: {"left": {"type": "pilot"}, "right": None}
         self.actuators = self.properties.get("actuators", {"left": None, "right": None})
 
-        self.body_state = 0  # 0 = repouso, 1 = ativo
+        default_side = self.properties.get("default_side", "right")
+        self.body_state = 1 if default_side == "left" else 0
 
     def handle_command(self, command: dict):
         """

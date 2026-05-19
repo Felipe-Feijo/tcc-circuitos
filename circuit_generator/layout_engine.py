@@ -621,6 +621,58 @@ def apply(data: dict) -> dict:
         if _position_child(node):
             deferred_late.remove(node)
 
+    # ── Fase 2.8: centralizar cada PressureLine sobre seus componentes conectados ─
+    #
+    # Após todos os nós estarem posicionados, recalcula o x de cada PL para que
+    # o centro da PL coincida com o centro do range de x dos componentes que
+    # conectam a ela (pilots, sigs, mc anchors).
+    # Fórmula: pl_x = (min_x + max_x) / 2 - pl_width / 2
+    # onde pl_width = PL_PIX_W/2 + (n_anchors - 1) * PL_SPACING
+
+    _pl_nodes_map = {n["id"]: n for n in data["nodes"] if n["type"] == "PressureLine"}
+
+    # Coletar x de componentes conectados a cada PL
+    _pl_connected_xs: dict[str, list[float]] = {pl_id: [] for pl_id in _pl_nodes_map}
+
+    for conn in data.get("connections", []):
+        src_id  = conn["source"]["node"]
+        tgt_id  = conn["target"]["node"]
+        src_anc = conn["source"]["anchor"]
+        tgt_anc = conn["target"]["anchor"]
+
+        for pl_id, other_id, other_anc in [
+            (src_id, tgt_id, tgt_anc),
+            (tgt_id, src_id, src_anc),
+        ]:
+            if pl_id not in _pl_nodes_map:
+                continue
+            ntype = node_type_map.get(other_id, "")
+            npos  = node_pos.get(other_id)
+            if npos is None:
+                continue
+            local = _anchor_local(ntype, other_anc)
+            if local:
+                _pl_connected_xs[pl_id].append(npos[0] + local[0])
+            else:
+                _pl_connected_xs[pl_id].append(npos[0])
+
+    # Range global: min e max de todos os componentes conectados a qualquer PL
+    all_xs = [x for xs in _pl_connected_xs.values() for x in xs]
+    if all_xs:
+        global_min_x = min(all_xs)
+        global_max_x = max(all_xs)
+        global_center = (global_min_x + global_max_x) / 2
+
+        for pl_id, xs in _pl_connected_xs.items():
+            if not xs:
+                continue
+            pl_node = _pl_nodes_map[pl_id]
+            n_anchors = len(pl_node["properties"]["anchors"])
+            pl_width  = PL_PIX_W / 2 + (n_anchors - 1) * PL_SPACING
+            new_pl_x  = global_center - pl_width / 2
+            pl_node["position"]["x"] = new_pl_x
+            node_pos[pl_id] = (new_pl_x, node_pos[pl_id][1])
+
     def _anchor_scene_x_for_pl(pl_node: dict, anchor_name: str) -> float:
         """Posição X em cena de um anchor Xi de uma PressureLine."""
         pl_x = node_pos[pl_node["id"]][0]
@@ -742,18 +794,81 @@ def apply(data: dict) -> dict:
                     return False
             return True
 
-        # Candidatos: ordenados por proximidade a target_x
+        # Candidatos: livre primeiro, depois mais próximo de target_x
+        # Também exclui anchors já usados por outra conexão no mesmo x
         candidates = []
         for name in anchors:
-            idx = int(name[1:])
-            ax = pl_node_map[pl_node["id"]] and node_pos[pl_node["id"]][0] or 0
             pl_x = node_pos[pl_node["id"]][0]
+            idx = int(name[1:])
             ax = pl_x + PL_PIX_W / 2 + (idx - 1) * PL_SPACING
             clear = col_is_clear(ax)
-            candidates.append((abs(ax - target_x), not clear, name))  # sort: distância, bloqueado por último
+            taken = round(ax) in _pl_anchor_used
+            candidates.append((not clear, taken, abs(ax - target_x), name))
 
-        candidates.sort(key=lambda c: (c[1], c[0]))  # livre primeiro, depois mais próximo
-        return candidates[0][2]
+        candidates.sort(key=lambda c: (c[0], c[1], c[2]))  # livre, não-tomado, mais próximo
+        chosen = candidates[0][3]
+        # Registrar no _pl_anchor_used
+        chosen_ax = node_pos[pl_node["id"]][0] + PL_PIX_W / 2 + (int(chosen[1:]) - 1) * PL_SPACING
+        _pl_anchor_used[round(chosen_ax)] = (target_x, 0.0)
+        return chosen
+
+    _pl_anchor_used: dict[int, tuple[str, float]] = {}  # round(x) → (owner_id, owner_y)
+    # Mapa de conn por owner_id para poder reatribuir o anchor do ocupante anterior
+    _conn_by_owner: dict[str, object] = {}  # owner_id → conn (para reatribuir anchor)
+
+    def _resolve_anchor_conflict(pl_node: dict, anchor: str, owner: str,
+                                  owner_y: float, conn_ref: object,
+                                  anchor_side: str = "source") -> str:
+        """
+        Registra o anchor. Se já estiver em uso, o componente com MAIOR y
+        move 1 posição em direção à extremidade (iterativamente até ficar livre).
+        Direção: idx <= metade → recua (idx-1); idx > metade → avança (idx+1).
+        anchor_side: 'source' ou 'target' — qual lado do conn_ref atualizar se
+                     o ocupante anterior precisar ser movido.
+        """
+        anchors = pl_node["properties"]["anchors"]
+        n = len(anchors)
+        mid = n / 2
+
+        def _next_anchor(current: str) -> str:
+            idx = int(current[1:])
+            new_idx = (idx - 1) if idx <= mid else (idx + 1)
+            new_idx = max(1, min(n, new_idx))
+            return f"X{new_idx}"
+
+        def _register(anc: str, oid: str, oy: float, cref: object):
+            """Registra anchor; se conflito, move o de maior y."""
+            ax = _anchor_scene_x_for_pl(pl_node, anc)
+            key = round(ax)
+            if key not in _pl_anchor_used:
+                _pl_anchor_used[key] = (oid, oy)
+                _conn_by_owner[oid] = (cref, anchor_side, pl_node)
+                return anc
+            # Conflito — quem tem maior y se move
+            prev_id, prev_y = _pl_anchor_used[key]
+            if oy >= prev_y:
+                # novo owner tem maior y → ele se move
+                moved = _next_anchor(anc)
+                print(f"[layout] ⚠️  mesmo x={ax:.1f}: {oid} (y={oy:.0f}) conflita com "
+                      f"{prev_id} (y={prev_y:.0f}), movendo {anc} → {moved}")
+                return _register(moved, oid, oy, cref)
+            else:
+                # ocupante anterior tem maior y → ele se move, novo fica
+                _pl_anchor_used[key] = (oid, oy)
+                _conn_by_owner[oid] = (cref, anchor_side, pl_node)
+                prev_conn, prev_side, prev_pl = _conn_by_owner.get(prev_id, (None, None, None))
+                if prev_conn is not None:
+                    moved = _next_anchor(anc)
+                    print(f"[layout] ⚠️  mesmo x={ax:.1f}: {prev_id} (y={prev_y:.0f}) conflita com "
+                          f"{oid} (y={oy:.0f}), movendo {anc} → {moved} (ocupante anterior)")
+                    new_anc = _register(moved, prev_id, prev_y, prev_conn)
+                    if prev_side == "source":
+                        prev_conn["source"]["anchor"] = new_anc
+                    else:
+                        prev_conn["target"]["anchor"] = new_anc
+                return anc
+
+        return _register(anchor, owner, owner_y, conn_ref)
 
     for conn in data.get("connections", []):
         src_id  = conn["source"]["node"]
@@ -777,9 +892,11 @@ def apply(data: dict) -> dict:
                     sig_P_y   = (tgt_pos_n[1] + 180) if tgt_pos_n else 0
                     pl_y      = pl_pos_n[1] if pl_pos_n else 0
                     if sig_P_y > pl_y:
-                        # Sig abaixo da PL: escolher anchor cuja coluna está livre
                         conn["source"]["anchor"] = _best_pl_anchor_clear_column(
                             pl_node_map[src_id], tgt_x, pl_y, sig_P_y)
+                    elif sig_P_y < pl_y:
+                        conn["source"]["anchor"] = _best_pl_anchor_clear_column(
+                            pl_node_map[src_id], tgt_x, sig_P_y, pl_y)
                     else:
                         conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
                 elif tgt_anc == "PL":
@@ -802,6 +919,12 @@ def apply(data: dict) -> dict:
                     conn["target"]["anchor"] = nearest_pl_anchor_right_of(pl_node_map[tgt_id], src_x + _PILOT_PL_OFFSET)
                 else:
                     conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
+                # Detectar mesmo x que outra conexão PL→sig.P ou pilot→PL
+                if src_anc in ("PL", "PR"):
+                    owner_y = node_pos.get(src_id, (0, 0))[1]
+                    conn["target"]["anchor"] = _resolve_anchor_conflict(
+                        pl_node_map[tgt_id], conn["target"]["anchor"], src_id,
+                        owner_y, conn, "target")
 
     # ── Fase 4: roteamento A* ────────────────────────────────────────────────────
     #

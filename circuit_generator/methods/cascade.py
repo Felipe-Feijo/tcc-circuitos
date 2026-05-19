@@ -40,7 +40,7 @@ from circuit_generator.sequence_parser import extract_cylinders, split_into_grou
 
 # Número de anchors reservados por atuador em cada PressureLine de grupo.
 # 10 por cilindro garante folga para sig.P, pilots e entrada de memória.
-_ANCHORS_PER_ACTUATOR = 10
+_ANCHORS_PER_EVENT = 10  # anchors por evento (aparição na sequência) por cilindro
 
 
 def generate(events: list[tuple[str, str]]) -> dict:
@@ -155,7 +155,12 @@ def generate(events: list[tuple[str, str]]) -> dict:
 
     # ── 5. Linhas de pressão de grupo ────────────────────────────────────────
 
-    n_pl_anchors = n_cyls * _ANCHORS_PER_ACTUATOR
+    # Contar total de eventos por cilindro na sequência
+    # Cada evento gera conexões à PL (pilot + sig.P), então usamos
+    # _ANCHORS_PER_EVENT por aparição de cada cilindro.
+    from collections import Counter
+    events_per_cyl = Counter(letter for letter, _ in events)
+    n_pl_anchors = sum(events_per_cyl[c] * _ANCHORS_PER_EVENT for c in cylinders)
     all_anchors  = [f"X{i}" for i in range(1, n_pl_anchors + 1)]
 
     pl_grp_ids: list[str] = []
@@ -174,9 +179,10 @@ def generate(events: list[tuple[str, str]]) -> dict:
         if idx > n_pl_anchors:
             raise RuntimeError(
                 f"PressureLine {pl_id} esgotou todos os {n_pl_anchors} anchors. "
-                f"Aumente _ANCHORS_PER_ACTUATOR (atual={_ANCHORS_PER_ACTUATOR})."
+                f"Aumente _ANCHORS_PER_EVENT (atual={_ANCHORS_PER_EVENT})."
             )
         return f"X{idx}"
+
 
     # ── 5b. Encadeamento de pressão ───────────────────────────────────────────
     #

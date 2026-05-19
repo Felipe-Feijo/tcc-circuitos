@@ -357,6 +357,7 @@ class DirectionalValveItem(NodeItem):
     def apply_properties(self):
         self.initialize_body_visuals()
         self.initialize_actuators()
+        self.update_actuators_visuals()
         self.update()
 
     def extend_context_menu(self, menu: QMenu):

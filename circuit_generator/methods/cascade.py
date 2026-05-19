@@ -89,6 +89,11 @@ def generate(events: list[tuple[str, str]]) -> dict:
     def sig_id(letter, direction):
         return f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}"
 
+    # Estado inicial de cada cilindro: deduzido pelo primeiro evento.
+    # Se o primeiro movimento for "-", o cilindro começa estendido.
+    first_event = {letter: direction for letter, direction in reversed(events)}
+    starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
+
     # ── 1. Cilindros ──────────────────────────────────────────────────────────
 
     for letter in cylinders:
@@ -97,7 +102,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "sensors": {
                          "retracted": {"type": "reed", "name": sensor_ret(letter)},
                          "extended":  {"type": "reed", "name": sensor_ext(letter)},
-                     }
+                     },
+                     "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
 
     # ── 2. Válvulas 4/2 com PS e Exhaust dedicados ───────────────────────────
@@ -108,7 +114,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "actuators": {
                          "left":  {"type": "pilot"},
                          "right": {"type": "pilot"},
-                     }
+                     },
+                     "default_side": "left" if starts_extended[letter] else "right",
                  })
         connect(f"gen-v42-{letter}", "A", f"gen-cyl-{letter}", "A")
         connect(f"gen-v42-{letter}", "B", f"gen-cyl-{letter}", "B")
@@ -144,7 +151,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "actuators": {
                          "left":  {"type": "pilot"},
                          "right": {"type": "pilot"},
-                     }
+                     },
+                     "default_side": "left" if i > 0 else "right",
                  })
         exh1 = f"{mem_id}-exh-r1"
         exh2 = f"{mem_id}-exh-r2"
@@ -248,12 +256,21 @@ def generate(events: list[tuple[str, str]]) -> dict:
             connect(f"gen-v42-{letter}", v42_pilot,
                     pl_current, next_anchor(pl_current))
 
+        # sig começa em left se o sensor que ela monitora já está ativo no estado inicial
+        # sig-ext monitora a1 → ativo se cilindro começa estendido
+        # sig-ret monitora a0 → ativo se cilindro começa retraído
+        sig_default_side = "left" if (
+            (direction == "+" and not starts_extended[letter]) or
+            (direction == "-" and starts_extended[letter])
+        ) else "right"
+
         add_node(s_id, "Valve_3_2_Ways", f"signal_valve:{g_idx * 100 + e_idx}",
                  properties={
                      "actuators": {
                          "left":  {"type": "limit_switch", "sensor_name": sensor},
                          "right": {"type": "spring"},
-                     }
+                     },
+                     "default_side": sig_default_side,
                  })
 
         exh_sig = add_exhaust(f"exhaust:sig-{g_idx * 100 + e_idx}")

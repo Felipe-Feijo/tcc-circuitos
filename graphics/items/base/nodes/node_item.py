@@ -168,7 +168,6 @@ class NodeItem(DiagramItemBase):
         be reset (e.g. a non-default pixmap).  Always call super().
         """
         self.simulation_mode = False
-        self.visual_offset = QPointF(0, 0)
 
         if hasattr(self, "initialize_actuators"):
             self.initialize_actuators()
@@ -183,7 +182,9 @@ class NodeItem(DiagramItemBase):
                 self.body_state = 0
             self.update_body_visuals()
 
-        if hasattr(self, "update_anchor_positions"):
+        if hasattr(self, "update_actuators_visuals"):
+            self.update_actuators_visuals()
+        elif hasattr(self, "update_anchor_positions"):
             self.update_anchor_positions()
 
         self.update()

@@ -40,7 +40,7 @@ from circuit_generator.sequence_parser import extract_cylinders, split_into_grou
 
 # Número de anchors reservados por atuador em cada PressureLine de grupo.
 # 10 por cilindro garante folga para sig.P, pilots e entrada de memória.
-_ANCHORS_PER_EVENT = 10  # anchors por evento (aparição na sequência) por cilindro
+_ANCHORS_PER_EVENT = 20  # anchors por evento (aparição na sequência) por cilindro
 
 
 def generate(events: list[tuple[str, str]]) -> dict:

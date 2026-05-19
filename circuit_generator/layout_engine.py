@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from circuit_generator.sprite_metrics import METRICS as _M
 
 _CONFIG_PATH = Path(__file__).parent / "layout_config.json"
 
@@ -31,44 +32,8 @@ def _load_config() -> dict:
 #       R1 → (width*271/450, 180) = (271, 180)   base
 #       R2 → (width*405/450, 180) = (405, 180)   base
 
-_ANCHOR_LOCAL: dict[str, dict[str, tuple[float, float]]] = {
-    "DoubleActingCylinder": {
-        # Sprite 498×193; anchors na base (y = height = 193)
-        "A": (498 * 18/497,  193),   # ≈ (18.04, 193)
-        "B": (498 * 408/497, 193),   # ≈ (408.82, 193)
-    },
-    "Exhaust": {
-        "R": (33 * 0.5, 0),
-    },
-    "PressureSource": {
-        "P": (31 * 0.467, 0),
-    },
-    "Valve_3_2_Ways": {
-        "A": (300 * 254/300,   0),
-        "R": (300 * 190/300, 180),
-        "P": (300 * 254/300, 180),
-    },
-    "Valve_4_2_Ways": {
-        "P":  (300 * 191/300, 180),
-        "A":  (300 * 191/300,   0),
-        "B":  (300 * 256/300,   0),
-        "R":  (300 * 256/300, 180),
-        # Pilots: body.left() - pilot_w e body.right() + pilot_w; y = height*0.6222
-        # pilot sprite = 100×180 → PL.x = 0 - 100 = -100; PR.x = 300 + 100 = 400
-        "PL": (-100, 180 * 0.6222),
-        "PR": (400,  180 * 0.6222),
-    },
-    "Valve_5_2_Ways": {
-        "P":  (450 * 338/450, 180),
-        "A":  (450 * 270/450,   0),
-        "B":  (450 * 405/450,   0),
-        "R1": (450 * 271/450, 180),
-        "R2": (450 * 405/450, 180),
-        # Pilots: mesmo padrão da 4/2 — pilot sprite 100px
-        "PL": (-100, 180 * 0.6222),
-        "PR": (550,  180 * 0.6222),
-    },
-}
+# Anchor local derivado automaticamente dos sprites via sprite_metrics.py
+_ANCHOR_LOCAL: dict[str, dict[str, tuple[float, float]]] = _M.anchor_local
 
 # Anchor local do próprio filho que será alinhado ao anchor do pai
 _CHILD_CONNECT_ANCHOR: dict[str, str] = {
@@ -402,9 +367,9 @@ def apply(data: dict) -> dict:
     #
     # O encadeamento mc[n].B → mc[n-1].P é tratado pela fase 3 (anchor mais próximo).
 
-    MC_PL_PIX_W   = 71
-    MC_PL_SPACING = 120
-    V52_SPRITE_CX = 225  # 450 / 2
+    MC_PL_PIX_W   = _M.pl_pix_w
+    MC_PL_SPACING = _M.pl_spacing
+    V52_SPRITE_CX = _M.v52_sprite_cx
 
     pl_node_by_id = {n["id"]: n for n in data["nodes"] if n["type"] == "PressureLine"}
 
@@ -445,9 +410,9 @@ def apply(data: dict) -> dict:
     #
     # X: mc[n_mc-1].x = cyl_first_x + CYL_WIDTH - MC_WIDTH/2 - 15  (do gabarito)
     #    mc[n].x = mc[n+1].x + |chain_offset| + PL_PIX_W = mc[n+1].x + 138
-    CYL_WIDTH  = 498   # largura do sprite DoubleActingCylinder
-    MC_WIDTH   = 450   # largura do sprite Valve_5_2_Ways
-    MC_X_STEP  = int(abs(MC_CHAIN_OFFSET)) + MC_PL_PIX_W  # 67 + 71 = 138
+    CYL_WIDTH  = _M.cyl_width
+    MC_WIDTH   = _M.v52_width
+    MC_X_STEP  = _M.mc_x_step
     mc_top_x   = cyl_first_x + CYL_WIDTH - MC_WIDTH / 2 - 15
 
     for node in reversed(real_mc_nodes):  # do mais alto (n_mc-1) para o mais baixo (0)
@@ -578,8 +543,8 @@ def apply(data: dict) -> dict:
     #   x_local(Xi) = PL_PIX_W / 2 + (i - 1) * PL_SPACING
     # onde PL_PIX_W = 71 (terminal sprite) e PL_SPACING = 120.
 
-    PL_PIX_W   = 71    # largura do terminal sprite (pressure_line_terminal.png)
-    PL_SPACING = 120   # espaçamento entre anchors (expandable_item.py)
+    PL_PIX_W   = _M.pl_pix_w
+    PL_SPACING = _M.pl_spacing
 
     def pl_anchor_scene_x(pl_id: str, anchor_name: str) -> float | None:
         """Retorna a posição X em cena do anchor Xi de uma PressureLine."""
@@ -875,6 +840,7 @@ def apply(data: dict) -> dict:
 
         return _register(anchor, owner, owner_y, conn_ref)
 
+    _mc_A_anchor: dict[str, tuple[str, int]] = {}  # mc_id → (pl_id, anchor_idx) de mc.A
     for conn in data.get("connections", []):
         src_id  = conn["source"]["node"]
         tgt_id  = conn["target"]["node"]
@@ -887,10 +853,6 @@ def apply(data: dict) -> dict:
         if src_id in pl_node_map and src_anc.startswith("X"):
             tgt_x = anchor_scene_x(tgt_id, tgt_anc)
             if tgt_x is not None:
-                # Para PL→sig.P quando sig está ABAIXO da PL:
-                # preferir o anchor cuja coluna vertical esteja livre de obstáculos
-                # entre a PL e o destino. Se todas estiverem bloqueadas, usar a
-                # mais próxima (o A* contorna).
                 if (tgt_ntype_p3 == "Valve_3_2_Ways" and tgt_anc == "P"):
                     tgt_pos_n = node_pos.get(tgt_id)
                     pl_pos_n  = node_pos.get(src_id)
@@ -905,13 +867,15 @@ def apply(data: dict) -> dict:
                     else:
                         conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
                 elif tgt_anc == "PL":
-                    # Pilot esquerdo: anchor com x MENOR que o pilot (vem pela esquerda)
                     conn["source"]["anchor"] = nearest_pl_anchor_left_of(pl_node_map[src_id], tgt_x)
                 elif tgt_anc == "PR":
-                    # Pilot direito: anchor com x MAIOR que o pilot (vem pela direita)
                     conn["source"]["anchor"] = nearest_pl_anchor_right_of(pl_node_map[src_id], tgt_x)
                 else:
                     conn["source"]["anchor"] = nearest_pl_anchor(pl_node_map[src_id], tgt_x)
+                owner_y = node_pos.get(tgt_id, (0, 0))[1]
+                conn["source"]["anchor"] = _resolve_anchor_conflict(
+                    pl_node_map[src_id], conn["source"]["anchor"], tgt_id,
+                    owner_y, conn, "source")
 
         # caso 2: qualquer nó → PressureLine
         elif tgt_id in pl_node_map and tgt_anc.startswith("X"):
@@ -922,14 +886,37 @@ def apply(data: dict) -> dict:
                     conn["target"]["anchor"] = nearest_pl_anchor_left_of(pl_node_map[tgt_id], src_x - _PILOT_PL_OFFSET)
                 elif src_anc == "PR":
                     conn["target"]["anchor"] = nearest_pl_anchor_right_of(pl_node_map[tgt_id], src_x + _PILOT_PL_OFFSET)
+                elif (node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "A"):
+                    V52_A_local_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["A"][0]  # 270
+                    mc_A_scene_x = node_pos.get(src_id, (0, 0))[0] + V52_A_local_x
+                    conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], mc_A_scene_x)
+                elif (node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "B"):
+                    V52_B_local_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]  # 405
+                    mc_B_scene_x = node_pos.get(src_id, (0, 0))[0] + V52_B_local_x
+                    conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], mc_B_scene_x)
                 else:
                     conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
-                # Detectar mesmo x que outra conexão PL→sig.P ou pilot→PL
-                if src_anc in ("PL", "PR"):
-                    owner_y = node_pos.get(src_id, (0, 0))[1]
-                    conn["target"]["anchor"] = _resolve_anchor_conflict(
-                        pl_node_map[tgt_id], conn["target"]["anchor"], src_id,
-                        owner_y, conn, "target")
+                owner_y = node_pos.get(src_id, (0, 0))[1]
+                conn["target"]["anchor"] = _resolve_anchor_conflict(
+                    pl_node_map[tgt_id], conn["target"]["anchor"], src_id,
+                    owner_y, conn, "target")
+                # Registrar anchor final de mc.A para garantir mc.B > mc.A depois
+                if node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "A":
+                    _mc_A_anchor[src_id] = (tgt_id, int(conn["target"]["anchor"][1:]))
+
+    # ── Fase 3.5: garantir que anchor de mc.B > anchor de mc.A (evita cruzamento) ──
+    for conn in data.get("connections", []):
+        src_id  = conn["source"]["node"]
+        src_anc = conn["source"]["anchor"]
+        tgt_id  = conn["target"]["node"]
+        if (node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "B"
+                and tgt_id in pl_node_map):
+            a_pl_id, a_idx = _mc_A_anchor.get(src_id, (None, -1))
+            if a_idx != -1:
+                b_idx = int(conn["target"]["anchor"][1:])
+                if b_idx <= a_idx:
+                    n_anchors = len(pl_node_map[tgt_id]["properties"]["anchors"])
+                    conn["target"]["anchor"] = f"X{min(a_idx + 1, n_anchors)}"
 
     # ── Fase 4: roteamento A* ────────────────────────────────────────────────────
     #
@@ -945,8 +932,8 @@ def apply(data: dict) -> dict:
     # Construir grid com obstáculos
     astar_grid = build_grid(data["nodes"])
 
-    PL_PIX_W_R  = 71
-    PL_SPACING_R = 120
+    PL_PIX_W_R  = _M.pl_pix_w
+    PL_SPACING_R = _M.pl_spacing
 
     def _scene_xy(node_id: str, anc: str) -> tuple[float, float] | None:
         npos = node_pos.get(node_id)

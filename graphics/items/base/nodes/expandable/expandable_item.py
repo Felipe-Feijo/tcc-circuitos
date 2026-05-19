@@ -12,7 +12,7 @@ class ExpandableItem(NodeItem):
         self.properties = {
             "anchors": list(getattr(self, "DEFAULT_ANCHORS", []))
         }
-        self.spacing = 120
+        self.spacing = 60
         self.internal_connections = []
         self.anchor_list = []
         self.initialize_terminal_visuals()

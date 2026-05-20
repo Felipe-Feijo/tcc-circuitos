@@ -90,13 +90,30 @@ class SingleActingCylinder(Node, HydraulicMixin):
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
-        anchor  = self.anchors["A"]
-        P_prev  = getattr(anchor, "pressure", 0.0)
-        if isinstance(P_prev, str):
-            P_prev = 0.0
+        anchor = self.anchors["A"]
+        EPS    = self.stroke * 1e-3
+
+        # No batente: o chute físico correto é Q=0, pois o pistão está parado.
+        # Usar anchor.pressure aqui é perigoso — quando o circuito troca de
+        # topologia (válvula comuta), anchor.pressure ainda carrega a pressão
+        # do regime anterior (ex: 1.6 MPa da relief), o que gera Q_eq na casa
+        # de +1000 m³/s, 8 ordens de grandeza acima de q_ref, no sinal errado
+        # para o bound (Q ≤ 0). O solver leva 30 s para escapar desse chute.
+        # Solução: nos batentes, chute direto em 0. Fora dos batentes, usa
+        # p_hint da mola (pressão de equilíbrio real), não anchor.pressure.
+        if self.x <= EPS or self.x >= self.stroke - EPS:
+            return {self.flow_var: 0.0}
+
+        # Zona livre: estima Q pelo equilíbrio de forças usando p_hint
+        # (pressão da mola), que é sempre fisicamente consistente — não
+        # depende do histórico do NodeContinuity.
+        P_eq   = self.p_hint   # F_mola / area — pressão de equilíbrio da mola
         F_mola = self.spring_k * self.x
-        F_net  = P_prev * self.area - F_mola - self.external_force
+        F_net  = P_eq * self.area - F_mola - self.external_force
         Q_eq   = (F_net / max(self.friction, 1e-3)) * self.area
+        # clipa em ±q_ref para não explodir se F_net for grande por algum motivo
+        q_ref  = getattr(self, "q_ref", 1e-4)
+        Q_eq   = max(-q_ref, min(q_ref, Q_eq))
         return {self.flow_var: Q_eq}
 
     def hydraulic_ports(self):
@@ -121,27 +138,27 @@ class SingleActingCylinder(Node, HydraulicMixin):
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
         P = x[idx[self.anchors["A"].pressure_var]]
-        EPS = self.stroke * 1e-3
-        v       = Q / self.area
+        v = Q / self.area
         F_hidro = P * self.area
-        F_mola  = self.spring_k * self.x
-        F_res   = F_mola + self.external_force + self.friction * v
+        F_res   = self.spring_k * self.x + self.external_force + self.friction * v
+        EPS = self.stroke * 1e-3
+
+        if self.x >= self.stroke - EPS:
+            # Complementaridade: ou Q=0 (pistão parado) ou F_net=0 (pistão se move)
+            # P_A sempre ancorada pela equação — nunca fica livre no NodeContinuity
+            a = -Q / self.q_ref                    # ≥ 0 quando Q ≤ 0
+            b = (F_hidro - F_res) / max(F_res, 1)  # ≥ 0 quando pressão sustenta
+            return [a + b - math.sqrt(a**2 + b**2)]
 
         # no batente retraído com força empurrando para fora
         if self.x <= EPS and F_hidro <= F_res:
             F_scale = max(abs(F_res), 1.0)
             return [Q / (self.area * F_scale)]  # força Q → 0
 
-        # no batente estendido com força empurrando para dentro
-        if self.x >= self.stroke - EPS and F_hidro >= F_res:
-            F_scale = max(abs(F_hidro), 1.0)
-            return [Q / (self.area * F_scale)]  # força Q → 0
-
         # zona livre — equilíbrio de forças normal
         F_contact = self._contact_force(self.x, v)
-        F_res     = F_res - F_contact
-        F_net     = F_hidro - F_res
-        F_scale   = max(abs(F_hidro), abs(F_res), 1.0)
+        F_net   = F_hidro - F_res - F_contact
+        F_scale = max(abs(F_hidro), abs(F_res), 1.0)
         return [F_net / F_scale]
 
     # ------------------------------------------------------------------

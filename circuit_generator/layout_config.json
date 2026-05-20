@@ -24,7 +24,7 @@
         "sig_pilot_offset_PR_per_mc": 150,
         "sig_pilot_offset_y": 300,
         "memory_gap_y": 400,
-        "mc_B_pl_margin": 200
+        "mc_B_pl_margin": 300
     },
     "rows": {
         "cylinder": -220,

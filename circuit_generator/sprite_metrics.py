@@ -95,16 +95,16 @@ class SpriteMetrics:
 
     # Derivados da PressureLine (calculados no __post_init__)
     v52_sprite_cx: float = field(init=False)
-    mc_chain_offset: float = field(init=False)  # V52_P_X - V52_B_X
-    mc_x_step: int = field(init=False)           # |chain_offset| + pl_pix_w
+    mc_chain_offset: float = field(init=False)  # V52_A_X - V52_P_X
+    mc_x_step: int = field(init=False)           # A.x - P.x (alinha A[i+1] com P[i])
 
     def __post_init__(self):
         object.__setattr__(self, "v52_sprite_cx", self.v52_width / 2)
         v52_P_x = self.v52_width * 338/450
-        v52_B_x = self.v52_width * 405/450
-        chain = v52_P_x - v52_B_x
+        v52_A_x = self.v52_width * 270/450
+        chain = v52_A_x - v52_P_x
         object.__setattr__(self, "mc_chain_offset", chain)
-        object.__setattr__(self, "mc_x_step", int(abs(chain)) + self.pl_pix_w)
+        object.__setattr__(self, "mc_x_step", int(abs(chain)))
 
 
 def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:

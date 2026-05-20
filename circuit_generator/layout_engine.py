@@ -111,7 +111,7 @@ def _best_pl_anchor_clear_column(pl_node: dict, target_x: float,
                            abs(ax - target_x), name))
     candidates.sort(key=lambda c: c[:3])
     chosen = candidates[0][3]
-    pl_anchor_used[round(_pl_anchor_x(pl_node, chosen, node_pos))] = ("_clear_col", 0.0)
+    pl_anchor_used[round(_pl_anchor_x(pl_node, chosen, node_pos))] = ("_clear_col", 0.0, 0.0)
     return chosen
 
 
@@ -386,15 +386,19 @@ def apply(data: dict) -> dict:
         for pl_id, xs in pl_xs.items():
             if not xs:
                 continue
-            pl_node  = pl_node_map[pl_id]
-            n_anch   = len(pl_node["properties"]["anchors"])
-            pl_width = _M.pl_pix_w / 2 + (n_anch - 1) * _M.pl_spacing
-            new_x    = center - pl_width / 2
+            pl_node   = pl_node_map[pl_id]
+            anchors   = pl_node["properties"]["anchors"]
+            first_idx = int(anchors[0][1:])
+            last_idx  = int(anchors[-1][1:])
+            # X1 estaria em node_x + pl_pix_w/2, então X_first está em node_x + pl_pix_w/2 + (first_idx-1)*spacing
+            # Centralizar significa que o centro da faixa usada fica em `center`
+            mid_idx   = (first_idx + last_idx) / 2
+            new_x     = center - (_M.pl_pix_w / 2 + (mid_idx - 1) * _M.pl_spacing)
             pl_node["position"]["x"] = new_x
             node_pos[pl_id] = (new_x, node_pos[pl_id][1])
 
     # ── Fase 3: atribuir anchors das PressureLines ────────────────────────────
-    pl_anchor_used: dict[int, tuple[str, float]] = {}  # round(x) → (owner_id, owner_y)
+    pl_anchor_used: dict[int, tuple[str, float, float]] = {}  # round(x) → (owner_id, owner_y, owner_pl_y)
     conn_by_owner:  dict[str, tuple]             = {}  # owner_id → (conn, side, pl_node)
     mc_A_anchor:    dict[str, tuple[str, int]]   = {}  # mc_id → (pl_id, idx)
 
@@ -407,20 +411,28 @@ def apply(data: dict) -> dict:
             idx = int(anc[1:])
             return f"X{max(1, min(n, (idx-1) if idx <= mid else (idx+1)))}"
 
+        pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
+
         def _reg(anc: str, oid: str, oy: float, cref: object) -> str:
             ax  = _pl_anchor_x(pl_node, anc, node_pos)
             key = round(ax)
             if key not in pl_anchor_used:
-                pl_anchor_used[key] = (oid, oy)
+                pl_anchor_used[key] = (oid, oy, pl_y)
                 conn_by_owner[oid]  = (cref, side, pl_node)
                 return anc
-            prev_id, prev_y = pl_anchor_used[key]
+            prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
             if prev_id == oid:
+                return anc
+            # Sem conflito real se lados opostos E ordem Y consistente com ordem PL
+            # (componente acima→PL acima e componente abaixo→PL abaixo = sem cruzamento)
+            opp_sides = (oy > pl_y) != (prev_y > prev_pl_y)
+            same_order = (oy < prev_y) == (pl_y < prev_pl_y)
+            if opp_sides and same_order:
                 return anc
             if oy >= prev_y:
                 return _reg(_next(anc), oid, oy, cref)
             else:
-                pl_anchor_used[key] = (oid, oy)
+                pl_anchor_used[key] = (oid, oy, pl_y)
                 conn_by_owner[oid]  = (cref, side, pl_node)
                 prev_conn, prev_side, prev_pl = conn_by_owner.get(prev_id, (None, None, None))
                 if prev_conn is not None:
@@ -432,10 +444,22 @@ def apply(data: dict) -> dict:
 
     # Processar caso 2 (componente → PL) antes do caso 1 (PL → componente)
     # para registrar no pl_anchor_used antes de resolver conflitos
+    def _conn_sort_key(c):
+        s_id, s_anc = c["source"]["node"], c["source"]["anchor"]
+        t_id = c["target"]["node"]
+        is_to_pl = t_id in pl_node_map
+        if not is_to_pl:
+            return (2, 0)  # PL → componente: por último
+        if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_anc == "PL":
+            return (0, 0)  # mc.PL → PL: primeiro (lado esquerdo)
+        if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_anc == "B":
+            return (1, -node_pos.get(s_id, (0, 0))[1])  # mc.B → PL: depois, mc[0] (maior y) por último
+        return (1, 0)  # resto: junto com mc.B
+
     connections_sorted = sorted(
         [c for c in data.get("connections", [])
          if c["source"]["node"] != c["target"]["node"]],
-        key=lambda c: 0 if c["target"]["node"] in pl_node_map else 1
+        key=_conn_sort_key
     )
 
     for conn in connections_sorted:
@@ -475,7 +499,11 @@ def apply(data: dict) -> dict:
                 continue
             pl = pl_node_map[t_id]
             OFF = 10
-            if s_anc == "PL":
+            if s_anc == "PL" and s_type == "Valve_5_2_Ways":
+                mc_role = role_map.get(s_id, "")
+                mc_idx  = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
+                anc = _nearest_pl_anchor(pl, src_x - mc_idx * 2 * _M.pl_spacing, node_pos, "left")
+            elif s_anc == "PL":
                 anc = _nearest_pl_anchor(pl, src_x - OFF, node_pos, "left")
             elif s_anc == "PR":
                 anc = _nearest_pl_anchor(pl, src_x + OFF, node_pos, "right")
@@ -483,8 +511,16 @@ def apply(data: dict) -> dict:
                 ax  = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["A"][0]
                 anc = _nearest_pl_anchor(pl, ax, node_pos)
             elif s_type == "Valve_5_2_Ways" and s_anc == "B":
-                bx  = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
-                anc = _nearest_pl_anchor(pl, bx + cols.get("mc_B_pl_margin", 30), node_pos, "right")
+                bx      = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
+                mc_role = role_map.get(s_id, "")
+                mc_idx  = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
+                n_mc    = sum(1 for r in role_map.values() if r.startswith("memory:"))
+                safeguard = cols.get("mc_B_pl_safeguard", 20)
+                PR_B_diff = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0] - _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
+                margin  = PR_B_diff + (n_mc - 1 - mc_idx) * _M.mc_x_step + safeguard
+                anc = _nearest_pl_anchor(pl, bx + margin, node_pos, "right")
+                conn["target"]["anchor"] = anc  # mc.B sempre abaixo da PL, sem conflito real
+                continue
             else:
                 anc = _nearest_pl_anchor(pl, src_x, node_pos)
             conn["target"]["anchor"] = _resolve_conflict(
@@ -521,10 +557,11 @@ def apply(data: dict) -> dict:
             keep_max = min(max(all_idxs), used_max + 1)
             pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs
                                                 if keep_min <= i <= keep_max]
-            old_x = node_pos[pl_id][0]
-            new_x = old_x + (keep_min - 1) * _M.pl_spacing
+            removed_left = keep_min - min(all_idxs)
+            new_x = node_pos[pl_id][0] + removed_left * _M.pl_spacing
             pl_node["position"]["x"] = new_x
             node_pos[pl_id] = (new_x, node_pos[pl_id][1])
+
 
     # ── Fase 4: roteamento A* ─────────────────────────────────────────────────
     from circuit_generator.astar_router import build_grid, route_connection, get_exit_dir

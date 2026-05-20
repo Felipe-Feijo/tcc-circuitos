@@ -31,12 +31,16 @@ class GraphicsView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
 
+    MIN_ZOOM = 0.1
+
     def zoom_in(self):
         self.scale(self.ZOOM_IN_FACTOR, self.ZOOM_IN_FACTOR)
         if self.editor:
             self.editor.update_scene_rect()
 
     def zoom_out(self):
+        if self.transform().m11() * self.ZOOM_OUT_FACTOR < self.MIN_ZOOM:
+            return
         self.scale(self.ZOOM_OUT_FACTOR, self.ZOOM_OUT_FACTOR)
         if self.editor:
             self.editor.update_scene_rect()

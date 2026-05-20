@@ -1,6 +1,7 @@
 from PyQt6.QtGui import QAction
 from main_window.ui.circuit_generator_dialog import CircuitGeneratorDialog
 from circuit_generator.circuit_generator import generate_and_load
+from editor.mode import EditorMode
 
 
 def create_generator_actions(main_window) -> dict:
@@ -24,3 +25,5 @@ def _open_dialog(main_window):
             main_window.scene,
             main_window.state,
         )
+        main_window.set_mode(EditorMode.SELECT)
+        main_window.zoom_to_contents()

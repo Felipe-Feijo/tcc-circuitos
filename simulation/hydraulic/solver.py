@@ -193,6 +193,8 @@ class NonlinearSystemSolver:
         # Tentativa rápida — fsolve (Newton-Raphson)                          #
         # ------------------------------------------------------------------ #
         x_for_ls = x0.copy()
+        fsolve_best: np.ndarray | None = None   # melhor solucao do fsolve, mesmo fora de bounds
+        fsolve_best_residual = np.inf
 
         try:
             x_fast, info, ier, msg = fsolve(system, x0.copy(), full_output=True)
@@ -205,10 +207,6 @@ class NonlinearSystemSolver:
             sane = np.all(np.abs(x_fast) < 1e12)
 
             # Critério normalizado: residual adimensional < 1e-6.
-            # Divide pelo _mixed_scale em vez de q_ref_safe puro, para que
-            # tanto resíduos de equações de vazão quanto de pressão sejam
-            # considerados. Sem isso, um resíduo de 1e5 Pa passa no threshold
-            # de q_ref*1e-3 ~ 3e-7 m³/s de um circuito de 20 L/min.
             residual_norm = residual_fast / _mixed_scale
             if ier == 1 and residual_norm < 1e-6 and within_bounds and sane:
                 print(f"  fsolve: convergiu | residual_norm={residual_norm:.2e} (raw={residual_fast:.2e})")
@@ -216,9 +214,14 @@ class NonlinearSystemSolver:
 
             if sane:
                 x_for_ls = x_fast  # warm start para least_squares
+                # Guarda como candidato de fallback mesmo fora de bounds —
+                # se o least_squares falhar, esta solucao pode ser melhor que nada.
+                if ier == 1 and residual_norm < 1e-4:
+                    fsolve_best = np.clip(x_fast, lower, upper)
+                    fsolve_best_residual = residual_fast
 
         except Exception as e:
-            print(f"  fsolve: exceção — {e}")
+            print(f"  fsolve: excecao — {e}")
 
         # ------------------------------------------------------------------ #
         # Fallback robusto — least_squares (TRF)                              #
@@ -256,6 +259,15 @@ class NonlinearSystemSolver:
             f"q_ref={ctx.q_ref:.2e} m³/s | "
             f"zc={ctx.zc:.2e}"
         )
+
+        # Se o least_squares nao convergiu bem mas o fsolve tinha uma solucao
+        # razoavel (mesmo fora de bounds por causa dos batentes), prefere o fsolve.
+        # Isso evita que o engine receba uma solucao garbage do TRF e marque ERR.
+        ls_residual_norm = residual / _mixed_scale
+        if ls_residual_norm > 1e-4 and fsolve_best is not None:
+            if fsolve_best_residual / _mixed_scale < ls_residual_norm:
+                print(f"  least_squares: usando fallback do fsolve (residual menor)")
+                return {var: fsolve_best[i] for var, i in self.var_index.items()}
 
         return {var: result.x[i] for var, i in self.var_index.items()}
 

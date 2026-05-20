@@ -16,6 +16,10 @@ class FixedDisplacementPump(Node, HydraulicMixin):
             self.flow_out_var = f"Q_{self.id}_S"
 
     @property
+    def is_flow_source(self) -> bool:
+        return True
+
+    @property
     def flow_hint(self) -> float:
         return self.Q_set
 

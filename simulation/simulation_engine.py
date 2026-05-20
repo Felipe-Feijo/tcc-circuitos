@@ -279,6 +279,20 @@ class SimulationEngine:
                         pressure_var_to_nodes[pvar].add(node)
                         node_to_pressure_vars[node].add(pvar)
 
+            # Inclui todas as portas fisicas do no no grafo de conectividade
+            # (nao so as ativas). Uma valvula direcional tem portas bloqueadas
+            # que ainda estao ligadas por fios — sem isso, a bomba fica num
+            # circuito separado do cilindro quando a valvula comuta.
+            # Nota: isso so afeta a PARTICAO (quem esta no mesmo circuito),
+            # nao as equacoes — as portas bloqueadas nao entram no solve.
+            for anchor_name, anchor in node.anchors.items():
+                if anchor.domain != "hydraulic":
+                    continue
+                pvar = anchor_to_pressure_var.get(anchor)
+                if pvar:
+                    pressure_var_to_nodes[pvar].add(node)
+                    node_to_pressure_vars[node].add(pvar)
+
             for anchor_name_a, anchor_name_b in (node.get_internal_connections() or []):
                 anchor_a = node.anchors.get(anchor_name_a)
                 anchor_b = node.anchors.get(anchor_name_b)
@@ -324,8 +338,16 @@ class SimulationEngine:
         circuit_list = list(circuit_nodes)
         new_nodes_set = set(circuit_list)
 
-        # circuito morto — nem chama o solver
-        if ctx.q_ref < 1e-10:
+        # circuito morto — nem chama o solver.
+        # Criterio: nenhum no tem is_flow_source=True, ou seja, nao ha
+        # fonte de fluxo ativa (bomba ligada, cilindro com mola comprimida).
+        # Desacoplado do flow_hint para que o ScaleManager possa usar
+        # flow_hint como pura ordem de grandeza sem carregar semantica de estado.
+        has_flow_source = any(
+            getattr(n, "is_flow_source", False)
+            for n in circuit_list
+        )
+        if not has_flow_source:
             sol = {}
             for node in circuit_list:
                 for anchor_name, flow_var in node.hydraulic_ports().items():
@@ -346,7 +368,13 @@ class SimulationEngine:
         for pvar in circuit_pvars:
             prev_nodes = self._prev_circuit_map.get(pvar)
             if prev_nodes is not None and prev_nodes != new_nodes_set:
-                self._reset_continuity(pvar)
+                # Mudanca de topologia detectada (valvula comutou, cilindro travou, etc).
+                # Em vez de zerar p_previous (que jogaria o solver para o ponto trivial
+                # e causaria dezenas de iteracoes de least_squares ate o zc escalar),
+                # re-seed com p_ref — o mesmo chute usado na criacao do NodeContinuity.
+                cont = self._continuities.get(pvar)
+                if cont:
+                    cont.p_previous = ctx.p_ref
             self._prev_circuit_map[pvar] = new_nodes_set
 
         sol = self._try_solve(index, circuit_list, anchor_to_pressure_var, ctx=ctx)
@@ -358,12 +386,6 @@ class SimulationEngine:
             self._reset_circuit_continuities(circuit_pvars)
             self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
             return
-
-        for pvar in circuit_pvars:
-            if pvar in sol and abs(sol[pvar]) > self.P_MAX:
-                self._reset_circuit_continuities(circuit_pvars)
-                self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
-                return
 
         for pvar, continuity in self._continuities.items():
             if pvar in circuit_pvars:

@@ -71,10 +71,14 @@ class SingleActingCylinder(Node, HydraulicMixin):
         return ([pvar] if pvar else []) + [self.flow_var]
 
     @property
+    def is_flow_source(self) -> bool:
+        # Mola comprimida pode expulsar oleo — fonte de fluxo variavel.
+        return self.x > 0.0
+
+    @property
     def flow_hint(self) -> float:
-        # O cilindro e consumidor de fluxo, nao fonte.
-        # Retornar estimativa via friction da valores absurdos (ex: 39 m3/s)
-        # que corrompem q_ref do ScaleManager. O q_ref e determinado pela bomba.
+        # Cilindro nao e fonte de fluxo controlada — q_ref vem da bomba.
+        # A semantica de "pode expulsar oleo" e capturada por is_flow_source.
         return 0.0
 
     @property

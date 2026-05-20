@@ -369,6 +369,7 @@ class SimulationEngine:
             if pvar in circuit_pvars:
                 continuity.update_pressure(sol)
 
+        self._scale_manager.update_from_solution(sol)
         self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var, ctx: ScaleContext):

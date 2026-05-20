@@ -151,19 +151,29 @@ class ScaleManager:
     Estratégia em cascata para p_ref:
       1. max dos p_hint dos nós (se algum > 1 Pa)
       2. inferência via atributo `pressure` (Reservoir com P > 0)
-      3. memória da última escala válida
+      3. memória da última escala válida (EMA sobre resultados reais)
       4. fallback absoluto: DEFAULT_P_REF
 
     Estratégia em cascata para q_ref:
       1. max dos flow_hint dos nós (se algum > 1e-10)
-      2. memória da última escala válida
+      2. memória da última escala válida (EMA sobre resultados reais)
       3. fallback absoluto: DEFAULT_Q_REF
 
-    A memória é essencial para transições de topologia: quando uma
-    válvula comuta ou um cilindro trava, os hints podem cair a zero
-    por um frame. Sem memória, o scaling colapsa exatamente na
-    iteração mais crítica.
+    A memória usa EMA (média exponencial móvel) sobre os valores reais
+    da solução anterior — não apenas os hints estáticos dos nós. Isso
+    garante que o scaling acompanha o estado real do circuito após
+    transições de topologia (válvula comuta, cilindro trava), onde os
+    hints podem ficar desatualizados por várias iterações.
+
+    Parâmetros
+    ----------
+    ema_alpha : peso do valor novo na EMA (0 < alpha <= 1).
+                Alpha=1 desativa a memória (comportamento original).
+                Alpha=0.2 dá 80% de peso à história — rastreamento suave.
     """
+
+    #: peso EMA para atualização via resultados reais do solve
+    EMA_ALPHA: float = 0.2
 
     def __init__(self):
         self._last_p: float = DEFAULT_P_REF
@@ -178,13 +188,42 @@ class ScaleManager:
         p_ref = self._estimate_pressure(nodes)
         q_ref = self._estimate_flow(nodes)
 
-        # atualiza memória só quando temos valores confiáveis
+        # atualiza memória só quando temos valores confiáveis dos hints
         if p_ref > 1.0:
             self._last_p = p_ref
         if q_ref > 1e-10:
             self._last_q = q_ref
 
         return p_ref, q_ref
+
+    def update_from_solution(self, sol: dict[str, float]) -> None:
+        """
+        Atualiza a memória de escala com EMA sobre os resultados reais
+        do último solve bem-sucedido.
+
+        Deve ser chamado pelo engine após cada solve aceito, antes de
+        descartar a solução. Isso fecha o loop de feedback: em vez de
+        depender apenas de hints estáticos, o scaling aprende com os
+        valores reais que o solver encontrou.
+
+        Parâmetros
+        ----------
+        sol : dicionário {nome_variavel: valor} retornado pelo solver
+        """
+        p_values = [v for k, v in sol.items()
+                    if k.startswith("P_") and isinstance(v, float) and v > 1.0]
+        q_values = [abs(v) for k, v in sol.items()
+                    if k.startswith("Q_") and isinstance(v, float) and abs(v) > 1e-10]
+
+        alpha = self.EMA_ALPHA
+
+        if p_values:
+            p_real = max(p_values)
+            self._last_p = (1.0 - alpha) * self._last_p + alpha * p_real
+
+        if q_values:
+            q_real = max(q_values)
+            self._last_q = (1.0 - alpha) * self._last_q + alpha * q_real
 
     def build_context(
         self,

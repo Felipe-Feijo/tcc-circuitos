@@ -180,6 +180,15 @@ class NonlinearSystemSolver:
         system = self.build_system()
         q_ref_safe = max(ctx.q_ref, 1e-12)
 
+        # Escala de normalização mista para o critério de aceitação do fsolve.
+        # O sistema tem duas classes de equações com unidades distintas:
+        #   - equações de vazão (NodeContinuity, conservação): resíduo em m³/s
+        #   - equações de pressão (ΔP–Q das válvulas, etc.): resíduo em Pa
+        # Usar apenas q_ref como threshold aceita soluções onde as equações
+        # de pressão têm resíduo enorme (ex: 1e5 Pa) sem perceber.
+        # A escala mista normaliza ambas as classes para ordem 1.
+        _mixed_scale = q_ref_safe + ctx.p_ref / max(ctx.zc, 1.0)
+
         # ------------------------------------------------------------------ #
         # Tentativa rápida — fsolve (Newton-Raphson)                          #
         # ------------------------------------------------------------------ #
@@ -195,8 +204,14 @@ class NonlinearSystemSolver:
             )
             sane = np.all(np.abs(x_fast) < 1e12)
 
-            if ier == 1 and residual_fast < q_ref_safe * 1e-3 and within_bounds and sane:
-                print(f"  fsolve: convergiu | residual={residual_fast:.2e}")
+            # Critério normalizado: residual adimensional < 1e-6.
+            # Divide pelo _mixed_scale em vez de q_ref_safe puro, para que
+            # tanto resíduos de equações de vazão quanto de pressão sejam
+            # considerados. Sem isso, um resíduo de 1e5 Pa passa no threshold
+            # de q_ref*1e-3 ~ 3e-7 m³/s de um circuito de 20 L/min.
+            residual_norm = residual_fast / _mixed_scale
+            if ier == 1 and residual_norm < 1e-6 and within_bounds and sane:
+                print(f"  fsolve: convergiu | residual_norm={residual_norm:.2e} (raw={residual_fast:.2e})")
                 return {var: x_fast[i] for var, i in self.var_index.items()}
 
             if sane:
@@ -210,11 +225,23 @@ class NonlinearSystemSolver:
         # ------------------------------------------------------------------ #
         x_for_ls = np.clip(x_for_ls, lower, upper)
 
+        # Escala explícita por tipo de variável: P-vars em Pa, Q-vars em m³/s.
+        # Substituímos x_scale="jac" porque o Jacobiano de circuitos hidráulicos
+        # é frequentemente mal-condicionado (razão P/Q ~ 1e8 em 100 bar / 20 L/min),
+        # e o escalonamento via Jacobiano herda esse mal-condicionamento em vez
+        # de corrigi-lo. Com escala física explícita, TRF opera em variáveis
+        # adimensionais de ordem 1, convergindo mais rápido e de forma mais robusta.
+        x_scale_arr = np.array([
+            ctx.p_ref if var.startswith("P_") else ctx.q_ref
+            for var in self.index_var
+        ])
+        x_scale_arr = np.where(x_scale_arr > 0, x_scale_arr, 1.0)
+
         result = least_squares(
             system, x_for_ls,
             method="trf",
             bounds=(lower, upper),
-            x_scale="jac",
+            x_scale=x_scale_arr,
             ftol=1e-10,
             xtol=1e-10,
             gtol=1e-10,

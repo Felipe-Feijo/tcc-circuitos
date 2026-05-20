@@ -72,11 +72,10 @@ class SingleActingCylinder(Node, HydraulicMixin):
 
     @property
     def flow_hint(self) -> float:
-        F_mola = self.spring_k * self.x
-        F_net  = F_mola + self.external_force
-        if F_net <= 0:
-            return 0.0
-        return (F_net / self.friction) * self.area
+        # O cilindro e consumidor de fluxo, nao fonte.
+        # Retornar estimativa via friction da valores absurdos (ex: 39 m3/s)
+        # que corrompem q_ref do ScaleManager. O q_ref e determinado pela bomba.
+        return 0.0
 
     @property
     def p_hint(self) -> float:

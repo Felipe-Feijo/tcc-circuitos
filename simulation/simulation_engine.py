@@ -369,7 +369,25 @@ class SimulationEngine:
             if pvar in circuit_pvars:
                 continuity.update_pressure(sol)
 
-        self._scale_manager.update_from_solution(sol)
+        # Só atualiza a memória de escala se a solução é fisicamente válida.
+        # Uma solução espúria (balanço de vazão ruim) não deve "ensinar" o
+        # ScaleManager — caso contrário, um q_ref absurdo pode contaminar
+        # os solves seguintes via EMA.
+        _, q_ref_check = self._scale_manager.estimate(circuit_list)
+        sol_q_values = [abs(v) for k, v in sol.items()
+                        if k.startswith("Q_") and isinstance(v, float)]
+        max_q = max(sol_q_values) if sol_q_values else 0.0
+        q_is_sane = max_q < q_ref_check * 1e3   # no máximo 1000x o q_ref esperado
+        p_values_sol = [v for k, v in sol.items()
+                        if k.startswith("P_") and isinstance(v, float) and v >= 0]
+        max_p = max(p_values_sol) if p_values_sol else 0.0
+        p_is_sane = max_p < self.P_MAX
+
+        if q_is_sane and p_is_sane:
+            self._scale_manager.update_from_solution(sol)
+        else:
+            print(f"  [ScaleManager] solucao rejeitada para EMA: max_q={max_q:.2e}, max_p={max_p:.2e}")
+
         self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var, ctx: ScaleContext):
@@ -383,10 +401,19 @@ class SimulationEngine:
                 if pvar:
                     group_flows[pvar].append(flow_var)
 
+        # p_ref do circuito — usado para seed de novos NodeContinuity
+        circuit_p_ref = ctx.p_ref
+
         continuities = []
         for pvar, flow_vars in group_flows.items():
             if pvar not in self._continuities:
-                self._continuities[pvar] = NodeContinuity(pvar, flow_vars)
+                cont = NodeContinuity(pvar, flow_vars)
+                # Seed inicial: usa p_ref do circuito como chute de pressão.
+                # Sem isso, p_previous=0 faz o solver convergir para o ponto
+                # trivial (tudo a zero) em vez do estado estacionário real.
+                # O solver vai refinar a partir daqui — não é um valor fixado.
+                cont.p_previous = circuit_p_ref
+                self._continuities[pvar] = cont
             else:
                 self._continuities[pvar].flow_vars = flow_vars
 

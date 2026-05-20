@@ -483,7 +483,8 @@ def apply(data: dict) -> dict:
             # sig.A.x = mc.x + V52_PR_local_x + sig_pilot_offset_PR
             # sig.x   = mc.x + V52_PR_local_x - sig.A.local_x + sig_pilot_offset_PR
             #         = mc.x + 405 - 254 + offset_PR
-            sig_pr_off = cols.get("sig_pilot_offset_PR", 59)
+            sig_pr_off = (cols.get("sig_pilot_offset_PR", 59)
+                          + cols.get("sig_pilot_offset_PR_per_mc", 0) * (n_mc_total - 1))
             mc_id, _ = sig_to_mc_pilot[nid]
             mc_pos = node_pos.get(mc_id)
             V52_PR_local_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0]  # 405
@@ -893,7 +894,9 @@ def apply(data: dict) -> dict:
                 elif (node_type_map.get(src_id) == "Valve_5_2_Ways" and src_anc == "B"):
                     V52_B_local_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]  # 405
                     mc_B_scene_x = node_pos.get(src_id, (0, 0))[0] + V52_B_local_x
-                    conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], mc_B_scene_x)
+                    mc_B_margin = cols.get("mc_B_pl_margin", 30)
+                    conn["target"]["anchor"] = nearest_pl_anchor_right_of(
+                        pl_node_map[tgt_id], mc_B_scene_x + mc_B_margin)
                 else:
                     conn["target"]["anchor"] = nearest_pl_anchor(pl_node_map[tgt_id], src_x)
                 owner_y = node_pos.get(src_id, (0, 0))[1]
@@ -917,6 +920,41 @@ def apply(data: dict) -> dict:
                 if b_idx <= a_idx:
                     n_anchors = len(pl_node_map[tgt_id]["properties"]["anchors"])
                     conn["target"]["anchor"] = f"X{min(a_idx + 1, n_anchors)}"
+
+    # ── Fase 3.9: pruning das PressureLines ──────────────────────────────────────
+    #
+    # Varre todas as conexões de todas as PLs, coleta o menor e maior índice de
+    # anchor usado globalmente e corta todas as PLs para [global_min-1 .. global_max+1].
+    # Também reposiciona o x da PL para refletir o novo anchor inicial.
+
+    _global_used_min = float("inf")
+    _global_used_max = float("-inf")
+
+    for conn in data.get("connections", []):
+        src, tgt = conn["source"], conn["target"]
+        if src["node"] == tgt["node"]:
+            continue
+        if src["node"] in pl_node_map and src["anchor"].startswith("X"):
+            idx = int(src["anchor"][1:])
+            _global_used_min = min(_global_used_min, idx)
+            _global_used_max = max(_global_used_max, idx)
+        if tgt["node"] in pl_node_map and tgt["anchor"].startswith("X"):
+            idx = int(tgt["anchor"][1:])
+            _global_used_min = min(_global_used_min, idx)
+            _global_used_max = max(_global_used_max, idx)
+
+    if _global_used_min != float("inf"):
+        for pl_id, pl_node in pl_node_map.items():
+            all_idxs  = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+            keep_min  = max(min(all_idxs), _global_used_min - 1)
+            keep_max  = min(max(all_idxs), _global_used_max + 1)
+            pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs
+                                                if keep_min <= i <= keep_max]
+            # Reposicionar x da PL para refletir o novo anchor inicial
+            old_pl_x = node_pos[pl_id][0]
+            new_pl_x = old_pl_x + (keep_min - 1) * PL_SPACING
+            pl_node["position"]["x"] = new_pl_x
+            node_pos[pl_id] = (new_pl_x, node_pos[pl_id][1])
 
     # ── Fase 4: roteamento A* ────────────────────────────────────────────────────
     #

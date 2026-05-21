@@ -191,24 +191,51 @@ def apply(data: dict) -> dict:
             letter = role.split(":", 1)[1]
             v42_by_letter[letter] = nid
 
-    _sig_off_PL      = cols.get("sig_pilot_offset_PL", -50)
-    _sig_off_v42_PR  = cols.get("sig_v42_pilot_offset_PR", 50)
-    _v42_aln     = cols.get("v42_align_offset_x", 65)
-    _V42_PL_x    = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PL"][0]
-    _V42_PR_x    = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PR"][0]
-    _SIG_A_x     = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
-    _group_gap   = cols.get("group_gap", 300)
+    _v42_aln      = cols.get("v42_align_offset_x", 65)
+    _V42_PL_x     = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PL"][0]
+    _V42_PR_x     = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PR"][0]
+    _SIG_A_x      = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
+    _group_gap    = cols.get("group_gap", 300)
+    _sig_base_off = cols.get("sig_base_offset", 400)  # offset do anchor A da 1a col a borda do sprite da 4/2
+    _sig_spacing  = _M.sig_spacing                    # distancia entre colunas adjacentes
+
+    # PL fica em x negativo (fora do sprite a esquerda): borda esquerda = x=0, PL_x < 0
+    # PR fica alem da largura (fora a direita): borda direita = v42_width, PR_x > v42_width
+    # Compensamos para que sig_base_offset seja sempre medido a partir da borda do sprite,
+    # garantindo simetria visual independente da posicao dos anchors PL/PR.
+    _PL_border_excess = abs(min(_V42_PL_x, 0))           # quanto PL ultrapassa a borda esq
+    _PR_border_excess = max(_V42_PR_x - _M.v42_width, 0) # quanto PR ultrapassa a borda dir
+
+    # Pre-computa posicoes X das colunas de sigs de cada grupo relativas a x_v42=0.
+    # Retorna lista de dx do anchor A para cada coluna, de dentro pra fora.
+    def _sig_col_xs(v42_id: str, pilot_anc: str) -> list[float]:
+        sigs = [s for s, anc in v42_to_sigs.get(v42_id, []) if anc == pilot_anc]
+        pilot_x = _V42_PL_x if pilot_anc == "PL" else _V42_PR_x
+        sign    = -1 if pilot_anc == "PL" else 1
+        excess  = _PL_border_excess if pilot_anc == "PL" else _PR_border_excess
+        return [pilot_x - _SIG_A_x + sign * (_sig_base_off + excess + i * _sig_spacing)
+                for i in range(len(sigs))]
+
+    # Mapa: (v42_id, pilot_anc) -> lista ordenada de dx dos anchors A das colunas
+    sig_col_x_map: dict[tuple[str,str], list[float]] = {}
 
     x_cursor = cyl_first_x
     for letter in sorted(v42_by_letter):
         v42_id = v42_by_letter[letter]
+
+        # Footprint base: 4/2 e cilindro
         offsets: list[tuple[float, float]] = [
-            (0.0,       float(_M.v42_width)),
-            (-_v42_aln, -_v42_aln + _M.cyl_width),
+            (0.0,        float(_M.v42_width)),
+            (-_v42_aln,  -_v42_aln + _M.cyl_width),
         ]
-        for _, pilot_anc in v42_to_sigs.get(v42_id, []):
-            dx = _V42_PL_x - _SIG_A_x + _sig_off_PL if pilot_anc == "PL"                  else _V42_PR_x - _SIG_A_x + _sig_off_v42_PR
-            offsets.append((dx, dx + _M.v32_width))
+
+        # Footprint das colunas de sigs por pilot
+        for pilot_anc in ("PL", "PR"):
+            col_xs = _sig_col_xs(v42_id, pilot_anc)
+            sig_col_x_map[(v42_id, pilot_anc)] = col_xs
+            for ax_dx in col_xs:
+                # footprint da coluna = fp_left a esquerda do A, fp_right a direita
+                offsets.append((ax_dx - _M.sig_fp_left, ax_dx + _M.sig_fp_right))
 
         x_min = min(x0 for x0, _ in offsets)
         x_max = max(x1 for _, x1 in offsets)
@@ -269,12 +296,17 @@ def apply(data: dict) -> dict:
             nid = node["id"]
             v42_id, pilot_anc = sig_to_v42[nid]
             v42_pos = node_pos.get(v42_id)
-            sig_A_x = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
-            offset  = cols.get("sig_pilot_offset_PL" if pilot_anc == "PL"
-                                else "sig_v42_pilot_offset_PR", 50)
             if v42_pos:
-                pl_x = _ANCHOR_LOCAL["Valve_4_2_Ways"][pilot_anc][0]
-                x = v42_pos[0] + pl_x - sig_A_x + offset
+                col_xs  = sig_col_x_map.get((v42_id, pilot_anc), [])
+                # determina qual coluna esta sig ocupa (ordem de chegada)
+                placed  = sum(1 for n2 in data["nodes"]
+                              if n2.get("_role","").startswith("signal_valve:")
+                              and n2["id"] != nid
+                              and n2["id"] in sig_to_v42
+                              and sig_to_v42[n2["id"]] == (v42_id, pilot_anc)
+                              and n2.get("position") is not None)
+                dx = col_xs[placed] if placed < len(col_xs) else col_xs[-1]
+                x  = v42_pos[0] + dx
             else:
                 x = cyl_first_x
             _place(node, x, rows["main_valve"] + cols.get("sig_pilot_offset_y", 0))
@@ -542,15 +574,16 @@ def apply(data: dict) -> dict:
             if src_x is None:
                 continue
             pl = pl_node_map[t_id]
-            OFF = 10
+            OFF_PL = cols.get("v42_pl_exit_offset", 10)
+            OFF_PR = cols.get("v42_pr_exit_offset", 150)
             if s_anc == "PL" and s_type == "Valve_5_2_Ways":
                 mc_role = role_map.get(s_id, "")
                 mc_idx  = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
                 anc = _nearest_pl_anchor(pl, src_x - mc_idx * 2 * _M.pl_spacing, node_pos, "left")
             elif s_anc == "PL":
-                anc = _nearest_pl_anchor(pl, src_x - OFF, node_pos, "left")
+                anc = _nearest_pl_anchor(pl, src_x - OFF_PL, node_pos, "left")
             elif s_anc == "PR":
-                anc = _nearest_pl_anchor(pl, src_x + OFF, node_pos, "right")
+                anc = _nearest_pl_anchor(pl, src_x + OFF_PR, node_pos, "right")
             elif s_type == "Valve_5_2_Ways" and s_anc == "A":
                 ax  = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["A"][0]
                 anc = _nearest_pl_anchor(pl, ax, node_pos)

@@ -98,6 +98,30 @@ class SpriteMetrics:
     mc_chain_offset: float = field(init=False)  # V52_A_X - V52_P_X
     mc_x_step: int = field(init=False)           # A.x - P.x (alinha A[i+1] com P[i])
 
+    # Espaçamento mínimo entre anchors A de duas válvulas 3/2 adjacentes.
+    #
+    # As sigs que pilotam uma 4/2 são organizadas em uma grid 2D relativa ao pilot:
+    #
+    #   Colunas = sinais em paralelo (OR - condições alternativas que ativam o
+    #             mesmo pilot). Espaçadas por sig_spacing em X.
+    #   Linhas  = sinais em série dentro de uma coluna (AND - condições conjuntas).
+    #             Empilhadas verticalmente na mesma coluna.
+    #
+    #   Ordem: colunas mais próximas da 4/2 = acionamentos mais tardios na
+    #   sequência; colunas externas = acionamentos mais antecipados.
+    #
+    # sig_spacing garante não-sobreposição entre colunas adjacentes:
+    #   fp_left  = A_x + pilot_w              (sprite + atuador esquerdo)
+    #   fp_right = (v32_w - A_x) + pilot_w + comutation_shift
+    #
+    sig_fp_left:  int = field(init=False)  # px a esquerda do anchor A
+    sig_fp_right: int = field(init=False)  # px a direita do anchor A (com shift)
+    sig_spacing:  int = field(init=False)  # sig_fp_left + sig_fp_right
+
+    # Deslocamento horizontal do simbolo interno da 3/2 ao comutar.
+    # Extraido de valve_3_2_ways.py -> QPointF(147, 0).
+    V32_COMUTATION_SHIFT: int = 147
+
     def __post_init__(self):
         object.__setattr__(self, "v52_sprite_cx", self.v52_width / 2)
         v52_P_x = self.v52_width * 338/450
@@ -105,6 +129,13 @@ class SpriteMetrics:
         chain = v52_A_x - v52_P_x
         object.__setattr__(self, "mc_chain_offset", chain)
         object.__setattr__(self, "mc_x_step", int(abs(chain)))
+
+        v32_A_x  = self.anchor_local.get("Valve_3_2_Ways", {}).get("A", (254, 0))[0]
+        fp_left  = int(v32_A_x + self.pilot_w)
+        fp_right = int((self.v32_width - v32_A_x) + self.pilot_w + self.V32_COMUTATION_SHIFT)
+        object.__setattr__(self, "sig_fp_left",  fp_left)
+        object.__setattr__(self, "sig_fp_right", fp_right)
+        object.__setattr__(self, "sig_spacing",  fp_left + fp_right)
 
 
 def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:

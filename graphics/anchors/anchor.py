@@ -103,4 +103,6 @@ class AnchorItem(QGraphicsEllipseItem):
     def format_hydraulic_value(self, value: float, unit: str) -> str:
         if abs(value) < 1e-10:
             return f"0 {unit}"
+        if unit == "Pa" and abs(value) < 1.0:
+            return f"0 {unit}"
         return f"{value:.3g} {unit}"

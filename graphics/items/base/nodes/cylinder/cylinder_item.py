@@ -35,6 +35,8 @@ class CylinderItem(NodeItem):
         self.initialize_body_visuals()
         self.initialize_anchors()
         self.initialize_sensors()
+        if self.domain == "hydraulic":
+            self._init_velocity_label()
 
     def register_sensors(self) -> None:
         for pos in ("retracted", "extended"):
@@ -157,6 +159,34 @@ class CylinderItem(NodeItem):
         self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y()),), self.body_sprite)
 
     # --------------------------
+    # Label de velocidade (hidráulico)
+    # --------------------------
+    def _init_velocity_label(self):
+        self._label_velocity = LabelItem(properties={
+            "text": "v: 0 m/s",
+            "editable": False,
+            "movable": True,
+            "border": False,
+            "font_size": 8,
+        })
+        self._label_velocity.setParentItem(self)
+        # Posiciona acima do centro do corpo
+        cx = self.width / 2
+        self._label_velocity.setPos(QPointF(cx, -18))
+
+    def update_velocity_label(self, velocity: float):
+        if not hasattr(self, "_label_velocity"):
+            return
+        if isinstance(velocity, str):
+            self._label_velocity.set_text("v: ERR")
+            return
+        # Reutiliza o mesmo formatador dos anchors hidráulicos
+        from graphics.anchors.anchor import AnchorItem
+        v_str = AnchorItem.format_hydraulic_value(None, abs(velocity), "m/s")
+        sign = "-" if velocity < -1e-10 else ""
+        self._label_velocity.set_text(f"v: {sign}{v_str}")
+
+    # --------------------------
     # Atualização de estado
     # --------------------------
     def update_from_domain(self, domain_node):
@@ -167,6 +197,9 @@ class CylinderItem(NodeItem):
         super().update_from_domain(domain_node)
         new_state = domain_node.get_visual_state()
 
+        if self.domain == "hydraulic":
+            self._update_velocity_from_domain(domain_node)
+
         if new_state == self.body_state:
             return
 
@@ -175,6 +208,33 @@ class CylinderItem(NodeItem):
 
         self.update_connections()
         self.update()
+
+    def _update_velocity_from_domain(self, domain_node):
+        """Calcula a velocidade do pistao a partir do fluxo e area do no de dominio."""
+        try:
+            anchor = domain_node.anchors.get("A")
+            if anchor is None or isinstance(getattr(anchor, "flow", None), str):
+                return
+
+            flow = anchor.flow  # m^3/s
+
+            # single acting usa `area`, double acting usa `area_a`
+            area = getattr(domain_node, "area", None) or getattr(domain_node, "area_a", None)
+            if not area:
+                return
+
+            velocity = flow / area  # m/s
+            if abs(velocity) < 1e-8:
+                velocity = 0.0
+                
+            self.update_velocity_label(velocity)
+        except Exception:
+            pass
+
+    def reset_visual_state(self) -> None:
+        super().reset_visual_state()
+        if hasattr(self, "_label_velocity"):
+            self._label_velocity.set_text("v: 0 m/s")
 
     def apply_properties(self) -> None:
         self.initialize_body_visuals()

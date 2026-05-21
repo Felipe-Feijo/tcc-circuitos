@@ -91,17 +91,22 @@ class ConnectionItem(DiagramItemBase):
         points = self.get_path_points()
         if len(points) < 2:
             return
-        pen = self._get_pen()
+        is_preview = self.target_anchor is None
+        pen = self._get_pen(is_preview)
         painter.setPen(pen)
         for start, end in zip(points, points[1:]):
             painter.drawLine(start, end)
         if self.waypoints:
             self._draw_waypoint_handles(painter)
-        if self.domain == "hydraulic" and self.state != "ERR" and not self.isSelected():
+        if not is_preview and self.domain == "hydraulic" and self.state != "ERR" and not self.isSelected():
             if len(points) >= 3:
                 self._draw_flow_arrows(painter, points, pen)
 
-    def _get_pen(self) -> QPen:
+    def _get_pen(self, is_preview: bool = False) -> QPen:
+        if is_preview:
+            pen = QPen(QColor(150, 150, 150), 2)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            return pen
         if self.isSelected():
             return QPen(Qt.GlobalColor.blue, 3)
         if self.domain == "pneumatic" and self.state == 1:

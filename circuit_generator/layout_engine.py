@@ -126,7 +126,6 @@ def apply(data: dict) -> dict:
     gap  = cfg.get("anchor_child_gap", 20)
 
     cyl_first_x  = cols["cylinder_first_x"]
-    cyl_group_w  = cols["cylinder_group_width"]
     pl_grp_x     = cols["pl_grp_x"]
     memory_x     = cols["memory_x"]
     btn_offset_x = cols["btn_offset_x"]
@@ -137,13 +136,8 @@ def apply(data: dict) -> dict:
     node_type_map: dict[str, str] = {n["id"]: n["type"] for n in data["nodes"]}
     role_map:      dict[str, str] = {n["id"]: n.get("_role", "") for n in data["nodes"]}
 
-    # letter → coluna x dos cilindros
+    # letter → coluna x da 4/2 (calculado por cursor após dry-run)
     cyl_col: dict[str, float] = {}
-    for nid, role in role_map.items():
-        if role.startswith("cylinder:"):
-            letter = role.split(":", 1)[1]
-            if letter not in cyl_col:
-                cyl_col[letter] = cyl_first_x + len(cyl_col) * cyl_group_w
 
     node_pos: dict[str, tuple[float, float]] = {}
 
@@ -184,6 +178,47 @@ def apply(data: dict) -> dict:
                 sig_to_btn.add(s_id)
             else:
                 sig_to_sig[s_id] = t_id
+
+
+    # ── Footprint dos grupos: cursor calcula x_v42 de cada letra ────────────
+    v42_to_sigs: dict[str, list[tuple[str, str]]] = {}
+    for sig_id, (v42_id, pilot_anc) in sig_to_v42.items():
+        v42_to_sigs.setdefault(v42_id, []).append((sig_id, pilot_anc))
+
+    v42_by_letter: dict[str, str] = {}
+    for nid, role in role_map.items():
+        if role.startswith("main_valve:"):
+            letter = role.split(":", 1)[1]
+            v42_by_letter[letter] = nid
+
+    _sig_off_PL      = cols.get("sig_pilot_offset_PL", -50)
+    _sig_off_v42_PR  = cols.get("sig_v42_pilot_offset_PR", 50)
+    _v42_aln     = cols.get("v42_align_offset_x", 65)
+    _V42_PL_x    = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PL"][0]
+    _V42_PR_x    = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PR"][0]
+    _SIG_A_x     = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
+    _group_gap   = cols.get("group_gap", 300)
+
+    x_cursor = cyl_first_x
+    for letter in sorted(v42_by_letter):
+        v42_id = v42_by_letter[letter]
+        offsets: list[tuple[float, float]] = [
+            (0.0,       float(_M.v42_width)),
+            (-_v42_aln, -_v42_aln + _M.cyl_width),
+        ]
+        for _, pilot_anc in v42_to_sigs.get(v42_id, []):
+            dx = _V42_PL_x - _SIG_A_x + _sig_off_PL if pilot_anc == "PL"                  else _V42_PR_x - _SIG_A_x + _sig_off_v42_PR
+            offsets.append((dx, dx + _M.v32_width))
+
+        x_min = min(x0 for x0, _ in offsets)
+        x_max = max(x1 for _, x1 in offsets)
+
+        # x_v42 tal que x_min do grupo caia em x_cursor
+        x_v42 = x_cursor - x_min
+        cyl_col[letter] = x_v42
+
+        x_cursor = x_v42 + x_max + _group_gap
+
 
     # ── Fase 1: nós primários ─────────────────────────────────────────────────
     deferred:    list[dict] = []  # Exhaust / PS
@@ -236,7 +271,7 @@ def apply(data: dict) -> dict:
             v42_pos = node_pos.get(v42_id)
             sig_A_x = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
             offset  = cols.get("sig_pilot_offset_PL" if pilot_anc == "PL"
-                                else "sig_pilot_offset_PR", -50)
+                                else "sig_v42_pilot_offset_PR", 50)
             if v42_pos:
                 pl_x = _ANCHOR_LOCAL["Valve_4_2_Ways"][pilot_anc][0]
                 x = v42_pos[0] + pl_x - sig_A_x + offset
@@ -312,7 +347,7 @@ def apply(data: dict) -> dict:
         _position_child(node)
 
     # ── Fase 2.6: btn e sigs dependentes das mc ───────────────────────────────
-    cyl_last_x = cyl_first_x + (len(cyl_col) - 1) * cyl_group_w if cyl_col else cyl_first_x
+    cyl_last_x = max(cyl_col.values()) if cyl_col else cyl_first_x
     sig_below_btn_offset = cols.get("sig_below_btn_offset", 93)
     btn_height = 180
     btn_x = btn_y = 0.0
@@ -325,7 +360,7 @@ def apply(data: dict) -> dict:
         btn_y = mc0_y + round(0.974 * pl_grp_gap)
         _place(btn_node, btn_x, btn_y)
 
-    sig_pr_off = (cols.get("sig_pilot_offset_PR", 59)
+    sig_pr_off = (cols.get("sig_mc_pilot_offset_PR", 500)
                   + cols.get("sig_pilot_offset_PR_per_mc", 0) * (n_mc_total - 1))
     V52_PR_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0]
     SIG_A_x  = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
@@ -425,8 +460,17 @@ def apply(data: dict) -> dict:
                 return anc
             # Sem conflito real se lados opostos E ordem Y consistente com ordem PL
             # (componente acima→PL acima e componente abaixo→PL abaixo = sem cruzamento)
-            opp_sides = (oy > pl_y) != (prev_y > prev_pl_y)
-            same_order = (oy < prev_y) == (pl_y < prev_pl_y)
+            # Um está acima e outro abaixo da pressure line?
+            curr_above = oy < pl_y
+            prev_above = prev_y < prev_pl_y
+            opp_sides = curr_above != prev_above
+            # A ordem relativa de Y dos componentes bate com a ordem das suas PLs?
+            # (se curr está acima de prev_y, a PL de curr deve estar acima da PL de prev)
+            if pl_y != prev_pl_y:
+                same_order = (oy < prev_y) == (pl_y < prev_pl_y)
+            else:
+                # Mesma PL: um vem de cima, outro de baixo → ordem trivialmente consistente
+                same_order = True
             if opp_sides and same_order:
                 return anc
             if oy >= prev_y:
@@ -512,12 +556,9 @@ def apply(data: dict) -> dict:
                 anc = _nearest_pl_anchor(pl, ax, node_pos)
             elif s_type == "Valve_5_2_Ways" and s_anc == "B":
                 bx      = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
-                mc_role = role_map.get(s_id, "")
-                mc_idx  = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
-                n_mc    = sum(1 for r in role_map.values() if r.startswith("memory:"))
                 safeguard = cols.get("mc_B_pl_safeguard", 20)
                 PR_B_diff = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0] - _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
-                margin  = PR_B_diff + (n_mc - 1 - mc_idx) * _M.mc_x_step + safeguard
+                margin  = PR_B_diff + 2.5 * _M.mc_x_step + safeguard
                 anc = _nearest_pl_anchor(pl, bx + margin, node_pos, "right")
                 conn["target"]["anchor"] = anc  # mc.B sempre abaixo da PL, sem conflito real
                 continue

@@ -79,6 +79,12 @@ class GraphicsView(QGraphicsView):
             event.accept()
             return
 
+        if event.button() == Qt.MouseButton.MiddleButton:
+            scene_pos = self.mapToScene(event.pos())
+            print(f"[debug] scene pos: x={scene_pos.x():.1f}  y={scene_pos.y():.1f}")
+            event.accept()
+            return
+
         if event.button() == Qt.MouseButton.RightButton:
             # If the cursor is over a waypoint on a connection, let the
             # event reach the item instead of starting a pan.

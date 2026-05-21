@@ -16,6 +16,18 @@ class DoubleActingCylinder(Node, HydraulicMixin):
 
         self.outputs = {}
 
+        # Inicializa outputs dos sensores com base no default_state,
+        # para que o valor já seja correto antes do primeiro step de simulação.
+        if self.sensors["retracted"]["type"]:
+            name = self.sensors["retracted"]["name"]
+            if name:
+                self.outputs[name] = {"type": "signal", "value": self.position == 0}
+
+        if self.sensors["extended"]["type"]:
+            name = self.sensors["extended"]["name"]
+            if name:
+                self.outputs[name] = {"type": "signal", "value": self.position == 1}
+
         if self.domain == "hydraulic":
             for key in ("bore", "rod_diameter", "stroke"):
                 if self.properties.get(key) is None:

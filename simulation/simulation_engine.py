@@ -31,6 +31,16 @@ class SimulationEngine:
     def run_until_stable(self, dt=0.1):
         iteration = 0
 
+        if not self.outputs:
+            # Semeia engine.outputs com os outputs iniciais dos nós (ex: sensores
+            # de cilindro baseados no default_state) para que o primeiro update
+            # já receba valores corretos em vez de outputs={}.
+            for node in self.nodes.values():
+                node_outputs = getattr(node, "outputs", None)
+                if node_outputs:
+                    for name, payload in node_outputs.items():
+                        self.outputs[name] = payload
+
         while True:
             iteration += 1
             if iteration > self.max_iterations:

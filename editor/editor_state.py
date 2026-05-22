@@ -1,22 +1,25 @@
+"""Estado mutável de interação do editor de diagramas."""
+
 from PyQt6.QtCore import QObject, pyqtSignal
 
 
 class EditorState(QObject):
-    """
-    Holds the mutable interaction state of the diagram editor.
+    """Centraliza o estado de interação do editor.
 
-    Owned by MainWindow and passed to GraphicsView, DiagramItemBase,
-    and AnchorItem so they don't need a direct reference to the window.
+    Pertencente à MainWindow e passado para GraphicsView, DiagramItemBase
+    e AnchorItem, eliminando referências diretas à janela principal.
 
     Attributes:
-        mode          -- current editor mode (EditorMode enum)
-        pending_node  -- NodeDescriptor selected in the palette (only in ADD mode)
-        hover_anchor  -- AnchorItem currently under the cursor (only in CONNECT mode)
-        active_context_menu -- QMenu currently open, used to close it on delete
+        mode: Modo atual do editor (enum EditorMode).
+        pending_node: NodeDescriptor selecionado na paleta (somente no modo ADD).
+        hover_anchor: AnchorItem sob o cursor (somente no modo CONNECT).
+        active_context_menu: QMenu aberto no momento, fechado ao deletar.
+        actions: Dicionário de QActions preenchido pela MainWindow após construção.
 
     Signals:
-        add_node_requested(x, y)         -- user clicked to place a node
-        scene_rect_update_requested()    -- scene rect should recalculate
+        add_node_requested(x, y): Usuário clicou para posicionar um nó.
+        scene_rect_update_requested: O retângulo da cena deve ser recalculado.
+        theme_changed(is_light): O tema da aplicação foi alterado.
     """
 
     add_node_requested = pyqtSignal(float, float)
@@ -31,16 +34,21 @@ class EditorState(QObject):
         self.hover_anchor = None
         self.active_context_menu = None
 
-        # Connection drag state — owned here, read by GraphicsView and AnchorItem
+        # Estado de arrasto de conexão — lido por GraphicsView e AnchorItem
         self._connecting: bool = False
         self._conn_source_anchor = None
 
-        # dict of QActions for context menus — set by MainWindow after construction
         self.actions: dict = {}
 
-    # Convenience wrappers so call sites read naturally
     def add_node_at(self, x: float, y: float) -> None:
+        """Emite o sinal para posicionar um nó nas coordenadas da cena.
+
+        Args:
+            x: Coordenada horizontal na cena.
+            y: Coordenada vertical na cena.
+        """
         self.add_node_requested.emit(x, y)
 
     def update_scene_rect(self) -> None:
+        """Solicita recálculo do retângulo da cena."""
         self.scene_rect_update_requested.emit()

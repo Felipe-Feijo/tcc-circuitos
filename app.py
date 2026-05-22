@@ -1,9 +1,14 @@
-# app.py
+"""Ponto de entrada da aplicação.
+
+Inicializa o QApplication, carrega o stylesheet global e exibe a janela principal.
+"""
+
 import sys
+import faulthandler
+
 from PyQt6.QtWidgets import QApplication
 from main_window.main_window import MainWindow
 
-import faulthandler
 faulthandler.enable()
 
 app = QApplication(sys.argv)

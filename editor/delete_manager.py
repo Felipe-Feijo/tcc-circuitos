@@ -1,3 +1,5 @@
+"""Gerencia a remoção segura de nós, conexões e labels da cena gráfica."""
+
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QGraphicsScene
 
@@ -5,41 +7,53 @@ from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
 
+
 class DeleteManager:
-    """Manages deletion of nodes and connections from the scene."""
-    
+    """Remove itens da cena de forma segura, adiando a deleção para fora do ciclo de eventos Qt.
+
+    A deleção imediata durante o processamento de um evento pode causar
+    acesso a ponteiros inválidos. O uso de QTimer.singleShot(0, ...) garante
+    que a remoção ocorre apenas após o evento atual ser completamente processado.
+    """
+
     def __init__(self, scene):
         self.scene = scene
 
-    def delete_selection(self):
-        # Waypoints têm prioridade: varrer todos os itens da cena (não só
-        # os selecionados) pois a conexão fica deselecionada ao clicar num waypoint.
+    def delete_selection(self) -> bool:
+        """Remove os itens atualmente selecionados da cena.
+
+        Waypoints de conexão têm prioridade: se alguma conexão tiver um
+        waypoint selecionado, apenas esse waypoint é removido. Caso contrário,
+        remove todos os nós, conexões e labels selecionados, incluindo as
+        conexões transitivas dos nós selecionados.
+
+        Returns:
+            True se algum item foi removido, False se não havia seleção.
+        """
+        # Waypoints têm prioridade: a conexão fica desselecionada ao clicar
+        # num waypoint, então varremos todos os itens da cena, não só os selecionados.
         for item in self.scene.items():
             if isinstance(item, ConnectionItem) and getattr(item, '_selected_wp', None) is not None:
                 item._delete_waypoint(item._selected_wp)
                 return True
 
-        # Obtém todos os itens selecionados na cena
         items = list(self.scene.selectedItems())
 
         if not items:
             return False
 
-        # Separa conexões, nodes e labels
         connections = {i for i in items if isinstance(i, ConnectionItem)}
         nodes       = [i for i in items if isinstance(i, NodeItem)]
         labels      = [i for i in items if isinstance(i, LabelItem)]
 
-        # Adiciona conexões de nodes selecionados
+        # Inclui conexões dos nós selecionados (serão removidas junto)
         for node in nodes:
-            node_conns = getattr(node, "connections", [])
-            connections.update(node_conns)
+            connections.update(getattr(node, "connections", []))
 
         connections = list(connections)
 
         def do_delete():
-            """Deferred deletion to avoid Qt event handling issues."""
-
+            """Executa a remoção efetiva, adiada para fora do evento Qt."""
             for label in labels:
                 parent = label.parentItem()
                 if parent and hasattr(parent, "labels"):
@@ -49,35 +63,31 @@ class DeleteManager:
                 if label.scene():
                     self.scene.removeItem(label)
 
-            # Phase 1: Prepare all items for deletion
+            # Fase 1: notifica cada item antes de remover (limpa referências internas)
             for conn in connections:
                 conn.prepare_delete()
 
             for node in nodes:
                 node.prepare_delete()
 
-            # Phase 2: Remove items from scene
+            # Fase 2: remove da cena
             for item in connections + nodes:
                 if item.scene():
                     self.scene.removeItem(item)
 
-            # Clear references
             connections.clear()
             nodes.clear()
             items.clear()
 
-            # Force scene refresh
+            # Força atualização visual completa da cena
             self.scene.invalidate(
                 self.scene.sceneRect(),
                 QGraphicsScene.SceneLayer.AllLayers
             )
-
             current_index = self.scene.itemIndexMethod()
             self.scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
             self.scene.setItemIndexMethod(current_index)
-
             self.scene.update()
 
-        # Defer deletion to next event loop iteration
         QTimer.singleShot(0, do_delete)
         return True

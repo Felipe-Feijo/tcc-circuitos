@@ -1,3 +1,12 @@
+"""Motor principal de simulação: itera os três domínios até estabilização.
+
+O SimulationEngine não conhece Qt nem itens gráficos. Recebe um grafo de
+nós e conexões de domínio e, a cada chamada de run_until_stable(), propaga
+estado pelos domínios pneumático, elétrico e hidráulico até que nenhuma
+âncora mude de valor — ou até atingir o limite de iterações.
+"""
+
+import logging
 from collections import defaultdict, deque
 
 from simulation.hydraulic import (
@@ -11,8 +20,22 @@ from simulation.hydraulic import (
     ConvergenceResult,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class SimulationEngine:
+    """Motor de simulação multi-domínio baseado em ponto fixo.
+
+    Itera sobre os três domínios (pneumático, elétrico, hidráulico) em
+    sequência até que nenhum âncora mude de estado — indicando estabilização.
+    O domínio hidráulico usa um solver não-linear interno com detecção de
+    convergência e gerenciamento de escala.
+
+    Args:
+        nodes: Dicionário {node_id: Node} construído pelo GraphBuilder.
+        connections: Dicionário {connection_id: Connection}.
+        max_iterations: Limite de iterações de ponto fixo antes de lançar RuntimeError.
+    """
     def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes
         self.connections = connections
@@ -29,6 +52,18 @@ class SimulationEngine:
         self._conv_monitor  = ConvergenceMonitor()
 
     def run_until_stable(self, dt=0.1):
+        """Executa iterações de ponto fixo até estabilização dos três domínios.
+
+        A cada iteração, chama node.update() em todos os nós e propaga estado
+        pelos domínios pneumático, elétrico e hidráulico. Para quando nenhum
+        domínio reporta mudança. Após estabilizar, chama compute_outputs().
+
+        Args:
+            dt: Intervalo de tempo em segundos para post_step_update.
+
+        Raises:
+            RuntimeError: Se o número de iterações exceder max_iterations.
+        """
         iteration = 0
 
         if not self.outputs:
@@ -62,6 +97,15 @@ class SimulationEngine:
         self.compute_outputs(dt=dt)
 
     def compute_outputs(self, dt):
+        """Coleta os outputs de todos os nós após a estabilização.
+
+        Chama post_step_update(dt) em cada nó e agrega os valores de
+        node.outputs no dicionário self.outputs, usado como entrada da
+        próxima iteração de run_until_stable.
+
+        Args:
+            dt: Intervalo de tempo em segundos desde o último passo.
+        """
         self.outputs = {}
 
         for node in self.nodes.values():
@@ -247,7 +291,10 @@ class SimulationEngine:
 
         if self._hydraulic_iteration >= self._hydraulic_max_iterations:
             self._hydraulic_iteration = 0
-            print(f"Hydraulic domain did not converge after {self._hydraulic_max_iterations} iterations.")
+            logger.warning(
+                "domínio hidráulico não convergiu após %d iterações.",
+                self._hydraulic_max_iterations,
+            )
             return False
 
         return True
@@ -418,7 +465,10 @@ class SimulationEngine:
         if q_is_sane and p_is_sane:
             self._scale_manager.update_from_solution(sol)
         else:
-            print(f"  [ScaleManager] solucao rejeitada para EMA: max_q={max_q:.2e}, max_p={max_p:.2e}")
+            logger.debug(
+                "solução rejeitada pelo ScaleManager: max_q=%.2e, max_p=%.2e",
+                max_q, max_p,
+            )
 
         self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
 
@@ -467,7 +517,7 @@ class SimulationEngine:
         try:
             return solver.solve(x0, ctx)
         except Exception as e:
-            print(f"  circuito {index}: falhou — {e}")
+            logger.warning("circuito %d: solver falhou — %s", index, e)
             return None
 
     def _write_circuit_results(self, circuit_nodes, circuit_pvars, anchor_to_pressure_var, sol):

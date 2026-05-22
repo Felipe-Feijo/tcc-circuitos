@@ -11,22 +11,24 @@ class NodePaletteItem(QWidget):
         self.selected = False
 
         self.setFixedWidth(100)
-        # altura não é fixada — cresce com o texto
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setSpacing(2)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         image_label = QLabel()
         image_label.setPixmap(pixmap)
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_label.setFixedHeight(60)
+        image_label.setFixedSize(92, 68)
+        image_label.setScaledContents(False)
 
         text_label = QLabel(name)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop)
+        text_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         text_label.setWordWrap(True)
+        text_label.setFixedWidth(92)
         text_label.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Minimum,
         )
 

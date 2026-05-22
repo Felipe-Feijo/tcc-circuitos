@@ -4,14 +4,22 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.nodes import PressureSource as PressureSourceNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from ....anchors.anchor import AnchorItem
 
 
 class PressureSource(NodeItem):
     node_type = "pressure_source"
     simulation_cls = PressureSourceNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic",),
+            sprite="resources/nodes/pressure_source/pressure_source.png",
+            name="Pressure Source",
+        )
     def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/pressure_source/pressure_source.png")
         self.width  = self.pixmap.width()

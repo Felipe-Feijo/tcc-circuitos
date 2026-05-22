@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QMenu
 from simulation.nodes.switch.relay_switch import RelaySwitch as RelaySwitchNode
 
 from graphics.items.base.nodes.switch.switch_item import SwitchItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.labels.label import LabelItem
 from .....anchors.anchor import AnchorItem
 
@@ -35,6 +36,14 @@ class RelaySwitch(SwitchItem):
             },
         }
     }
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("electric",),
+            sprite=cls.SWITCH_VISUALS["NO"][0]["sprite"],
+            name="RelaySwitch",
+        )
 
     def setup(self) -> None:
         super().setup()  # SwitchItem.setup()

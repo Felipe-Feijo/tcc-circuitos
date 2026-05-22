@@ -4,6 +4,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.nodes.cylinder.cylinder_item import CylinderItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder as SingleActingCylinderNode
 
 _BASE_PATH = "resources/nodes/single_acting_cylinder"
@@ -37,6 +38,14 @@ class SingleActingCylinder(CylinderItem):
             "offset": QPointF(0, 0),
         }
     }
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic", "hydraulic"),
+            sprite=f"{_BASE_PATH}/single_acting_cylinder_retracted.png",
+            name="Single Acting Cylinder",
+        )
 
     def setup(self) -> None:
         super().setup()

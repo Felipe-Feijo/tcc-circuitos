@@ -1,6 +1,7 @@
 """Nó gráfico de bobina de solenóide."""
 
 from graphics.items.base.nodes.coil.coil_item import CoilItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from simulation.nodes.coil import Coil
 
 class SolenoidCoil(CoilItem):
@@ -9,3 +10,11 @@ class SolenoidCoil(CoilItem):
     SPRITE_PATH = "resources/nodes/solenoid_coil/solenoid_coil.png"
     PREFIX = "Y"
     SENSOR_TYPE = "solenoid_coil"
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("electric",),
+            sprite=cls.SPRITE_PATH,
+            name="Solenoid Coil",
+        )

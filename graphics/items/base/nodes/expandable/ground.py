@@ -1,6 +1,7 @@
 """Nó gráfico de referência de terra elétrico."""
 
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from PyQt6.QtCore import QPointF
 from simulation.nodes.ground import Ground as GroundNode
 
@@ -8,6 +9,14 @@ from simulation.nodes.ground import Ground as GroundNode
 class Ground(ExpandableItem):
     node_type = "ground"
     simulation_cls = GroundNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("electric",),
+            sprite="resources/nodes/ground/ground_terminal.png",
+            name="Ground",
+        )
     TERMINAL_VISUALS = {
         "left":  "resources/nodes/ground/ground_terminal.png",
     }

@@ -1,6 +1,6 @@
 """Item individual da paleta: ícone e nome do componente, arrastável para a cena."""
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QPen
 
@@ -10,7 +10,8 @@ class NodePaletteItem(QWidget):
 
         self.selected = False
 
-        self.setFixedSize(100, 100)
+        self.setFixedWidth(100)
+        # altura não é fixada — cresce com o texto
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -19,9 +20,15 @@ class NodePaletteItem(QWidget):
         image_label = QLabel()
         image_label.setPixmap(pixmap)
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image_label.setFixedHeight(60)
 
         text_label = QLabel(name)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop)
+        text_label.setWordWrap(True)
+        text_label.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Minimum,
+        )
 
         layout.addWidget(image_label)
         layout.addWidget(text_label)

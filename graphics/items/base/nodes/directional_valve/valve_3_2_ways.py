@@ -4,6 +4,7 @@ from PyQt6.QtCore import QPointF
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways as Valve_3_2_WaysNode
 
 from graphics.items.base.nodes.directional_valve.directional_valve_item import DirectionalValveItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from .....anchors.anchor import AnchorItem
 
 
@@ -20,6 +21,15 @@ class Valve_3_2_Ways(DirectionalValveItem):
             "offset": QPointF(147, 0),
         }
     }
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic", "hydraulic"),
+            sprite=cls.BODY_VISUALS[0]["sprite"],
+            name="Valve 3/2 Ways",
+        )
+
     def initialize_anchors(self):
         self.add_anchor(AnchorItem("A", QPointF(self.width*254/300, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
         self.add_anchor(AnchorItem("R", QPointF(self.width*190/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))

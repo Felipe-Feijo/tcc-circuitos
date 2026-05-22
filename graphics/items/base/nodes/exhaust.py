@@ -5,12 +5,21 @@ from PyQt6.QtCore import QPointF
 from simulation.nodes.nodes import Exhaust as ExhaustNode
 
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from ....anchors.anchor import AnchorItem
 
 
 class Exhaust(NodeItem):
     node_type = "exhaust"
     simulation_cls = ExhaustNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic",),
+            sprite="resources/nodes/exhaust/exhaust.png",
+            name="Exhaust",
+        )
 
     def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/exhaust/exhaust.png")

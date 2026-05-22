@@ -4,8 +4,8 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.relief_valve import DirectOperatedReliefValve as DirectOperatedReliefValveNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
 from ....anchors.anchor import AnchorItem
 
@@ -13,6 +13,14 @@ from ....anchors.anchor import AnchorItem
 class DirectOperatedReliefValve(NodeItem):
     node_type = "direct_operated_relief_valve"
     simulation_cls = DirectOperatedReliefValveNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("hydraulic",),
+            sprite="resources/nodes/direct_operated_relief_valve/direct_operated_relief_valve.png",
+            name="ReliefValve (direct)",
+        )
     def setup(self) -> None:
         self.properties = {}
         self.pixmap = QPixmap("resources/nodes/direct_operated_relief_valve/direct_operated_relief_valve.png")

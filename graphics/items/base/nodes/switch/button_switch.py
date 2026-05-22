@@ -4,6 +4,7 @@ from PyQt6.QtCore import QPointF
 from simulation.nodes.switch.button_switch import ButtonSwitch as ButtonSwitchNode
 
 from graphics.items.base.nodes.switch.switch_item import SwitchItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from .....anchors.anchor import AnchorItem
 
 
@@ -33,6 +34,14 @@ class ButtonSwitch(SwitchItem):
             },
         }
     }
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("electric",),
+            sprite=cls.SWITCH_VISUALS["NO"][0]["sprite"],
+            name="ButtonSwitch",
+        )
     def initialize_anchors(self):
         self.add_anchor(AnchorItem("T", QPointF(self.width*39/50, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
         self.add_anchor(AnchorItem("B", QPointF(self.width*39/50, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))

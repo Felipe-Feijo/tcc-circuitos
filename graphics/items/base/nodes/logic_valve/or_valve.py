@@ -4,14 +4,22 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
 from simulation.nodes.logic_valve.or_valve import OrValve as OrValveNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from .....anchors.anchor import AnchorItem
 
 
 class OrValve(NodeItem):
     node_type = "or_valve"
     simulation_cls = OrValveNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic",),
+            sprite="resources/nodes/or_valve/or_valve_x_side.png",
+            name="Or Valve",
+        )
 
     def setup(self) -> None:
         self.icon_x_side = QPixmap("resources/nodes/or_valve/or_valve_x_side.png")

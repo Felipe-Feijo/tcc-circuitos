@@ -7,6 +7,7 @@ from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
 
 class NodeItem(DiagramItemBase):
@@ -77,6 +78,26 @@ class NodeItem(DiagramItemBase):
     # ── Subclass must declare ────────────────────────────────────────────────
     node_type: str = None
     simulation_cls: type = None
+
+    @classmethod
+    def palette_meta(cls) -> "PaletteMeta | None":
+        """Retorna metadados de paleta para este tipo de nó.
+
+        Retorne uma instância de ``PaletteMeta`` para que o nó apareça
+        automaticamente na paleta.  Classes base (abstratas) não precisam
+        sobrescrever — o default ``None`` as exclui do auto-discovery.
+
+        Example::
+
+            @classmethod
+            def palette_meta(cls):
+                return PaletteMeta(
+                    domains=("pneumatic", "hydraulic"),
+                    sprite=cls.BODY_VISUALS[0]["sprite"],
+                    name="Valve 3/2 Ways",
+                )
+        """
+        return None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

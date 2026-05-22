@@ -4,14 +4,22 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.reservoir import Reservoir as ReservoirNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from ....anchors.anchor import AnchorItem
 
 
 class Reservoir(NodeItem):
     node_type = "reservoir"
     simulation_cls = ReservoirNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("hydraulic",),
+            sprite="resources/nodes/reservoir/reservoir.png",
+            name="Reservoir",
+        )
     def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/reservoir/reservoir.png")
         self.width  = self.pixmap.width()

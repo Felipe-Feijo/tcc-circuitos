@@ -1,6 +1,7 @@
 """Nó gráfico de linha de pressão pneumática expansível."""
 
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from PyQt6.QtCore import QPointF
 from simulation.nodes.pressure_line import PressureLine as PressureLineNode
 
@@ -8,6 +9,14 @@ from simulation.nodes.pressure_line import PressureLine as PressureLineNode
 class PressureLine(ExpandableItem):
     node_type = "pressure_line"
     simulation_cls = PressureLineNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic",),
+            sprite="resources/nodes/pressure_line/pressure_line_terminal.png",
+            name="Pressure Line",
+        )
     TERMINAL_VISUALS = {
         "left":  "resources/nodes/pressure_line/pressure_line_terminal.png",
         "right": "resources/nodes/pressure_line/pressure_line_terminal.png"

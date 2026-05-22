@@ -4,14 +4,22 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
 from simulation.nodes.logic_valve.and_valve import AndValve as AndValveNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from .....anchors.anchor import AnchorItem
 
 
 class AndValve(NodeItem):
     node_type = "and_valve"
     simulation_cls = AndValveNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("pneumatic",),
+            sprite="resources/nodes/and_valve/and_valve_default.png",
+            name="And Valve",
+        )
 
     def setup(self) -> None:
         self.icon_default = QPixmap("resources/nodes/and_valve/and_valve_default.png")

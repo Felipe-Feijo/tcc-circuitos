@@ -4,8 +4,8 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode
 
-
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
 from ....anchors.anchor import AnchorItem
 
@@ -13,6 +13,14 @@ from ....anchors.anchor import AnchorItem
 class FixedDisplacementPump(NodeItem):
     node_type = "fixed_displacement_pump"
     simulation_cls = FixedDisplacementPumpNode
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("hydraulic",),
+            sprite="resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png",
+            name="Fixed Displacement Pump",
+        )
     def setup(self) -> None:
         self.properties = {}
         self.pixmap = QPixmap("resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png")

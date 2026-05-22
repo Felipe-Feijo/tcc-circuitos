@@ -1,6 +1,7 @@
 """Nó gráfico de bobina de relé."""
 
 from graphics.items.base.nodes.coil.coil_item import CoilItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from simulation.nodes.coil import Coil
 
 class RelayCoil(CoilItem):
@@ -9,3 +10,11 @@ class RelayCoil(CoilItem):
     SPRITE_PATH = "resources/nodes/relay_coil/relay_coil.png"
     PREFIX = "K"
     SENSOR_TYPE = "relay_coil"
+
+    @classmethod
+    def palette_meta(cls):
+        return PaletteMeta(
+            domains=("electric",),
+            sprite=cls.SPRITE_PATH,
+            name="Relay Coil",
+        )

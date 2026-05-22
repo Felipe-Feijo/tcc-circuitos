@@ -80,8 +80,6 @@ class GraphicsView(QGraphicsView):
             return
 
         if event.button() == Qt.MouseButton.MiddleButton:
-            scene_pos = self.mapToScene(event.pos())
-            print(f"[debug] scene pos: x={scene_pos.x():.1f}  y={scene_pos.y():.1f}")
             event.accept()
             return
 
@@ -193,8 +191,6 @@ class GraphicsView(QGraphicsView):
                 and conn.target is target_item
                 and conn.source_anchor == source_anchor
                 and conn.target_anchor == target_anchor):
-
-                print("⚠️ Duplicate connection ignored")
                 return
 
         conn = ConnectionItem(

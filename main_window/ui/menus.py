@@ -1,4 +1,6 @@
-# main_window/menus.py
+"""Constrói a barra de menus da janela principal a partir das ações criadas."""
+
+
 def create_menus(main_window, actions):
     menubar = main_window.menuBar()
 

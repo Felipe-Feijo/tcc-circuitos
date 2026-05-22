@@ -1,6 +1,8 @@
+"""Diálogo genérico de edição de propriedades de componentes do diagrama."""
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QComboBox, QPushButton, QFrame, QSizePolicy
+    QLabel, QLineEdit, QComboBox, QPushButton, QFrame,
 )
 from PyQt6.QtCore import Qt
 

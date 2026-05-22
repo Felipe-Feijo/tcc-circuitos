@@ -16,7 +16,6 @@ mas a detecção real do engine usa HydraulicMixin como base.
 
 from __future__ import annotations
 
-from abc import abstractmethod
 from typing import Protocol, runtime_checkable
 import numpy as np
 

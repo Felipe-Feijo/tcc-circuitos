@@ -11,11 +11,10 @@ Uso:
     python tests/simulate_json.py caminho/para/circuito.json [--steps N] [--dt DT] [--debug]
 
 Exemplo:
-    python tests/simulate_json.py funciona_pfv.json --steps 5 --dt 0.05 --debug
+    python tests/simulate_json.py teste.json --steps 5 --dt 0.05 --debug
 """
 
 import sys
-import os
 import json
 import argparse
 import math

@@ -1,3 +1,5 @@
+"""Diálogo modal para configuração e disparo do gerador automático de circuitos."""
+
 import re
 from circuit_generator.sequence_parser import parse as _parse_sequence, validate_cylinder_states
 from PyQt6.QtWidgets import (
@@ -5,7 +7,6 @@ from PyQt6.QtWidgets import (
     QPushButton, QRadioButton, QButtonGroup, QGroupBox, QWidget,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPalette
 
 _SEQUENCE_RE = re.compile(r'^([A-Z][a-z]*)([+-])([A-Z][a-z]*[+-])*$')
 

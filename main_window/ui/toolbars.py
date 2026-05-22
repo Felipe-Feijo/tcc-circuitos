@@ -1,4 +1,5 @@
-# main_window/toolbars.py
+"""Constrói as barras de ferramentas da janela principal a partir das ações criadas."""
+
 from PyQt6.QtWidgets import QToolBar
 
 def create_toolbars(main_window, actions):

@@ -1,5 +1,7 @@
+"""Ações de simulação: play, pause, passo para frente/trás e controle de velocidade."""
+
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QDoubleSpinBox, QLabel, QWidget, QHBoxLayout
+from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout
 
 SPEED_STEPS = [1, 2, 4, 8]
 

@@ -36,7 +36,6 @@ class ClipboardManager:
             return
 
         self._data = serialize_scene(scene, nodes=selected_nodes)
-        print("Copied to clipboard:", self._data)
 
     def has_data(self) -> bool:
         return self._data is not None

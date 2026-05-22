@@ -1,3 +1,5 @@
+"""Nó de simulação de válvula lógica AND."""
+
 from simulation.nodes.nodes import Node
 
 class AndValve(Node):

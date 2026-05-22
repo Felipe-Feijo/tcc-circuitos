@@ -1,3 +1,5 @@
+"""Experimento de validação do solver hidráulico usando bond graph e scipy."""
+
 import numpy as np
 from scipy.optimize import fsolve
 

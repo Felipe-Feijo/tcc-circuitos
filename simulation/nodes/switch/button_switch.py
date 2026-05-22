@@ -1,3 +1,5 @@
+"""Nó de simulação de chave tipo botão."""
+
 from simulation.nodes.nodes import Node
 
 

@@ -1,3 +1,5 @@
+"""Registro estático de todos os tipos de nó disponíveis para instanciação na cena."""
+
 from graphics.items.base.nodes.coil.relay_coil import RelayCoil
 from graphics.items.base.nodes.expandable.ground import Ground
 from graphics.items.base.nodes.expandable.voltage_source import VoltageSource

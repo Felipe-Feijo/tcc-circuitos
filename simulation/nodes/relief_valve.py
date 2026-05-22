@@ -1,3 +1,5 @@
+"""Nó de simulação de válvula de alívio de ação direta."""
+
 import math
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin

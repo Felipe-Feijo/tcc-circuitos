@@ -1,3 +1,5 @@
+"""Nó gráfico de bobina de relé."""
+
 from graphics.items.base.nodes.coil.coil_item import CoilItem
 from simulation.nodes.coil import Coil
 

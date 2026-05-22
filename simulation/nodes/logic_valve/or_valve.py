@@ -1,3 +1,5 @@
+"""Nó de simulação de válvula lógica OR."""
+
 from simulation.nodes.nodes import Node
 
 class OrValve(Node):

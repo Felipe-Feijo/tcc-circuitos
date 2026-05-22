@@ -1,3 +1,5 @@
+"""Nó de simulação de bobina elétrica."""
+
 from simulation.nodes.nodes import Node
 
 class Coil(Node):

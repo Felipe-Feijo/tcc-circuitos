@@ -1,3 +1,5 @@
+"""Ações de visualização: zoom in/out e ajustar à tela."""
+
 from PyQt6.QtGui import QAction
 
 def create_view_actions(main_window):

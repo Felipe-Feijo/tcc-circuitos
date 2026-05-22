@@ -1,3 +1,5 @@
+"""Ações de ajuda: sobre e documentação."""
+
 from PyQt6.QtGui import QAction
 
 def create_help_actions(main_window):

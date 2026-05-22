@@ -1,3 +1,5 @@
+"""Ações de arquivo: novo, abrir, salvar e salvar como."""
+
 from PyQt6.QtGui import QAction
 
 def create_file_actions(main_window):

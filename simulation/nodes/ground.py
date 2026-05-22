@@ -1,3 +1,5 @@
+"""Nó de simulação de referência de terra elétrico."""
+
 from simulation.nodes.nodes import Node
 
 class Ground(Node):

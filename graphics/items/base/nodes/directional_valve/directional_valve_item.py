@@ -1,3 +1,5 @@
+"""Classe base para válvulas direcionais com suporte a atuadores configuráveis."""
+
 from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QMenu

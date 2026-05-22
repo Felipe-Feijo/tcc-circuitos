@@ -1,3 +1,5 @@
+"""Cria o QDockWidget flutuante que contém a paleta de nós."""
+
 from editor.mode import EditorMode
 from PyQt6.QtWidgets import QDockWidget
 from editor.mode import EditorMode

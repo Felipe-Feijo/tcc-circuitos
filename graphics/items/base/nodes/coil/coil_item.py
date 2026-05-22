@@ -1,3 +1,5 @@
+"""Classe base para bobinas elétricas (relé e solenóide)."""
+
 from PyQt6.QtGui import QPixmap, QPainterPath
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtWidgets import QMessageBox

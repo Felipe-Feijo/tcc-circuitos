@@ -1,3 +1,9 @@
+"""Parse e validação de sequências de atuação de cilindros pneumáticos.
+
+Converte strings como "A+B-A-B+" em listas de tuplas (cilindro, direção)
+e valida regras de alternância e fechamento de ciclo.
+"""
+
 import re
 
 

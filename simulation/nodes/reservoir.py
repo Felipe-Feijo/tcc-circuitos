@@ -1,3 +1,5 @@
+"""Nó de simulação de reservatório hidráulico."""
+
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
 

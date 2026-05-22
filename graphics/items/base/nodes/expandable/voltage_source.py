@@ -1,3 +1,5 @@
+"""Nó gráfico de fonte de tensão elétrica."""
+
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
 from simulation.nodes.voltage_source import VoltageSource as VoltageSourceNode

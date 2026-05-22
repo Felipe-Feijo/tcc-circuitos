@@ -1,3 +1,5 @@
+"""Nó de simulação de bomba de deslocamento fixo (domínio hidráulico)."""
+
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
 

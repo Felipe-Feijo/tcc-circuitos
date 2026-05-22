@@ -1,3 +1,5 @@
+"""Ações de edição: deletar, copiar e colar."""
+
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtCore import Qt
 

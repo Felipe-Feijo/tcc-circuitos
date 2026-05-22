@@ -1,3 +1,5 @@
+"""Testes unitários para o módulo sequence_parser."""
+
 import pytest
 import sys
 from pathlib import Path

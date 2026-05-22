@@ -1,3 +1,5 @@
+"""Nó de simulação de cilindro de dupla ação."""
+
 import math
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin

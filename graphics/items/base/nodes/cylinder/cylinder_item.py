@@ -1,3 +1,5 @@
+"""Classe base para cilindros pneumáticos e hidráulicos."""
+
 from PyQt6.QtGui import QPixmap, QPainterPath, QAction
 from PyQt6.QtCore import QRectF, QPointF, Qt
 from PyQt6.QtWidgets import QMessageBox

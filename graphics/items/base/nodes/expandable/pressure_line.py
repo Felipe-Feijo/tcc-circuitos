@@ -1,3 +1,5 @@
+"""Nó gráfico de linha de pressão pneumática expansível."""
+
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
 from simulation.nodes.pressure_line import PressureLine as PressureLineNode

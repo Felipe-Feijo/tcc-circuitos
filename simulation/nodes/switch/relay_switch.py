@@ -1,3 +1,5 @@
+"""Nó de simulação de contato de relé."""
+
 from simulation.nodes.nodes import Node
 
 

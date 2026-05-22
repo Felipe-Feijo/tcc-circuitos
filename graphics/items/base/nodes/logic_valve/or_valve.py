@@ -1,3 +1,5 @@
+"""Nó gráfico de válvula lógica OR (seletor de circuito)."""
+
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
 from simulation.nodes.logic_valve.or_valve import OrValve as OrValveNode

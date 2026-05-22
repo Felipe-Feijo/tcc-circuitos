@@ -1,3 +1,5 @@
+"""Janela principal da aplicação: monta e conecta todos os subsistemas."""
+
 from pathlib import Path
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt, pyqtSignal

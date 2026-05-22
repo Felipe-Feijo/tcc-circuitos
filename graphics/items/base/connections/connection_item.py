@@ -1,3 +1,5 @@
+"""Item gráfico de conexão entre dois âncoras do diagrama."""
+
 # graphics/items/connection_item.py
 from PyQt6.QtWidgets import QGraphicsItem
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPainter, QPainterPathStroker

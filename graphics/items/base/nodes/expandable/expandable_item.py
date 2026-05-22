@@ -1,3 +1,5 @@
+"""Classe base para nós de linha contínua expansível (pressão, terra, tensão)."""
+
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
 from PyQt6.QtWidgets import QMenu, QHBoxLayout, QLabel, QPushButton, QFrame

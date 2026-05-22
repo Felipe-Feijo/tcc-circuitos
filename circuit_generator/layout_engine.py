@@ -1,3 +1,10 @@
+"""Motor de posicionamento espacial dos componentes gerados.
+
+Recebe o dicionário de dados do circuito (com _role em cada nó) e preenche
+as posições x/y de cada componente com base nas regras de layout definidas
+em layout_config.json e nas métricas de sprites em sprite_metrics.py.
+"""
+
 import json
 from pathlib import Path
 from circuit_generator.sprite_metrics import METRICS as _M

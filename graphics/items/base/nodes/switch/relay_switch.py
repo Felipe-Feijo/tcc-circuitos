@@ -1,3 +1,5 @@
+"""Nó gráfico de contato de relé (NA/NF controlado por bobina)."""
+
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu

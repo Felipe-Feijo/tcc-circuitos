@@ -1,3 +1,5 @@
+"""Nó gráfico de referência de terra elétrico."""
+
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from PyQt6.QtCore import QPointF
 from simulation.nodes.ground import Ground as GroundNode

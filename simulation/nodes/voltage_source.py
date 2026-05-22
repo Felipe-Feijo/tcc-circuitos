@@ -1,3 +1,5 @@
+"""Nó de simulação de fonte de tensão elétrica."""
+
 from simulation.nodes.nodes import Node
 
 class VoltageSource(Node):

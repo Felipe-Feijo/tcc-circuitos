@@ -1,3 +1,5 @@
+"""Nó de simulação de linha de pressão pneumática."""
+
 from simulation.nodes.nodes import Node
 
 class PressureLine(Node):

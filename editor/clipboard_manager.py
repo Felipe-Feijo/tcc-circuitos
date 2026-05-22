@@ -1,3 +1,5 @@
+"""Gerencia copiar e colar de itens da cena via serialização JSON."""
+
 import copy
 import uuid
 from graphics.items.base.nodes.node_item import NodeItem

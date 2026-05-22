@@ -1,3 +1,5 @@
+"""Agrega e exporta a função de criação de todas as ações da janela principal."""
+
 from .file_actions import create_file_actions
 from .view_actions import create_view_actions
 from .edit_actions import create_edit_actions

@@ -1,3 +1,5 @@
+"""Nó de simulação de válvula direcional 3/2 vias."""
+
 import math
 from simulation.nodes.directional_valve.directional_valve import DirectionalValve
 from simulation.hydraulic import HydraulicMixin

@@ -1,3 +1,5 @@
+"""Nó de simulação de válvula direcional 4/2 vias."""
+
 
 from simulation.nodes.directional_valve.directional_valve import DirectionalValve
 

@@ -1,3 +1,5 @@
+"""Classe base de simulação para válvulas direcionais."""
+
 from simulation.nodes.nodes import Node
 
 class DirectionalValve(Node):

@@ -1,3 +1,5 @@
+"""Seção agrupadora da paleta (ex: "Pneumático", "Elétrico")."""
+
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from PyQt6.QtCore import Qt
 

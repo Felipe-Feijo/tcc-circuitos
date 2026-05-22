@@ -1,3 +1,5 @@
+"""Nó gráfico de reservatório hidráulico."""
+
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.reservoir import Reservoir as ReservoirNode

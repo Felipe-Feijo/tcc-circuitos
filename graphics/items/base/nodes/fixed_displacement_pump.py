@@ -1,3 +1,5 @@
+"""Nó gráfico de bomba de deslocamento fixo."""
+
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode

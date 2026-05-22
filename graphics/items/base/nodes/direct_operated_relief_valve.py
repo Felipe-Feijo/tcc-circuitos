@@ -1,3 +1,5 @@
+"""Nó gráfico de válvula de alívio de ação direta."""
+
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
 from simulation.nodes.relief_valve import DirectOperatedReliefValve as DirectOperatedReliefValveNode

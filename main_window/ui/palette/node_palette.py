@@ -1,3 +1,5 @@
+"""Widget da paleta de nós com scroll e organização em seções."""
+
 from PyQt6.QtWidgets import ( QWidget, QVBoxLayout, QLabel, QScrollArea, QGridLayout ) 
 from PyQt6.QtCore import Qt 
 from main_window.ui.palette.node_palette_item import NodePaletteItem

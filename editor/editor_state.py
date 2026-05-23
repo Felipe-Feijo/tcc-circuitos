@@ -2,6 +2,8 @@
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from editor.undo import UndoStack
+
 
 class EditorState(QObject):
     """Centraliza o estado de interação do editor.
@@ -15,6 +17,7 @@ class EditorState(QObject):
         hover_anchor: AnchorItem sob o cursor (somente no modo CONNECT).
         active_context_menu: QMenu aberto no momento, fechado ao deletar.
         actions: Dicionário de QActions preenchido pela MainWindow após construção.
+        undo_stack: Pilha de undo/redo compartilhada por todo o editor.
 
     Signals:
         add_node_requested(x, y): Usuário clicou para posicionar um nó.
@@ -39,6 +42,11 @@ class EditorState(QObject):
         self._conn_source_anchor = None
 
         self.actions: dict = {}
+
+        # Pilha de undo/redo — usada por DeleteManager, ClipboardManager,
+        # GraphicsView e MainWindow
+        self.undo_stack = UndoStack()
+        self.undo_stack.setUndoLimit(50)
 
     def add_node_at(self, x: float, y: float) -> None:
         """Emite o sinal para posicionar um nó nas coordenadas da cena.

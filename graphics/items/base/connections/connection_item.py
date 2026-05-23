@@ -209,6 +209,8 @@ class ConnectionItem(DiagramItemBase):
             self._waypoints_initialized = True
             self.waypoints = [QPointF(pt) for pt in
                               self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
+            # Garante ortogonalidade nos waypoints recém-criados
+            self.adjust_waypoints_for_node_move()
         else:
             # Waypoints já existem (gerados pelo A* ou por edição manual).
             # Derivar entry_dir e exit_dir a partir dos waypoints reais,
@@ -379,48 +381,54 @@ class ConnectionItem(DiagramItemBase):
         self.update()
 
     def adjust_waypoints_for_node_move(self) -> None:
+        """Repair any non-orthogonal segments after a node move.
+
+        Forward pass over [p1_out, wp0, …, wpN, p2_in]: for each diagonal
+        segment, snaps the mutable waypoint to keep the path axis-aligned,
+        seeded by exit_dir so the first segment is always correct.
+        """
         if getattr(self, '_being_deleted', False):
             return
-        if not self._waypoints_initialized or not self.waypoints:
+        if not self._waypoints_initialized:
             return
         if not self.source_anchor or not self.target_anchor:
             return
         if not self.source_anchor.scene() or not self.target_anchor.scene():
             return
+        if not self.waypoints:
+            return
 
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
-        wps = [QPointF(wp) for wp in self.waypoints]
 
-        if wps:
-            first = wps[0]
-            if exit_dir in ("left", "right"):
-                first.setY(p1_out.y())
+        SNAP = 0.5
+
+        def is_ortho(a: QPointF, b: QPointF) -> bool:
+            return abs(a.x() - b.x()) < SNAP or abs(a.y() - b.y()) < SNAP
+
+        inner: list[QPointF] = [p1_out] + [QPointF(wp) for wp in self.waypoints] + [p2_in]
+        last_h: bool = exit_dir in ("left", "right")
+        new_inner: list[QPointF] = [inner[0]]
+
+        for i in range(1, len(inner)):
+            prev = new_inner[-1]
+            curr = inner[i]
+            is_last = (i == len(inner) - 1)
+
+            if is_ortho(prev, curr):
+                last_h = abs(prev.y() - curr.y()) < SNAP
+                new_inner.append(curr)
             else:
-                first.setX(p1_out.x())
-            wps[0] = first
+                if is_last:
+                    corner = QPointF(prev.x(), curr.y()) if last_h else QPointF(curr.x(), prev.y())
+                    new_inner.append(corner)
+                    new_inner.append(curr)
+                    last_h = not last_h
+                else:
+                    curr = QPointF(curr.x(), prev.y()) if last_h else QPointF(prev.x(), curr.y())
+                    new_inner.append(curr)
+                    last_h = not last_h
 
-            last = wps[-1]
-            if entry_dir in ("left", "right"):
-                last.setY(p2_in.y())
-            else:
-                last.setX(p2_in.x())
-            wps[-1] = last
-
-        pts = [p1_out] + wps + [p2_in]
-        repaired = [pts[0]]
-
-        for curr in pts[1:]:
-            prev = repaired[-1]
-            dx = abs(curr.x() - prev.x())
-            dy = abs(curr.y() - prev.y())
-            if dx < 0.5 or dy < 0.5:
-                repaired.append(curr)
-                continue
-            corner = QPointF(curr.x(), prev.y()) if dx > dy else QPointF(prev.x(), curr.y())
-            repaired.append(corner)
-            repaired.append(curr)
-
-        self.waypoints = repaired[1:-1]
+        self.waypoints = new_inner[1:-1]
         self.prepareGeometryChange()
         self.update()
 

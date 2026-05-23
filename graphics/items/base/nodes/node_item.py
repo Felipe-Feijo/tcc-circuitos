@@ -405,8 +405,17 @@ class NodeItem(DiagramItemBase):
         if dialog is None:
             event.ignore()
             return
+
+        # Captura snapshot antes de abrir o dialog — só empilha se o usuário confirmar
+        scene = self.scene()
+        undo_stack = getattr(getattr(self, "editor", None), "undo_stack", None)
+        before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
+
         if dialog.exec():
             self.apply_properties_from_dialog(dialog)
+            if before is not None:
+                undo_stack.push_snapshot(scene, self.editor, before, "Editar propriedades")
+
         event.accept()
 
     # ══════════════════════════════════════════════════════════════════════════

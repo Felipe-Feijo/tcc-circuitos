@@ -67,6 +67,11 @@ class MainWindow(QMainWindow):
         create_menus(self, self.actions)
         create_toolbars(self, self.actions)
 
+        # Registra todas as ações na janela para que os atalhos
+        # ApplicationShortcut funcionem mesmo fora de menus (necessário no Windows)
+        for action in self.actions.values():
+            self.addAction(action)
+
         # estado inicial explícito
         self.actions["mode_select"].setChecked(True)
 
@@ -119,6 +124,7 @@ class MainWindow(QMainWindow):
         self.simulation = SimulationSession(self.scene)
         self.file_session = SceneFileSession(self.scene, self, self.state)
         self._wire_state_callbacks()
+        self.state.undo_stack.clear()
         self.setWindowTitle("Simulador – Editor Gráfico")
         self.update_scene_rect()
 
@@ -186,6 +192,10 @@ class MainWindow(QMainWindow):
         if not self.state.pending_node:
             return
 
+        # Captura snapshot ANTES de adicionar o nó
+        from editor.undo import UndoStack
+        before = UndoStack.snapshot(self.scene)
+
         item = self.state.pending_node.cls(
             domain=self.state.pending_node.domain,
             sensor_registry=self.scene.sensor_registry)
@@ -201,6 +211,10 @@ class MainWindow(QMainWindow):
 
         self.scene.addItem(item)
         self.update_scene_rect()
+
+        # Empilha o command de undo APÓS o nó ser adicionado
+        self.state.undo_stack.push_snapshot(self.scene, self.state, before, "Adicionar nó")
+
         self.set_mode(EditorMode.SELECT)
 
     def update_scene_rect(self):
@@ -239,7 +253,7 @@ class MainWindow(QMainWindow):
             self.state.active_context_menu = None
 
         # domain/editor concern
-        deleted = self.delete_manager.delete_selection()
+        deleted = self.delete_manager.delete_selection(editor_state=self.state)
         if deleted:
             self.update_scene_rect()
 
@@ -307,9 +321,14 @@ class MainWindow(QMainWindow):
         run       = self.actions["run"]
         step_back = self.actions["step_back"]
         step_fwd  = self.actions["step_forward"]
-        speed     = self.actions["speed"]
 
-        if self.state.mode != EditorMode.SIMULATE or not self.simulation or not self.simulation.active:
+        in_simulation = (
+            self.state.mode == EditorMode.SIMULATE
+            and self.simulation
+            and self.simulation.active
+        )
+
+        if not in_simulation:
             run.setEnabled(False)
             run.setText("Run")
             step_back.setEnabled(False)
@@ -324,7 +343,6 @@ class MainWindow(QMainWindow):
         steps_enabled = not ctrl.playing
         step_back.setEnabled(steps_enabled and ctrl.can_step_back())
         step_fwd.setEnabled(steps_enabled)
-
     def _update_mode_actions(self, active_mode):
         for action in self.mode_group.actions():
             action.setChecked(action.data() == active_mode)

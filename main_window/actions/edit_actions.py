@@ -1,4 +1,4 @@
-"""Ações de edição: deletar, copiar e colar."""
+"""Ações de edição: deletar, copiar, colar, undo e redo."""
 
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtCore import Qt
@@ -43,6 +43,25 @@ def create_edit_actions(main_window):
     actions["open_palette"].setCheckable(True)
     actions["open_palette"].toggled.connect(
         main_window.palette_dock.setVisible
+    )
+
+    # ── Undo / Redo ──────────────────────────────────────────────────────────
+    # Nota: Ctrl+Z é usado pela simulação (step_back) quando o modo SIMULATE
+    # está ativo. As ações abaixo ficam habilitadas somente fora da simulação;
+    # a lógica de alternância é feita em MainWindow.update_simulation_actions().
+
+    actions["undo"] = QAction("Undo", main_window)
+    actions["undo"].setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z
+    actions["undo"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+    actions["undo"].triggered.connect(
+        lambda: main_window.state.undo_stack.undo()
+    )
+
+    actions["redo"] = QAction("Redo", main_window)
+    actions["redo"].setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Shift+Z
+    actions["redo"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+    actions["redo"].triggered.connect(
+        lambda: main_window.state.undo_stack.redo()
     )
 
     return actions

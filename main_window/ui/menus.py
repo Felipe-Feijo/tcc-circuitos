@@ -15,6 +15,9 @@ def create_menus(main_window, actions):
     file_menu.addAction(actions["exit"])
 
     edit_menu = menubar.addMenu("Edit")
+    edit_menu.addAction(actions["undo"])
+    edit_menu.addAction(actions["redo"])
+    edit_menu.addSeparator()
     edit_menu.addAction(actions["delete"])
     edit_menu.addAction(actions["copy"])
     edit_menu.addAction(actions["paste"])

@@ -40,6 +40,9 @@ class GraphicsView(QGraphicsView):
         self._temp_connection = None
         self._preview_node = None
 
+        # Snapshot capturado no início de um arrasto de nó para undo de move
+        self._move_before_snapshot = None
+
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -139,6 +142,18 @@ class GraphicsView(QGraphicsView):
 
         super().mousePressEvent(event)
 
+        # Captura snapshot ANTES do arrasto de nó para undo de move.
+        # Só captura se algum NodeItem ficou selecionado após o clique.
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self.editor.mode == EditorMode.SELECT
+        ):
+            scene_pos = self.mapToScene(event.pos())
+            hit = self.scene().items(scene_pos)
+            if any(isinstance(i, NodeItem) for i in hit):
+                from editor.undo import UndoStack
+                self._move_before_snapshot = UndoStack.snapshot(self.scene())
+
     def mouseMoveEvent(self, event) -> None:
         """Atualiza pan, conexão temporária ou preview de nó conforme o modo."""
         if self._panning:
@@ -186,7 +201,33 @@ class GraphicsView(QGraphicsView):
             if self.editor:
                 self.editor.update_scene_rect()
             return
+
         super().mouseReleaseEvent(event)
+
+        # Se havia um snapshot de início de arrasto, verifica se algum nó
+        # se moveu e empilha o command de undo apenas nesse caso.
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._move_before_snapshot is not None
+        ):
+            from persistence.serializer import serialize_scene
+            after = serialize_scene(self.scene())
+            before_positions = {
+                n["id"]: n["position"]
+                for n in self._move_before_snapshot.get("nodes", [])
+            }
+            after_positions = {
+                n["id"]: n["position"]
+                for n in after.get("nodes", [])
+            }
+            if before_positions != after_positions:
+                self.editor.undo_stack.push_snapshot(
+                    self.scene(),
+                    self.editor,
+                    self._move_before_snapshot,
+                    "Mover nó",
+                )
+            self._move_before_snapshot = None
 
     # Criação de conexões
 
@@ -221,11 +262,23 @@ class GraphicsView(QGraphicsView):
             ):
                 return
 
+        # Captura snapshot ANTES de criar a conexão
+        from editor.undo import UndoStack
+        before = UndoStack.snapshot(self.scene())
+
         conn = ConnectionItem(source_item, source_anchor, target_item, target_anchor)
         conn.editor = self.editor
         self.scene().addItem(conn)
         source_item.connections.append(conn)
         target_item.connections.append(conn)
+
+        # Empilha o command de undo APÓS a conexão ser criada
+        self.editor.undo_stack.push_snapshot(
+            self.scene(),
+            self.editor,
+            before,
+            "Criar conexão",
+        )
 
     def start_temp_connection(self, source_item, source_anchor) -> None:
         """Cria a ConnectionItem temporária (tracejada) de preview de conexão.

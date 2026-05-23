@@ -53,6 +53,10 @@ class ClipboardManager:
         if not self._data:
             return
 
+        # Captura snapshot ANTES do paste para undo
+        from editor.undo import UndoStack
+        before = UndoStack.snapshot(scene)
+
         data = copy.deepcopy(self._data)
         id_map = {}
 
@@ -78,8 +82,10 @@ class ClipboardManager:
         # 4. desserializa
         created_items = deserialize_scene(data, scene, editor_state, clear_scene=False)
 
-        # 4. seleção
+        # 5. seleção
         scene.clearSelection()
-
         for item in created_items:
             item.setSelected(True)
+
+        # 6. empilha o command de undo APÓS o paste ser aplicado
+        editor_state.undo_stack.push_snapshot(scene, editor_state, before, "Colar itens")

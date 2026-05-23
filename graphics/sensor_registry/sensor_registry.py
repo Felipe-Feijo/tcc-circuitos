@@ -1,8 +1,8 @@
 """Registro centralizado de sensores e atuadores da cena gráfica."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
+from dataclasses import dataclass
 
 
 @dataclass
@@ -46,20 +46,18 @@ class SensorRegistry(QObject):
     def register(self, name: str, sensor_type: str, node) -> bool:
         """Registra um sensor se o nome ainda não estiver em uso.
 
-        Args:
-            name: Nome único desejado para o sensor.
-            sensor_type: Tipo do sensor (ex: "reed", "coil").
-            node: NodeItem proprietário.
-
         Returns:
             True se registrado com sucesso, False se o nome já existia.
         """
         if name in self._map:
             return False
+
         info = SensorInfo(name, sensor_type, node)
         self._map[name] = info
+
         if not self.is_loading:
             self.sensor_added.emit(name, info)
+
         return True
 
     def unregister(self, name: str) -> None:
@@ -72,29 +70,34 @@ class SensorRegistry(QObject):
     def rename(self, old_name: str, new_name: str, node) -> bool:
         """Renomeia um sensor existente.
 
-        Args:
-            old_name: Nome atual do sensor.
-            new_name: Novo nome desejado.
-            node: NodeItem proprietário (incluído no sinal emitido).
-
         Returns:
             True se renomeado com sucesso, False se old_name não existe
             ou new_name já está em uso.
         """
-        if old_name not in self._map or new_name in self._map:
+        if old_name not in self._map:
             return False
+
+        if new_name in self._map:
+            return False
+
         info = self._map.pop(old_name)
         info.name = new_name
         self._map[new_name] = info
+
         if not self.is_loading:
             self.sensor_renamed.emit(old_name, new_name, info)
+
         return True
 
     def list_names(self, sensor_type: str | None = None) -> list[str]:
         """Retorna os nomes registrados, opcionalmente filtrados por tipo."""
         if sensor_type is None:
             return list(self._map.keys())
-        return [n for n, info in self._map.items() if info.sensor_type == sensor_type]
+
+        return [
+            name for name, info in self._map.items()
+            if info.sensor_type == sensor_type
+        ]
 
     def exists(self, name: str) -> bool:
         """Retorna True se o nome já está registrado."""

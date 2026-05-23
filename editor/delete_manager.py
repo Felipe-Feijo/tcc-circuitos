@@ -19,13 +19,17 @@ class DeleteManager:
     def __init__(self, scene):
         self.scene = scene
 
-    def delete_selection(self) -> bool:
+    def delete_selection(self, editor_state=None) -> bool:
         """Remove os itens atualmente selecionados da cena.
 
         Waypoints de conexão têm prioridade: se alguma conexão tiver um
         waypoint selecionado, apenas esse waypoint é removido. Caso contrário,
         remove todos os nós, conexões e labels selecionados, incluindo as
         conexões transitivas dos nós selecionados.
+
+        Args:
+            editor_state: EditorState opcional. Quando fornecido, a operação
+                é registrada na undo_stack para suporte a Ctrl+Z.
 
         Returns:
             True se algum item foi removido, False se não havia seleção.
@@ -41,6 +45,12 @@ class DeleteManager:
 
         if not items:
             return False
+
+        # Captura snapshot ANTES da deleção para undo
+        before = None
+        if editor_state is not None:
+            from editor.undo import UndoStack
+            before = UndoStack.snapshot(self.scene)
 
         connections = {i for i in items if isinstance(i, ConnectionItem)}
         nodes       = [i for i in items if isinstance(i, NodeItem)]
@@ -88,6 +98,15 @@ class DeleteManager:
             self.scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
             self.scene.setItemIndexMethod(current_index)
             self.scene.update()
+
+            # Empilha o command de undo APÓS a deleção ser aplicada
+            if editor_state is not None and before is not None:
+                editor_state.undo_stack.push_snapshot(
+                    self.scene,
+                    editor_state,
+                    before,
+                    "Deletar itens",
+                )
 
         QTimer.singleShot(0, do_delete)
         return True

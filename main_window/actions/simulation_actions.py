@@ -14,12 +14,13 @@ def create_simulation_actions(main_window):
     actions["run"].triggered.connect(main_window.toggle_play)
 
     actions["step_back"] = QAction("Step Back", main_window)
-    actions["step_back"].setShortcut("Ctrl+Z")
+    # Ctrl+Z é reservado para Undo — step_back usa Ctrl+Left na simulação
+    actions["step_back"].setShortcut("Ctrl+Left")
     actions["step_back"].setEnabled(False)
     actions["step_back"].triggered.connect(main_window.on_step_back)
 
     actions["step_forward"] = QAction("Step Forward", main_window)
-    actions["step_forward"].setShortcut("Ctrl+Y")
+    actions["step_forward"].setShortcut("Ctrl+Right")
     actions["step_forward"].setEnabled(False)
     actions["step_forward"].triggered.connect(main_window.on_step_forward)
 

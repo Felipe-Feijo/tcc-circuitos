@@ -1,4 +1,5 @@
 import uuid
+import copy
 from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPixmap, QColor
@@ -243,7 +244,7 @@ class NodeItem(DiagramItemBase):
             "type": self.__class__.__name__,
             "domain": self.domain,
             "position": {"x": self.pos().x(), "y": self.pos().y()},
-            "properties": getattr(self, "properties", {}),
+            "properties": copy.deepcopy(getattr(self, "properties", {})),
             "labels": self.labels_to_dict(),
         }
 
@@ -508,8 +509,15 @@ class NodeItem(DiagramItemBase):
         if dialog is None:
             dialog = PropertiesDialog(title="Properties")
             dialog.add_no_properties_message()
+
+        scene = self.scene()
+        undo_stack = getattr(getattr(self, "editor", None), "undo_stack", None)
+        before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
+
         if dialog.exec():
             self.apply_properties_from_dialog(dialog)
+            if before is not None:
+                undo_stack.push_snapshot(scene, self.editor, before, "Editar propriedades")
 
     def _next_label_key(self) -> str:
         i = 0

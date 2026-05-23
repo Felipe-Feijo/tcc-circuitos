@@ -405,30 +405,28 @@ class ConnectionItem(DiagramItemBase):
         def is_ortho(a: QPointF, b: QPointF) -> bool:
             return abs(a.x() - b.x()) < SNAP or abs(a.y() - b.y()) < SNAP
 
-        inner: list[QPointF] = [p1_out] + [QPointF(wp) for wp in self.waypoints] + [p2_in]
-        last_h: bool = exit_dir in ("left", "right")
-        new_inner: list[QPointF] = [inner[0]]
+        # Snap the last waypoint to follow p2_in (entry direction),
+        # and the first waypoint to follow p1_out (exit direction).
+        # This keeps the path orthogonal when source or target nodes move,
+        # without inserting extra waypoints.
+        wps = [QPointF(wp) for wp in self.waypoints]
 
-        for i in range(1, len(inner)):
-            prev = new_inner[-1]
-            curr = inner[i]
-            is_last = (i == len(inner) - 1)
+        entry_h = entry_dir in ("left", "right")
+        exit_h  = exit_dir  in ("left", "right")
 
-            if is_ortho(prev, curr):
-                last_h = abs(prev.y() - curr.y()) < SNAP
-                new_inner.append(curr)
-            else:
-                if is_last:
-                    corner = QPointF(prev.x(), curr.y()) if last_h else QPointF(curr.x(), prev.y())
-                    new_inner.append(corner)
-                    new_inner.append(curr)
-                    last_h = not last_h
-                else:
-                    curr = QPointF(curr.x(), prev.y()) if last_h else QPointF(prev.x(), curr.y())
-                    new_inner.append(curr)
-                    last_h = not last_h
+        # First waypoint must share the axis perpendicular to exit_dir with p1_out
+        if exit_h:
+            wps[0] = QPointF(wps[0].x(), p1_out.y())
+        else:
+            wps[0] = QPointF(p1_out.x(), wps[0].y())
 
-        self.waypoints = new_inner[1:-1]
+        # Last waypoint must share the axis perpendicular to entry_dir with p2_in
+        if entry_h:
+            wps[-1] = QPointF(wps[-1].x(), p2_in.y())
+        else:
+            wps[-1] = QPointF(p2_in.x(), wps[-1].y())
+
+        self.waypoints = wps
         self.prepareGeometryChange()
         self.update()
 

@@ -209,38 +209,14 @@ class ConnectionItem(DiagramItemBase):
             self._waypoints_initialized = True
             self.waypoints = [QPointF(pt) for pt in
                               self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
-            # Garante ortogonalidade nos waypoints recém-criados
-            self.adjust_waypoints_for_node_move()
         else:
             # Waypoints já existem (gerados pelo A* ou por edição manual).
-            # Derivar entry_dir e exit_dir a partir dos waypoints reais,
-            # para que p1_out e p2_in sejam coerentes com eles.
-            if self.waypoints:
-                first_wp = self.waypoints[0]
-                dx0 = first_wp.x() - p1.x()
-                dy0 = first_wp.y() - p1.y()
-                if abs(dy0) >= abs(dx0):
-                    exit_dir = "bottom" if dy0 > 0 else "top"
-                else:
-                    exit_dir = "right" if dx0 > 0 else "left"
-                p1_out = self._apply_margin(p1, exit_dir, source_margin)
-
-                last_wp = self.waypoints[-1]
-                dx1 = p2.x() - last_wp.x()
-                dy1 = p2.y() - last_wp.y()
-                # entry_dir = direção de onde a linha CHEGA em p2.
-                # p2_in = _apply_margin(p2, entry_dir) deve ficar entre last_wp e p2,
-                # então entry_dir é oposto ao vetor last_wp→p2:
-                # se dy1>0 (linha vem de cima, desce até p2) → entry_dir=top (p2_in acima de p2)
-                # se dy1<0 (linha vem de baixo, sobe até p2)  → entry_dir=bottom
-                if abs(dy1) >= abs(dx1):
-                    entry_dir = "top" if dy1 > 0 else "bottom"
-                else:
-                    entry_dir = "left" if dx1 > 0 else "right"
-            else:
-                entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
-
+            # Usar sempre os exit_directions reais dos anchors — não inferir
+            # a direção a partir do vetor até o waypoint, pois isso falha
+            # com waypoints corrompidos ou com a margem diferente do A*.
+            entry_dir = self._choose_best_exit_direction(p2, p1, target_dirs)
             p2_in = self._apply_margin(p2, entry_dir, target_margin)
+            # p1_out já foi calculado acima com o exit_dir correto do anchor.
 
         self._last_exit_dir  = exit_dir
         self._last_entry_dir = entry_dir
@@ -383,9 +359,11 @@ class ConnectionItem(DiagramItemBase):
     def adjust_waypoints_for_node_move(self) -> None:
         """Repair any non-orthogonal segments after a node move.
 
-        Forward pass over [p1_out, wp0, …, wpN, p2_in]: for each diagonal
-        segment, snaps the mutable waypoint to keep the path axis-aligned,
-        seeded by exit_dir so the first segment is always correct.
+        Builds the full point chain [p1_out, wp0, …, wpN, p2_in] and does a
+        forward pass followed by a backward pass to propagate orthogonality
+        from both ends toward the middle.  When the waypoint count is
+        insufficient to connect the current endpoints with right angles, the
+        route is discarded and recomputed from scratch.
         """
         if getattr(self, '_being_deleted', False):
             return
@@ -400,31 +378,69 @@ class ConnectionItem(DiagramItemBase):
 
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
 
-        SNAP = 0.5
-
-        def is_ortho(a: QPointF, b: QPointF) -> bool:
-            return abs(a.x() - b.x()) < SNAP or abs(a.y() - b.y()) < SNAP
-
-        # Snap the last waypoint to follow p2_in (entry direction),
-        # and the first waypoint to follow p1_out (exit direction).
-        # This keeps the path orthogonal when source or target nodes move,
-        # without inserting extra waypoints.
-        wps = [QPointF(wp) for wp in self.waypoints]
-
-        entry_h = entry_dir in ("left", "right")
         exit_h  = exit_dir  in ("left", "right")
+        entry_h = entry_dir in ("left", "right")
 
-        # First waypoint must share the axis perpendicular to exit_dir with p1_out
+        wps = [QPointF(wp) for wp in self.waypoints]
+        n = len(wps)
+
+        # ── Forward pass (from source side) ──────────────────────────────────
+        # The segment p1_out → wps[0] must follow exit_dir.
+        # If exit is horizontal the segment is horizontal → wps[0] keeps its x
+        # but must share y with p1_out.
+        # If exit is vertical  the segment is vertical   → wps[0] keeps its y
+        # but must share x with p1_out.
         if exit_h:
             wps[0] = QPointF(wps[0].x(), p1_out.y())
         else:
             wps[0] = QPointF(p1_out.x(), wps[0].y())
 
-        # Last waypoint must share the axis perpendicular to entry_dir with p2_in
+        # Each subsequent wp must form a right-angle with its predecessor.
+        # We alternate axis: if the incoming segment was horizontal the next
+        # must be vertical, so the wp shares x with the previous one.
+        prev_h = exit_h
+        for i in range(1, n):
+            if prev_h:
+                # incoming segment was H → this segment must be V → share x
+                wps[i] = QPointF(wps[i - 1].x(), wps[i].y())
+            else:
+                # incoming segment was V → this segment must be H → share y
+                wps[i] = QPointF(wps[i].x(), wps[i - 1].y())
+            prev_h = not prev_h
+
+        # ── Backward pass (from target side) ─────────────────────────────────
+        # The segment wps[-1] → p2_in must follow entry_dir (horizontally or
+        # vertically).  We walk backwards and fix any waypoint whose alignment
+        # with its successor is wrong.
         if entry_h:
             wps[-1] = QPointF(wps[-1].x(), p2_in.y())
         else:
             wps[-1] = QPointF(p2_in.x(), wps[-1].y())
+
+        next_h = entry_h
+        for i in range(n - 2, -1, -1):
+            if next_h:
+                # next segment is H → this segment must be V → share x
+                wps[i] = QPointF(wps[i + 1].x(), wps[i].y())
+            else:
+                # next segment is V → this segment must be H → share y
+                wps[i] = QPointF(wps[i].x(), wps[i + 1].y())
+            next_h = not next_h
+
+        # ── Sanity check ─────────────────────────────────────────────────────
+        # After both passes, all wp-to-wp segments must be orthogonal.
+        # We do NOT include p1_out/p2_in here because waypoints generated by
+        # the A* router use a different margin (EXIT_PX=40px) than the editor
+        # (6-18px), so the border segments will legitimately be non-orthogonal
+        # with respect to p1_out/p2_in — that is handled by get_path_points.
+        # If the wp count is too small to absorb the required direction changes
+        # (e.g. forward and backward passes fought each other), reroute.
+        SNAP = 0.5
+        for a, b in zip(wps, wps[1:]):
+            if abs(a.x() - b.x()) >= SNAP and abs(a.y() - b.y()) >= SNAP:
+                # Non-orthogonal wp-to-wp segment — reroute from scratch.
+                self._reroute_waypoints()
+                return
 
         self.waypoints = wps
         self.prepareGeometryChange()
@@ -827,7 +843,12 @@ class ConnectionItem(DiagramItemBase):
         conn._waypoints_initialized = True
         source_node.connections.append(conn)
         target_node.connections.append(conn)
+        # Reparar waypoints não-ortogonais salvos por versões antigas bugadas.
+        # adjust_waypoints_for_node_move usa sanity check apenas wp-to-wp,
+        # então é seguro para waypoints do gerador A* (que têm margem diferente).
+        conn.adjust_waypoints_for_node_move()
         return conn
+
 
     # =========================================================================
     # Simulation state

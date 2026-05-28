@@ -588,8 +588,32 @@ class DirectionalValveItem(NodeItem):
                 return a.get("sensor_name", "None")
             return ACTUATOR_DICT[a["type"]]["label"]
 
+        timer_label = ACTUATOR_DICT["timer"]["label"]
+
+        def _timer_delay(side):
+            a = self.properties["actuators"].get(side)
+            return a.get("delay_steps", 3) if a and a.get("type") == "timer" else 3
+
+        # Helper to show/hide a delay row by widget reference
+        def _set_timer_row_visible(field, visible):
+            form = dialog._form_layout
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, form.ItemRole.FieldRole)
+                if item and item.widget() is field:
+                    form.setRowVisible(row, visible)
+                    return
+
         dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_label("left"))
+        dialog._field_timer_left = dialog.add_number_field(
+            "Timer delay — left (steps)", placeholder="ex: 3",
+            value=_timer_delay("left"), required=False,
+        )
+
         dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_label("right"))
+        dialog._field_timer_right = dialog.add_number_field(
+            "Timer delay — right (steps)", placeholder="ex: 3",
+            value=_timer_delay("right"), required=False,
+        )
 
         dialog._combo_default_side = dialog.add_combo_field(
             "Posição de repouso",
@@ -597,43 +621,17 @@ class DirectionalValveItem(NodeItem):
             current=self.properties.get("default_side", "right"),
         )
 
-        # Timer delay fields — always added, shown only when combo selects "Timer"
-        timer_label = ACTUATOR_DICT["timer"]["label"]
-
-        def _timer_delay(side):
-            a = self.properties["actuators"].get(side)
-            return a.get("delay_steps", 3) if a and a.get("type") == "timer" else 3
-
-        dialog._field_timer_left = dialog.add_number_field(
-            "Timer delay — left (steps)", placeholder="ex: 3",
-            value=_timer_delay("left"), required=False,
-        )
-        dialog._field_timer_right = dialog.add_number_field(
-            "Timer delay — right (steps)", placeholder="ex: 3",
-            value=_timer_delay("right"), required=False,
-        )
-
         # Show/hide timer delay rows based on combo selection
-        def _refresh_timer_rows():
-            form = dialog._form_layout
-            left_is_timer  = dialog._combo_left.currentText()  == timer_label
-            right_is_timer = dialog._combo_right.currentText() == timer_label
-            # rows: find by widget reference
-            for row in range(form.rowCount()):
-                item = form.itemAt(row, form.ItemRole.FieldRole)
-                if not item:
-                    continue
-                widget = item.widget()
-                if widget is dialog._field_timer_left:
-                    form.setRowVisible(row, left_is_timer)
-                elif widget is dialog._field_timer_right:
-                    form.setRowVisible(row, right_is_timer)
-
-        dialog._combo_left.currentTextChanged.connect(lambda _: _refresh_timer_rows())
-        dialog._combo_right.currentTextChanged.connect(lambda _: _refresh_timer_rows())
+        dialog._combo_left.currentTextChanged.connect(
+            lambda t: _set_timer_row_visible(dialog._field_timer_left, t == timer_label)
+        )
+        dialog._combo_right.currentTextChanged.connect(
+            lambda t: _set_timer_row_visible(dialog._field_timer_right, t == timer_label)
+        )
 
         # Set initial visibility
-        _refresh_timer_rows()
+        _set_timer_row_visible(dialog._field_timer_left,  current_label("left")  == timer_label)
+        _set_timer_row_visible(dialog._field_timer_right, current_label("right") == timer_label)
 
         return dialog
 
@@ -671,4 +669,3 @@ class DirectionalValveItem(NodeItem):
             self.update_body_visuals()
             self.update_connections()
             self.update()
-

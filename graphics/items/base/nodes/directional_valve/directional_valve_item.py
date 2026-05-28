@@ -597,12 +597,12 @@ class DirectionalValveItem(NodeItem):
             current=self.properties.get("default_side", "right"),
         )
 
-        # Timer delay fields — shown for all valves; only applied when actuator is timer
+        # Timer delay fields — always added, shown only when combo selects "Timer"
+        timer_label = ACTUATOR_DICT["timer"]["label"]
+
         def _timer_delay(side):
             a = self.properties["actuators"].get(side)
-            if a and a.get("type") == "timer":
-                return a.get("delay_steps", 3)
-            return None
+            return a.get("delay_steps", 3) if a and a.get("type") == "timer" else 3
 
         dialog._field_timer_left = dialog.add_number_field(
             "Timer delay — left (steps)", placeholder="ex: 3",
@@ -612,6 +612,28 @@ class DirectionalValveItem(NodeItem):
             "Timer delay — right (steps)", placeholder="ex: 3",
             value=_timer_delay("right"), required=False,
         )
+
+        # Show/hide timer delay rows based on combo selection
+        def _refresh_timer_rows():
+            form = dialog._form_layout
+            left_is_timer  = dialog._combo_left.currentText()  == timer_label
+            right_is_timer = dialog._combo_right.currentText() == timer_label
+            # rows: find by widget reference
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, form.ItemRole.FieldRole)
+                if not item:
+                    continue
+                widget = item.widget()
+                if widget is dialog._field_timer_left:
+                    form.setRowVisible(row, left_is_timer)
+                elif widget is dialog._field_timer_right:
+                    form.setRowVisible(row, right_is_timer)
+
+        dialog._combo_left.currentTextChanged.connect(lambda _: _refresh_timer_rows())
+        dialog._combo_right.currentTextChanged.connect(lambda _: _refresh_timer_rows())
+
+        # Set initial visibility
+        _refresh_timer_rows()
 
         return dialog
 

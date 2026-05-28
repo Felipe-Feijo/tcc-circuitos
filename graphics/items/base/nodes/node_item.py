@@ -300,6 +300,9 @@ class NodeItem(DiagramItemBase):
 
         return node
 
+    # Clockwise 90° rotation map for exit direction labels.
+    _DIR_CW90 = {"top": "right", "right": "bottom", "bottom": "left", "left": "top"}
+
     def rotate(self, degrees: float = 90.0) -> None:
         """Rotate the node by *degrees* clockwise around its visual centre.
 
@@ -307,11 +310,29 @@ class NodeItem(DiagramItemBase):
         the node appears to spin in place.  Anchors, labels, and all other
         child items are rotated automatically by Qt.
 
+        exit_directions on every anchor are also rotated so the A* router
+        always receives directions consistent with the new orientation.
+        Only multiples of 90° are supported for direction mapping.
+
         Args:
             degrees: Clockwise rotation step in degrees (default 90).
         """
         self.setTransformOriginPoint(self.width / 2, self.height / 2)
         self.setRotation((self.rotation() + degrees) % 360)
+
+        steps = int(round(degrees / 90)) % 4
+        if steps:
+            for anchor in self.anchors.values():
+                if not anchor.exit_directions:
+                    continue
+                rotated = {}
+                for key, dirs in anchor.exit_directions.items():
+                    current = list(dirs)
+                    for _ in range(steps):
+                        current = [self._DIR_CW90.get(d, d) for d in current]
+                    rotated[key] = current
+                anchor.exit_directions = rotated
+
         self.update_connections()
 
     # ══════════════════════════════════════════════════════════════════════════

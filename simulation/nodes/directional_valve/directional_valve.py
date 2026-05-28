@@ -15,6 +15,9 @@ class DirectionalValve(Node):
         default_side = self.properties.get("default_side", "right")
         self.body_state = 1 if default_side == "left" else 0
 
+        # Timer actuator state: steps remaining per side (0 = idle)
+        self._timer_steps: dict[str, int] = {"left": 0, "right": 0}
+
     def handle_command(self, command: dict):
         """
         command:
@@ -95,24 +98,62 @@ class DirectionalValve(Node):
             self.body_state = 0
         # 00 e 11 → mantém
 
+    def _update_timers(self):
+        """Reset timer counter if the pilot anchor loses pressure."""
+        for side in ("left", "right"):
+            actuator = self.actuators.get(side)
+            if not actuator or actuator.get("type") != "timer":
+                continue
+            anchor = "PL" if side == "left" else "PR"
+            if not self.anchors[anchor].state:
+                # Signal dropped — reset counter and bit
+                self._timer_steps[side] = 0
+                self.bits[side] = 0
+
+    def post_step_update(self, dt=None):
+        """Tick timer counters on stabilised states (once per step)."""
+        super().post_step_update(dt=dt)
+        for side in ("left", "right"):
+            actuator = self.actuators.get(side)
+            if not actuator or actuator.get("type") != "timer":
+                continue
+            anchor = "PL" if side == "left" else "PR"
+            if not self.anchors[anchor].state:
+                self._timer_steps[side] = 0
+                self.bits[side] = 0
+                continue
+            if self.bits[side] == 1:
+                # Already fired — stay active
+                continue
+            delay = int((self.properties.get("actuators", {}).get(side) or {}).get("delay_steps", 3))
+            if self._timer_steps[side] == 0:
+                self._timer_steps[side] = delay
+            self._timer_steps[side] -= 1
+            if self._timer_steps[side] <= 0:
+                self._timer_steps[side] = 0
+                self.bits[side] = 1
+        self._compute_body_state()
+
     def update(self, outputs=None):
         """
         sensors: dicionário opcional {sensor_name: bool} com estado dos sensores
         """
         self._update_pilots()
-        
+        self._update_timers()
+
         if outputs:
             self._update_sensor_actuators(outputs)
 
         self._update_springs()
-        
+
         self._compute_body_state()
 
     def get_state(self):
         state = super().get_state()
         state.update({
             "bits": self.bits.copy(),
-            "body_state": self.body_state
+            "body_state": self.body_state,
+            "timer_steps": self._timer_steps.copy(),
         })
         return state
 
@@ -124,3 +165,6 @@ class DirectionalValve(Node):
 
         if "body_state" in state:
             self.body_state = state["body_state"]
+
+        if "timer_steps" in state:
+            self._timer_steps = state["timer_steps"].copy()

@@ -50,6 +50,14 @@ ACTUATOR_DICT = {
         "mirrored": True,
         "menu": False,
         "default_bit": 0,
+    },
+    "timer": {
+        "label": "Timer",
+        "sprite_active_path": "resources/actuators/timer/timer.png",
+        "sprite_inactive_path": "resources/actuators/timer/timer.png",
+        "mirrored": True,
+        "menu": True,
+        "default_bit": 0,
     }
 }
 
@@ -317,11 +325,11 @@ class DirectionalValveItem(NodeItem):
             self.actuator_rects[side] = QRectF(x, y, w, h)
 
             
-            if actuator_name == "pilot":
+            if actuator_name in ("pilot", "timer"):
                 x = self.actuator_rects[side].left() if side == "left" else self.actuator_rects[side].right()
                 self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self, domain=self.domain, exit_directions={"external": ["left"] if side == "left" else ["right"]})) 
             else:
-                # se não é pilot, garante que não exista
+                # se não é pilot/timer, garante que não exista
                 self.remove_anchor(anchor_name)
 
             label_name = f"actuator_label_{side}"
@@ -457,7 +465,7 @@ class DirectionalValveItem(NodeItem):
             self.update_connections()
             self.update()
 
-    def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None,):
+    def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None, delay_steps: int | None = None):
         current = self.properties["actuators"].get(side)
 
         if actuator_name is None:
@@ -466,6 +474,11 @@ class DirectionalValveItem(NodeItem):
             new_value = {
                 "type": actuator_name,
                 "sensor_name": actuator_sensor_name,
+            }
+        elif actuator_name == "timer":
+            new_value = {
+                "type": "timer",
+                "delay_steps": delay_steps if delay_steps is not None else 3,
             }
         else:
             new_value = {
@@ -584,18 +597,45 @@ class DirectionalValveItem(NodeItem):
             current=self.properties.get("default_side", "right"),
         )
 
+        # Timer delay fields — shown for all valves; only applied when actuator is timer
+        def _timer_delay(side):
+            a = self.properties["actuators"].get(side)
+            if a and a.get("type") == "timer":
+                return a.get("delay_steps", 3)
+            return None
+
+        dialog._field_timer_left = dialog.add_number_field(
+            "Timer delay — left (steps)", placeholder="ex: 3",
+            value=_timer_delay("left"), required=False,
+        )
+        dialog._field_timer_right = dialog.add_number_field(
+            "Timer delay — right (steps)", placeholder="ex: 3",
+            value=_timer_delay("right"), required=False,
+        )
+
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
         if dialog._field_k is not None:
             k_text = dialog._field_k.text().strip()
             self.properties["k"] = float(k_text) if k_text else None
-        for side, combo in [("left", dialog._combo_left), ("right", dialog._combo_right)]:
+        for side, combo, timer_field in [
+            ("left",  dialog._combo_left,  dialog._field_timer_left),
+            ("right", dialog._combo_right, dialog._field_timer_right),
+        ]:
             selected = combo.currentText()
             if selected == "None":
                 self.set_actuator(side, None)
             elif selected in dialog._actuator_key_map:
-                self.set_actuator(side, dialog._actuator_key_map[selected])
+                key = dialog._actuator_key_map[selected]
+                if key == "timer":
+                    try:
+                        delay = max(1, int(float(timer_field.text().strip() or "3")))
+                    except ValueError:
+                        delay = 3
+                    self.set_actuator(side, "timer", delay_steps=delay)
+                else:
+                    self.set_actuator(side, key)
             elif self.sensor_registry:
                 info = self.sensor_registry.get(selected)
                 if info:

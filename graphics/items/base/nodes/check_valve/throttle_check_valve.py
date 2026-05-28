@@ -24,7 +24,7 @@ from graphics.utils.properties_dialog import PropertiesDialog
 from .....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/throttle_check_valve"
-_ANCHOR_Y = 106
+
 
 
 class ThrottleCheckValve(NodeItem):
@@ -55,14 +55,14 @@ class ThrottleCheckValve(NodeItem):
 
         self.add_anchor(AnchorItem(
             "X",
-            QPointF(0, _ANCHOR_Y),
+            QPointF(0, 106/150 * self.height),
             node=self,
             domain=self.domain,
             exit_directions={"external": ["left"]},
         ))
         self.add_anchor(AnchorItem(
             "Y",
-            QPointF(self.width, _ANCHOR_Y),
+            QPointF(self.width, 106/150 * self.height),
             node=self,
             domain=self.domain,
             exit_directions={"external": ["right"]},

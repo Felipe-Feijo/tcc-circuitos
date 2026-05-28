@@ -244,6 +244,7 @@ class NodeItem(DiagramItemBase):
             "type": self.__class__.__name__,
             "domain": self.domain,
             "position": {"x": self.pos().x(), "y": self.pos().y()},
+            "rotation": self.rotation(),
             "properties": copy.deepcopy(getattr(self, "properties", {})),
             "labels": self.labels_to_dict(),
         }
@@ -277,6 +278,11 @@ class NodeItem(DiagramItemBase):
         pos = data["position"]
         node.setPos(float(pos["x"]), float(pos["y"]))
 
+        rotation = data.get("rotation", 0.0)
+        if rotation:
+            node.setTransformOriginPoint(node.width / 2, node.height / 2)
+            node.setRotation(rotation)
+
         for key, label_data in data.get("labels", {}).items():
             props = dict(label_data["properties"])
             for color_key in ("color", "border_color"):
@@ -293,6 +299,20 @@ class NodeItem(DiagramItemBase):
         node.apply_properties()
 
         return node
+
+    def rotate(self, degrees: float = 90.0) -> None:
+        """Rotate the node by *degrees* clockwise around its visual centre.
+
+        The transform origin is pinned to the centre of the bounding rect so
+        the node appears to spin in place.  Anchors, labels, and all other
+        child items are rotated automatically by Qt.
+
+        Args:
+            degrees: Clockwise rotation step in degrees (default 90).
+        """
+        self.setTransformOriginPoint(self.width / 2, self.height / 2)
+        self.setRotation((self.rotation() + degrees) % 360)
+        self.update_connections()
 
     # ══════════════════════════════════════════════════════════════════════════
     # Anchor & label management
@@ -487,6 +507,20 @@ class NodeItem(DiagramItemBase):
     def extend_context_menu(self, menu: QMenu) -> None:
         props_action = menu.addAction("Propriedades...")
         props_action.triggered.connect(self._open_properties_dialog)
+        menu.addSeparator()
+
+        rotate_action = menu.addAction("Rotate 90°")
+        rotate_action.setShortcut("R")
+
+        def _rotate():
+            undo_stack = getattr(getattr(self, "editor", None), "undo_stack", None)
+            scene = self.scene()
+            before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
+            self.rotate(90)
+            if before is not None:
+                undo_stack.push_snapshot(scene, self.editor, before, "Rotate component")
+
+        rotate_action.triggered.connect(_rotate)
         menu.addSeparator()
 
         add_label_action = menu.addAction("Adicionar label")

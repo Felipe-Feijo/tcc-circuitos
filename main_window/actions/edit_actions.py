@@ -1,4 +1,4 @@
-"""Ações de edição: deletar, copiar, colar, undo e redo."""
+"""Edit actions: delete, copy, paste, undo, redo, and rotate."""
 
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtCore import Qt
@@ -46,9 +46,9 @@ def create_edit_actions(main_window):
     )
 
     # ── Undo / Redo ──────────────────────────────────────────────────────────
-    # Nota: Ctrl+Z é usado pela simulação (step_back) quando o modo SIMULATE
-    # está ativo. As ações abaixo ficam habilitadas somente fora da simulação;
-    # a lógica de alternância é feita em MainWindow.update_simulation_actions().
+    # Note: Ctrl+Z is used by the simulation (step_back) when SIMULATE mode
+    # is active. These actions are enabled only outside simulation;
+    # the toggle logic is handled in MainWindow.update_simulation_actions().
 
     actions["undo"] = QAction("Undo", main_window)
     actions["undo"].setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z
@@ -63,5 +63,38 @@ def create_edit_actions(main_window):
     actions["redo"].triggered.connect(
         lambda: main_window.state.undo_stack.redo()
     )
+
+    # ── Rotate ───────────────────────────────────────────────────────────────
+    actions["rotate"] = QAction("Rotate 90°", main_window)
+    actions["rotate"].setShortcut(QKeySequence("R"))
+    actions["rotate"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+    actions["rotate"].setToolTip("Rotate selected component 90° clockwise (R)")
+
+    def _do_rotate():
+        from editor.mode import EditorMode
+        from graphics.items.base.nodes.node_item import NodeItem
+
+        if main_window.state.mode == EditorMode.SIMULATE:
+            return
+
+        scene = main_window.scene
+        selected_nodes = [
+            item for item in scene.selectedItems()
+            if isinstance(item, NodeItem)
+        ]
+        if not selected_nodes:
+            return
+
+        undo_stack = main_window.state.undo_stack
+        before = undo_stack.snapshot(scene)
+
+        for node in selected_nodes:
+            node.rotate(90)
+
+        undo_stack.push_snapshot(
+            scene, main_window.state, before, "Rotate component"
+        )
+
+    actions["rotate"].triggered.connect(_do_rotate)
 
     return actions

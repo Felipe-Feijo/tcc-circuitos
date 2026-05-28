@@ -282,6 +282,9 @@ class NodeItem(DiagramItemBase):
         if rotation:
             node.setTransformOriginPoint(node.width / 2, node.height / 2)
             node.setRotation(rotation)
+            steps = int(round(rotation / 90)) % 4
+            if steps:
+                node._apply_exit_direction_rotation(steps)
 
         for key, label_data in data.get("labels", {}).items():
             props = dict(label_data["properties"])
@@ -322,18 +325,22 @@ class NodeItem(DiagramItemBase):
 
         steps = int(round(degrees / 90)) % 4
         if steps:
-            for anchor in self.anchors.values():
-                if not anchor.exit_directions:
-                    continue
-                rotated = {}
-                for key, dirs in anchor.exit_directions.items():
-                    current = list(dirs)
-                    for _ in range(steps):
-                        current = [self._DIR_CW90.get(d, d) for d in current]
-                    rotated[key] = current
-                anchor.exit_directions = rotated
+            self._apply_exit_direction_rotation(steps)
 
         self.update_connections()
+
+    def _apply_exit_direction_rotation(self, steps: int) -> None:
+        """Rotate exit_directions on all anchors by *steps* clockwise 90° turns."""
+        for anchor in self.anchors.values():
+            if not anchor.exit_directions:
+                continue
+            rotated = {}
+            for key, dirs in anchor.exit_directions.items():
+                current = list(dirs)
+                for _ in range(steps):
+                    current = [self._DIR_CW90.get(d, d) for d in current]
+                rotated[key] = current
+            anchor.exit_directions = rotated
 
     # ══════════════════════════════════════════════════════════════════════════
     # Anchor & label management

@@ -3,13 +3,13 @@
 Sprite layout
 -------------
 Width × Height: 200 × 150 px
-Anchor X (left) : (  0, 106)   exit → left
-Anchor Y (right): (200, 106)   exit → right
+Anchor X (left) : (  0, 106/150 * height)   exit → left
+Anchor Y (right): (200, 106/150 * height)   exit → right
 
 Sprites
 -------
-throttle_check_valve_closed.png  — default / idle
-throttle_check_valve_open.png    — active transfer in either direction
+throttle_check_valve_open.png    — default / idle / free-flow
+throttle_check_valve_closed.png  — restricted direction (X=1, Y=0)
 """
 
 from PyQt6.QtGui import QPixmap
@@ -26,7 +26,6 @@ from .....anchors.anchor import AnchorItem
 _SPRITE_DIR = "resources/nodes/throttle_check_valve"
 
 
-
 class ThrottleCheckValve(NodeItem):
     node_type = "throttle_check_valve"
     simulation_cls = ThrottleCheckValveNode
@@ -35,7 +34,7 @@ class ThrottleCheckValve(NodeItem):
     def palette_meta(cls):
         return PaletteMeta(
             domains=("pneumatic",),
-            sprite=f"{_SPRITE_DIR}/throttle_check_valve_closed.png",
+            sprite=f"{_SPRITE_DIR}/throttle_check_valve_open.png",
             name="Throttle Check Valve",
         )
 
@@ -46,23 +45,25 @@ class ThrottleCheckValve(NodeItem):
     def setup(self) -> None:
         self.properties = {"delay_steps": 3}
 
-        self._pixmap_closed = QPixmap(f"{_SPRITE_DIR}/throttle_check_valve_closed.png")
         self._pixmap_open   = QPixmap(f"{_SPRITE_DIR}/throttle_check_valve_open.png")
+        self._pixmap_closed = QPixmap(f"{_SPRITE_DIR}/throttle_check_valve_closed.png")
 
-        self.pixmap = self._pixmap_closed
+        self.pixmap = self._pixmap_open
         self.width  = self.pixmap.width()   # 200
         self.height = self.pixmap.height()  # 150
 
+        anchor_y = 106 / 150 * self.height
+
         self.add_anchor(AnchorItem(
             "X",
-            QPointF(0, 106/150 * self.height),
+            QPointF(0, anchor_y),
             node=self,
             domain=self.domain,
             exit_directions={"external": ["left"]},
         ))
         self.add_anchor(AnchorItem(
             "Y",
-            QPointF(self.width, 106/150 * self.height),
+            QPointF(self.width, anchor_y),
             node=self,
             domain=self.domain,
             exit_directions={"external": ["right"]},
@@ -79,12 +80,12 @@ class ThrottleCheckValve(NodeItem):
     def update_from_domain(self, domain_node) -> None:
         super().update_from_domain(domain_node)
         visual = domain_node.get_visual_state()
-        self.pixmap = self._pixmap_open if visual == "open" else self._pixmap_closed
+        self.pixmap = self._pixmap_closed if visual == "closed" else self._pixmap_open
         self.update()
 
     def reset_visual_state(self) -> None:
         super().reset_visual_state()
-        self.pixmap = self._pixmap_closed
+        self.pixmap = self._pixmap_open
         self.update()
 
     # ------------------------------------------------------------------

@@ -1,0 +1,27 @@
+@startuml casos_de_uso_simulacao
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam actorBorderColor #333
+skinparam usecaseBorderColor #333
+skinparam packageBorderColor #666
+
+left to right direction
+
+actor "usuário" as user
+
+rectangle "Simulação" #F8CECC {
+    usecase "Iniciar / Parar Simulação" as UC_iniciar
+    usecase "Pausar / Retomar" as UC_pausar
+    usecase "Avançar / Retroceder Passo" as UC_passo
+    usecase "Enviar Comando" as UC_cmd
+    usecase "Validar Circuito" as UC_val_circ
+}
+
+user --> UC_iniciar
+
+UC_pausar .> UC_iniciar : <<extends>>
+UC_passo .> UC_iniciar : <<extends>>
+UC_cmd .> UC_iniciar : <<extends>>
+UC_iniciar .> UC_val_circ : <<includes>>
+
+@enduml

@@ -1,0 +1,23 @@
+@startuml casos_de_uso_conexoes
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam actorBorderColor #333
+skinparam usecaseBorderColor #333
+skinparam packageBorderColor #666
+
+left to right direction
+
+actor "usuário" as user
+
+rectangle "Conexões" #FFF2CC {
+    usecase "Conectar Componentes" as UC_conectar
+    usecase "Editar Conexões" as UC_edit_con
+    usecase "Validar Conexão" as UC_val_con
+}
+
+user --> UC_conectar
+
+UC_edit_con .> UC_conectar : <<extends>>
+UC_conectar .> UC_val_con : <<includes>>
+
+@enduml

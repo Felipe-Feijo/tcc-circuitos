@@ -1,0 +1,53 @@
+@startuml seq_orquestracao
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+skinparam sequenceArrowThickness 1.5
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+participant "StepScheduler" as sched #DAE8FC
+participant "SimulationController" as ctrl #DAE8FC
+participant "SimulationEngine" as eng #D5E8D4
+participant "ViewSync" as vsync #FFF2CC
+participant "HistoryManager" as hist #F8CECC
+
+== Disparo do passo ==
+
+note over sched : timer.timeout dispara\n_on_tick() periodicamente\n(modo contínuo) ou\nrequest_step() manual
+
+sched -> ctrl : step_requested [signal Qt]
+activate ctrl
+
+ctrl -> sched : mark_step_started()
+note right of sched : bloqueia novos\ndisparos até\nmark_step_done()
+
+== Execução ==
+
+ctrl -> eng : run_until_stable(dt)
+activate eng
+note right of eng : ver seq_engine\n(loop interno)
+eng --> ctrl
+deactivate eng
+
+== Sincronização visual ==
+
+ctrl -> vsync : sync()
+activate vsync
+vsync --> ctrl
+deactivate vsync
+
+== Histórico ==
+
+ctrl -> hist : push(engine.nodes)
+activate hist
+hist --> ctrl
+deactivate hist
+
+== Finalização ==
+
+ctrl -> sched : mark_step_done()
+note over ctrl : emit state_changed\n[signal Qt]
+deactivate ctrl
+
+@enduml

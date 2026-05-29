@@ -1,0 +1,95 @@
+@startuml uml_editor
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam classBorderColor #333
+skinparam classBackgroundColor #DAE8FC
+skinparam arrowColor #333
+
+abstract class DiagramItemBase {
+    +editor: EditorState
+    +draw_selection: bool
+    --
+    +contextMenuEvent(event): void
+    +paint_selection_feedback(painter): void
+    +update_from_domain(domain_node: Node): void
+}
+
+class EditorState {
+    +mode: EditorMode
+    +pending_node: NodeDescriptor
+    +hover_anchor: AnchorItem
+    +undo_stack: UndoStack
+    --
+    +add_node_at(x: float, y: float): void
+    +update_scene_rect(): void
+}
+
+class NodeItem {
+    +id: str
+    +node_type: str
+    +domain: str
+    +anchors: dict
+    +connections: list
+    +labels: dict
+    +properties: dict
+    +simulation_mode: bool
+    --
+    +setup(): void
+    +to_dict(): dict
+    +from_dict(data: dict, keep_id: bool): NodeItem
+    +apply_properties(): void
+    +update_from_domain(domain_node: Node): void
+    +add_anchor(anchor: AnchorItem): void
+    +remove_anchor(name: str): void
+    +add_label(key: str, label: LabelItem, special: bool): void
+    +prepare_delete(): void
+    +on_simulation_activated(): void
+}
+
+class AnchorItem {
+    +name: str
+    +id: tuple
+    +node: NodeItem
+    +domain: str
+    +exit_directions: dict
+    +margin: float
+    --
+    +set_exit_directions(directions: dict): void
+    +set_hydraulic_labels_visible(visible: bool): void
+    +update_hydraulic_labels(): void
+    +format_hydraulic_value(value: float, unit: str): str
+}
+
+class LabelItem {
+    +properties: dict
+    --
+    +set_text(text: str): void
+    +finish_editing(): void
+}
+
+class ConnectionItem {
+    +source: NodeItem
+    +source_anchor: AnchorItem
+    +target: NodeItem
+    +target_anchor: AnchorItem
+    +waypoints: list
+    +state: float
+    --
+    +to_dict(): dict
+    +from_dict(data: dict, node_index: dict): ConnectionItem
+    +set_state(value: float): void
+    +reset_visual_state(): void
+    +prepare_delete(): void
+}
+
+DiagramItemBase <|-- NodeItem
+DiagramItemBase <|-- ConnectionItem
+DiagramItemBase o-- EditorState
+
+NodeItem "1" *-- "N" AnchorItem
+NodeItem "1" *-- "N" LabelItem
+ConnectionItem --> AnchorItem : source_anchor
+ConnectionItem --> AnchorItem : target_anchor
+
+@enduml

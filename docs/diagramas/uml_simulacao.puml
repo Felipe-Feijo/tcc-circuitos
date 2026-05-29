@@ -1,0 +1,83 @@
+@startuml uml_simulacao
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam classBorderColor #333
+skinparam classBackgroundColor #D5E8D4
+skinparam arrowColor #333
+
+class SimulationSession {
+    +scene: QGraphicsScene
+    +engine: SimulationEngine
+    +controller: SimulationController
+    +active: bool
+    +dt: float
+    --
+    +start(): str
+    +stop(): void
+    +play(): void
+    +pause(): void
+    +toggle_play(): void
+    +is_playing(): bool
+}
+
+class SimulationController {
+    +engine: SimulationEngine
+    +dt: float
+    +playing: bool
+    --
+    +play(): void
+    +pause(): void
+    +set_dt(dt: float): void
+    +request_step(n: int, reset_timer: bool): void
+    +command(node_id: str, cmd: dict): void
+    +step_forward(): bool
+    +step_backward(): bool
+    +can_step_back(): bool
+}
+
+class SimulationEngine {
+    +nodes: dict
+    +connections: dict
+    +max_iterations: int
+    --
+    +run_until_stable(dt: float): void
+    +compute_outputs(dt: float): void
+}
+
+class Node {
+    +id: str
+    +type: str
+    +domain: str
+    +anchors: dict
+    +properties: dict
+    --
+    +add_anchor(name: str, domain: str): Anchor
+    +get_anchor(name: str): Anchor
+    +get_state(): dict
+    +set_state(state: dict): void
+    +handle_command(command: str): void
+    +update(outputs: dict): void
+    +post_step_update(dt: float): void
+    +get_internal_connections(): list
+}
+
+class Anchor {
+    +name: str
+    +id: tuple
+    +node: Node
+    +domain: str
+    +state: bool
+    +pressure: float
+    +flow: float
+    --
+    +connect(connection: Connection): void
+}
+
+SimulationSession "1" *-- "1" SimulationController
+SimulationSession "1" *-- "1" SimulationEngine
+SimulationController --> SimulationEngine : engine
+SimulationEngine "1" o-- "N" Node
+Node "1" *-- "N" Anchor
+
+@enduml

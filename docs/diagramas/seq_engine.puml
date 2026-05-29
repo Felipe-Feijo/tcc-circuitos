@@ -1,0 +1,50 @@
+@startuml seq_engine
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+skinparam sequenceArrowThickness 1.5
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+participant "SimulationEngine" as eng #D5E8D4
+participant "Node\n(domínio)" as node #D5E8D4
+participant "NodeItem\n(gráfico)" as nitem #FFF2CC
+
+== run_until_stable(dt) ==
+
+loop até estabilizar (max_iterations)
+
+    eng -> node : update(outputs)
+    note right of node : lê sinais publicados\nno passo anterior
+    node --> eng
+
+    eng -> eng : _update_pneumatic_domain()
+    note right of eng : propaga estado booleano\npor grupos conectados
+
+    eng -> eng : _update_electric_domain()
+    note right of eng : busca em profundidade\nsource → ground
+
+    eng -> eng : _update_hydraulic_domain()
+    note right of eng : particiona sub-circuitos\ne resolve sistema\nnão-linear (fsolve / TRF)
+
+    alt nenhum domínio mudou
+        note over eng : convergiu — encerra loop
+    end
+
+end
+
+== compute_outputs(dt) ==
+
+eng -> node : post_step_update(dt)
+note right of node : integra posições\natualiza node.outputs
+node --> eng
+note over eng : agrega node.outputs\nem engine.outputs
+
+== Sincronização visual ==
+
+note over nitem : chamado pelo ViewSync\n(ver seq_orquestracao)
+eng -> nitem : update_from_domain(domain_node)
+note right of nitem : atualiza símbolo,\ncores e rótulos
+nitem --> eng
+
+@enduml

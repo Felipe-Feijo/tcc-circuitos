@@ -1,0 +1,63 @@
+@startuml casos_de_uso
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam actorBorderColor #333
+skinparam usecaseBorderColor #333
+skinparam packageBorderColor #666
+skinparam packageBackgroundColor #F5F5F5
+
+left to right direction
+
+actor "usuário" as user
+
+rectangle "Arquivo" #DAE8FC {
+    usecase "Salvar Circuito" as UC_salvar
+    usecase "Salvar Como" as UC_salvar_como
+    usecase "Abrir Circuito" as UC_abrir
+}
+
+rectangle "Edição do Circuito" #D5E8D4 {
+    usecase "Adicionar Componente" as UC_add
+    usecase "Remover Elemento" as UC_rem
+    usecase "Remover Componente" as UC_rem_comp
+    usecase "Remover Conexão" as UC_rem_con
+    usecase "Mover Componente" as UC_mover
+    usecase "Editar Propriedades" as UC_props
+    usecase "Desfazer / Refazer" as UC_undo
+}
+
+rectangle "Conexões" #FFF2CC {
+    usecase "Conectar Componentes" as UC_conectar
+    usecase "Editar Conexões" as UC_edit_con
+    usecase "Validar Conexão" as UC_val_con
+}
+
+rectangle "Simulação" #F8CECC {
+    usecase "Iniciar / Parar Simulação" as UC_iniciar
+    usecase "Pausar / Retomar" as UC_pausar
+    usecase "Avançar / Retroceder Passo" as UC_passo
+    usecase "Enviar Comando" as UC_cmd
+    usecase "Validar Circuito" as UC_val_circ
+}
+
+user --> UC_salvar
+user --> UC_abrir
+user --> UC_add
+user --> UC_rem
+user --> UC_mover
+user --> UC_props
+user --> UC_undo
+user --> UC_conectar
+user --> UC_iniciar
+
+UC_salvar_como .> UC_salvar : <<extends>>
+UC_rem_comp .> UC_rem : <<extends>>
+UC_rem_con .> UC_rem : <<extends>>
+UC_edit_con .> UC_conectar : <<extends>>
+UC_conectar .> UC_val_con : <<includes>>
+UC_pausar .> UC_iniciar : <<extends>>
+UC_passo .> UC_iniciar : <<extends>>
+UC_cmd .> UC_iniciar : <<extends>>
+UC_iniciar .> UC_val_circ : <<includes>>
+
+@enduml

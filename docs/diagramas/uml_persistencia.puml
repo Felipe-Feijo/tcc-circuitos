@@ -1,0 +1,53 @@
+@startuml uml_persistencia
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam classBorderColor #333
+skinparam classBackgroundColor #FFF2CC
+skinparam arrowColor #333
+
+class SceneFileSession {
+    +scene: QGraphicsScene
+    +current_file: str
+    --
+    +save(): void
+    +save_as(): void
+    +open(): void
+}
+
+class Serializer {
+    --
+    +serialize_scene(scene, nodes): dict
+    +deserialize_scene(data: dict, scene, editor): list
+    +save_to_file(scene, filepath: str): void
+    +load_from_file(scene, filepath: str, editor): void
+}
+
+class EditorController {
+    +scene: QGraphicsScene
+    --
+    +build_graph(): GraphBuilder
+}
+
+class GraphBuilder {
+    +nodes: dict
+    +connections: dict
+    +node_map: dict
+    +connection_map: dict
+    --
+    +add_node_from_item(node_item: NodeItem): Node
+    +add_connection_from_item(connection_item: ConnectionItem): Connection
+    +raise_if_errors(): void
+}
+
+note as n1
+  NodeItem e Node
+  definidos nos
+  diagramas anteriores
+end note
+
+SceneFileSession ..> Serializer : usa
+EditorController ..> GraphBuilder : cria
+GraphBuilder ..> n1
+
+@enduml

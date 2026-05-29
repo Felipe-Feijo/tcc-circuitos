@@ -37,6 +37,7 @@ class ConnectionItem(DiagramItemBase):
 
         self.setPos(0, 0)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        self.use_light_theme: bool = False
         self.pen = QPen(Qt.GlobalColor.cyan if self.domain == "hydraulic" else Qt.GlobalColor.white, 3)
         self.setZValue(-10)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
@@ -111,6 +112,10 @@ class ConnectionItem(DiagramItemBase):
             if self.state > 0:               return QPen(Qt.GlobalColor.blue, 3)
             if self.state < 0:               return QPen(QColor(100, 180, 255), 3)
             return QPen(Qt.GlobalColor.cyan, 3)
+        # Default pen — white on dark theme, black on light theme.
+        if self.domain != "hydraulic":
+            color = Qt.GlobalColor.black if self.use_light_theme else Qt.GlobalColor.white
+            return QPen(color, 3)
         return self.pen
 
     def _draw_flow_arrows(self, painter: QPainter, points: list, pen: QPen):
@@ -660,7 +665,18 @@ class ConnectionItem(DiagramItemBase):
             if value and self._drag_mode == 'waypoint':
                 return False
             self.update()
+        elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
+            if self.editor and hasattr(self.editor, "theme_changed"):
+                try:
+                    self.editor.theme_changed.disconnect(self.on_theme_changed)
+                except (TypeError, RuntimeError):
+                    pass
+                self.editor.theme_changed.connect(self.on_theme_changed)
         return super().itemChange(change, value)
+
+    def on_theme_changed(self, is_light: bool) -> None:
+        self.use_light_theme = is_light
+        self.update()
 
     # =========================================================================
     # Lifecycle

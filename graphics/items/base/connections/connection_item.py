@@ -294,12 +294,19 @@ class ConnectionItem(DiagramItemBase):
         return (bool(self.source_anchor and self.target_anchor) and
                 bool(self.source_anchor.scene() and self.target_anchor.scene()))
 
-    def adjust_waypoints_for_node_move(self) -> None:
-        """Repara segmentos não-ortogonais após mover um nó ou ao carregar arquivo.
+    def adjust_waypoints_for_node_move(self, moved_source: bool = True, moved_target: bool = True) -> None:
+        """Realinha o trecho de borda do lado que mudou de posição.
 
-        Forward pass propaga ortogonalidade a partir do source; backward pass
-        a partir do target.  Se os dois passes conflitam (waypoints insuficientes
-        para a geometria atual), rerouteia do zero.
+        Desloca wps[0] (lado source) e/ou wps[-1] (lado target) para
+        acompanhar o anchor que moveu, propagando o mesmo deslocamento por
+        qualquer sequência de waypoints colineares adjacentes à borda —
+        pontos "soltos" inseridos no meio de um segmento reto (double-click)
+        — parando assim que encontra uma curva real, que é edição manual do
+        usuário e não deve ser tocada.
+
+        Caso especial: com um único waypoint compartilhando as duas bordas,
+        se exit_dir e entry_dir caem no mesmo eixo (ambos H ou ambos V), um
+        ponto só não pode satisfazer as duas pontas — rerroteia esse trecho.
         """
         if getattr(self, '_being_deleted', False) or not self._waypoints_initialized:
             return
@@ -307,38 +314,36 @@ class ConnectionItem(DiagramItemBase):
             return
 
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
-        exit_h  = exit_dir  in ("left", "right")
-        entry_h = entry_dir in ("left", "right")
-        wps = [QPointF(wp) for wp in self.waypoints]
+        exit_h, entry_h = exit_dir in ("left", "right"), entry_dir in ("left", "right")
+        wps = self.waypoints
         n   = len(wps)
 
-        # Forward pass: alinha wps[0] ao eixo de saída, depois alterna H/V.
-        wps[0] = QPointF(wps[0].x(), p1_out.y()) if exit_h else QPointF(p1_out.x(), wps[0].y())
-        prev_h = exit_h
-        for i in range(1, n):
-            wps[i] = QPointF(wps[i-1].x(), wps[i].y()) if prev_h else QPointF(wps[i].x(), wps[i-1].y())
-            prev_h = not prev_h
-
-        # Backward pass: alinha wps[-1] ao eixo de entrada, depois alterna H/V.
-        wps[-1] = QPointF(wps[-1].x(), p2_in.y()) if entry_h else QPointF(p2_in.x(), wps[-1].y())
-        next_h = entry_h
-        for i in range(n - 2, -1, -1):
-            wps[i] = QPointF(wps[i+1].x(), wps[i].y()) if next_h else QPointF(wps[i].x(), wps[i+1].y())
-            next_h = not next_h
-
-        # Sanity check apenas nos segmentos wp→wp — os segmentos de borda
-        # (p1_out→wp[0] e wp[-1]→p2_in) são excluídos porque waypoints do A*
-        # usam EXIT_PX=40px de margem, diferente dos 6-18px do editor.
-        # Se algum segmento interno ficou diagonal, os passes conflitaram →
-        # waypoints insuficientes para essa geometria → reroutear do zero.
-        SNAP = 0.5
-        if any(abs(a.x()-b.x()) >= SNAP and abs(a.y()-b.y()) >= SNAP for a, b in zip(wps, wps[1:])):
+        if n == 1 and moved_source and moved_target and exit_h == entry_h:
             self._reroute_waypoints()
             return
 
-        self.waypoints = wps
         self.prepareGeometryChange()
+        if moved_source:
+            self._shift_collinear_run(range(n), p1_out, exit_h)
+        if moved_target:
+            self._shift_collinear_run(range(n - 1, -1, -1), p2_in, entry_h)
         self.update()
+
+    def _shift_collinear_run(self, indices: range, anchor_pt: QPointF, is_horizontal: bool) -> None:
+        """Desloca a sequência de waypoints colineares a partir da borda para
+        acompanhar anchor_pt, parando no primeiro waypoint que já representa
+        uma curva real (não compartilha a coordenada constrangida com a borda).
+        """
+        wps = self.waypoints
+        first = wps[indices[0]]
+        old_val = first.y() if is_horizontal else first.x()
+        new_val = anchor_pt.y() if is_horizontal else anchor_pt.x()
+        for k in indices:
+            p   = wps[k]
+            cur = p.y() if is_horizontal else p.x()
+            if abs(cur - old_val) >= 0.5:
+                break
+            wps[k] = QPointF(p.x(), new_val) if is_horizontal else QPointF(new_val, p.y())
 
     # =========================================================================
     # Waypoints — constants

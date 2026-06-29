@@ -442,7 +442,7 @@ class NodeItem(DiagramItemBase):
         for conn in self.connections[:]:
             if conn.source_anchor.scene() is None or conn.target_anchor.scene() is None:
                 continue
-            conn.adjust_waypoints_for_node_move()
+            conn.adjust_waypoints_for_node_move(moved_source=conn.source is self, moved_target=conn.target is self)
             conn.prepareGeometryChange()
             conn.update()
 

@@ -126,8 +126,8 @@ class AnchorItem(QGraphicsEllipseItem):
             "border": False,
             "font_size": 8,
         })
-        self._label_hydraulic.setParentItem(self.node)
-        self._label_hydraulic.setPos(self.pos() + QPointF(10, -8))
+        self._label_hydraulic.setParentItem(self)
+        self._label_hydraulic.setPos(QPointF(10, -8))
 
     def update_hydraulic_labels(self):
         """Atualiza o texto dos labels de pressão e vazão com os valores atuais."""

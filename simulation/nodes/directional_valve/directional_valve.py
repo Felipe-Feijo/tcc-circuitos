@@ -43,11 +43,14 @@ class DirectionalValve(Node):
     def _update_pilots(self):
         for side in ("left", "right"):
             actuator = self.actuators.get(side)
-            if not actuator or actuator.get("type") != "pilot":
+            if not actuator:
                 continue
-
-            anchor = "PL" if side == "left" else "PR"
-            self.bits[side] = 1 if self.anchors[anchor].state else 0
+            atype = actuator.get("type")
+            anchor_name = "PL" if side == "left" else "PR"
+            if atype == "pneumatic_pilot":
+                self.bits[side] = 1 if self.anchors[anchor_name].state else 0
+            elif atype == "hydraulic_pilot":
+                self.bits[side] = 1 if self.anchors[anchor_name].pressure > 1e5 else 0
 
     def _update_springs(self):
         for side in ("left", "right"):

@@ -19,7 +19,7 @@ class DirectOperatedReliefValve(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite="resources/nodes/direct_operated_relief_valve/direct_operated_relief_valve.png",
-            name="ReliefValve (direct)",
+            name="Relief Valve (direct)",
         )
     def setup(self) -> None:
         self.properties = {}

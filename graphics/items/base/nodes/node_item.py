@@ -350,6 +350,7 @@ class NodeItem(DiagramItemBase):
         existing = self.anchors.get(anchor.name)
         if existing:
             existing.setPos(anchor.pos())
+            anchor.setParentItem(None)
             return
         anchor.setParentItem(self)
         self.anchors[anchor.name] = anchor

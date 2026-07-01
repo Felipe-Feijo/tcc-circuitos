@@ -299,8 +299,8 @@ class SimulationEngine:
 
         return True
 
-    def _collect_hydraulic_nodes(self) -> list: 
-        return [n for n in self.nodes.values() if isinstance(n, HydraulicNode) and any(a.domain == "hydraulic" for a in n.anchors.values())]
+    def _collect_hydraulic_nodes(self) -> list:
+        return [n for n in self.nodes.values() if isinstance(n, HydraulicNode) and getattr(n, "domain", None) == "hydraulic"]
 
     def _assign_pressure_vars(self) -> dict:
         visited_anchors = set()

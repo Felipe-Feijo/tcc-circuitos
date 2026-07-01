@@ -101,8 +101,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         add_node(f"gen-v42-{letter}", "Valve_4_2_Ways", f"main_valve:{letter}",
                  properties={
                      "actuators": {
-                         "left":  {"type": "pilot"},
-                         "right": {"type": "pilot"},
+                         "left":  {"type": "pneumatic_pilot"},
+                         "right": {"type": "pneumatic_pilot"},
                      },
                      "default_side": "left" if starts_extended[letter] else "right",
                  })
@@ -135,8 +135,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         add_node(mem_id, "Valve_5_2_Ways", f"memory:{i}",
                  properties={
                      "actuators": {
-                         "left":  {"type": "pilot"},
-                         "right": {"type": "pilot"},
+                         "left":  {"type": "pneumatic_pilot"},
+                         "right": {"type": "pneumatic_pilot"},
                      },
                      "default_side": "left" if i > 0 else "right",
                  })

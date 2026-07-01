@@ -13,10 +13,10 @@ This document describes the responsibilities and interactions between the main a
 └────────┬───────────────────────────┬────────────────┘
          │                           │
 ┌────────▼──────────────┐   ┌────────▼────────────────┐
-│    Editor layer       │   │   Circuit Generator      │
-│  GraphicsView/Scene   │   │  (sequence → JSON →      │
-│  NodeItem/Connection  │   │   deserialize_scene)     │
-│  EditorController     │   └─────────────────────────-┘
+│    Editor layer       │   │   Circuit Generator     │
+│  GraphicsView/Scene   │   │  (sequence → JSON →     │
+│  NodeItem/Connection  │   │   deserialize_scene)    │
+│  EditorController     │   └────────────────────────-┘
 │  EditorState          │
 │  Undo / Delete /      │
 │  Clipboard managers   │
@@ -29,7 +29,7 @@ This document describes the responsibilities and interactions between the main a
 └────────┬──────────────┘
          │  GraphBuilder.build()
 ┌────────▼──────────────────────────────────────────┐
-│                  Simulation layer                  │
+│                  Simulation layer                 │
 │   SimulationSession                               │
 │     ├── GraphBuilder   (scene → domain graph)     │
 │     ├── SimulationEngine  (domain logic)          │

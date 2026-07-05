@@ -56,8 +56,13 @@ class DirectOperatedReliefValve(Node, HydraulicMixin):
 
         eq_conservation = (Q_in + Q_out) / Q_scale
 
-        # regime passivo: fluxo reverso de pressão com vazão positiva
-        if P_out > P_in and Q_in > 0:
+        # regime passivo: só entra quando o lado T está genuinamente
+        # contrapressurizado acima do próprio p_set — não apenas acima de
+        # P_in. Sem o gate por p_set, P_in e P_out perto de zero (ruído
+        # numérico logo após uma mudança de topologia) bastavam para
+        # disparar o branch, que não referencia p_set — a relief "abria"
+        # sem nunca ter atingido a pressão de ajuste.
+        if P_out > self.p_set and P_out > P_in and Q_in > 0:
             eq_fb = (P_in - P_out) / P_scale
         else:
             a = (self.p_set - P_in) / P_scale

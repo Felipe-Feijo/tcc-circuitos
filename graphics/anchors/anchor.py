@@ -127,7 +127,41 @@ class AnchorItem(QGraphicsEllipseItem):
             "font_size": 8,
         })
         self._label_hydraulic.setParentItem(self)
-        self._label_hydraulic.setPos(QPointF(10, -8))
+        self._label_hydraulic.setPos(self._default_label_offset())
+
+    def _default_label_offset(self) -> QPointF:
+        """Calcula um offset inicial que empurra o label para fora do componente.
+
+        Usa a posição da âncora relativa ao bounding box do node (self.node.width/
+        height) para descobrir em qual borda ela está (topo/base/esquerda/direita)
+        e desloca o label para o lado de fora dessa borda, evitando que ele nasça
+        sobreposto ao sprite do componente.
+        """
+        margin = 4
+        rect = self._label_hydraulic.boundingRect()
+        w, h = rect.width(), rect.height()
+
+        node = self.node
+        node_w = getattr(node, "width", 0)
+        node_h = getattr(node, "height", 0)
+        x, y = self.pos().x(), self.pos().y()
+
+        on_top = y <= 0
+        on_bottom = bool(node_h) and y >= node_h
+        on_left = x <= 0
+        on_right = bool(node_w) and x >= node_w
+
+        if on_top:
+            return QPointF(-w / 2, -h - margin)
+        if on_bottom:
+            return QPointF(-w / 2, margin)
+        if on_left:
+            return QPointF(-w - margin, -h / 2)
+        if on_right:
+            return QPointF(margin, -h / 2)
+
+        # Âncora interna (não está em nenhuma borda): mantém o padrão antigo.
+        return QPointF(margin, -h - margin)
 
     def update_hydraulic_labels(self):
         """Atualiza o texto dos labels de pressão e vazão com os valores atuais."""

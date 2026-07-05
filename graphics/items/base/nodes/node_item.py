@@ -247,7 +247,22 @@ class NodeItem(DiagramItemBase):
             "rotation": self.rotation(),
             "properties": copy.deepcopy(getattr(self, "properties", {})),
             "labels": self.labels_to_dict(),
+            "anchor_labels": self.anchor_labels_to_dict(),
         }
+
+    def anchor_labels_to_dict(self) -> dict:
+        """Serializa a posição (relativa à âncora) dos labels hidráulicos.
+
+        Esses labels são filhos do AnchorItem (não de self.labels), pois
+        acompanham a âncora individualmente — por isso precisam de uma
+        chave própria de serialização.
+        """
+        data = {}
+        for name, anchor in self.anchors.items():
+            label = getattr(anchor, "_label_hydraulic", None)
+            if label is not None:
+                data[name] = {"x": label.pos().x(), "y": label.pos().y()}
+        return data
 
     def labels_to_dict(self) -> dict:
         data = {}
@@ -300,6 +315,15 @@ class NodeItem(DiagramItemBase):
 
         node.properties = data.get("properties", {})
         node.apply_properties()
+
+        # Aplicado após apply_properties(): algumas subclasses recriam suas
+        # âncoras ali (ex.: mudança de número de portas), o que substituiria
+        # os AnchorItem existentes e descartaria a posição restaurada antes.
+        for name, pos in data.get("anchor_labels", {}).items():
+            anchor = node.anchors.get(name)
+            label = getattr(anchor, "_label_hydraulic", None) if anchor else None
+            if label is not None:
+                label.setPos(QPointF(float(pos["x"]), float(pos["y"])))
 
         return node
 

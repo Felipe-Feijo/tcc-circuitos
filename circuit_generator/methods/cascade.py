@@ -80,7 +80,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         return f"{letter.lower()}{'1' if direction == '+' else '0'}"
 
     # Estado inicial: se o primeiro movimento for "-", o cilindro começa estendido.
-    first_event     = {letter: direction for letter, direction in reversed(events)}
+    first_event     = {letter: direction for letter, direction, *_ in reversed(events)}
     starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
 
     # ── 1. Cilindros ──────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
 
     # ── 5. Linhas de pressão de grupo ────────────────────────────────────────
 
-    events_per_cyl = Counter(letter for letter, _ in events)
+    events_per_cyl = Counter(letter for letter, _, *__ in events)
     n_pl_anchors   = sum(events_per_cyl[c] * _ANCHORS_PER_EVENT for c in cylinders)
     all_anchors    = [f"X{i}" for i in range(1, n_pl_anchors + 1)]
 
@@ -204,7 +204,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
     all_events_flat = [
         (g_idx, e_idx, letter, direction)
         for g_idx, group in enumerate(groups)
-        for e_idx, (letter, direction) in enumerate(group)
+        for e_idx, (letter, direction, *_) in enumerate(group)
     ]
 
     for flat_idx, (g_idx, e_idx, letter, direction) in enumerate(all_events_flat):

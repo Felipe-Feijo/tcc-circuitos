@@ -145,24 +145,52 @@ def extract_cylinders(events: list[tuple]) -> list[str]:
     return list(seen.keys())
 
 
-def split_into_groups(events: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
+def split_into_groups(events: list[tuple]) -> list[list[tuple]]:
     """
     Divide a sequência em grupos onde nenhuma letra se repete.
-    Ex: [A+, B+, A-, B-] → [[A+, B+], [A-, B-]]
+    Ex: [A+, B+, A-, B-] -> [[A+, B+], [A-, B-]]
     Usado pelo método cascata.
+
+    Eventos com o mesmo `parallel_id` (3º campo, quando presente) formam um
+    bloco atômico: se qualquer letra do bloco já apareceu no grupo corrente,
+    o corte de grupo acontece antes do bloco inteiro, nunca no meio dele.
+    Eventos de 2 campos (sem parallel_id) são tratados como blocos de 1.
     """
     groups: list[list] = []
     current: list = []
     seen: set[str] = set()
-    for event in events:
-        letter, _ = event
-        if letter in seen:
+
+    for atom in _atomize(events):
+        letters = {event[0] for event in atom}
+        if letters & seen:
             groups.append(current)
-            current = [event]
-            seen = {letter}
+            current = list(atom)
+            seen = set(letters)
         else:
-            current.append(event)
-            seen.add(letter)
+            current.extend(atom)
+            seen |= letters
     if current:
         groups.append(current)
     return groups
+
+
+def _atomize(events: list[tuple]) -> list[list[tuple]]:
+    """Agrupa eventos consecutivos que compartilham o mesmo parallel_id
+    (3º campo) em blocos atômicos. Eventos sem parallel_id (2 campos, ou
+    3º campo None) viram blocos de 1 evento."""
+    atoms: list[list[tuple]] = []
+    i, n = 0, len(events)
+    while i < n:
+        pid = events[i][2] if len(events[i]) > 2 else None
+        if pid is None:
+            atoms.append([events[i]])
+            i += 1
+            continue
+        j = i
+        block: list[tuple] = []
+        while j < n and (events[j][2] if len(events[j]) > 2 else None) == pid:
+            block.append(events[j])
+            j += 1
+        atoms.append(block)
+        i = j
+    return atoms

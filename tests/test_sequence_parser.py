@@ -208,3 +208,27 @@ class TestSplitIntoGroups:
             [("A","+")],
             [("A","-")],
         ]
+
+    def test_atomic_block_cuts_before_whole_block_not_inside(self):
+        # "A" já está no grupo corrente quando o bloco (A-,B+) começa.
+        # O corte deve acontecer ANTES do bloco inteiro — nunca separando
+        # A de B dentro dele.
+        events = [
+            ("A", "+", None),
+            ("A", "-", 0), ("B", "+", 0),
+            ("B", "-", None),
+        ]
+        assert split_into_groups(events) == [
+            [("A", "+", None)],
+            [("A", "-", 0), ("B", "+", 0)],
+            [("B", "-", None)],
+        ]
+
+    def test_block_with_no_collision_merges_into_current_group(self):
+        events = [
+            ("C", "+", None),
+            ("A", "-", 0), ("B", "+", 0),
+        ]
+        assert split_into_groups(events) == [
+            [("C", "+", None), ("A", "-", 0), ("B", "+", 0)],
+        ]

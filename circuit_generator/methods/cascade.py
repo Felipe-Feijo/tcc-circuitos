@@ -44,6 +44,44 @@ from circuit_generator.sequence_parser import extract_cylinders, split_into_grou
 _ANCHORS_PER_EVENT = 20
 
 
+def _atomize_group(group: list[tuple]) -> list[list[tuple[int, str, str]]]:
+    """
+    Agrupa os eventos de um grupo cascata em átomos: um evento sozinho vira
+    um átomo de tamanho 1; eventos consecutivos com o mesmo parallel_id
+    (bloco simultâneo) viram um átomo só. Cada evento é anotado com seu
+    e_idx original dentro do grupo (necessário para nomear _role de
+    válvulas de sinalização, que usa g_idx*100+e_idx).
+
+    Espelha sequence_parser._atomize (mesma lógica de agrupamento por
+    parallel_id), mas devolve e_idx junto — que sequence_parser não expõe
+    porque não precisa dele para decidir corte de grupo.
+
+    Aceita eventos de 2 ou 3 campos, (letra, direção) ou
+    (letra, direção, parallel_id) — mesma tolerância usada em todo o
+    módulo desde o sub-projeto 1.
+    """
+    atoms: list[list[tuple[int, str, str]]] = []
+    i, n = 0, len(group)
+    while i < n:
+        letter, direction, *rest = group[i]
+        pid = rest[0] if rest else None
+        if pid is None:
+            atoms.append([(i, letter, direction)])
+            i += 1
+            continue
+        j = i
+        atom: list[tuple[int, str, str]] = []
+        while j < n:
+            letter_j, direction_j, *rest_j = group[j]
+            if (rest_j[0] if rest_j else None) != pid:
+                break
+            atom.append((j, letter_j, direction_j))
+            j += 1
+        atoms.append(atom)
+        i = j
+    return atoms
+
+
 def generate(events: list[tuple[str, str]]) -> dict:
     cylinders = extract_cylinders(events)
     groups    = split_into_groups(events)

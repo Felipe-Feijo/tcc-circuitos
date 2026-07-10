@@ -89,6 +89,10 @@ class SpriteMetrics:
     ps_width:   int
     ps_height:  int
 
+    # OrValve
+    or_width:   int
+    or_height:  int
+
     # Anchors locais calculados a partir das dimensões reais dos sprites.
     # Cada entrada: tipo → { porta → (local_x, local_y) }
     anchor_local: dict = field(default_factory=dict)
@@ -138,14 +142,31 @@ class SpriteMetrics:
         object.__setattr__(self, "sig_spacing",  fp_left + fp_right)
 
 
+def _ratio_from_expr(expr: str, axis: str) -> float:
+    """
+    Extrai a fração de 'self.<axis>' numa expressão de coordenada de anchor.
+    Cobre os três formatos usados nos componentes gráficos:
+      "self.<axis>"                -> 1.0
+      "self.<axis>*NUM/DEN" / "*F" -> NUM/DEN ou F
+      literal (ex: "0")            -> 0.0
+    """
+    expr = expr.strip()
+    if expr == f"self.{axis}":
+        return 1.0
+    m = re.search(rf'self\.{axis}\s*\*\s*([\d./]+)', expr)
+    if m:
+        return eval(m.group(1))
+    return 0.0
+
+
 def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:
     """
     Extrai frações de anchor do initialize_anchors() de um arquivo fonte.
     Lê expressões do tipo:
       AnchorItem("NAME", QPointF(self.width*NUM/DEN, self.height_or_0), ...)
-    Retorna { name: (x_ratio, y_is_height) } onde y_is_height é True/False.
+    Retorna { name: (x_ratio, y_ratio) } — frações de width/height. Cobre
+    "self.<eixo>" (1.0), "self.<eixo>*fração" e literal (0.0).
     """
-    import re
     src = Path(_ROOT / src_path).read_text(encoding="utf-8")
     pat = re.compile(
         r'AnchorItem\(\s*["\'](\w+)["\'\]],\s*QPointF\(([^,]+),\s*([^)]+)\)',
@@ -155,12 +176,8 @@ def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:
         name   = m.group(1)
         x_expr = m.group(2).strip()
         y_expr = m.group(3).strip()
-        # x: self.width*NUM/DEN  ou  self.width*FLOAT
-        xm = re.search(r'self\.width\s*\*?\s*([\d./]+)', x_expr)
-        x_ratio = eval(xm.group(1)) if xm else 0.0
-        # y: 0 ou self.height
-        y_is_height = "height" in y_expr
-        result[name] = (x_ratio, y_is_height)
+        result[name] = (_ratio_from_expr(x_expr, "width"),
+                         _ratio_from_expr(y_expr, "height"))
     return result
 
 
@@ -184,10 +201,10 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
 
     def _resolve(ratios: dict, width: int, height: int,
                  extra: dict | None = None) -> dict:
-        """Converte { name: (x_ratio, y_is_height) } em { name: (x, y) }."""
+        """Converte { name: (x_ratio, y_ratio) } em { name: (x, y) }."""
         result = {}
-        for name, (xr, y_is_h) in ratios.items():
-            result[name] = (width * xr, height if y_is_h else 0.0)
+        for name, (xr, yr) in ratios.items():
+            result[name] = (width * xr, height * yr)
         if extra:
             result.update(extra)
         return result
@@ -198,6 +215,7 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
     cyl = _parse_anchor_ratios("graphics/items/base/nodes/cylinder/double_acting_cylinder.py")
     exh = _parse_anchor_ratios("graphics/items/base/nodes/exhaust.py")
     ps  = _parse_anchor_ratios("graphics/items/base/nodes/pressure_source.py")
+    or_ = _parse_anchor_ratios("graphics/items/base/nodes/logic_valve/or_valve.py")
 
     return {
         "DoubleActingCylinder": _resolve(cyl, m.cyl_width,  m.cyl_height),
@@ -212,6 +230,7 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "PL": (-pilot_w,              m.v52_height * pilot_y),
             "PR": (m.v52_width + pilot_w, m.v52_height * pilot_y),
         }),
+        "OrValve":              _resolve(or_, m.or_width,   m.or_height),
     }
 
 
@@ -223,6 +242,7 @@ def _load() -> SpriteMetrics:
     v32_w, v32_h = _sprite_size("resources/nodes/valve_3_2_ways/valve_3_2_body_left.png")
     exh_w, exh_h = _sprite_size("resources/nodes/exhaust/exhaust.png")
     ps_w,  ps_h  = _sprite_size("resources/nodes/pressure_source/pressure_source.png")
+    or_w,  or_h  = _sprite_size("resources/nodes/or_valve/or_valve_x_side.png")
     spacing      = _read_expandable_spacing()
 
     pilot_w, _    = _sprite_size("resources/actuators/pilot/pilot.png")
@@ -235,6 +255,7 @@ def _load() -> SpriteMetrics:
         v32_width=v32_w, v32_height=v32_h,
         exh_width=exh_w, exh_height=exh_h,
         ps_width=ps_w,   ps_height=ps_h,
+        or_width=or_w,   or_height=or_h,
         pilot_w=pilot_w,
         anchor_local={},
     )

@@ -229,73 +229,111 @@ def generate(events: list[tuple[str, str]]) -> dict:
         # 1 grupo: btn alimenta pl[0] direto
         connect("gen-btn", "A", pl_grp_ids[0], next_anchor(pl_grp_ids[0]))
 
-    # ── 6. Válvulas de sinalização por evento ────────────────────────────────
+    # ── 6. Disparo e confirmação por átomo ───────────────────────────────────
     #
-    #   Para cada grupo g com eventos [E0, E1, ..., En]:
-    #     pl_grp[g] → v42-E0.pilot      (barramento aciona o 1º cilindro direto)
-    #     pl_grp[g] → sig_E0.P          (sig_E0 confirma que E0 terminou)
-    #     sig_E0.A  → v42-E1.pilot      (sig_E0 aciona o próximo)
-    #     ...
-    #     sig_En.A  → mc[g].PR          (última sig → troca de grupo)
-    #               ou btn.P            (se for o último grupo → fecha ciclo)
+    #   Cada grupo cascata é dividido em "átomos" (_atomize_group): um
+    #   evento sozinho, ou um bloco "(...)" inteiro (eventos com o mesmo
+    #   parallel_id). Um átomo dispara cada um dos seus eventos exatamente
+    #   uma vez (uma fonte dedicada por evento — nunca duplicada) e produz
+    #   `fan_out` conjuntos de confirmação independentes: um por evento do
+    #   PRÓXIMO átomo, ou 1 se for o último átomo do grupo (alimenta
+    #   mc.PR/btn.P). Cada conjunto de confirmação é um grupo dedicado de
+    #   válvulas de sinalização (mesmo sensor, mesmo P do barramento),
+    #   mescladas por uma cadeia AndValve se o átomo tem mais de um evento.
     #
-    #   Multi-ciclo: quando o mesmo pilot de uma 4/2 recebe mais de uma fonte
-    #   de disparo (o mesmo cilindro repete a mesma direção em pontos
-    #   diferentes da sequência), as fontes são acumuladas em
-    #   `triggers_for_pilot` (passada 1) e resolvidas na passada 2 — 1 fonte
-    #   conecta direto no pilot (idêntico ao comportamento de antes deste
-    #   sub-projeto); 2+ fontes convergem através de uma cadeia binária de
-    #   válvulas OrValve (a OrValve só tem 2 entradas, X/Y).
-
-    all_events_flat = [
-        (g_idx, e_idx, letter, direction)
-        for g_idx, group in enumerate(groups)
-        for e_idx, (letter, direction, *_) in enumerate(group)
-    ]
+    #   fan_out é sempre uma consulta LOCAL ao próximo átomo apenas — nunca
+    #   se acumula por trás de múltiplos átomos (só o disparo do átomo
+    #   imediatamente anterior a um bloco precisa duplicar; o resto da
+    #   cadeia serial antes dele permanece com um único conjunto).
+    #
+    #   Sem blocos "(...)", todo átomo tem tamanho 1 e fan_out=1 em todo
+    #   lugar — o algoritmo colapsa exatamente na fiação evento-a-evento de
+    #   antes deste sub-projeto.
+    #
+    #   Multi-ciclo (sub-projeto 2): quando o mesmo pilot de uma 4/2 recebe
+    #   mais de uma fonte de disparo, as fontes são acumuladas em
+    #   `triggers_for_pilot` e resolvidas na passada 2 (abaixo, inalterada)
+    #   — 1 fonte conecta direto; 2+ fontes convergem via OrValve.
 
     triggers_for_pilot: dict[tuple[str, str], list[tuple[str, str]]] = {}
 
-    for flat_idx, (g_idx, e_idx, letter, direction) in enumerate(all_events_flat):
-        is_first_event = (e_idx == 0)
-        is_last_event  = (e_idx == len(groups[g_idx]) - 1)
-        is_last_group  = (g_idx == n_groups - 1)
-        s_id           = f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}-{flat_idx}"
-        v42_pilot      = "PL" if direction == "+" else "PR"
-        pl_current     = pl_grp_ids[g_idx]
+    flat_idx_of: dict[tuple[int, int], int] = {}
+    _fi = 0
+    for g_idx, group in enumerate(groups):
+        for e_idx in range(len(group)):
+            flat_idx_of[(g_idx, e_idx)] = _fi
+            _fi += 1
 
-        # Primeiro evento do grupo: barramento é uma fonte de disparo do pilot
-        if is_first_event:
-            bus_anchor = next_anchor(pl_current)
-            triggers_for_pilot.setdefault((letter, v42_pilot), []).append(
-                (pl_current, bus_anchor))
+    for g_idx, group in enumerate(groups):
+        is_last_group = (g_idx == n_groups - 1)
+        pl_current    = pl_grp_ids[g_idx]
+        atoms         = _atomize_group(group)
+        n_atoms       = len(atoms)
 
-        # sig começa em left se o sensor que ela monitora já está ativo no estado inicial
-        sig_default_side = "left" if (
-            (direction == "+" and     starts_extended[letter]) or
-            (direction == "-" and not starts_extended[letter])
-        ) else "right"
+        entry_sources: list[tuple[str, str]] | None = None  # 1:1 com os eventos do átomo atual
 
-        add_node(s_id, "Valve_3_2_Ways", f"signal_valve:{g_idx * 100 + e_idx}",
-                 properties={
-                     "actuators": {
-                         "left":  {"type": "limit_switch", "sensor_name": confirm_sensor(letter, direction)},
-                         "right": {"type": "spring"},
-                     },
-                     "default_side": sig_default_side,
-                 })
+        for atom_idx, atom in enumerate(atoms):
+            is_last_atom = (atom_idx == n_atoms - 1)
+            fan_out      = 1 if is_last_atom else len(atoms[atom_idx + 1])
 
-        connect(add_simple("Exhaust", f"exhaust:sig-{g_idx * 100 + e_idx}"), "R", s_id, "R")
-        connect(pl_current, next_anchor(pl_current), s_id, "P")
+            if entry_sources is None:
+                entry_sources = [(pl_current, next_anchor(pl_current)) for _ in atom]
 
-        if is_last_event and not is_last_group:
-            connect(s_id, "A", mem_ids[n_mc - 1 - g_idx], "PR")
-        elif is_last_event and is_last_group:
-            if mem_ids:
-                connect(s_id, "A", "gen-btn", "P")
-        else:
-            next_letter, next_dir = all_events_flat[flat_idx + 1][2:4]
-            next_pilot = "PL" if next_dir == "+" else "PR"
-            triggers_for_pilot.setdefault((next_letter, next_pilot), []).append((s_id, "A"))
+            # Dispara cada evento do átomo uma única vez.
+            for slot_idx, (e_idx, letter, direction) in enumerate(atom):
+                v42_pilot = "PL" if direction == "+" else "PR"
+                triggers_for_pilot.setdefault((letter, v42_pilot), []).append(
+                    entry_sources[slot_idx])
+
+            # Produz `fan_out` conjuntos de confirmação independentes.
+            group_outputs: list[tuple[str, str]] = []
+            for conf_idx in range(fan_out):
+                completions: list[tuple[str, str]] = []
+                for e_idx, letter, direction in atom:
+                    suffix      = "" if fan_out == 1 else f"-{conf_idx}"
+                    role_suffix = "" if fan_out == 1 else f":{conf_idx}"
+                    s_id   = f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}-{flat_idx_of[(g_idx, e_idx)]}{suffix}"
+                    s_role = f"signal_valve:{g_idx * 100 + e_idx}{role_suffix}"
+
+                    sig_default_side = "left" if (
+                        (direction == "+" and     starts_extended[letter]) or
+                        (direction == "-" and not starts_extended[letter])
+                    ) else "right"
+
+                    add_node(s_id, "Valve_3_2_Ways", s_role,
+                             properties={
+                                 "actuators": {
+                                     "left":  {"type": "limit_switch", "sensor_name": confirm_sensor(letter, direction)},
+                                     "right": {"type": "spring"},
+                                 },
+                                 "default_side": sig_default_side,
+                             })
+                    connect(add_simple("Exhaust", f"exhaust:sig-{g_idx * 100 + e_idx}{suffix}"), "R", s_id, "R")
+                    connect(pl_current, next_anchor(pl_current), s_id, "P")
+
+                    completions.append((s_id, "A"))
+
+                if len(completions) == 1:
+                    group_outputs.append(completions[0])
+                else:
+                    current = completions[0]
+                    for chain_i, nxt in enumerate(completions[1:]):
+                        and_id = add_simple(
+                            "AndValve",
+                            f"and_valve:{g_idx}:{atom_idx}:{conf_idx}:{chain_i}")
+                        connect(current[0], current[1], and_id, "X")
+                        connect(nxt[0], nxt[1], and_id, "Y")
+                        current = (and_id, "A")
+                    group_outputs.append(current)
+
+            if is_last_atom:
+                final_id, final_anchor = group_outputs[0]
+                if not is_last_group:
+                    connect(final_id, final_anchor, mem_ids[n_mc - 1 - g_idx], "PR")
+                elif mem_ids:
+                    connect(final_id, final_anchor, "gen-btn", "P")
+            else:
+                entry_sources = group_outputs
 
     # ── 6b. Resolve as fontes de disparo acumuladas por pilot ────────────────
     #

@@ -151,7 +151,7 @@ def apply(data: dict) -> dict:
     # ── Varredura de conexões: montar todos os mapas de uma vez ──────────────
     child_parent:    dict[str, tuple[str, str]] = {}
     sig_to_v42:      dict[str, tuple[str, str]] = {}
-    sig_to_or:       dict[str, str]             = {}
+    sig_to_or:       dict[str, tuple[str, str]] = {}
     sig_to_mc:       dict[str, tuple[str, str]] = {}
     sig_to_btn:      set[str]                   = set()
     sig_to_sig:      dict[str, str]             = {}
@@ -177,7 +177,7 @@ def apply(data: dict) -> dict:
         if (s_type == "Valve_3_2_Ways" and s_anc == "A" and
                 t_type == "OrValve" and t_anc in ("X", "Y") and
                 s_role.startswith("signal_valve:")):
-            sig_to_or[s_id] = t_id
+            sig_to_or[s_id] = (t_id, t_anc)
 
         # sig → mc pilot
         if (s_type == "Valve_3_2_Ways" and s_anc == "A" and
@@ -271,6 +271,12 @@ def apply(data: dict) -> dict:
         node_pos[node["id"]] = (x, y)
         node.pop("_role", None)
 
+    def _or_valve_xy(letter: str, pilot_side: str, chain_i: int) -> float:
+        base_x    = cyl_col.get(letter, cyl_first_x)
+        side_sign = -1 if pilot_side == "PL" else 1
+        return base_x + side_sign * (cols.get("or_valve_base_offset_x", 600)
+                                      + chain_i * cols.get("or_valve_chain_step_x", 250))
+
     for node in data["nodes"]:
         role  = node.get("_role", "")
         ntype = node["type"]
@@ -327,30 +333,28 @@ def apply(data: dict) -> dict:
             _place(node, x, rows["main_valve"] + cols.get("sig_pilot_offset_y", 0))
         elif role.startswith("signal_valve:") and node["id"] in sig_to_or:
             # sig → OrValve (multi-ciclo): sem coluna própria — posição
-            # simples baseada na 4/2 que a OrValve alvo alimenta em última
-            # instância (decodificada do _role da OrValve, que já carrega a
-            # letra do cilindro e o lado do pilot). Rústico até o motor de
-            # grid genérico existir (sub-projeto futuro).
-            nid     = node["id"]
-            or_id   = sig_to_or[nid]
-            or_role = role_map.get(or_id, "")
+            # baseada na posição da própria OrValve alvo (mesma fórmula do
+            # branch or_valve: acima, via _or_valve_xy), deslocada conforme
+            # o anchor (X ou Y) que este sig alimenta, para que os dois
+            # sigs que alimentam a mesma OrValve nunca coincidam. Rústico
+            # até o motor de grid genérico existir (sub-projeto futuro).
+            nid              = node["id"]
+            or_id, or_anchor = sig_to_or[nid]
+            or_role          = role_map.get(or_id, "")
             if or_role.startswith("or_valve:"):
-                _, letter, pilot_side, _ = or_role.split(":")
+                _, letter, pilot_side, chain_i = or_role.split(":")
+                or_x = _or_valve_xy(letter, pilot_side, int(chain_i))
             else:
-                letter, pilot_side = None, "PL"
-            base_x    = cyl_col.get(letter, cyl_first_x) if letter else cyl_first_x
-            side_sign = -1 if pilot_side == "PL" else 1
-            _place(node, base_x + side_sign * cols.get("or_orphan_sig_offset_x", 500),
-                   rows["main_valve"] + cols.get("sig_pilot_offset_y", 0))
+                or_x = cyl_first_x
+            anchor_spread = cols.get("or_orphan_sig_anchor_spread", 300)
+            x = or_x - anchor_spread if or_anchor == "X" else or_x + anchor_spread
+            _place(node, x, rows["main_valve"] + cols.get("sig_pilot_offset_y", 0))
         elif role.startswith("or_valve:"):
             # multi-ciclo: posição simples baseada em cyl_col, sem integrar
             # no sistema de colunas — rústico até o motor de grid genérico
             # existir (sub-projeto futuro).
             _, letter, pilot_side, chain_i = role.split(":")
-            base_x    = cyl_col.get(letter, cyl_first_x)
-            side_sign = -1 if pilot_side == "PL" else 1
-            x = base_x + side_sign * (cols.get("or_valve_base_offset_x", 600)
-                                       + int(chain_i) * cols.get("or_valve_chain_step_x", 250))
+            x = _or_valve_xy(letter, pilot_side, int(chain_i))
             _place(node, x, rows["main_valve"] + cols.get("or_valve_offset_y", -200))
         elif role.startswith("step_module:") or role.startswith("relay_coil:"):
             i = int(role.split(":", 1)[1])

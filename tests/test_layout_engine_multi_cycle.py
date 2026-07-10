@@ -62,6 +62,18 @@ def test_orphan_signal_valves_get_a_position():
     assert (pos_ext["x"], pos_ext["y"]) != (pos_ret["x"], pos_ret["y"])
 
 
+def test_two_orphan_signal_valves_feeding_same_or_valve_get_distinct_positions():
+    # gen-sig-A-ext-0 e gen-sig-A-ret-5 alimentam anchors diferentes (X e Y)
+    # da MESMA OrValve (or_valve:B:PL:0) -- precisam de posições distintas
+    # mesmo compartilhando letra+pilot_side
+    data = cascade.generate(parse("A+B+A-B-A+A-B+B-"))
+    data = apply_layout(data)
+    positions = _positions_by_id(data)
+    pos_ext = positions["gen-sig-A-ext-0"]
+    pos_ret = positions["gen-sig-A-ret-5"]
+    assert (pos_ext["x"], pos_ext["y"]) != (pos_ret["x"], pos_ret["y"])
+
+
 def test_three_cycle_chain_layout_does_not_crash():
     # cadeia de 2 OrValve por pilot — garante que o caso N>2 também
     # atravessa o layout sem erro

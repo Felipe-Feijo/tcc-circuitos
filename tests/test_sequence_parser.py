@@ -30,6 +30,9 @@ class TestValidateCylinderStates:
     def test_valid_three_cylinders(self):
         validate_cylinder_states([("A","+"), ("B","+"), ("C","+"), ("A","-"), ("B","-"), ("C","-")])
 
+    def test_accepts_events_with_parallel_id_field(self):
+        validate_cylinder_states([("A","+",0), ("B","+",0), ("A","-",None), ("B","-",None)])
+
     def test_invalid_consecutive_same_direction_extend(self):
         with pytest.raises(ValueError, match="estendido"):
             validate_cylinder_states([("A","+"), ("B","+"), ("A","+"), ("B","-"), ("A","-")])
@@ -101,6 +104,10 @@ class TestExtractCylinders:
     def test_three_cylinders(self):
         events = [("A","+"), ("B","+"), ("C","+"), ("A","-"), ("B","-"), ("C","-")]
         assert extract_cylinders(events) == ["A", "B", "C"]
+
+    def test_accepts_events_with_parallel_id_field(self):
+        events = [("A","+",0), ("B","+",0), ("A","-",None), ("B","-",None)]
+        assert extract_cylinders(events) == ["A", "B"]
 
     def test_preserves_order_not_alphabetical(self):
         events = [("C","+"), ("A","+"), ("C","-"), ("A","-")]

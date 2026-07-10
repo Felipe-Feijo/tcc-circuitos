@@ -20,12 +20,15 @@ def parse(sequence: str) -> list[tuple[str, str]]:
     return tokens
 
 
-def validate_cylinder_states(events: list[tuple[str, str]]) -> None:
+def validate_cylinder_states(events: list[tuple]) -> None:
     """
     Valida que cada cilindro:
       1. Nunca repete a mesma direção consecutivamente (ex: A+...A+ sem A- no meio).
       2. Fecha o ciclo: termina no estado oposto ao primeiro movimento
          (o primeiro movimento sai de um estado e o último deve retornar a ele).
+
+    Aceita eventos de 2 ou 3 campos — (letra, direção) ou
+    (letra, direção, parallel_id); o parallel_id é ignorado aqui.
 
     Lança ValueError com mensagem descritiva se alguma regra for violada.
     Não assume estado inicial — o cilindro pode começar retraído ou avançado.
@@ -33,7 +36,7 @@ def validate_cylinder_states(events: list[tuple[str, str]]) -> None:
     first_move: dict[str, str] = {}   # direção do primeiro evento de cada cilindro
     last_move:  dict[str, str] = {}   # direção do último evento de cada cilindro
 
-    for letter, direction in events:
+    for letter, direction, *_ in events:
         if letter not in first_move:
             first_move[letter] = direction
         else:
@@ -58,10 +61,13 @@ def validate_cylinder_states(events: list[tuple[str, str]]) -> None:
             )
 
 
-def extract_cylinders(events: list[tuple[str, str]]) -> list[str]:
-    """Retorna letras únicas na ordem de primeira aparição."""
+def extract_cylinders(events: list[tuple]) -> list[str]:
+    """Retorna letras únicas na ordem de primeira aparição.
+
+    Aceita eventos de 2 ou 3 campos (ver `validate_cylinder_states`).
+    """
     seen: dict[str, bool] = {}
-    for letter, _ in events:
+    for letter, *_ in events:
         seen.setdefault(letter, True)
     return list(seen.keys())
 

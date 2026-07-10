@@ -58,19 +58,25 @@ class TestValidateCylinderStates:
 
 class TestParse:
     def test_basic_retracted_start(self):
-        assert parse("A+B+A-B-") == [("A","+"), ("B","+"), ("A","-"), ("B","-")]
+        assert parse("A+B+A-B-") == [
+            ("A","+",None), ("B","+",None), ("A","-",None), ("B","-",None),
+        ]
 
     def test_basic_extended_start(self):
-        assert parse("A-B+A+B-") == [("A","-"), ("B","+"), ("A","+"), ("B","-")]
+        assert parse("A-B+A+B-") == [
+            ("A","-",None), ("B","+",None), ("A","+",None), ("B","-",None),
+        ]
 
     def test_single_cylinder_valid(self):
-        assert parse("A+A-") == [("A","+"), ("A","-")]
+        assert parse("A+A-") == [("A","+",None), ("A","-",None)]
 
     def test_multi_letter_cylinder(self):
-        assert parse("Ab+Ab-") == [("Ab","+"), ("Ab","-")]
+        assert parse("Ab+Ab-") == [("Ab","+",None), ("Ab","-",None)]
 
     def test_ignores_spaces(self):
-        assert parse("A+ B+ A- B-") == [("A","+"), ("B","+"), ("A","-"), ("B","-")]
+        assert parse("A+ B+ A- B-") == [
+            ("A","+",None), ("B","+",None), ("A","-",None), ("B","-",None),
+        ]
 
     def test_raises_on_empty(self):
         with pytest.raises(ValueError):
@@ -87,6 +93,57 @@ class TestParse:
     def test_raises_on_open_cycle(self):
         with pytest.raises(ValueError, match="não fecha o ciclo"):
             parse("A+B+B-")
+
+    def test_multi_cycle_without_parentheses_still_valid(self):
+        # Regressão: dois ciclos do mesmo cilindro (A) já eram aceitos antes
+        # deste plano e continuam sendo — parênteses não são exigidos aqui.
+        assert parse("A+B+A-B-A+A-") == [
+            ("A","+",None), ("B","+",None), ("A","-",None),
+            ("B","-",None), ("A","+",None), ("A","-",None),
+        ]
+
+
+class TestParseParallelGroups:
+    def test_simple_block(self):
+        assert parse("(A+B+)A-B-") == [
+            ("A","+",0), ("B","+",0), ("A","-",None), ("B","-",None),
+        ]
+
+    def test_single_event_block_unwraps_to_sequential(self):
+        assert parse("(A+)A-") == parse("A+A-")
+
+    def test_single_event_block_does_not_consume_a_visible_id(self):
+        events = parse("(A+B+)C+(A-)B-C-")
+        # primeiro bloco (2 eventos) usa parallel_id=0; o segundo bloco tem
+        # 1 evento só -> desembrulha para parallel_id=None, não "1"
+        assert events == [
+            ("A","+",0), ("B","+",0), ("C","+",None),
+            ("A","-",None), ("B","-",None), ("C","-",None),
+        ]
+
+    def test_second_multi_event_block_gets_incremented_id(self):
+        events = parse("(A+B+)C+(A-B-)C-")
+        # dois blocos com 2+ eventos cada -> parallel_id 0 e 1, em ordem
+        assert events == [
+            ("A","+",0), ("B","+",0), ("C","+",None),
+            ("A","-",1), ("B","-",1), ("C","-",None),
+        ]
+
+    def test_duplicate_letter_in_block_raises(self):
+        with pytest.raises(ValueError, match="repetido dentro do mesmo grupo simultâneo"):
+            parse("(A+A-)")
+
+    def test_nested_parentheses_raises(self):
+        with pytest.raises(ValueError, match="aninhados"):
+            parse("(A+(B+C+))")
+
+    def test_unbalanced_missing_close_raises(self):
+        with pytest.raises(ValueError, match=r"'\(' sem '\)' correspondente"):
+            parse("(A+B+")
+
+    def test_unbalanced_missing_open_raises(self):
+        with pytest.raises(ValueError, match=r"'\)' sem '\(' correspondente"):
+            parse("A+B+)")
 
 
 # ---------------------------------------------------------------------------

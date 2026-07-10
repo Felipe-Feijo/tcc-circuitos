@@ -329,14 +329,18 @@ def apply(data: dict) -> dict:
             # sig → OrValve (multi-ciclo): sem coluna própria — posição
             # simples baseada na 4/2 que a OrValve alvo alimenta em última
             # instância (decodificada do _role da OrValve, que já carrega a
-            # letra do cilindro). Rústico até o motor de grid genérico
-            # existir (sub-projeto futuro).
+            # letra do cilindro e o lado do pilot). Rústico até o motor de
+            # grid genérico existir (sub-projeto futuro).
             nid     = node["id"]
             or_id   = sig_to_or[nid]
             or_role = role_map.get(or_id, "")
-            letter  = or_role.split(":")[1] if or_role.startswith("or_valve:") else None
-            base_x  = cyl_col.get(letter, cyl_first_x) if letter else cyl_first_x
-            _place(node, base_x + cols.get("or_orphan_sig_offset_x", 500),
+            if or_role.startswith("or_valve:"):
+                _, letter, pilot_side, _ = or_role.split(":")
+            else:
+                letter, pilot_side = None, "PL"
+            base_x    = cyl_col.get(letter, cyl_first_x) if letter else cyl_first_x
+            side_sign = -1 if pilot_side == "PL" else 1
+            _place(node, base_x + side_sign * cols.get("or_orphan_sig_offset_x", 500),
                    rows["main_valve"] + cols.get("sig_pilot_offset_y", 0))
         elif role.startswith("or_valve:"):
             # multi-ciclo: posição simples baseada em cyl_col, sem integrar

@@ -55,6 +55,11 @@ def test_orphan_signal_valves_get_a_position():
         assert sig_id in positions
         pos = positions[sig_id]
         assert (pos["x"], pos["y"]) != (0, 0)
+    # os dois orphan sigs alimentam lados de pilot diferentes (PL vs PR) do
+    # mesmo cilindro — não podem cair na mesma posição
+    pos_ext = positions["gen-sig-B-ext-0"]
+    pos_ret = positions["gen-sig-B-ret-2"]
+    assert (pos_ext["x"], pos_ext["y"]) != (pos_ret["x"], pos_ret["y"])
 
 
 def test_three_cycle_chain_layout_does_not_crash():

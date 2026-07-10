@@ -29,6 +29,7 @@ SPRITE_SIZES: dict[str, tuple[int, int]] = {
     "PressureLine":          (71,  12),
     "Exhaust":               (33,  33),
     "PressureSource":        (29,  29),
+    "OrValve":               (130, 71),
 }
 
 # Direção de saída padrão de cada anchor
@@ -53,6 +54,9 @@ EXIT_DIR_MAP: dict[tuple[str, str], str] = {
     ("Valve_5_2_Ways",      "PL"):  "LEFT",
     ("Valve_4_2_Ways",      "PR"):  "RIGHT",
     ("Valve_5_2_Ways",      "PR"):  "RIGHT",
+    ("OrValve",              "X"):  "LEFT",
+    ("OrValve",              "Y"):  "RIGHT",
+    ("OrValve",              "A"):  "UP",
 }
 
 DIR_VEC = {"UP": (0,-1), "DOWN": (0,1), "LEFT": (-1,0), "RIGHT": (1,0)}

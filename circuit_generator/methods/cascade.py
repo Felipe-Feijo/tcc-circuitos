@@ -200,6 +200,14 @@ def generate(events: list[tuple[str, str]]) -> dict:
     #     ...
     #     sig_En.A  → mc[g].PR          (última sig → troca de grupo)
     #               ou btn.P            (se for o último grupo → fecha ciclo)
+    #
+    #   Multi-ciclo: quando o mesmo pilot de uma 4/2 recebe mais de uma fonte
+    #   de disparo (o mesmo cilindro repete a mesma direção em pontos
+    #   diferentes da sequência), as fontes são acumuladas em
+    #   `triggers_for_pilot` (passada 1) e resolvidas na passada 2 — 1 fonte
+    #   conecta direto no pilot (idêntico ao comportamento de antes deste
+    #   sub-projeto); 2+ fontes convergem através de uma cadeia binária de
+    #   válvulas OrValve (a OrValve só tem 2 entradas, X/Y).
 
     all_events_flat = [
         (g_idx, e_idx, letter, direction)
@@ -207,18 +215,21 @@ def generate(events: list[tuple[str, str]]) -> dict:
         for e_idx, (letter, direction, *_) in enumerate(group)
     ]
 
+    triggers_for_pilot: dict[tuple[str, str], list[tuple[str, str]]] = {}
+
     for flat_idx, (g_idx, e_idx, letter, direction) in enumerate(all_events_flat):
         is_first_event = (e_idx == 0)
         is_last_event  = (e_idx == len(groups[g_idx]) - 1)
         is_last_group  = (g_idx == n_groups - 1)
-        s_id           = f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}"
+        s_id           = f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}-{flat_idx}"
         v42_pilot      = "PL" if direction == "+" else "PR"
         pl_current     = pl_grp_ids[g_idx]
 
-        # Primeiro evento do grupo: barramento aciona o cilindro diretamente
+        # Primeiro evento do grupo: barramento é uma fonte de disparo do pilot
         if is_first_event:
-            connect(f"gen-v42-{letter}", v42_pilot,
-                    pl_current, next_anchor(pl_current))
+            bus_anchor = next_anchor(pl_current)
+            triggers_for_pilot.setdefault((letter, v42_pilot), []).append(
+                (pl_current, bus_anchor))
 
         # sig começa em left se o sensor que ela monitora já está ativo no estado inicial
         sig_default_side = "left" if (
@@ -245,7 +256,37 @@ def generate(events: list[tuple[str, str]]) -> dict:
                 connect(s_id, "A", "gen-btn", "P")
         else:
             next_letter, next_dir = all_events_flat[flat_idx + 1][2:4]
-            connect(s_id, "A", f"gen-v42-{next_letter}", "PL" if next_dir == "+" else "PR")
+            next_pilot = "PL" if next_dir == "+" else "PR"
+            triggers_for_pilot.setdefault((next_letter, next_pilot), []).append((s_id, "A"))
+
+    # ── 6b. Resolve as fontes de disparo acumuladas por pilot ────────────────
+    #
+    #   1 fonte  -> conecta direto no pilot, na mesma ordem de chamada de
+    #               connect() usada antes deste sub-projeto (preserva a
+    #               topologia exata para sequências de 1 ciclo por cilindro).
+    #   2+ fontes -> cadeia binária de OrValve: a saída de cada OR alimenta
+    #               a entrada livre da próxima, até a última OR alimentar o
+    #               pilot da 4/2.
+
+    for (letter, pilot_side), sources in triggers_for_pilot.items():
+        if len(sources) == 1:
+            src_id, src_anchor = sources[0]
+            if src_anchor == "A":
+                # fonte encadeada (sig.A) -> pilot da 4/2
+                connect(src_id, src_anchor, f"gen-v42-{letter}", pilot_side)
+            else:
+                # fonte direta do barramento -> pilot da 4/2 (a 4/2 é o
+                # "source" da chamada, o barramento é o "target" — mesma
+                # ordem usada antes deste sub-projeto)
+                connect(f"gen-v42-{letter}", pilot_side, src_id, src_anchor)
+        else:
+            current = sources[0]
+            for i, nxt in enumerate(sources[1:]):
+                or_id = add_simple("OrValve", f"or_valve:{letter}:{pilot_side}:{i}")
+                connect(current[0], current[1], or_id, "X")
+                connect(nxt[0], nxt[1], or_id, "Y")
+                current = (or_id, "A")
+            connect(current[0], current[1], f"gen-v42-{letter}", pilot_side)
 
     # ── 7. Pilots PL das memórias via PressureLines ──────────────────────────
     #

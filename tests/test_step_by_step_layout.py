@@ -200,12 +200,50 @@ class TestRouting:
         assert len(with_waypoints) > 0
 
     def test_pl_anchor_connections_get_waypoints_too(self):
+        """PL-touching connections need explicit `waypoints` UNLESS the
+        connection is already near-straight (dx below astar_router's
+        `< 3px` "no routing needed" shortcut) -- proximity-based anchor
+        assignment (see step_by_step_layout._nearest_pl_anchor) can pick an
+        anchor whose x lands within a pixel or two of the target's x, in
+        which case a straight vertical line *is* the correct route and the
+        router legitimately returns None instead of a waypoints list.
+        Connections whose endpoints are NOT nearly aligned in x must still
+        be routed -- if the router silently stopped routing those, this
+        assertion should catch it."""
+        from circuit_generator.sprite_metrics import METRICS as _M
+
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         pl_conns = [c for c in result["connections"]
                     if c["source"]["anchor"].startswith("X") or c["target"]["anchor"].startswith("X")]
         assert len(pl_conns) > 0
-        assert all("waypoints" in c for c in pl_conns)
+
+        nodes_by_id = {n["id"]: n for n in result["nodes"]}
+
+        def _anchor_x(node_id: str, anchor: str) -> float:
+            node = nodes_by_id[node_id]
+            x = node["position"]["x"]
+            if node["type"] == "PressureLine" and anchor.startswith("X"):
+                idx = int(anchor[1:])
+                return x + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+            local = _M.anchor_local.get(node["type"], {}).get(anchor)
+            return x + local[0] if local else x
+
+        STRAIGHT_THRESHOLD_PX = 3  # mirrors astar_router.route_connection's shortcut
+
+        needs_routing = []
+        for c in pl_conns:
+            sx = _anchor_x(c["source"]["node"], c["source"]["anchor"])
+            tx = _anchor_x(c["target"]["node"], c["target"]["anchor"])
+            if abs(sx - tx) >= STRAIGHT_THRESHOLD_PX:
+                needs_routing.append(c)
+
+        # Sanity check: this fixture must actually exercise both branches,
+        # otherwise the assertion below would be vacuous.
+        assert len(needs_routing) > 0
+        assert len(needs_routing) < len(pl_conns)
+
+        assert all("waypoints" in c for c in needs_routing)
 
 
 class TestLogicRegionColumnSpacing:

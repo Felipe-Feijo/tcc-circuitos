@@ -97,3 +97,37 @@ class TestValve32WaysPilotAnchors:
         pr_x, _ = anchors["PR"]
         assert pl_x < 0
         assert pr_x > m.v32_width
+
+
+class TestPilotSideOffsetX:
+    def test_matches_body_visuals_state1_offset_in_source(self):
+        from circuit_generator.sprite_metrics import METRICS as m
+        assert m.pilot_side_offset_x["Valve_3_2_Ways"] == 147.0
+        assert m.pilot_side_offset_x["Valve_4_2_Ways"] == 147.0
+        assert m.pilot_side_offset_x["Valve_5_2_Ways"] == 222.0
+
+
+class TestAnchorLocalForRouting:
+    def test_pr_always_gets_the_commutation_margin(self):
+        # Sempre, incondicionalmente -- não depende de default_side, já
+        # que o deslocamento de comutação só empurra PR pra direita, nunca
+        # pra esquerda, então base+offset é o pior caso em qualquer estado.
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as m
+        for node_type in ("Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways"):
+            base_pr = m.anchor_local[node_type]["PR"]
+            expected = (base_pr[0] + m.pilot_side_offset_x[node_type], base_pr[1])
+            assert anchor_local_for_routing(node_type, "PR") == expected
+
+    def test_pl_unchanged(self):
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as m
+        for node_type in ("Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways"):
+            assert anchor_local_for_routing(node_type, "PL") == m.anchor_local[node_type]["PL"]
+
+    def test_other_anchors_unchanged(self):
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as m
+        assert anchor_local_for_routing("Valve_4_2_Ways", "A") == m.anchor_local["Valve_4_2_Ways"]["A"]
+        assert anchor_local_for_routing("Valve_3_2_Ways", "P") == m.anchor_local["Valve_3_2_Ways"]["P"]
+
+    def test_unknown_anchor_returns_none(self):
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+        assert anchor_local_for_routing("Valve_4_2_Ways", "NOPE") is None

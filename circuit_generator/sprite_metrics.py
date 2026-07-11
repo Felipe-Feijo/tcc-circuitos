@@ -53,6 +53,18 @@ def _read_expandable_spacing() -> int:
     return int(m.group(1))
 
 
+def _read_body_state1_offset_x(src_path: str) -> float:
+    """
+    Lê o x de BODY_VISUALS[1]["offset"] = QPointF(<N>, 0) -- o deslocamento
+    visual do corpo da válvula direcional no estado comutado ("ativo").
+    """
+    src = Path(_ROOT / src_path).read_text(encoding="utf-8")
+    m = re.search(r'1:\s*\{.*?"offset":\s*QPointF\(([\d.]+)\s*,', src, re.DOTALL)
+    if not m:
+        raise ValueError(f"Não foi possível ler BODY_VISUALS[1]['offset'] em {src_path}")
+    return float(m.group(1))
+
+
 # ── Dataclass com todas as métricas ──────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -122,9 +134,12 @@ class SpriteMetrics:
     sig_fp_right: int = field(init=False)  # px a direita do anchor A (com shift)
     sig_spacing:  int = field(init=False)  # sig_fp_left + sig_fp_right
 
-    # Deslocamento horizontal do simbolo interno da 3/2 ao comutar.
-    # Extraido de valve_3_2_ways.py -> QPointF(147, 0).
-    V32_COMUTATION_SHIFT: int = 147
+    # Deslocamento horizontal do corpo/pilots no estado comutado ("ativo")
+    # de cada válvula direcional -- lido de BODY_VISUALS[1]["offset"] em
+    # cada arquivo gráfico. Chave = node_type. É sempre >= 0 (comutar só
+    # empurra o pilot PR pra direita, nunca pra esquerda) -- ver
+    # docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
+    pilot_side_offset_x: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
         object.__setattr__(self, "v52_sprite_cx", self.v52_width / 2)
@@ -136,7 +151,7 @@ class SpriteMetrics:
 
         v32_A_x  = self.anchor_local.get("Valve_3_2_Ways", {}).get("A", (254, 0))[0]
         fp_left  = int(v32_A_x + self.pilot_w)
-        fp_right = int((self.v32_width - v32_A_x) + self.pilot_w + self.V32_COMUTATION_SHIFT)
+        fp_right = int((self.v32_width - v32_A_x) + self.pilot_w + self.pilot_side_offset_x["Valve_3_2_Ways"])
         object.__setattr__(self, "sig_fp_left",  fp_left)
         object.__setattr__(self, "sig_fp_right", fp_right)
         object.__setattr__(self, "sig_spacing",  fp_left + fp_right)
@@ -250,6 +265,15 @@ def _load() -> SpriteMetrics:
 
     pilot_w, _    = _sprite_size("resources/actuators/pilot/pilot.png")
 
+    pilot_side_offset_x = {
+        "Valve_3_2_Ways": _read_body_state1_offset_x(
+            "graphics/items/base/nodes/directional_valve/valve_3_2_ways.py"),
+        "Valve_4_2_Ways": _read_body_state1_offset_x(
+            "graphics/items/base/nodes/directional_valve/valve_4_2_ways.py"),
+        "Valve_5_2_Ways": _read_body_state1_offset_x(
+            "graphics/items/base/nodes/directional_valve/valve_5_2_ways.py"),
+    }
+
     m = SpriteMetrics(
         pl_pix_w=pl_w,   pl_pix_h=pl_h,   pl_spacing=spacing,
         cyl_width=cyl_w, cyl_height=cyl_h,
@@ -261,6 +285,7 @@ def _load() -> SpriteMetrics:
         or_width=or_w,   or_height=or_h,
         pilot_w=pilot_w,
         anchor_local={},
+        pilot_side_offset_x=pilot_side_offset_x,
     )
     # anchor_local é frozen, então populamos via object.__setattr__
     object.__setattr__(m, "anchor_local", _build_anchor_local(m))
@@ -269,6 +294,23 @@ def _load() -> SpriteMetrics:
 
 # Singleton — carregado uma vez na importação
 METRICS: SpriteMetrics = _load()
+
+
+def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, float] | None:
+    """
+    Como METRICS.anchor_local[node_type][anchor_name], mas para PR soma
+    sempre o deslocamento de comutação -- o pior caso (mais à direita)
+    que o pilot pode ocupar em QUALQUER estado, já que comutar só empurra
+    pra direita, nunca pra esquerda. PL não precisa de ajuste (seu pior
+    caso, mais à esquerda, já é o valor sem deslocamento). Ver
+    docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
+    """
+    base = METRICS.anchor_local.get(node_type, {}).get(anchor_name)
+    if base is None:
+        return None
+    if anchor_name == "PR":
+        return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
+    return base
 
 
 if __name__ == "__main__":

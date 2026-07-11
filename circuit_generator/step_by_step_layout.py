@@ -285,4 +285,33 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(stack_row_id, k, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
+    # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ──────
+    _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
+    child_parent: dict[str, tuple[str, str]] = {}
+    for conn in data["connections"]:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        for child, parent, p_anc in [(s_id, t_id, t_anc), (t_id, s_id, s_anc)]:
+            if node_type_map.get(child) in _CHILD_ANCHOR:
+                child_parent.setdefault(child, (parent, p_anc))
+
+    gap = cols.get("anchor_child_gap", 32)
+    for child_id, (parent_id, parent_anchor) in child_parent.items():
+        parent_pos   = node_by_id[parent_id]["position"]
+        parent_local = _M.anchor_local.get(node_type_map[parent_id], {}).get(parent_anchor)
+        if parent_local is None:
+            node_by_id[child_id]["position"] = {"x": parent_pos["x"], "y": parent_pos["y"] + 100}
+            continue
+        anc_x = parent_pos["x"] + parent_local[0]
+        anc_y = parent_pos["y"] + parent_local[1]
+        child_type  = node_type_map[child_id]
+        child_local = _M.anchor_local.get(child_type, {}).get(_CHILD_ANCHOR[child_type])
+        cx = anc_x - (child_local[0] if child_local else 0.0)
+        cy = anc_y + gap
+        node_by_id[child_id]["position"] = {"x": cx, "y": cy}
+
+    # ── Limpeza final: remove _role de todos os nós ──────────────────────────
+    for node in data["nodes"]:
+        node.pop("_role", None)
+
     return data

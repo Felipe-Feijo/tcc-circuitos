@@ -132,3 +132,29 @@ class TestLogicRegion:
         positions = [(n["position"]["x"], n["position"]["y"]) for n in result["nodes"]
                      if n["type"] in ("Valve_3_2_Ways", "PressureLine")]
         assert len(positions) == len(set(positions))
+
+
+class TestChildPositioning:
+    def test_every_node_has_role_removed(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        assert all("_role" not in n for n in result["nodes"])
+
+    def test_exhaust_and_pressure_source_positioned_near_parent(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        v42_a = _node(result, "gen-v42-A")
+        exh_ids = [c["source"]["node"] for c in result["connections"]
+                   if c["target"]["node"] == "gen-v42-A" and c["target"]["anchor"] == "P"]
+        assert len(exh_ids) == 1
+        exhaust = _node(result, exh_ids[0])
+        assert exhaust["type"] == "Exhaust"
+        assert abs(exhaust["position"]["x"] - v42_a["position"]["x"]) < 500
+        assert abs(exhaust["position"]["y"] - v42_a["position"]["y"]) < 500
+
+    def test_no_node_left_at_origin_by_accident(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        at_origin = [n["id"] for n in result["nodes"]
+                     if n["position"]["x"] == 0 and n["position"]["y"] == 0]
+        assert at_origin == []

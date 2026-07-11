@@ -244,18 +244,27 @@ class TestConfirmationAndClosure:
         assert len(ids) == len(set(ids))
 
 
-class TestAnchorBudgetScaling:
-    def test_anchor_count_scales_with_number_of_atoms(self):
-        # sequência pequena (2 átomos) vs maior (4 átomos) -- a de 4
-        # átomos precisa de MAIS anchors por linha, não o mesmo número
-        # fixo de sempre.
-        data_small = sbs.generate(parse("A+A-"))
-        data_big   = sbs.generate(parse("A+B+A-B-"))
-        pl_small = next(n for n in data_small["nodes"] if n["id"] == "gen-pl-step0")
-        pl_big   = next(n for n in data_big["nodes"] if n["id"] == "gen-pl-step0")
-        assert len(pl_big["properties"]["anchors"]) > len(pl_small["properties"]["anchors"])
+class TestAnchorAllocation:
+    def test_anchor_count_equals_connections_touching_that_line(self):
+        # next_anchor() cresce a lista sob demanda -- sem chute de largura
+        # física (isso virou responsabilidade do layout, ver
+        # step_by_step_layout.py). O número final de anchors de uma PL tem
+        # que bater exatamente com o número de conexões que a tocam, nem
+        # mais nem menos.
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        pl_ids = {n["id"] for n in data["nodes"] if n["type"] == "PressureLine"}
+        for pl_id in pl_ids:
+            pl = next(n for n in data["nodes"] if n["id"] == pl_id)
+            touching = [
+                c for c in data["connections"]
+                if (c["source"]["node"] == pl_id and c["source"]["anchor"].startswith("X"))
+                or (c["target"]["node"] == pl_id and c["target"]["anchor"].startswith("X"))
+            ]
+            assert len(pl["properties"]["anchors"]) == len(touching)
 
-    def test_anchor_budget_never_drops_below_the_original_floor(self):
-        data = sbs.generate(parse("A+A-"))
-        pl0 = next(n for n in data["nodes"] if n["id"] == "gen-pl-step0")
-        assert len(pl0["properties"]["anchors"]) >= 20
+    def test_no_anchor_name_reused_within_the_same_line(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        for n in data["nodes"]:
+            if n["type"] == "PressureLine":
+                anchors = n["properties"]["anchors"]
+                assert len(anchors) == len(set(anchors))

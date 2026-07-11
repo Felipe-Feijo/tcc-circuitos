@@ -35,8 +35,6 @@ suportado -- ver `_check_no_multi_cycle` e a seção "Fora de escopo" do spec.
 import uuid
 from circuit_generator.sequence_parser import extract_cylinders
 
-_ANCHORS_PER_ATOM = 20
-
 
 def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
     """Agrupa os eventos da sequência inteira em átomos: eventos consecutivos
@@ -191,30 +189,26 @@ def generate(events: list[tuple[str, str]]) -> dict:
     pl_ids = [f"gen-pl-step{k}" for k in range(n_atoms)]
     mc_ids = [f"gen-mc-{k}" for k in range(n_atoms)]
 
-    # Orçamento de anchors escala com n_atoms: o motor de posicionamento
-    # (step_by_step_layout.py) reatribui anchors por proximidade real de
-    # pixel -- com um orçamento fixo pequeno, conexões distantes (átomos
-    # afastados) convergem todas pro mesmo anchor extremo, causando
-    # colisões que a resolução de conflito não consegue resolver.
-    # _ANCHORS_PER_ATOM continua como piso mínimo (circuitos pequenos).
-    anchors_per_atom = max(_ANCHORS_PER_ATOM, 50 * n_atoms)
-
-    _pl_counter: dict[str, int] = {}
+    # O gerador de topologia não tem nenhuma posição de tela real pra
+    # decidir quanto uma PressureLine precisa alcançar fisicamente -- só
+    # quem sabe isso é a etapa de layout (step_by_step_layout.py, via
+    # Grid.occupied_x_range). Aqui, cada PL nasce vazia e next_anchor()
+    # cresce a lista sob demanda: exatamente 1 anchor por conexão real,
+    # nunca mais, nunca menos, sem risco de esgotamento.
+    pl_node_by_id: dict[str, dict] = {}
     for k, pl_id in enumerate(pl_ids):
         add_node(pl_id, "PressureLine", f"pressure_line_step:{k}",
-                 properties={"anchors": [f"X{i}" for i in range(1, anchors_per_atom + 1)]})
-        _pl_counter[pl_id] = 1
+                 properties={"anchors": []})
+        pl_node_by_id[pl_id] = nodes[-1]
+
+    _pl_counter: dict[str, int] = {pl_id: 0 for pl_id in pl_ids}
 
     def next_anchor(pl_id: str) -> str:
-        idx = _pl_counter[pl_id]
-        _pl_counter[pl_id] = idx + 1
-        if idx > anchors_per_atom:
-            raise RuntimeError(
-                f"PressureLine {pl_id} esgotou todos os {anchors_per_atom} "
-                f"anchors. Aumente _ANCHORS_PER_ATOM ou o multiplicador de "
-                f"escala (atual={anchors_per_atom})."
-            )
-        return f"X{idx}"
+        idx = _pl_counter[pl_id] + 1
+        _pl_counter[pl_id] = idx
+        name = f"X{idx}"
+        pl_node_by_id[pl_id]["properties"]["anchors"].append(name)
+        return name
 
     for k in range(n_atoms):
         add_node(mc_ids[k], "Valve_3_2_Ways", f"memory:{k}",

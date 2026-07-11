@@ -484,11 +484,19 @@ def apply(data: dict) -> dict:
     #   soltos em vez de um barramento contínuo). Diferença do cascata:
     #   margem maior que 1 de cada lado (confirmado com o usuário).
     #
-    #   Largura final IGUAL entre todas as PLs só é garantida porque
-    #   step_by_step_pneumatic.py dá o MESMO orçamento de anchors
-    #   (anchors_per_atom, calculado uma vez por circuito) pra toda linha
-    #   -- se um dia o orçamento virar por-linha, essa garantia quebra
-    #   silenciosamente (min/max(all_idxs) divergiria entre PLs).
+    #   Largura final IGUAL entre todas as PLs não vem mais de um orçamento
+    #   de anchors dado na geração (step_by_step_pneumatic.py hoje só bota
+    #   um anchor por conexão real que toca a linha -- PLs diferentes podem
+    #   sair da topologia com contagens diferentes) -- quem garante a
+    #   igualdade agora é o passo "Dimensiona as PressureLines pelo alcance
+    #   real do grid" (mais acima nesta função), que cresce o array de
+    #   anchors de TODA PL até o mesmo `needed`, calculado a partir do mesmo
+    #   x_origin (cols["cylinder_first_x"]) e do mesmo max_x global
+    #   (Grid.occupied_x_range()) pra todas elas. Isso pressupõe que nenhuma
+    #   PL chegue da topologia já com mais anchors reais do que esse
+    #   `needed` compartilhado -- não acontece nos circuitos que este
+    #   gerador produz, e test_all_pressure_lines_share_the_same_anchor_count
+    #   (tests/test_step_by_step_layout.py) guarda o invariante.
     used_min, used_max = float("inf"), float("-inf")
     for conn in data["connections"]:
         for side in (conn["source"], conn["target"]):

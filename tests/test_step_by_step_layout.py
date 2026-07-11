@@ -133,6 +133,26 @@ class TestLogicRegion:
                      if n["type"] in ("Valve_3_2_Ways", "PressureLine")]
         assert len(positions) == len(set(positions))
 
+    def test_no_two_nodes_share_the_same_position_all_node_types(self):
+        """Every node in the generated circuit -- including Exhaust,
+        PressureSource, DoubleActingCylinder and Valve_4_2_Ways, not just
+        Valve_3_2_Ways/PressureLine -- must end up at a distinct (x, y).
+        A collision here means two sprites would render stacked on top of
+        each other in the canvas."""
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        positions = [(n["id"], n["position"]["x"], n["position"]["y"]) for n in result["nodes"]]
+        coords = [(x, y) for _, x, y in positions]
+        if len(coords) != len(set(coords)):
+            seen: dict[tuple[float, float], str] = {}
+            dupes = []
+            for nid, x, y in positions:
+                if (x, y) in seen:
+                    dupes.append((seen[(x, y)], nid, (x, y)))
+                else:
+                    seen[(x, y)] = nid
+            raise AssertionError(f"duplicate positions found: {dupes}")
+
 
 class TestChildPositioning:
     def test_every_node_has_role_removed(self):

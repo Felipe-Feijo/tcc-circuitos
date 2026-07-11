@@ -239,7 +239,10 @@ def generate(events: list[tuple[str, str]]) -> dict:
     #   PRÓXIMO átomo, ou 1 se for o último átomo do grupo (alimenta
     #   mc.PR/btn.P). Cada conjunto de confirmação é um grupo dedicado de
     #   válvulas de sinalização (mesmo sensor, mesmo P do barramento),
-    #   mescladas por uma cadeia AndValve se o átomo tem mais de um evento.
+    #   encadeadas em série se o átomo tem mais de um evento -- a 1ª sig
+    #   puxa P do barramento, as demais puxam P da saída (A) da sig
+    #   anterior (E lógico sem nenhuma AndValve; ver spec
+    #   docs/superpowers/specs/2026-07-11-serial-confirmation-no-andvalve-design.md).
     #
     #   fan_out é sempre uma consulta LOCAL ao próximo átomo apenas — nunca
     #   se acumula por trás de múltiplos átomos (só o disparo do átomo
@@ -288,7 +291,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
             # Produz `fan_out` conjuntos de confirmação independentes.
             group_outputs: list[tuple[str, str]] = []
             for conf_idx in range(fan_out):
-                completions: list[tuple[str, str]] = []
+                prev_output: tuple[str, str] | None = None
                 for e_idx, letter, direction in atom:
                     suffix      = "" if fan_out == 1 else f"-{conf_idx}"
                     role_suffix = "" if fan_out == 1 else f":{conf_idx}"
@@ -309,22 +312,14 @@ def generate(events: list[tuple[str, str]]) -> dict:
                                  "default_side": sig_default_side,
                              })
                     connect(add_simple("Exhaust", f"exhaust:sig-{g_idx * 100 + e_idx}{suffix}"), "R", s_id, "R")
-                    connect(pl_current, next_anchor(pl_current), s_id, "P")
+                    if prev_output is None:
+                        connect(pl_current, next_anchor(pl_current), s_id, "P")
+                    else:
+                        connect(prev_output[0], prev_output[1], s_id, "P")
 
-                    completions.append((s_id, "A"))
+                    prev_output = (s_id, "A")
 
-                if len(completions) == 1:
-                    group_outputs.append(completions[0])
-                else:
-                    current = completions[0]
-                    for chain_i, nxt in enumerate(completions[1:]):
-                        and_id = add_simple(
-                            "AndValve",
-                            f"and_valve:{g_idx}:{atom_idx}:{conf_idx}:{chain_i}")
-                        connect(current[0], current[1], and_id, "X")
-                        connect(nxt[0], nxt[1], and_id, "Y")
-                        current = (and_id, "A")
-                    group_outputs.append(current)
+                group_outputs.append(prev_output)
 
             if is_last_atom:
                 final_id, final_anchor = group_outputs[0]

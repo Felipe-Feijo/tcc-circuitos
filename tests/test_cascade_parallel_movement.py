@@ -109,13 +109,12 @@ class TestBlockStartsGroup:
     """"(A+B+)A-B-": o bloco é o único átomo do grupo 0 -- A e B disparados
     direto do barramento (sem duplicação de válvula, fan_out=1 para a
     confirmação, já que o bloco é ao mesmo tempo o primeiro e o último
-    átomo do grupo), fechamento via 1 AndValve."""
+    átomo do grupo), confirmação em série (sem AndValve): a sig de A puxa
+    P do barramento, a sig de B puxa P da saída de A."""
 
-    def test_exactly_one_and_valve(self):
+    def test_no_and_valve_for_this_block(self):
         data = cascade.generate(parse("(A+B+)A-B-"))
-        and_nodes = [n for n in data["nodes"] if n["type"] == "AndValve"]
-        assert len(and_nodes) == 1
-        assert and_nodes[0]["_role"] == "and_valve:0:0:0:0"
+        assert [n for n in data["nodes"] if n["type"] == "AndValve"] == []
 
     def test_a_and_b_triggered_directly_from_bus_no_duplication(self):
         data = cascade.generate(parse("(A+B+)A-B-"))
@@ -124,13 +123,16 @@ class TestBlockStartsGroup:
         assert len(a_pl) == 1 and a_pl[0]["target"]["node"] == "gen-pl-grp1"
         assert len(b_pl) == 1 and b_pl[0]["target"]["node"] == "gen-pl-grp1"
 
-    def test_and_valve_merges_a_and_b_signal_valves(self):
+    def test_confirmation_is_a_serial_chain_a_then_b(self):
         data = cascade.generate(parse("(A+B+)A-B-"))
-        and_id = next(n["id"] for n in data["nodes"] if n["type"] == "AndValve")
-        x_conn = _conns_to(data, and_id, "X")
-        y_conn = _conns_to(data, and_id, "Y")
-        assert x_conn[0]["source"]["node"] == "gen-sig-A-ext-0"
-        assert y_conn[0]["source"]["node"] == "gen-sig-B-ext-1"
+        a_out = _conns_from(data, "gen-sig-A-ext-0", "A")
+        assert len(a_out) == 1
+        assert a_out[0]["target"]["node"] == "gen-sig-B-ext-1"
+        assert a_out[0]["target"]["anchor"] == "P"
+        b_out = _conns_from(data, "gen-sig-B-ext-1", "A")
+        assert len(b_out) == 1
+        assert b_out[0]["target"]["node"] == "gen-mc-0"
+        assert b_out[0]["target"]["anchor"] == "PR"
 
     def test_no_signal_valve_duplication_for_this_block(self):
         data = cascade.generate(parse("(A+B+)A-B-"))
@@ -176,8 +178,8 @@ class TestSingleEventBeforeBlock:
 class TestChainedBlocks:
     """"(A+B+)(C+D+)A-B-C-D-": dois blocos adjacentes no mesmo grupo -- o
     primeiro precisa de 2 conjuntos de confirmação (fan_out=2, tamanho do
-    segundo bloco), cada um mesclando A+B via uma AndValve independente,
-    cada uma alimentando um evento do segundo bloco."""
+    segundo bloco), cada um encadeando A+B em série (sem AndValve), cada
+    conjunto alimentando um evento do segundo bloco."""
 
     def test_a_and_b_each_get_two_signal_valves(self):
         data = cascade.generate(parse("(A+B+)(C+D+)A-B-C-D-"))
@@ -186,31 +188,34 @@ class TestChainedBlocks:
         assert a_ids == {"gen-sig-A-ext-0-0", "gen-sig-A-ext-0-1"}
         assert b_ids == {"gen-sig-B-ext-1-0", "gen-sig-B-ext-1-1"}
 
-    def test_two_independent_and_valves_merge_first_block(self):
+    def test_no_and_valve_anywhere(self):
         data = cascade.generate(parse("(A+B+)(C+D+)A-B-C-D-"))
-        and0 = next(n for n in data["nodes"] if n.get("_role") == "and_valve:0:0:0:0")
-        and1 = next(n for n in data["nodes"] if n.get("_role") == "and_valve:0:0:1:0")
-        assert _conns_to(data, and0["id"], "X")[0]["source"]["node"] == "gen-sig-A-ext-0-0"
-        assert _conns_to(data, and0["id"], "Y")[0]["source"]["node"] == "gen-sig-B-ext-1-0"
-        assert _conns_to(data, and1["id"], "X")[0]["source"]["node"] == "gen-sig-A-ext-0-1"
-        assert _conns_to(data, and1["id"], "Y")[0]["source"]["node"] == "gen-sig-B-ext-1-1"
+        assert [n for n in data["nodes"] if n["type"] == "AndValve"] == []
 
-    def test_each_and_valve_triggers_a_different_second_block_event(self):
+    def test_two_independent_serial_chains_merge_first_block(self):
         data = cascade.generate(parse("(A+B+)(C+D+)A-B-C-D-"))
-        and0_id = next(n["id"] for n in data["nodes"] if n.get("_role") == "and_valve:0:0:0:0")
-        and1_id = next(n["id"] for n in data["nodes"] if n.get("_role") == "and_valve:0:0:1:0")
+        chain0 = _conns_from(data, "gen-sig-A-ext-0-0", "A")
+        chain1 = _conns_from(data, "gen-sig-A-ext-0-1", "A")
+        assert chain0[0]["target"]["node"] == "gen-sig-B-ext-1-0"
+        assert chain0[0]["target"]["anchor"] == "P"
+        assert chain1[0]["target"]["node"] == "gen-sig-B-ext-1-1"
+        assert chain1[0]["target"]["anchor"] == "P"
+
+    def test_each_chain_triggers_a_different_second_block_event(self):
+        data = cascade.generate(parse("(A+B+)(C+D+)A-B-C-D-"))
         c_pl = _conns_to(data, "gen-v42-C", "PL")
         d_pl = _conns_to(data, "gen-v42-D", "PL")
-        assert c_pl[0]["source"]["node"] == and0_id
-        assert d_pl[0]["source"]["node"] == and1_id
+        assert c_pl[0]["source"]["node"] == "gen-sig-B-ext-1-0"
+        assert d_pl[0]["source"]["node"] == "gen-sig-B-ext-1-1"
 
-    def test_third_and_valve_closes_the_group_merging_c_and_d(self):
+    def test_second_block_chain_closes_the_group(self):
         data = cascade.generate(parse("(A+B+)(C+D+)A-B-C-D-"))
-        and_nodes = [n for n in data["nodes"] if n["type"] == "AndValve"]
-        assert len(and_nodes) == 3
-        closing = next(n for n in data["nodes"] if n.get("_role") == "and_valve:0:1:0:0")
-        assert _conns_to(data, closing["id"], "X")[0]["source"]["node"] == "gen-sig-C-ext-2"
-        assert _conns_to(data, closing["id"], "Y")[0]["source"]["node"] == "gen-sig-D-ext-3"
+        c_out = _conns_from(data, "gen-sig-C-ext-2", "A")
+        assert c_out[0]["target"]["node"] == "gen-sig-D-ext-3"
+        assert c_out[0]["target"]["anchor"] == "P"
+        d_out = _conns_from(data, "gen-sig-D-ext-3", "A")
+        assert d_out[0]["target"]["node"] == "gen-mc-0"
+        assert d_out[0]["target"]["anchor"] == "PR"
 
 
 class TestDuplicationDoesNotPropagateBeyondImmediateNeighbor:

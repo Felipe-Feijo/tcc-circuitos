@@ -383,3 +383,49 @@ class TestPressureLineReachesEveryTarget:
                 assert ax > tx, f"{s} -> {t}: anchor x={ax} não ficou à direita do alvo x={tx}"
                 checked += 1
         assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão PR
+
+
+class TestValvePilotEntryDoesNotJump:
+    def test_v42_pl_pr_connections_enter_without_a_large_final_jump(self):
+        # Regressão: circuit_generator.astar_router.SPRITE_SIZES tinha a
+        # largura de Valve_4_2_Ways hardcoded em 447px, mas o sprite real
+        # (sprite_metrics.py, lido do PNG) tem 300px -- 147px de diferença.
+        # O retângulo de bloqueio de colisão do A* ficava 147px mais largo
+        # que a válvula de verdade, e o anchor PR (que sprite_metrics.py
+        # posiciona corretamente logo além da borda REAL do sprite) caía
+        # "dentro" desse bloqueio inflado. O roteador escapava bem mais pra
+        # longe do que precisava e desenhava um salto final enorme na
+        # horizontal pra alcançar o anchor de volta -- o fio parecia entrar
+        # pelo lado errado. Reproduzido com parse("A+A-B+B-").
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        data = step_by_step_pneumatic.generate(parse("A+A-B+B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        def anchor_x(node_id, anchor_name):
+            node = node_by_id[node_id]
+            ntype = node_type_map[node_id]
+            pos = node["position"]
+            if ntype == "PressureLine" and anchor_name.startswith("X"):
+                idx = int(anchor_name[1:])
+                return pos["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+            local = _M.anchor_local.get(ntype, {}).get(anchor_name)
+            return pos["x"] + local[0] if local else pos["x"]
+
+        checked = 0
+        for c in result["connections"]:
+            t = c["target"]
+            if t["anchor"] in ("PL", "PR") and node_type_map.get(t["node"]) == "Valve_4_2_Ways":
+                wps = c.get("waypoints")
+                if not wps:
+                    continue  # linha reta -- sem salto possível
+                last_x = wps[-1]["x"]
+                tx = anchor_x(t["node"], t["anchor"])
+                assert abs(last_x - tx) < 50, (
+                    f"{c['source']} -> {t}: aproximação final salta "
+                    f"{abs(last_x - tx):.1f}px na horizontal (last_x={last_x}, alvo_x={tx})"
+                )
+                checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 pilot PL/PR

@@ -14,6 +14,8 @@ from __future__ import annotations
 import heapq
 import math
 
+from circuit_generator.sprite_metrics import METRICS as _M
+
 CELL      = 20    # pixels por célula
 EXIT_PX   = 40    # pixels de saída antes do A* (2 células)
 TURN_COST = 8     # custo por mudança de direção
@@ -21,15 +23,24 @@ WIRE_COST = 3     # custo por passar sobre fio existente
 
 DIRS = [(0, -1), (0, 1), (-1, 0), (1, 0)]   # UP DOWN LEFT RIGHT
 
+# Fonte única de verdade: sprite_metrics.py (lê os PNGs reais). Antes, estes
+# valores eram hardcoded aqui separadamente e haviam ficado desatualizados
+# (ex: Valve_4_2_Ways com 447px em vez dos 300px reais) -- o retângulo de
+# bloqueio de colisão do A* ficava maior que o sprite de verdade, e um
+# anchor legitimamente posicionado logo além da borda real (ex: PR, que
+# sprite_metrics.py posiciona em v42_width + pilot_w) caía "dentro" desse
+# bloqueio inflado, forçando o roteador a escapar bem mais longe do que
+# necessário e depois saltar de volta -- ver
+# tests/test_astar_router.py::TestSpriteSizesMatchMetrics.
 SPRITE_SIZES: dict[str, tuple[int, int]] = {
-    "Valve_4_2_Ways":        (447, 180),
-    "Valve_5_2_Ways":        (650, 180),
-    "Valve_3_2_Ways":        (444, 180),
-    "DoubleActingCylinder":  (498, 193),
-    "PressureLine":          (71,  12),
-    "Exhaust":               (33,  33),
-    "PressureSource":        (29,  29),
-    "OrValve":               (130, 71),
+    "Valve_4_2_Ways":        (_M.v42_width, _M.v42_height),
+    "Valve_5_2_Ways":        (_M.v52_width, _M.v52_height),
+    "Valve_3_2_Ways":        (_M.v32_width, _M.v32_height),
+    "DoubleActingCylinder":  (_M.cyl_width, _M.cyl_height),
+    "PressureLine":          (_M.pl_pix_w,  _M.pl_pix_h),
+    "Exhaust":               (_M.exh_width, _M.exh_height),
+    "PressureSource":        (_M.ps_width,  _M.ps_height),
+    "OrValve":               (_M.or_width,  _M.or_height),
 }
 
 # Direção de saída padrão de cada anchor

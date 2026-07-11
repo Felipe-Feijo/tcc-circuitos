@@ -221,7 +221,10 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
         "DoubleActingCylinder": _resolve(cyl, m.cyl_width,  m.cyl_height),
         "Exhaust":              _resolve(exh, m.exh_width,  m.exh_height),
         "PressureSource":       _resolve(ps,  m.ps_width,   m.ps_height),
-        "Valve_3_2_Ways":       _resolve(v32, m.v32_width,  m.v32_height),
+        "Valve_3_2_Ways":       _resolve(v32, m.v32_width,  m.v32_height, extra={
+            "PL": (-pilot_w,              m.v32_height * pilot_y),
+            "PR": (m.v32_width + pilot_w, m.v32_height * pilot_y),
+        }),
         "Valve_4_2_Ways":       _resolve(v42, m.v42_width,  m.v42_height, extra={
             "PL": (-pilot_w,              m.v42_height * pilot_y),
             "PR": (m.v42_width + pilot_w, m.v42_height * pilot_y),

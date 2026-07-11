@@ -81,3 +81,19 @@ class TestOrValveAnchors:
         x, y = m.anchor_local["OrValve"]["A"]
         assert abs(x - 65.507) < 0.001
         assert y == 0.0
+
+
+class TestValve32WaysPilotAnchors:
+    def test_valve_3_2_ways_has_pl_and_pr(self):
+        from circuit_generator.sprite_metrics import METRICS as m
+        anchors = m.anchor_local["Valve_3_2_Ways"]
+        assert "PL" in anchors
+        assert "PR" in anchors
+
+    def test_pl_is_left_of_body_pr_is_right_of_body(self):
+        from circuit_generator.sprite_metrics import METRICS as m
+        anchors = m.anchor_local["Valve_3_2_Ways"]
+        pl_x, _ = anchors["PL"]
+        pr_x, _ = anchors["PR"]
+        assert pl_x < 0
+        assert pr_x > m.v32_width

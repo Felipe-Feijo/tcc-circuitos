@@ -421,6 +421,12 @@ def apply(data: dict) -> dict:
     #   diferentes entre linhas -- parecia pedaços soltos em vez de um
     #   barramento contínuo). Diferença do cascata: margem de 2 anchors
     #   de cada lado, não 1 (confirmado com o usuário).
+    #
+    #   Largura final IGUAL entre todas as PLs só é garantida porque
+    #   step_by_step_pneumatic.py dá o MESMO orçamento de anchors
+    #   (anchors_per_atom, calculado uma vez por circuito) pra toda linha
+    #   -- se um dia o orçamento virar por-linha, essa garantia quebra
+    #   silenciosamente (min/max(all_idxs) divergiria entre PLs).
     used_min, used_max = float("inf"), float("-inf")
     for conn in data["connections"]:
         for side in (conn["source"], conn["target"]):

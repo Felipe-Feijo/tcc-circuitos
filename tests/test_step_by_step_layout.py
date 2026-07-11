@@ -194,3 +194,43 @@ class TestRouting:
                     if c["source"]["anchor"].startswith("X") or c["target"]["anchor"].startswith("X")]
         assert len(pl_conns) > 0
         assert all("waypoints" in c for c in pl_conns)
+
+
+class TestPressureLinePruning:
+    """PressureLine nasce com _ANCHORS_PER_ATOM=20 anchors reservados
+    (step_by_step_pneumatic.py), mas cada linha de átomo só usa uns 4-6
+    de verdade. Sem poda, toda PL renderiza ~20 anchors de largura --
+    muito maior que o circuito real. O layout precisa podar pro range
+    realmente usado, mesma ideia de layout_engine.py (cascata)."""
+
+    def _used_anchor_range(self, result, pl_id):
+        idxs = []
+        for c in result["connections"]:
+            for side in (c["source"], c["target"]):
+                if side["node"] == pl_id and side["anchor"].startswith("X"):
+                    idxs.append(int(side["anchor"][1:]))
+        return min(idxs), max(idxs)
+
+    def test_pl_anchors_pruned_to_actually_used_range(self):
+        data = step_by_step_pneumatic.generate(parse("A+A-"))
+        result = layout.apply(data)
+        pl0 = next(n for n in result["nodes"] if n["id"] == "gen-pl-step0")
+        used_min, used_max = self._used_anchor_range(result, "gen-pl-step0")
+        kept = [int(a[1:]) for a in pl0["properties"]["anchors"]]
+        # mantém uma margem de 1 anchor de folga de cada lado (mesma regra
+        # do cascata), mas nunca os 20 originais.
+        assert len(kept) <= (used_max - used_min) + 3
+        assert len(kept) < 20
+
+    def test_pruned_anchors_still_cover_every_connection(self):
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        for k in range(5):
+            pl_id = f"gen-pl-step{k}"
+            pl_node = next(n for n in result["nodes"] if n["id"] == pl_id)
+            kept = {int(a[1:]) for a in pl_node["properties"]["anchors"]}
+            for c in result["connections"]:
+                for side in (c["source"], c["target"]):
+                    if side["node"] == pl_id and side["anchor"].startswith("X"):
+                        assert int(side["anchor"][1:]) in kept, (
+                            f"{pl_id} anchor {side['anchor']} usado mas podado")

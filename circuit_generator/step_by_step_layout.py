@@ -149,6 +149,37 @@ def apply(data: dict) -> dict:
         x, y2 = grid.place(f"pl_row_{k}", 0, pl_id)
         node_by_id[pl_id]["position"] = {"x": x, "y": y2}
 
+    # ── Poda dos anchors das PressureLines ───────────────────────────────────
+    #
+    #   step_by_step_pneumatic.py reserva _ANCHORS_PER_ATOM=20 anchors por
+    #   linha (margem generosa pra nunca esgotar durante a geração), mas
+    #   cada linha de átomo só usa uns 4-6 de verdade (memória alimentando
+    #   a linha, reset da memória anterior, pilot(s) do(s) evento(s),
+    #   entrada da sig de confirmação). Sem podar, toda PressureLine
+    #   renderiza com a largura de 20 anchors -- muito maior que qualquer
+    #   coisa conectada a ela. Cada PL é independente aqui (ao contrário
+    #   do cascata, que poda todas as PLs de grupo pro MESMO range usado
+    #   globalmente) -- poda cada linha pro seu próprio range usado.
+    pl_used_range: dict[str, tuple[int, int]] = {}
+    for conn in data["connections"]:
+        for side in (conn["source"], conn["target"]):
+            if side["node"] in roles["pl_by_idx"].values() and side["anchor"].startswith("X"):
+                idx = int(side["anchor"][1:])
+                lo, hi = pl_used_range.get(side["node"], (idx, idx))
+                pl_used_range[side["node"]] = (min(lo, idx), max(hi, idx))
+
+    for pl_id in roles["pl_by_idx"].values():
+        if pl_id not in pl_used_range:
+            continue
+        used_min, used_max = pl_used_range[pl_id]
+        pl_node   = node_by_id[pl_id]
+        all_idxs  = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+        keep_min  = max(min(all_idxs), used_min - 1)
+        keep_max  = min(max(all_idxs), used_max + 1)
+        pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
+        removed_left = keep_min - min(all_idxs)
+        pl_node["position"]["x"] += removed_left * _M.pl_spacing
+
     # ── Região de lógica: memória (Válvula 2) + relay (Válvula 1) ───────────
     n_atoms       = roles["n_atoms"]
     logic_cell_w  = cols["logic_cell_width"]

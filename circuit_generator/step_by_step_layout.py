@@ -337,8 +337,17 @@ def apply(data: dict) -> dict:
             fallback = anchors[0]
         return min(candidates)[1] if candidates else fallback
 
-    pl_anchor_used: dict[int, tuple[str, float, float]] = {}
-    conn_by_owner: dict[str, tuple] = {}
+    # Chaveado por (id da PressureLine, x arredondado) / (id da PressureLine,
+    # owner) -- não só pela posição X ou pelo owner isolados. Todas as
+    # PressureLines do passo a passo compartilham o mesmo x_origin (mesma
+    # coluna X0), então o mesmo índice de anchor (ex: X8) cai na MESMA
+    # posição de tela em qualquer linha -- sem o namespace por PL, uma
+    # colisão espúria entre conexões de linhas DIFERENTES (que não competem
+    # pelo mesmo anchor de verdade) podia empurrar uma conexão pra cima de
+    # outra que já estava legitimamente registrada na SUA própria linha,
+    # avaliando o heurístico "lados opostos" com o pl_y da linha ERRADA.
+    pl_anchor_used: dict[tuple[str, int], tuple[str, float, float]] = {}
+    conn_by_owner: dict[tuple[str, str], tuple] = {}
 
     def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
                            owner_y: float, conn_ref: dict, side: str,
@@ -366,10 +375,11 @@ def apply(data: dict) -> dict:
                 return anc  # sem slot livre nessa direção -- desiste, mantém
             seen = seen | {anc}
             ax = _pl_anchor_x(pl_node, anc)
-            key = round(ax)
+            key = (pl_node["id"], round(ax))
+            owner_key = (pl_node["id"], oid)
             if key not in pl_anchor_used:
                 pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid] = (cref, side, pl_node, pdir)
+                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
                 return anc
             prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
             if prev_id == oid:
@@ -387,9 +397,10 @@ def apply(data: dict) -> dict:
                 return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
             else:
                 pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid] = (cref, side, pl_node, pdir)
+                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
+                prev_owner_key = (pl_node["id"], prev_id)
                 prev_conn, prev_side, prev_pl, prev_pdir = conn_by_owner.get(
-                    prev_id, (None, None, None, 0))
+                    prev_owner_key, (None, None, None, 0))
                 if prev_conn is not None:
                     new_anc = _reg(_next(anc, prev_pdir), prev_id, prev_y, prev_conn, set(), prev_pdir)
                     prev_conn[prev_side]["anchor"] = new_anc

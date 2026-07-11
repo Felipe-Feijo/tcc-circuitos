@@ -178,3 +178,68 @@ class TestPilotWiring:
         b_pl = _conns_to(data, "gen-v42-B", "PL")
         assert len(a_pl) == 1 and a_pl[0]["source"]["node"] == "gen-pl-step1"
         assert len(b_pl) == 1 and b_pl[0]["source"]["node"] == "gen-pl-step1"
+
+
+class TestConfirmationAndClosure:
+    """Confirmação de átomo seta a memória do próximo (ou fecha o ciclo, se
+    for o último átomo). Átomos com 2+ eventos mesclam via AndValve."""
+
+    def test_simple_sequence_full_node_and_connection_counts(self):
+        # Contagem capturada rodando a implementação de referência deste
+        # plano (ver docs/superpowers/plans/2026-07-10-step-by-step-pneumatic-basic.md).
+        data = sbs.generate(parse("A+B+A-B-"))
+        assert len(data["nodes"]) == 34
+        assert len(data["connections"]) == 42
+
+    def test_simple_sequence_no_and_valve(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        assert [n for n in data["nodes"] if n["type"] == "AndValve"] == []
+
+    def test_simple_sequence_confirmation_chain(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        assert _conns_from(data, "gen-sig-A-ext-0", "A")[0]["target"]["node"] == "gen-mc-1"
+        assert _conns_from(data, "gen-sig-B-ext-1", "A")[0]["target"]["node"] == "gen-mc-2"
+        assert _conns_from(data, "gen-sig-A-ret-2", "A")[0]["target"]["node"] == "gen-mc-3"
+
+    def test_simple_sequence_closure_signals_button_never_touches_mc0(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        closure = _conns_from(data, "gen-sig-B-ret-3", "A")
+        assert len(closure) == 1
+        assert closure[0]["target"]["node"] == "gen-btn"
+        assert closure[0]["target"]["anchor"] == "P"
+        assert _conns_to(data, "gen-mc-0", "PL") == [
+            c for c in _conns_to(data, "gen-mc-0", "PL")
+            if c["source"]["node"] == "gen-btn"
+        ]
+
+    def test_parallel_sequence_full_node_and_connection_counts(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        assert len(data["nodes"]) == 47
+        assert len(data["connections"]) == 59
+
+    def test_parallel_sequence_exactly_one_and_valve(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        and_nodes = [n for n in data["nodes"] if n["type"] == "AndValve"]
+        assert len(and_nodes) == 1
+        assert and_nodes[0]["_role"] == "and_valve:1:0"
+
+    def test_parallel_sequence_and_valve_merges_both_signal_valves(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        and_id = next(n["id"] for n in data["nodes"] if n["type"] == "AndValve")
+        x_conn = _conns_to(data, and_id, "X")
+        y_conn = _conns_to(data, and_id, "Y")
+        assert x_conn[0]["source"]["node"] == "gen-sig-A-ext-1"
+        assert y_conn[0]["source"]["node"] == "gen-sig-B-ext-2"
+
+    def test_parallel_sequence_and_valve_output_sets_next_memory(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        and_id = next(n["id"] for n in data["nodes"] if n["type"] == "AndValve")
+        conns = _conns_from(data, and_id, "A")
+        assert len(conns) == 1
+        assert conns[0]["target"]["node"] == "gen-mc-2"
+        assert conns[0]["target"]["anchor"] == "PL"
+
+    def test_no_duplicate_node_ids(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))
+        ids = [n["id"] for n in data["nodes"]]
+        assert len(ids) == len(set(ids))

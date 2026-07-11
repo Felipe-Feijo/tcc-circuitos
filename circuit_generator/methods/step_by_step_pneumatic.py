@@ -12,7 +12,7 @@ usado em circuit_generator.methods.cascade: um evento sozinho, ou um bloco
                e Exhaust dedicado (porta R)
   - Por evento: 1 valve_3_2_ways de sinalização (limit_switch + spring)
                 + 1 Exhaust dedicado (porta R)
-  - AndValve mesclando confirmações quando um átomo tem 2+ eventos
+  - Confirmação em série (sem AndValve) quando um átomo tem 2+ eventos
 
 Diferente do cascata: não há grupos nem alternância de memória A/B -- cada
 átomo tem sua própria linha e memória dedicadas, nunca reaproveitadas.

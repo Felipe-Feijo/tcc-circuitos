@@ -27,6 +27,7 @@ class Grid:
         self._rows: dict[str, _Row] = {}
         self._positions: dict[str, tuple[float, float]] = {}
         self._occupant: dict[tuple[str, Hashable], str] = {}
+        self._node_cell: dict[str, tuple[str, Hashable]] = {}
 
     def add_row(self, row_id: str, cell_width: float, cell_height: float,
                 y: float, x_origin: float = 0.0) -> None:
@@ -38,24 +39,33 @@ class Grid:
     def place(self, row_id: str, column_key: Hashable, node_id: str) -> tuple[float, float]:
         """
         Aloca node_id na célula (row_id, column_key) e devolve sua posição
-        (x, y). Se column_key já foi usada nesta linha por OUTRO node_id,
-        lança ValueError (uma célula, um componente). Chamar de novo com o
-        MESMO node_id e column_key é idempotente (devolve a mesma posição).
-        Lança KeyError se row_id não foi registrado via add_row.
+        (x, y). Se column_key já foi usada nesta linha por OUTRO node_id, ou
+        se node_id já foi alocado em outra célula, lança ValueError (uma
+        célula por componente, um componente por célula). Chamar de novo com
+        a MESMA célula e o MESMO node_id é idempotente (devolve a mesma
+        posição). Lança KeyError se row_id não foi registrado via add_row.
         """
         row = self._rows[row_id]
+        cell_key = (row_id, column_key)
 
-        occupant_key = (row_id, column_key)
-        existing_occupant = self._occupant.get(occupant_key)
+        existing_occupant = self._occupant.get(cell_key)
         if existing_occupant is not None and existing_occupant != node_id:
             raise ValueError(
                 f"Célula ({row_id!r}, {column_key!r}) já ocupada por "
                 f"{existing_occupant!r}, não pode alocar {node_id!r}"
             )
 
+        existing_cell = self._node_cell.get(node_id)
+        if existing_cell is not None and existing_cell != cell_key:
+            raise ValueError(
+                f"{node_id!r} já foi alocado em {existing_cell!r}, não pode "
+                f"ser realocado em {cell_key!r}"
+            )
+
         if column_key not in row.column_index:
             row.column_index[column_key] = len(row.column_index)
-        self._occupant[occupant_key] = node_id
+        self._occupant[cell_key] = node_id
+        self._node_cell[node_id] = cell_key
 
         col_idx = row.column_index[column_key]
         x = row.x_origin + col_idx * row.cell_width

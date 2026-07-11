@@ -58,6 +58,21 @@ class TestPlace:
         pos2 = grid.place("row1", "A", "node-A")
         assert pos1 == pos2 == (0, 0)
 
+    def test_same_node_id_placed_in_two_different_cells_raises(self):
+        grid = Grid()
+        grid.add_row("row1", 500, 200, y=0)
+        grid.place("row1", "A", "node-A")
+        with pytest.raises(ValueError):
+            grid.place("row1", "B", "node-A")
+
+    def test_same_node_id_placed_in_different_row_raises(self):
+        grid = Grid()
+        grid.add_row("row1", 500, 200, y=0)
+        grid.add_row("row2", 500, 200, y=300)
+        grid.place("row1", "A", "node-A")
+        with pytest.raises(ValueError):
+            grid.place("row2", "A", "node-A")
+
     def test_same_column_key_different_rows_different_cell_widths_no_cross_alignment(self):
         grid = Grid()
         grid.add_row("wide", cell_width=600, cell_height=180, y=0)

@@ -97,3 +97,38 @@ class TestPositionOf:
         grid.add_row("row1", 500, 200, y=0)
         grid.place("row1", "A", "node-A")
         assert grid.position_of("node-A") == (0, 0)
+
+
+class TestOccupiedXRange:
+    def test_empty_grid_returns_none(self):
+        grid = Grid()
+        assert grid.occupied_x_range() is None
+
+    def test_single_node_returns_its_x_twice(self):
+        grid = Grid()
+        grid.add_row("row1", 500, 200, y=0, x_origin=100)
+        grid.place("row1", "A", "node-A")
+        assert grid.occupied_x_range() == (100, 100)
+
+    def test_min_and_max_across_multiple_rows(self):
+        grid = Grid()
+        grid.add_row("row1", 500, 200, y=0, x_origin=0)
+        grid.add_row("row2", 300, 100, y=300, x_origin=1000)
+        grid.place("row1", "A", "node-A")   # x=0
+        grid.place("row1", "B", "node-B")   # x=500
+        grid.place("row2", "A", "node-C")   # x=1000
+        assert grid.occupied_x_range() == (0, 1000)
+
+    def test_excluded_row_does_not_count(self):
+        grid = Grid()
+        grid.add_row("keep", 500, 200, y=0, x_origin=0)
+        grid.add_row("skip", 500, 200, y=300, x_origin=5000)
+        grid.place("keep", "A", "node-A")
+        grid.place("skip", "A", "node-skip")
+        assert grid.occupied_x_range(exclude_rows={"skip"}) == (0, 0)
+
+    def test_all_rows_excluded_returns_none(self):
+        grid = Grid()
+        grid.add_row("row1", 500, 200, y=0)
+        grid.place("row1", "A", "node-A")
+        assert grid.occupied_x_range(exclude_rows={"row1"}) is None

@@ -10,7 +10,7 @@ de larguras diferentes (decisão de design, ver spec).
 """
 
 from dataclasses import dataclass, field
-from typing import Hashable
+from typing import Hashable, Iterable
 
 
 @dataclass
@@ -77,3 +77,12 @@ class Grid:
         """Devolve a posição já atribuída a node_id, ou None se ainda não
         foi posicionado."""
         return self._positions.get(node_id)
+
+    def occupied_x_range(self, exclude_rows: Iterable[str] = ()) -> tuple[float, float] | None:
+        """(min_x, max_x) entre as posições já atribuídas a nós, excluindo
+        os das linhas em exclude_rows. None se nenhum nó foi posicionado
+        fora delas."""
+        exclude = set(exclude_rows)
+        xs = [x for node_id, (x, _y) in self._positions.items()
+              if self._node_cell[node_id][0] not in exclude]
+        return (min(xs), max(xs)) if xs else None

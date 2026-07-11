@@ -32,6 +32,19 @@ from circuit_generator.sprite_metrics import METRICS as _M
 
 _CONFIG_PATH = Path(__file__).parent / "step_by_step_layout_config.json"
 
+# Precisa bater com o _OFFSET de astar_router.route_connection (offset de
+# entrada aplicado na direção do anchor de destino) -- um anchor de PL
+# escolhido a menos dessa distância do X do pilot PR produz um caminho
+# apertado/ruim (jog quase nulo seguido de reentrada no próprio offset).
+_PL_ANCHOR_MIN_MARGIN = 20
+
+# Quantos anchors de sobra a poda global mantém além do range efetivamente
+# usado (used_min/used_max) em cada ponta da PressureLine -- dá ao roteador
+# espaço de manobra além da última conexão real, e no lado esquerdo
+# frequentemente não chega a remover nada (mantém a reserva inteira gerada
+# por step_by_step_pneumatic.py), o que é o objetivo.
+_PL_PRUNE_MARGIN = 8
+
 
 def _build_role_maps(data: dict) -> dict:
     """Extrai os mapas letra/índice -> node_id a partir dos _role dos nós."""
@@ -309,14 +322,15 @@ def apply(data: dict) -> dict:
         pl_x = node_pos[pl_node["id"]][0]
         return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - 1) * _M.pl_spacing
 
-    def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any") -> str:
+    def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any",
+                            min_margin: float = 0.0) -> str:
         anchors = pl_node["properties"]["anchors"]
         scored = [(int(n[1:]), _pl_anchor_x(pl_node, n), n) for n in anchors]
         if side == "left":
-            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x]
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x - min_margin]
             fallback = sorted(scored)[0][2]
         elif side == "right":
-            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x]
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x + min_margin]
             fallback = sorted(scored, reverse=True)[0][2]
         else:
             candidates = [(abs(ax - target_x), n) for _, ax, n in scored]
@@ -327,17 +341,27 @@ def apply(data: dict) -> dict:
     conn_by_owner: dict[str, tuple] = {}
 
     def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
-                           owner_y: float, conn_ref: dict, side: str) -> str:
+                           owner_y: float, conn_ref: dict, side: str,
+                           push_dir: int = 0) -> str:
+        # push_dir: direção forçada pra reempurrar em caso de colisão
+        # (+1 = sempre mais pra direita, -1 = sempre mais pra esquerda,
+        # 0 = heurística antiga baseada no meio da linha). Necessário pros
+        # casos com viés de lado (PL/PR): sem isso, uma colisão empurrava
+        # o anchor de volta em direção ao meio da PressureLine, podendo
+        # cruzar de volta pra baixo da margem mínima (ou pro lado errado
+        # do alvo) -- o "push" precisa continuar na mesma direção que
+        # motivou a escolha do lado em primeiro lugar.
         anchors = pl_node["properties"]["anchors"]
         n, mid = len(anchors), len(anchors) / 2
 
-        def _next(anc: str) -> str:
+        def _next(anc: str, direction: int) -> str:
             idx = int(anc[1:])
-            return f"X{max(1, min(n, (idx - 1) if idx <= mid else (idx + 1)))}"
+            step = direction if direction else ((-1) if idx <= mid else 1)
+            return f"X{max(1, min(n, idx + step))}"
 
         pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
 
-        def _reg(anc: str, oid: str, oy: float, cref: dict, seen: set) -> str:
+        def _reg(anc: str, oid: str, oy: float, cref: dict, seen: set, pdir: int) -> str:
             if anc in seen:
                 return anc  # sem slot livre nessa direção -- desiste, mantém
             seen = seen | {anc}
@@ -345,7 +369,7 @@ def apply(data: dict) -> dict:
             key = round(ax)
             if key not in pl_anchor_used:
                 pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid] = (cref, side, pl_node)
+                conn_by_owner[oid] = (cref, side, pl_node, pdir)
                 return anc
             prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
             if prev_id == oid:
@@ -360,17 +384,18 @@ def apply(data: dict) -> dict:
             if opp_sides and same_order:
                 return anc
             if oy >= prev_y:
-                return _reg(_next(anc), oid, oy, cref, seen)
+                return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
             else:
                 pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid] = (cref, side, pl_node)
-                prev_conn, prev_side, prev_pl = conn_by_owner.get(prev_id, (None, None, None))
+                conn_by_owner[oid] = (cref, side, pl_node, pdir)
+                prev_conn, prev_side, prev_pl, prev_pdir = conn_by_owner.get(
+                    prev_id, (None, None, None, 0))
                 if prev_conn is not None:
-                    new_anc = _reg(_next(anc), prev_id, prev_y, prev_conn, set())
+                    new_anc = _reg(_next(anc, prev_pdir), prev_id, prev_y, prev_conn, set(), prev_pdir)
                     prev_conn[prev_side]["anchor"] = new_anc
                 return anc
 
-        return _reg(anchor, owner, owner_y, conn_ref, set())
+        return _reg(anchor, owner, owner_y, conn_ref, set(), push_dir)
 
     def _target_x(node_id: str, anchor_name: str) -> float:
         ntype = node_type_map.get(node_id, "")
@@ -396,12 +421,15 @@ def apply(data: dict) -> dict:
             tgt_x = _target_x(t_id, t_anc)
             if t_anc == "PL":
                 anc = _nearest_pl_anchor(pl, tgt_x, "left")
+                push_dir = -1
             elif t_anc == "PR":
-                anc = _nearest_pl_anchor(pl, tgt_x, "right")
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
             else:
                 anc = _nearest_pl_anchor(pl, tgt_x)
+                push_dir = 0
             conn["source"]["anchor"] = _resolve_conflict(
-                pl, anc, t_id, node_pos.get(t_id, (0, 0))[1], conn, "source")
+                pl, anc, t_id, node_pos.get(t_id, (0, 0))[1], conn, "source", push_dir)
 
         elif t_id in pl_node_map and t_anc.startswith("X"):
             pl = pl_node_map[t_id]
@@ -414,13 +442,13 @@ def apply(data: dict) -> dict:
     #
     #   Todas as PLs do circuito ficam com a MESMA largura (cobrindo da
     #   primeira até a última coluna do circuito inteiro, com margem de
-    #   2 anchors de cada lado) -- mesmo espírito da poda do cascata
-    #   (Fase 3.9 de layout_engine.py), que também usa um range GLOBAL
-    #   compartilhado entre todas as PLs, não um range por-linha (poda
-    #   por-linha, tentada num sub-projeto anterior, produzia larguras
-    #   diferentes entre linhas -- parecia pedaços soltos em vez de um
-    #   barramento contínuo). Diferença do cascata: margem de 2 anchors
-    #   de cada lado, não 1 (confirmado com o usuário).
+    #   _PL_PRUNE_MARGIN anchors de cada lado) -- mesmo espírito da poda
+    #   do cascata (Fase 3.9 de layout_engine.py), que também usa um
+    #   range GLOBAL compartilhado entre todas as PLs, não um range
+    #   por-linha (poda por-linha, tentada num sub-projeto anterior,
+    #   produzia larguras diferentes entre linhas -- parecia pedaços
+    #   soltos em vez de um barramento contínuo). Diferença do cascata:
+    #   margem maior que 1 de cada lado (confirmado com o usuário).
     #
     #   Largura final IGUAL entre todas as PLs só é garantida porque
     #   step_by_step_pneumatic.py dá o MESMO orçamento de anchors
@@ -438,8 +466,8 @@ def apply(data: dict) -> dict:
     if used_min != float("inf"):
         for pl_id, pl_node in pl_node_map.items():
             all_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-            keep_min = max(min(all_idxs), used_min - 2)
-            keep_max = min(max(all_idxs), used_max + 2)
+            keep_min = max(min(all_idxs), used_min - _PL_PRUNE_MARGIN)
+            keep_max = min(max(all_idxs), used_max + _PL_PRUNE_MARGIN)
             pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
             removed_left = keep_min - min(all_idxs)
             pl_node["position"]["x"] += removed_left * _M.pl_spacing

@@ -111,6 +111,21 @@ class TestLogicRegion:
         assert sig_a["position"]["x"] == sig_b["position"]["x"]
         assert sig_a["position"]["y"] != sig_b["position"]["y"]
 
+    def test_closure_chain_tail_stacks_vertically_same_column(self):
+        # último átomo é um bloco paralelo -- fechamento tem 2 sigs em série
+        data = step_by_step_pneumatic.generate(parse("A+B+(A-B-)"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        btn = _node(result, "gen-btn")
+        sig0 = _node(result, "gen-sig-A-ret-2")
+        sig1 = _node(result, "gen-sig-B-ret-3")
+
+        assert sig0["position"] != {"x": 0, "y": 0}
+        assert sig1["position"] != {"x": 0, "y": 0}
+        assert mc0["position"]["x"] == btn["position"]["x"] == \
+            sig0["position"]["x"] == sig1["position"]["x"]
+        assert sig0["position"]["y"] != sig1["position"]["y"]
+
     def test_no_two_nodes_share_the_same_position(self):
         data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
         result = layout.apply(data)

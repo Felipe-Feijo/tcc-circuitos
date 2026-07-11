@@ -215,6 +215,20 @@ def apply(data: dict) -> dict:
     x, y = grid.place("closure_row", 0, closure_chain[0])
     node_by_id[closure_chain[0]]["position"] = {"x": x, "y": y}
 
+    # Cauda da cadeia de fechamento (quando o último átomo é um bloco
+    # paralelo, closure_chain tem 2+ sigs em série): mesma coluna que
+    # closure_row (== MC_0 == btn), empilhada 1 logic_row_gap por
+    # profundidade abaixo de closure_row -- mesmo padrão de
+    # relay_stack_N, mas ancorado em closure_row em vez de "relay".
+    for depth, sig_id in enumerate(closure_chain[1:], start=1):
+        stack_row_id = f"closure_stack_{depth}"
+        grid.add_row(stack_row_id, logic_cell_w, _M.v32_height,
+                     memory_y + closure_row_level * rows["logic_row_gap"]
+                     + depth * rows["logic_row_gap"],
+                     x_origin=memory_x0)
+        x, y = grid.place(stack_row_id, 0, sig_id)
+        node_by_id[sig_id]["position"] = {"x": x, "y": y}
+
     # Relay (Válvula 1) dos demais átomos: 1 coluna à esquerda da memória
     # que alimenta -- x_origin da linha relay = x_origin da memória menos
     # 1 cell_width, mesma ordem de átomo nas duas linhas.

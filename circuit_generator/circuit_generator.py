@@ -6,7 +6,7 @@ o resultado na cena gráfica.
 """
 
 from circuit_generator.sequence_parser import parse
-from circuit_generator.layout_engine import apply as apply_layout
+from circuit_generator import layout_engine, step_by_step_layout
 from circuit_generator.methods import cascade, step_by_step_pneumatic, step_by_step_electric
 from persistence.serializer import deserialize_scene
 from graphics.sensor_registry.sensor_registry import SensorRegistry
@@ -16,6 +16,11 @@ METHOD_MAP = {
     ("cascade",      None):          cascade.generate,
     ("step_by_step", "pneumatic"):   step_by_step_pneumatic.generate,
     ("step_by_step", "electric"):    step_by_step_electric.generate,
+}
+
+LAYOUT_MAP = {
+    ("cascade",      None):          layout_engine.apply,
+    ("step_by_step", "pneumatic"):   step_by_step_layout.apply,
 }
 
 
@@ -39,6 +44,13 @@ def generate_and_load(sequence: str, method: str, sub_type: str | None, scene, e
         raise ValueError(f"Método desconhecido: method={method!r}, sub_type={sub_type!r}")
 
     data = generator(events)   # retorna dict com _role nos nós
+
+    apply_layout = LAYOUT_MAP.get((method, sub_type))
+    if apply_layout is None:
+        raise ValueError(
+            f"Posicionamento não implementado para method={method!r}, "
+            f"sub_type={sub_type!r}"
+        )
     apply_layout(data)         # preenche position.x/y e remove _role
 
     scene.sensor_registry = SensorRegistry()

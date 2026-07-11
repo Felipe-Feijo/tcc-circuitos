@@ -178,3 +178,19 @@ class TestChildPositioning:
         at_origin = [n["id"] for n in result["nodes"]
                      if n["position"]["x"] == 0 and n["position"]["y"] == 0]
         assert at_origin == []
+
+
+class TestRouting:
+    def test_connections_get_waypoints(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        with_waypoints = [c for c in result["connections"] if "waypoints" in c]
+        assert len(with_waypoints) > 0
+
+    def test_pl_anchor_connections_get_waypoints_too(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        pl_conns = [c for c in result["connections"]
+                    if c["source"]["anchor"].startswith("X") or c["target"]["anchor"].startswith("X")]
+        assert len(pl_conns) > 0
+        assert all("waypoints" in c for c in pl_conns)

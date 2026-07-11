@@ -186,10 +186,38 @@ def apply(data: dict) -> dict:
     memory_x0     = cols["cylinder_first_x"]
     memory_y      = rows["pl_base"] + n_atoms * rows["pl_gap"] + rows["logic_row_gap"]
 
+    # Índice de coluna VIRTUAL dobrado (2k pra memória, 2k-1 pro relay que
+    # a alimenta) -- cada átomo ocupa 2 colunas dedicadas ("M + 2k", ver
+    # spec), nunca reaproveitando a coluna da memória do átomo anterior.
+    # Usar _place_aligned (definido abaixo) em vez de grid.place direto,
+    # porque a linha "memory" também fica esparsa em termos de índice
+    # virtual (só usa os pares 0,2,4,...) e por isso sofre do mesmo
+    # problema de ordem-de-chegada do Grid que motivou _place_aligned
+    # pra "relay" (ver nota mais abaixo) -- achado ao investigar um
+    # relato do usuário: o relay do átomo k estava caindo exatamente na
+    # MESMA coluna da memória do átomo k-1 (confirmado rodando o código:
+    # sig.x == mc_anterior.x), porque antes desta correção a linha
+    # "memory" avançava 1 cell_width por átomo (não 2), fazendo o relay
+    # (memory.x - 1 cell_width) coincidir com a memória anterior.
+    _reserved_cols: dict[str, set[int]] = {}
+
+    def _place_aligned(row_id: str, virtual_col: int, node_id: str) -> tuple[float, float]:
+        """grid.place, mas garante col_idx == virtual_col reservando
+        colunas anteriores ainda não usadas nesta linha com ids
+        placeholder -- Grid.place indexa por ordem de chegada, não pelo
+        valor de column_key (ver grid_layout.py)."""
+        reserved = _reserved_cols.setdefault(row_id, set())
+        for kk in range(virtual_col):
+            if kk not in reserved:
+                grid.place(row_id, kk, f"__reserved__{row_id}__{kk}__")
+                reserved.add(kk)
+        reserved.add(virtual_col)
+        return grid.place(row_id, virtual_col, node_id)
+
     grid.add_row("memory", logic_cell_w, _M.v32_height, memory_y, x_origin=memory_x0)
     for k in sorted(roles["mc_by_idx"]):
         mc_id = roles["mc_by_idx"][k]
-        x, y = grid.place("memory", k, mc_id)
+        x, y = _place_aligned("memory", 2 * k, mc_id)
         node_by_id[mc_id]["position"] = {"x": x, "y": y}
 
     chains = _build_confirmation_chains(data, roles)
@@ -260,43 +288,15 @@ def apply(data: dict) -> dict:
         x, y = grid.place(stack_row_id, 0, sig_id)
         node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
-    # Relay (Válvula 1) dos demais átomos: 1 coluna à esquerda da memória
-    # que alimenta -- x_origin da linha relay = x_origin da memória menos
-    # 1 cell_width, mesma ordem de átomo nas duas linhas.
-    #
-    # NOTA (desvio do texto literal do brief): Grid.place indexa colunas
-    # pela ORDEM DE CHEGADA dentro de cada linha (ver grid_layout.py),
-    # não pelo valor de column_key. A linha "memory" recebe k=0..n-1 sem
-    # buracos, então col_idx(k) == k ali. Mas a linha "relay" pula k=0
-    # (tratado à parte, bloco do botão), e as linhas "relay_stack_N" só
-    # recebem os k's cuja cadeia tem profundidade > N (esparso). Usar
-    # grid.place ingenuamente nessas linhas produz col_idx(k) != k, e
-    # portanto x's que NÃO se alinham com a coluna k da memória --
-    # contradizendo tanto o docstring do módulo ("relay fica sempre ...
-    # 1 coluna à esquerda da memória que alimenta") quanto os testes do
-    # próprio brief (test_relay_sig_one_column_left_of_its_memory,
-    # test_parallel_chain_stacks_vertically_same_column). Confirmado
-    # rodando os testes: os dois falhavam com exatamente esse desvio de
-    # 1 cell_width. Corrigido reservando, em cada linha, colunas
-    # "fantasma" (placeholder ids não usados em node_by_id) para todo
-    # k' < k ainda não inserido, garantindo col_idx(k) == k em todas as
-    # linhas de lógica -- sem alterar a semântica do Grid em si.
-    relay_x0 = memory_x0 - logic_cell_w
+    # Relay (Válvula 1) dos demais átomos: coluna DEDICADA (índice virtual
+    # 2k-1), 1 cell_width à esquerda da memória que alimenta (virtual 2k)
+    # e 1 cell_width à direita da memória do átomo anterior (virtual
+    # 2(k-1) = 2k-2) -- nunca reaproveita a coluna de outro bloco. Mesma
+    # x_origin da linha "memory" (não mais deslocada por -1 cell_width),
+    # já que agora o índice virtual por si só garante a posição relativa
+    # correta em ambas as direções.
     grid.add_row("relay", logic_cell_w, _M.v32_height,
-                 memory_y + rows["logic_row_gap"], x_origin=relay_x0)
-
-    _reserved_cols: dict[str, set[int]] = {}
-
-    def _place_aligned(row_id: str, k: int, node_id: str) -> tuple[float, float]:
-        """grid.place, mas garante col_idx == k reservando colunas
-        anteriores ainda não usadas nesta linha com ids placeholder."""
-        reserved = _reserved_cols.setdefault(row_id, set())
-        for kk in range(k):
-            if kk not in reserved:
-                grid.place(row_id, kk, f"__reserved__{row_id}__{kk}__")
-                reserved.add(kk)
-        reserved.add(k)
-        return grid.place(row_id, k, node_id)
+                 memory_y + rows["logic_row_gap"], x_origin=memory_x0)
 
     stack_rows_added: set[str] = set()
     for k in sorted(roles["mc_by_idx"]):
@@ -304,16 +304,16 @@ def apply(data: dict) -> dict:
             continue  # átomo 0 já tratado acima (bloco do botão)
         mc_id = roles["mc_by_idx"][k]
         sig_chain = chains[mc_id]
-        x, y = _place_aligned("relay", k, sig_chain[0])
+        x, y = _place_aligned("relay", 2 * k - 1, sig_chain[0])
         node_by_id[sig_chain[0]]["position"] = {"x": x, "y": y}
         for depth, sig_id in enumerate(sig_chain[1:], start=1):
             stack_row_id = f"relay_stack_{depth}"
             if stack_row_id not in stack_rows_added:
                 grid.add_row(stack_row_id, logic_cell_w, _M.v32_height,
                              memory_y + rows["logic_row_gap"] + depth * rows["logic_row_gap"],
-                             x_origin=relay_x0)
+                             x_origin=memory_x0)
                 stack_rows_added.add(stack_row_id)
-            x, y = _place_aligned(stack_row_id, k, sig_id)
+            x, y = _place_aligned(stack_row_id, 2 * k - 1, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
     # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ──────

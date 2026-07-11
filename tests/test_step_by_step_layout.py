@@ -103,6 +103,18 @@ class TestLogicRegion:
         assert sig["position"]["x"] == mc1["position"]["x"] - logic_cell_w
         assert sig["position"]["y"] == mc1["position"]["y"] + row_gap
 
+    def test_relay_column_is_dedicated_not_shared_with_previous_atom_memory(self):
+        # Cada átomo ocupa 2 colunas dedicadas (memória + relay), sem
+        # reaproveitar a coluna da memória do átomo anterior -- ver spec
+        # "cada átomo k ocupa a coluna M + 2k". A relay do átomo 1
+        # (confirma átomo 0, seta MC_1) NÃO pode cair na mesma coluna de
+        # MC_0 -- precisa da sua própria coluna, entre MC_0 e MC_1.
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        relay_for_mc1 = _node(result, "gen-sig-A-ext-0")
+        assert relay_for_mc1["position"]["x"] != mc0["position"]["x"]
+
     def test_parallel_chain_stacks_vertically_same_column(self):
         data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
         result = layout.apply(data)

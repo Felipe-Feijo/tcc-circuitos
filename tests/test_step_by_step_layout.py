@@ -208,46 +208,6 @@ class TestRouting:
         assert all("waypoints" in c for c in pl_conns)
 
 
-class TestPressureLinePruning:
-    """PressureLine nasce com _ANCHORS_PER_ATOM=20 anchors reservados
-    (step_by_step_pneumatic.py), mas cada linha de átomo só usa uns 4-6
-    de verdade. Sem poda, toda PL renderiza ~20 anchors de largura --
-    muito maior que o circuito real. O layout precisa podar pro range
-    realmente usado, mesma ideia de layout_engine.py (cascata)."""
-
-    def _used_anchor_range(self, result, pl_id):
-        idxs = []
-        for c in result["connections"]:
-            for side in (c["source"], c["target"]):
-                if side["node"] == pl_id and side["anchor"].startswith("X"):
-                    idxs.append(int(side["anchor"][1:]))
-        return min(idxs), max(idxs)
-
-    def test_pl_anchors_pruned_to_actually_used_range(self):
-        data = step_by_step_pneumatic.generate(parse("A+A-"))
-        result = layout.apply(data)
-        pl0 = next(n for n in result["nodes"] if n["id"] == "gen-pl-step0")
-        used_min, used_max = self._used_anchor_range(result, "gen-pl-step0")
-        kept = [int(a[1:]) for a in pl0["properties"]["anchors"]]
-        # mantém uma margem de 1 anchor de folga de cada lado (mesma regra
-        # do cascata), mas nunca os 20 originais.
-        assert len(kept) <= (used_max - used_min) + 3
-        assert len(kept) < 20
-
-    def test_pruned_anchors_still_cover_every_connection(self):
-        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
-        result = layout.apply(data)
-        for k in range(5):
-            pl_id = f"gen-pl-step{k}"
-            pl_node = next(n for n in result["nodes"] if n["id"] == pl_id)
-            kept = {int(a[1:]) for a in pl_node["properties"]["anchors"]}
-            for c in result["connections"]:
-                for side in (c["source"], c["target"]):
-                    if side["node"] == pl_id and side["anchor"].startswith("X"):
-                        assert int(side["anchor"][1:]) in kept, (
-                            f"{pl_id} anchor {side['anchor']} usado mas podado")
-
-
 class TestLogicRegionColumnSpacing:
     """logic_cell_width precisa deixar folga suficiente pro retângulo de
     bloqueio do A* de uma Valve_3_2_Ways (444px de sprite + 80px de
@@ -289,3 +249,46 @@ class TestLogicRegionColumnSpacing:
             for b in valve_nodes[i + 1:]:
                 assert not overlap(blocked_rect(a), blocked_rect(b)), (
                     f"{a['id']} e {b['id']} têm retângulos de bloqueio sobrepostos")
+
+
+class TestAnchorAssignmentByProximity:
+    def test_no_two_different_owners_share_the_same_pl_anchor(self):
+        # Verifica que, depois de apply(), nenhum anchor de PL é
+        # referenciado por 2 conexões cujo "outro lado" são componentes
+        # DIFERENTES -- isso indicaria colisão não resolvida.
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        pl_ids = {n["id"] for n in result["nodes"] if n["type"] == "PressureLine"}
+        seen: dict[tuple, set] = {}
+        for c in result["connections"]:
+            for side, other in ((c["source"], c["target"]), (c["target"], c["source"])):
+                if side["node"] in pl_ids and side["anchor"].startswith("X"):
+                    key = (side["node"], side["anchor"])
+                    seen.setdefault(key, set()).add(other["node"])
+        collisions = {k: v for k, v in seen.items() if len(v) > 1}
+        assert collisions == {}, f"anchors com múltiplos donos: {collisions}"
+
+    def test_pilot_connections_are_assigned_the_nearest_anchor(self):
+        # gen-pl-step0 alimenta gen-v42-A.PL -- o anchor escolhido deve
+        # ser o mais próximo (ou empatado) da posição X de gen-v42-A
+        # entre TODOS os anchors da linha, não um arbitrário.
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        pl0 = next(n for n in result["nodes"] if n["id"] == "gen-pl-step0")
+        v42a = next(n for n in result["nodes"] if n["id"] == "gen-v42-A")
+        conn = next(c for c in result["connections"]
+                    if c["source"]["node"] == "gen-pl-step0" and c["target"]["node"] == "gen-v42-A"
+                    and c["target"]["anchor"] == "PL")
+        chosen_idx = int(conn["source"]["anchor"][1:])
+        chosen_x = pl0["position"]["x"] + _pl_anchor_x_offset(chosen_idx)
+        target_x = v42a["position"]["x"]
+        # nenhum outro anchor da linha pode estar estritamente mais perto
+        for a in pl0["properties"]["anchors"]:
+            idx = int(a[1:])
+            ax = pl0["position"]["x"] + _pl_anchor_x_offset(idx)
+            assert abs(ax - target_x) >= abs(chosen_x - target_x) - 1e-6
+
+
+def _pl_anchor_x_offset(idx):
+    from circuit_generator.sprite_metrics import METRICS as _M
+    return _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing

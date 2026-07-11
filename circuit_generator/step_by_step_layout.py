@@ -16,10 +16,12 @@ Três regiões verticais (ver docs/superpowers/specs/
      do átomo 0 (botão + sig de fechamento), que fica na MESMA coluna
      que MC_0, empilhado verticalmente.
 
-Os anchors das PressureLines (X1, X2, ...) já foram atribuídos pelo
-gerador de topologia -- este módulo só converte esses anchors em pixels
-(mesma fórmula genérica usada por layout_engine.py), sem resolver
-conflito.
+Os anchors das PressureLines (X1, X2, ...) chegam do gerador de topologia
+com índices sequenciais arbitrários (sem noção de posição de tela) --
+este módulo os REATRIBUI por proximidade real (posição X do componente
+do outro lado de cada conexão), com resolução de conflito quando duas
+conexões disputam o mesmo anchor (mesma ideia da "Fase 3" de
+layout_engine.py, cascata).
 """
 
 import json
@@ -148,37 +150,6 @@ def apply(data: dict) -> dict:
                      x_origin=cols["cylinder_first_x"])
         x, y2 = grid.place(f"pl_row_{k}", 0, pl_id)
         node_by_id[pl_id]["position"] = {"x": x, "y": y2}
-
-    # ── Poda dos anchors das PressureLines ───────────────────────────────────
-    #
-    #   step_by_step_pneumatic.py reserva _ANCHORS_PER_ATOM=20 anchors por
-    #   linha (margem generosa pra nunca esgotar durante a geração), mas
-    #   cada linha de átomo só usa uns 4-6 de verdade (memória alimentando
-    #   a linha, reset da memória anterior, pilot(s) do(s) evento(s),
-    #   entrada da sig de confirmação). Sem podar, toda PressureLine
-    #   renderiza com a largura de 20 anchors -- muito maior que qualquer
-    #   coisa conectada a ela. Cada PL é independente aqui (ao contrário
-    #   do cascata, que poda todas as PLs de grupo pro MESMO range usado
-    #   globalmente) -- poda cada linha pro seu próprio range usado.
-    pl_used_range: dict[str, tuple[int, int]] = {}
-    for conn in data["connections"]:
-        for side in (conn["source"], conn["target"]):
-            if side["node"] in roles["pl_by_idx"].values() and side["anchor"].startswith("X"):
-                idx = int(side["anchor"][1:])
-                lo, hi = pl_used_range.get(side["node"], (idx, idx))
-                pl_used_range[side["node"]] = (min(lo, idx), max(hi, idx))
-
-    for pl_id in roles["pl_by_idx"].values():
-        if pl_id not in pl_used_range:
-            continue
-        used_min, used_max = pl_used_range[pl_id]
-        pl_node   = node_by_id[pl_id]
-        all_idxs  = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-        keep_min  = max(min(all_idxs), used_min - 1)
-        keep_max  = min(max(all_idxs), used_max + 1)
-        pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
-        removed_left = keep_min - min(all_idxs)
-        pl_node["position"]["x"] += removed_left * _M.pl_spacing
 
     # ── Região de lógica: memória (Válvula 2) + relay (Válvula 1) ───────────
     n_atoms       = roles["n_atoms"]
@@ -315,6 +286,129 @@ def apply(data: dict) -> dict:
                 stack_rows_added.add(stack_row_id)
             x, y = _place_aligned(stack_row_id, 2 * k - 1, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
+
+    # ── Reatribuição dos anchors das PressureLines por proximidade ──────────
+    #
+    #   O gerador de topologia atribui X1, X2, ... sequencialmente, sem
+    #   nenhuma noção de posição de tela -- isso produz fios que
+    #   atravessam o desenho sem necessidade (o componente mais à direita
+    #   pode ficar preso a um anchor bem à esquerda). Reatribui cada
+    #   anchor pro mais próximo da posição X real do componente do outro
+    #   lado da conexão -- mesma ideia da "Fase 3" de layout_engine.py
+    #   (cascata), com _pl_anchor_x/_nearest_pl_anchor/_resolve_conflict
+    #   copiados de lá (genéricos, sem nada específico de Valve_5_2_Ways)
+    #   e adaptados pro conjunto de conexões do passo a passo (só 4
+    #   formas, bem menos que o cascata -- não precisa da lógica de
+    #   "coluna livre" que o cascata usa pro caso sig.P, porque a região
+    #   de lógica do passo a passo está sempre abaixo de qualquer PL, sem
+    #   a ambiguidade acima/abaixo que motiva aquela função lá).
+    node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
+    pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
+
+    def _pl_anchor_x(pl_node: dict, anchor_name: str) -> float:
+        pl_x = node_pos[pl_node["id"]][0]
+        return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - 1) * _M.pl_spacing
+
+    def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any") -> str:
+        anchors = pl_node["properties"]["anchors"]
+        scored = [(int(n[1:]), _pl_anchor_x(pl_node, n), n) for n in anchors]
+        if side == "left":
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x]
+            fallback = sorted(scored)[0][2]
+        elif side == "right":
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x]
+            fallback = sorted(scored, reverse=True)[0][2]
+        else:
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored]
+            fallback = anchors[0]
+        return min(candidates)[1] if candidates else fallback
+
+    pl_anchor_used: dict[int, tuple[str, float, float]] = {}
+    conn_by_owner: dict[str, tuple] = {}
+
+    def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
+                           owner_y: float, conn_ref: dict, side: str) -> str:
+        anchors = pl_node["properties"]["anchors"]
+        n, mid = len(anchors), len(anchors) / 2
+
+        def _next(anc: str) -> str:
+            idx = int(anc[1:])
+            return f"X{max(1, min(n, (idx - 1) if idx <= mid else (idx + 1)))}"
+
+        pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
+
+        def _reg(anc: str, oid: str, oy: float, cref: dict, seen: set) -> str:
+            if anc in seen:
+                return anc  # sem slot livre nessa direção -- desiste, mantém
+            seen = seen | {anc}
+            ax = _pl_anchor_x(pl_node, anc)
+            key = round(ax)
+            if key not in pl_anchor_used:
+                pl_anchor_used[key] = (oid, oy, pl_y)
+                conn_by_owner[oid] = (cref, side, pl_node)
+                return anc
+            prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
+            if prev_id == oid:
+                return anc
+            curr_above = oy < pl_y
+            prev_above = prev_y < prev_pl_y
+            opp_sides = curr_above != prev_above
+            if pl_y != prev_pl_y:
+                same_order = (oy < prev_y) == (pl_y < prev_pl_y)
+            else:
+                same_order = True
+            if opp_sides and same_order:
+                return anc
+            if oy >= prev_y:
+                return _reg(_next(anc), oid, oy, cref, seen)
+            else:
+                pl_anchor_used[key] = (oid, oy, pl_y)
+                conn_by_owner[oid] = (cref, side, pl_node)
+                prev_conn, prev_side, prev_pl = conn_by_owner.get(prev_id, (None, None, None))
+                if prev_conn is not None:
+                    new_anc = _reg(_next(anc), prev_id, prev_y, prev_conn, set())
+                    prev_conn[prev_side]["anchor"] = new_anc
+                return anc
+
+        return _reg(anchor, owner, owner_y, conn_ref, set())
+
+    def _target_x(node_id: str, anchor_name: str) -> float:
+        ntype = node_type_map.get(node_id, "")
+        pos = node_by_id[node_id]["position"]
+        local = _M.anchor_local.get(ntype, {}).get(anchor_name)
+        return pos["x"] + local[0] if local else pos["x"]
+
+    def _conn_sort_key(c: dict) -> tuple:
+        t_id = c["target"]["node"]
+        return (0, 0) if t_id in pl_node_map else (1, 0)
+
+    connections_sorted = sorted(
+        [c for c in data["connections"] if c["source"]["node"] != c["target"]["node"]],
+        key=_conn_sort_key,
+    )
+
+    for conn in connections_sorted:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+
+        if s_id in pl_node_map and s_anc.startswith("X"):
+            pl = pl_node_map[s_id]
+            tgt_x = _target_x(t_id, t_anc)
+            if t_anc == "PL":
+                anc = _nearest_pl_anchor(pl, tgt_x, "left")
+            elif t_anc == "PR":
+                anc = _nearest_pl_anchor(pl, tgt_x, "right")
+            else:
+                anc = _nearest_pl_anchor(pl, tgt_x)
+            conn["source"]["anchor"] = _resolve_conflict(
+                pl, anc, t_id, node_pos.get(t_id, (0, 0))[1], conn, "source")
+
+        elif t_id in pl_node_map and t_anc.startswith("X"):
+            pl = pl_node_map[t_id]
+            src_x = _target_x(s_id, s_anc)
+            anc = _nearest_pl_anchor(pl, src_x)
+            conn["target"]["anchor"] = _resolve_conflict(
+                pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target")
 
     # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ──────
     _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}

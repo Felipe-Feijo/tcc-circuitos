@@ -242,3 +242,20 @@ class TestConfirmationAndClosure:
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))
         ids = [n["id"] for n in data["nodes"]]
         assert len(ids) == len(set(ids))
+
+
+class TestAnchorBudgetScaling:
+    def test_anchor_count_scales_with_number_of_atoms(self):
+        # sequência pequena (2 átomos) vs maior (4 átomos) -- a de 4
+        # átomos precisa de MAIS anchors por linha, não o mesmo número
+        # fixo de sempre.
+        data_small = sbs.generate(parse("A+A-"))
+        data_big   = sbs.generate(parse("A+B+A-B-"))
+        pl_small = next(n for n in data_small["nodes"] if n["id"] == "gen-pl-step0")
+        pl_big   = next(n for n in data_big["nodes"] if n["id"] == "gen-pl-step0")
+        assert len(pl_big["properties"]["anchors"]) > len(pl_small["properties"]["anchors"])
+
+    def test_anchor_budget_never_drops_below_the_original_floor(self):
+        data = sbs.generate(parse("A+A-"))
+        pl0 = next(n for n in data["nodes"] if n["id"] == "gen-pl-step0")
+        assert len(pl0["properties"]["anchors"]) >= 20

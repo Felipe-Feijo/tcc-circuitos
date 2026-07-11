@@ -191,19 +191,28 @@ def generate(events: list[tuple[str, str]]) -> dict:
     pl_ids = [f"gen-pl-step{k}" for k in range(n_atoms)]
     mc_ids = [f"gen-mc-{k}" for k in range(n_atoms)]
 
+    # Orçamento de anchors escala com n_atoms: o motor de posicionamento
+    # (step_by_step_layout.py) reatribui anchors por proximidade real de
+    # pixel -- com um orçamento fixo pequeno, conexões distantes (átomos
+    # afastados) convergem todas pro mesmo anchor extremo, causando
+    # colisões que a resolução de conflito não consegue resolver.
+    # _ANCHORS_PER_ATOM continua como piso mínimo (circuitos pequenos).
+    anchors_per_atom = max(_ANCHORS_PER_ATOM, 50 * n_atoms)
+
     _pl_counter: dict[str, int] = {}
     for k, pl_id in enumerate(pl_ids):
         add_node(pl_id, "PressureLine", f"pressure_line_step:{k}",
-                 properties={"anchors": [f"X{i}" for i in range(1, _ANCHORS_PER_ATOM + 1)]})
+                 properties={"anchors": [f"X{i}" for i in range(1, anchors_per_atom + 1)]})
         _pl_counter[pl_id] = 1
 
     def next_anchor(pl_id: str) -> str:
         idx = _pl_counter[pl_id]
         _pl_counter[pl_id] = idx + 1
-        if idx > _ANCHORS_PER_ATOM:
+        if idx > anchors_per_atom:
             raise RuntimeError(
-                f"PressureLine {pl_id} esgotou todos os {_ANCHORS_PER_ATOM} "
-                f"anchors. Aumente _ANCHORS_PER_ATOM (atual={_ANCHORS_PER_ATOM})."
+                f"PressureLine {pl_id} esgotou todos os {anchors_per_atom} "
+                f"anchors. Aumente _ANCHORS_PER_ATOM ou o multiplicador de "
+                f"escala (atual={anchors_per_atom})."
             )
         return f"X{idx}"
 

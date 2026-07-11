@@ -234,3 +234,46 @@ class TestPressureLinePruning:
                     if side["node"] == pl_id and side["anchor"].startswith("X"):
                         assert int(side["anchor"][1:]) in kept, (
                             f"{pl_id} anchor {side['anchor']} usado mas podado")
+
+
+class TestLogicRegionColumnSpacing:
+    """logic_cell_width precisa deixar folga suficiente pro retângulo de
+    bloqueio do A* de uma Valve_3_2_Ways (444px de sprite + 80px de
+    margem de cada lado, ver astar_router.py) não se sobrepor ao da
+    coluna adjacente -- mesma classe de problema já corrigida pra
+    group_gap na região de pistões (Task 4)."""
+
+    def test_logic_cell_width_clears_valve_blocking_rect_with_margin(self):
+        import json
+        from circuit_generator.astar_router import SPRITE_SIZES
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        logic_cell_w = cfg["columns"]["logic_cell_width"]
+        v32_w, _ = SPRITE_SIZES["Valve_3_2_Ways"]
+        MH = 80  # margem horizontal aplicada pelo astar_router pra válvulas
+        blocked_w = v32_w + 2 * MH
+        # folga mínima exigida entre colunas adjacentes -- não só "não
+        # sobrepor" (folga > 0), mas uma folga real e generosa.
+        assert logic_cell_w - blocked_w >= 300
+
+    def test_relay_and_adjacent_memory_dont_overlap(self):
+        # C+(A+B+)C-A-B-: MC_2 tem relay de 2 níveis (bloco paralelo),
+        # bom caso de estresse pra colunas adjacentes.
+        from circuit_generator.astar_router import SPRITE_SIZES
+        v32_w, v32_h = SPRITE_SIZES["Valve_3_2_Ways"]
+        MH = 80
+
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        valve_nodes = [n for n in result["nodes"] if n["type"] == "Valve_3_2_Ways"]
+
+        def blocked_rect(n):
+            x, y = n["position"]["x"], n["position"]["y"]
+            return (x - MH, y, x + v32_w + MH, y + v32_h)
+
+        def overlap(r1, r2):
+            return not (r1[2] <= r2[0] or r2[2] <= r1[0] or r1[3] <= r2[1] or r2[3] <= r1[1])
+
+        for i, a in enumerate(valve_nodes):
+            for b in valve_nodes[i + 1:]:
+                assert not overlap(blocked_rect(a), blocked_rect(b)), (
+                    f"{a['id']} e {b['id']} têm retângulos de bloqueio sobrepostos")

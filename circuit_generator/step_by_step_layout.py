@@ -25,6 +25,7 @@ layout_engine.py, cascata).
 """
 
 import json
+import math
 from pathlib import Path
 
 from circuit_generator.grid_layout import Grid
@@ -300,6 +301,31 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(stack_row_id, 2 * k - 1, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
+    node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
+    pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
+
+    # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
+    #
+    #   step_by_step_pneumatic.py não tem nenhuma posição de tela real pra
+    #   decidir quantos anchors uma PressureLine precisa -- só quem sabe é
+    #   esta etapa, via Grid (que já posicionou toda região de pistões/
+    #   válvulas/lógica acima). Cresce (nunca encolhe) o array de anchors
+    #   de cada PL até alcançar fisicamente o componente mais à direita de
+    #   todo o circuito -- a poda global (mais abaixo, já existente) corta
+    #   de volta pro range realmente usado + margem, então superestimar
+    #   aqui não deixa a PressureLine final maior que o necessário.
+    pl_row_ids = {f"pl_row_{k}" for k in roles["pl_by_idx"]}
+    x_range = grid.occupied_x_range(exclude_rows=pl_row_ids)
+    if x_range is not None:
+        _, max_x = x_range
+        reach_margin = cols["logic_cell_width"]
+        for pl_id, pl_node in pl_node_map.items():
+            needed = max(1, math.ceil(
+                (max_x + reach_margin - pl_node["position"]["x"] - _M.pl_pix_w / 2) / _M.pl_spacing
+            ) + 1)
+            if needed > len(pl_node["properties"]["anchors"]):
+                pl_node["properties"]["anchors"] = [f"X{i}" for i in range(1, needed + 1)]
+
     # ── Reatribuição dos anchors das PressureLines por proximidade ──────────
     #
     #   O gerador de topologia atribui X1, X2, ... sequencialmente, sem
@@ -315,9 +341,6 @@ def apply(data: dict) -> dict:
     #   "coluna livre" que o cascata usa pro caso sig.P, porque a região
     #   de lógica do passo a passo está sempre abaixo de qualquer PL, sem
     #   a ambiguidade acima/abaixo que motiva aquela função lá).
-    node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
-    pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
-
     def _pl_anchor_x(pl_node: dict, anchor_name: str) -> float:
         pl_x = node_pos[pl_node["id"]][0]
         return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - 1) * _M.pl_spacing

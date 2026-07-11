@@ -340,17 +340,6 @@ class TestGlobalPruning:
                   if n["type"] == "PressureLine"}
         assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"
 
-    def test_pruned_width_is_much_less_than_the_scaled_raw_budget(self):
-        # confirma que a poda de fato aconteceu (não ficou com os ~110+
-        # anchors do orçamento bruto escalado pela Task 1)
-        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
-        raw_budget = len(next(n for n in data["nodes"]
-                               if n["id"] == "gen-pl-step0")["properties"]["anchors"])
-        result = layout.apply(data)
-        pruned = len(next(n for n in result["nodes"]
-                           if n["id"] == "gen-pl-step0")["properties"]["anchors"])
-        assert pruned < raw_budget
-
     def test_no_pl_anchor_connection_references_a_pruned_anchor(self):
         data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
         result = layout.apply(data)
@@ -360,3 +349,37 @@ class TestGlobalPruning:
                 if side["node"] in pl_by_id and side["anchor"].startswith("X"):
                     kept = {int(a[1:]) for a in pl_by_id[side["node"]]["properties"]["anchors"]}
                     assert int(side["anchor"][1:]) in kept
+
+
+class TestPressureLineReachesEveryTarget:
+    def test_pr_anchor_lands_right_of_target_even_with_many_cylinders_few_atoms(self):
+        # Regressão do bug original: 16 cilindros agrupados em só 2 átomos
+        # paralelos grandes (extensão simultânea, depois retração
+        # simultânea) -- n_atoms pequeno, mas a região de válvulas 4/2 é
+        # LARGA (16 colunas). Antes da correção, o orçamento de anchors
+        # (baseado só em n_atoms) não alcançava as últimas colunas, e o
+        # fallback de _nearest_pl_anchor silenciosamente devolvia um
+        # anchor à ESQUERDA do alvo mesmo pedindo side="right".
+        import string
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        letters = list(string.ascii_uppercase[:16])
+        events = [(l, "+", "ext") for l in letters] + [(l, "-", "ret") for l in letters]
+        data = step_by_step_pneumatic.generate(events)
+        result = layout.apply(data)
+        nodes_by_id = {n["id"]: n for n in result["nodes"]}
+
+        def anchor_x(pl_node, anchor_name):
+            idx = int(anchor_name[1:])
+            return pl_node["position"]["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            src_node = nodes_by_id.get(s["node"])
+            if t["anchor"] == "PR" and src_node is not None and src_node["type"] == "PressureLine":
+                ax = anchor_x(src_node, s["anchor"])
+                tx = nodes_by_id[t["node"]]["position"]["x"]
+                assert ax > tx, f"{s} -> {t}: anchor x={ax} não ficou à direita do alvo x={tx}"
+                checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão PR

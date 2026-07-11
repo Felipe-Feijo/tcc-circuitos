@@ -410,6 +410,35 @@ def apply(data: dict) -> dict:
             conn["target"]["anchor"] = _resolve_conflict(
                 pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target")
 
+    # ── Poda global das PressureLines ────────────────────────────────────
+    #
+    #   Todas as PLs do circuito ficam com a MESMA largura (cobrindo da
+    #   primeira até a última coluna do circuito inteiro, com margem de
+    #   2 anchors de cada lado) -- mesmo espírito da poda do cascata
+    #   (Fase 3.9 de layout_engine.py), que também usa um range GLOBAL
+    #   compartilhado entre todas as PLs, não um range por-linha (poda
+    #   por-linha, tentada num sub-projeto anterior, produzia larguras
+    #   diferentes entre linhas -- parecia pedaços soltos em vez de um
+    #   barramento contínuo). Diferença do cascata: margem de 2 anchors
+    #   de cada lado, não 1 (confirmado com o usuário).
+    used_min, used_max = float("inf"), float("-inf")
+    for conn in data["connections"]:
+        for side in (conn["source"], conn["target"]):
+            if side["node"] in pl_node_map and side["anchor"].startswith("X"):
+                idx = int(side["anchor"][1:])
+                used_min = min(used_min, idx)
+                used_max = max(used_max, idx)
+
+    if used_min != float("inf"):
+        for pl_id, pl_node in pl_node_map.items():
+            all_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+            keep_min = max(min(all_idxs), used_min - 2)
+            keep_max = min(max(all_idxs), used_max + 2)
+            pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
+            removed_left = keep_min - min(all_idxs)
+            pl_node["position"]["x"] += removed_left * _M.pl_spacing
+            node_pos[pl_id] = (pl_node["position"]["x"], pl_node["position"]["y"])
+
     # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ──────
     _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
     child_parent: dict[str, tuple[str, str]] = {}

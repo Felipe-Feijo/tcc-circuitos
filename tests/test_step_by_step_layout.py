@@ -330,3 +330,33 @@ class TestAnchorAssignmentByProximity:
 def _pl_anchor_x_offset(idx):
     from circuit_generator.sprite_metrics import METRICS as _M
     return _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+
+
+class TestGlobalPruning:
+    def test_all_pressure_lines_share_the_same_anchor_count(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        counts = {len(n["properties"]["anchors"]) for n in result["nodes"]
+                  if n["type"] == "PressureLine"}
+        assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"
+
+    def test_pruned_width_is_much_less_than_the_scaled_raw_budget(self):
+        # confirma que a poda de fato aconteceu (não ficou com os ~110+
+        # anchors do orçamento bruto escalado pela Task 1)
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        raw_budget = len(next(n for n in data["nodes"]
+                               if n["id"] == "gen-pl-step0")["properties"]["anchors"])
+        result = layout.apply(data)
+        pruned = len(next(n for n in result["nodes"]
+                           if n["id"] == "gen-pl-step0")["properties"]["anchors"])
+        assert pruned < raw_budget
+
+    def test_no_pl_anchor_connection_references_a_pruned_anchor(self):
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        pl_by_id = {n["id"]: n for n in result["nodes"] if n["type"] == "PressureLine"}
+        for c in result["connections"]:
+            for side in (c["source"], c["target"]):
+                if side["node"] in pl_by_id and side["anchor"].startswith("X"):
+                    kept = {int(a[1:]) for a in pl_by_id[side["node"]]["properties"]["anchors"]}
+                    assert int(side["anchor"][1:]) in kept

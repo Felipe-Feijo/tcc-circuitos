@@ -154,3 +154,27 @@ class TestAtomLinesAndMemory:
         assert mc["gen-mc-3"]["properties"]["default_side"] == "left"
         for k in range(3):
             assert mc[f"gen-mc-{k}"]["properties"]["default_side"] == "right"
+
+
+class TestPilotWiring:
+    """Cada evento do átomo aciona o pilot da sua 4/2 direto da linha do
+    átomo -- inclusive em blocos paralelos, sem duplicação."""
+
+    def test_single_event_atom_triggers_its_pilot(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        conns = _conns_to(data, "gen-v42-A", "PL")
+        assert len(conns) == 1
+        assert conns[0]["source"]["node"] == "gen-pl-step0"
+
+    def test_retraction_uses_pr_pilot(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        conns = _conns_to(data, "gen-v42-A", "PR")
+        assert len(conns) == 1
+        assert conns[0]["source"]["node"] == "gen-pl-step2"
+
+    def test_parallel_block_feeds_both_pilots_from_same_line_no_duplication(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))  # bloco (A+B+) é o átomo 1
+        a_pl = _conns_to(data, "gen-v42-A", "PL")
+        b_pl = _conns_to(data, "gen-v42-B", "PL")
+        assert len(a_pl) == 1 and a_pl[0]["source"]["node"] == "gen-pl-step1"
+        assert len(b_pl) == 1 and b_pl[0]["source"]["node"] == "gen-pl-step1"

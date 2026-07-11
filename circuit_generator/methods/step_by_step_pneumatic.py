@@ -230,6 +230,21 @@ def generate(events: list[tuple[str, str]]) -> dict:
     # Única fonte de SET do átomo 0: o botão.
     connect("gen-btn", "A", mc_ids[0], "PL")
 
+    # ── 5. Pilots das 4/2 alimentados direto pela linha do átomo ─────────
+    #
+    #   Cada evento do átomo aciona o pilot correspondente da sua 4/2
+    #   direto da linha do átomo -- sem duplicação (um único tap por
+    #   evento), inclusive quando o átomo é um bloco "(...)" com 2+
+    #   eventos: a linha aceita quantos taps quiser, então alimentar 2+
+    #   pilots ao mesmo tempo não exige nenhuma válvula extra (ao contrário
+    #   do cascata, que precisa de fan_out/AndValve só pra isso).
+
+    for k, atom in enumerate(atoms):
+        pl_id = pl_ids[k]
+        for e_idx, letter, direction in atom:
+            v42_pilot = "PL" if direction == "+" else "PR"
+            connect(pl_id, next_anchor(pl_id), f"gen-v42-{letter}", v42_pilot)
+
     return {
         "version":     1,
         "nodes":       nodes,

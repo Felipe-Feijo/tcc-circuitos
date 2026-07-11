@@ -52,3 +52,68 @@ class TestPistonValveRegion:
         cyl_a = _node(result, "gen-cyl-A")
         v42_a = _node(result, "gen-v42-A")
         assert cyl_a["position"]["y"] < v42_a["position"]["y"]
+
+
+class TestConfirmationChains:
+    def test_simple_sequence_all_chains_have_one_sig(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        roles = layout._build_role_maps(data)
+        chains = layout._build_confirmation_chains(data, roles)
+        # 3 memórias (1,2,3) + 1 fechamento (btn) = 4 cadeias, 1 sig cada
+        assert len(chains) == 4
+        for target, sig_chain in chains.items():
+            assert len(sig_chain) == 1
+
+    def test_parallel_block_chain_has_two_sigs_in_order(self):
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        roles = layout._build_role_maps(data)
+        chains = layout._build_confirmation_chains(data, roles)
+        # a cadeia que alimenta gen-mc-2 vem do bloco (A+B+) -- 2 sigs
+        chain = chains[roles["mc_by_idx"][2]]
+        assert chain == ["gen-sig-A-ext-1", "gen-sig-B-ext-2"]
+
+    def test_closure_chain_targets_button(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        roles = layout._build_role_maps(data)
+        chains = layout._build_confirmation_chains(data, roles)
+        assert roles["btn_id"] in chains
+        assert chains[roles["btn_id"]] == ["gen-sig-B-ret-3"]
+
+
+class TestLogicRegion:
+    def test_mc0_button_closure_sig_share_same_column(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        btn = _node(result, "gen-btn")
+        closure_sig = _node(result, "gen-sig-B-ret-3")
+        assert mc0["position"]["x"] == btn["position"]["x"] == closure_sig["position"]["x"]
+        assert mc0["position"]["y"] < btn["position"]["y"] < closure_sig["position"]["y"]
+
+    def test_relay_sig_one_column_left_of_its_memory(self):
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        logic_cell_w = cfg["columns"]["logic_cell_width"]
+        row_gap      = cfg["rows"]["logic_row_gap"]
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc1 = _node(result, "gen-mc-1")
+        sig  = _node(result, "gen-sig-A-ext-0")  # confirma átomo 0, seta MC_1
+        assert sig["position"]["x"] == mc1["position"]["x"] - logic_cell_w
+        assert sig["position"]["y"] == mc1["position"]["y"] + row_gap
+
+    def test_parallel_chain_stacks_vertically_same_column(self):
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        sig_a = _node(result, "gen-sig-A-ext-1")
+        sig_b = _node(result, "gen-sig-B-ext-2")
+        assert sig_a["position"]["x"] == sig_b["position"]["x"]
+        assert sig_a["position"]["y"] != sig_b["position"]["y"]
+
+    def test_no_two_nodes_share_the_same_position(self):
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+        positions = [(n["position"]["x"], n["position"]["y"]) for n in result["nodes"]
+                     if n["type"] in ("Valve_3_2_Ways", "PressureLine")]
+        assert len(positions) == len(set(positions))

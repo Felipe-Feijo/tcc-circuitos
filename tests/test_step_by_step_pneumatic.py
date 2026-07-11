@@ -101,3 +101,56 @@ class TestBoilerplate:
         assert btn["type"] == "Valve_3_2_Ways"
         assert btn["properties"]["actuators"]["left"]["type"] == "button"
         assert len(_conns_to(data, "gen-btn", "R")) == 1
+
+
+class TestAtomLinesAndMemory:
+    """Uma PressureLine + uma memória Valve_3_2_Ways biestável por átomo,
+    nunca compartilhadas. Reset em anel; só o botão seta MC_0."""
+
+    def test_one_pressure_line_and_memory_per_atom(self):
+        data = sbs.generate(parse("A+B+A-B-"))  # 4 átomos de 1 evento
+        pl_ids = {n["id"] for n in data["nodes"] if n["type"] == "PressureLine"}
+        mc_ids = {n["id"] for n in data["nodes"]
+                  if n["type"] == "Valve_3_2_Ways" and n["_role"].startswith("memory:")}
+        assert pl_ids == {"gen-pl-step0", "gen-pl-step1", "gen-pl-step2", "gen-pl-step3"}
+        assert mc_ids == {"gen-mc-0", "gen-mc-1", "gen-mc-2", "gen-mc-3"}
+
+    def test_parallel_block_is_a_single_atom_with_one_line(self):
+        data = sbs.generate(parse("C+(A+B+)C-A-B-"))  # 5 átomos: C+, (A+B+), C-, A-, B-
+        pl_ids = {n["id"] for n in data["nodes"] if n["type"] == "PressureLine"}
+        assert pl_ids == {f"gen-pl-step{k}" for k in range(5)}
+
+    def test_memory_has_dedicated_pressure_source_and_exhaust(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        p_source = _conns_to(data, "gen-mc-0", "P")
+        r_exhaust = _conns_from(data, "gen-mc-0", "R")
+        assert len(p_source) == 1 and p_source[0]["source"]["node"] != "gen-mc-0"
+        assert len(r_exhaust) == 1
+
+    def test_memory_output_feeds_its_own_line(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        conns = _conns_from(data, "gen-mc-0", "A")
+        assert len(conns) == 1
+        assert conns[0]["target"]["node"] == "gen-pl-step0"
+
+    def test_button_sets_only_atom_zero(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        conns = _conns_from(data, "gen-btn", "A")
+        assert len(conns) == 1
+        assert conns[0]["target"]["node"] == "gen-mc-0"
+        assert conns[0]["target"]["anchor"] == "PL"
+
+    def test_reset_ring_wraps_last_atom_to_first_line(self):
+        data = sbs.generate(parse("A+B+A-B-"))  # 4 átomos: 0,1,2,3
+        for k in range(4):
+            expected_source_pl = f"gen-pl-step{(k + 1) % 4}"
+            conns = _conns_to(data, f"gen-mc-{k}", "PR")
+            assert len(conns) == 1
+            assert conns[0]["source"]["node"] == expected_source_pl
+
+    def test_last_memory_defaults_active_all_others_rest(self):
+        data = sbs.generate(parse("A+B+A-B-"))
+        mc = {n["id"]: n for n in data["nodes"] if n["id"].startswith("gen-mc-")}
+        assert mc["gen-mc-3"]["properties"]["default_side"] == "left"
+        for k in range(3):
+            assert mc[f"gen-mc-{k}"]["properties"]["default_side"] == "right"

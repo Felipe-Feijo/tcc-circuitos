@@ -174,6 +174,62 @@ def generate(events: list[tuple[str, str]]) -> dict:
              })
     connect(add_simple("Exhaust", "exhaust:btn-R"), "R", "gen-btn", "R")
 
+    # ── 4. Linhas de pressão e memórias por átomo ────────────────────────
+    #
+    #   Cada átomo (`_atomize`) ganha sua própria PressureLine dedicada e
+    #   sua própria válvula de memória biestável (Valve_3_2_Ways com dois
+    #   pilots pneumáticos) -- nunca compartilhadas entre átomos, ao
+    #   contrário do cascata. Reset em anel: MC_k.PR vem da linha do
+    #   PRÓXIMO átomo (módulo M), então o reset do último átomo vem da
+    #   linha do átomo 0, fechando o anel sem caso especial. Só o botão
+    #   seta MC_0 -- todas as outras memórias são setadas pela confirmação
+    #   do átomo anterior (Task 4).
+
+    atoms   = _atomize(events)
+    n_atoms = len(atoms)
+
+    pl_ids = [f"gen-pl-step{k}" for k in range(n_atoms)]
+    mc_ids = [f"gen-mc-{k}" for k in range(n_atoms)]
+
+    _pl_counter: dict[str, int] = {}
+    for k, pl_id in enumerate(pl_ids):
+        add_node(pl_id, "PressureLine", f"pressure_line_step:{k}",
+                 properties={"anchors": [f"X{i}" for i in range(1, _ANCHORS_PER_ATOM + 1)]})
+        _pl_counter[pl_id] = 1
+
+    def next_anchor(pl_id: str) -> str:
+        idx = _pl_counter[pl_id]
+        _pl_counter[pl_id] = idx + 1
+        if idx > _ANCHORS_PER_ATOM:
+            raise RuntimeError(
+                f"PressureLine {pl_id} esgotou todos os {_ANCHORS_PER_ATOM} "
+                f"anchors. Aumente _ANCHORS_PER_ATOM (atual={_ANCHORS_PER_ATOM})."
+            )
+        return f"X{idx}"
+
+    for k in range(n_atoms):
+        add_node(mc_ids[k], "Valve_3_2_Ways", f"memory:{k}",
+                 properties={
+                     "actuators": {
+                         "left":  {"type": "pneumatic_pilot"},
+                         "right": {"type": "pneumatic_pilot"},
+                     },
+                     "default_side": "left" if k == n_atoms - 1 else "right",
+                 })
+        ps_mc  = add_simple("PressureSource", f"pressure_source:mc-{k}")
+        exh_mc = add_simple("Exhaust", f"exhaust:mc-{k}")
+        connect(ps_mc, "P", mc_ids[k], "P")
+        connect(mc_ids[k], "R", exh_mc, "R")
+        connect(mc_ids[k], "A", pl_ids[k], next_anchor(pl_ids[k]))
+
+    # Reset em anel: MC_k.PR ← linha do próximo átomo.
+    for k in range(n_atoms):
+        pr_source = pl_ids[(k + 1) % n_atoms]
+        connect(pr_source, next_anchor(pr_source), mc_ids[k], "PR")
+
+    # Única fonte de SET do átomo 0: o botão.
+    connect("gen-btn", "A", mc_ids[0], "PL")
+
     return {
         "version":     1,
         "nodes":       nodes,

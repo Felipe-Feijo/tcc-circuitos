@@ -213,31 +213,30 @@ class TestConfirmationAndClosure:
         ]
 
     def test_parallel_sequence_full_node_and_connection_counts(self):
+        # Contagem atualizada: sem AndValve, a confirmação do bloco
+        # paralelo usa 1 conexão a menos (sig->sig em vez de 2 conexões
+        # X/Y + 1 de saída da AND) e 1 nó a menos (a própria AndValve).
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))
-        assert len(data["nodes"]) == 47
-        assert len(data["connections"]) == 59
+        assert len(data["nodes"]) == 46
+        assert len(data["connections"]) == 57
 
-    def test_parallel_sequence_exactly_one_and_valve(self):
+    def test_parallel_sequence_no_and_valve(self):
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))
-        and_nodes = [n for n in data["nodes"] if n["type"] == "AndValve"]
-        assert len(and_nodes) == 1
-        assert and_nodes[0]["_role"] == "and_valve:1:0"
+        assert [n for n in data["nodes"] if n["type"] == "AndValve"] == []
 
-    def test_parallel_sequence_and_valve_merges_both_signal_valves(self):
+    def test_parallel_sequence_confirmation_is_serial_chain(self):
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))
-        and_id = next(n["id"] for n in data["nodes"] if n["type"] == "AndValve")
-        x_conn = _conns_to(data, and_id, "X")
-        y_conn = _conns_to(data, and_id, "Y")
-        assert x_conn[0]["source"]["node"] == "gen-sig-A-ext-1"
-        assert y_conn[0]["source"]["node"] == "gen-sig-B-ext-2"
+        a_out = _conns_from(data, "gen-sig-A-ext-1", "A")
+        assert len(a_out) == 1
+        assert a_out[0]["target"]["node"] == "gen-sig-B-ext-2"
+        assert a_out[0]["target"]["anchor"] == "P"
 
-    def test_parallel_sequence_and_valve_output_sets_next_memory(self):
+    def test_parallel_sequence_chain_output_sets_next_memory(self):
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))
-        and_id = next(n["id"] for n in data["nodes"] if n["type"] == "AndValve")
-        conns = _conns_from(data, and_id, "A")
-        assert len(conns) == 1
-        assert conns[0]["target"]["node"] == "gen-mc-2"
-        assert conns[0]["target"]["anchor"] == "PL"
+        b_out = _conns_from(data, "gen-sig-B-ext-2", "A")
+        assert len(b_out) == 1
+        assert b_out[0]["target"]["node"] == "gen-mc-2"
+        assert b_out[0]["target"]["anchor"] == "PL"
 
     def test_no_duplicate_node_ids(self):
         data = sbs.generate(parse("C+(A+B+)C-A-B-"))

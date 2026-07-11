@@ -245,19 +245,20 @@ def generate(events: list[tuple[str, str]]) -> dict:
             v42_pilot = "PL" if direction == "+" else "PR"
             connect(pl_id, next_anchor(pl_id), f"gen-v42-{letter}", v42_pilot)
 
-    # ── 6. Confirmação por átomo (+ AndValve se 2+ eventos) ──────────────
+    # ── 6. Confirmação por átomo ────────────────────────────────────────
     #
     #   Cada átomo produz uma confirmação única (nunca duplicada -- ao
     #   contrário do cascata, aqui não existe fan_out: a sequência é plana,
     #   então todo átomo tem exatamente um "próximo"). Um evento sozinho
     #   usa uma única válvula de sinalização; um bloco de N>1 eventos usa N
-    #   válvulas mescladas por uma cadeia de N-1 AndValve. A confirmação do
-    #   átomo k seta MC_{k+1}.PL; a confirmação do último átomo fecha o
+    #   válvulas encadeadas em série -- a 1ª puxa P da linha do átomo, as
+    #   demais puxam P da sig anterior (E lógico sem AndValve). A confirmação
+    #   do átomo k seta MC_{k+1}.PL; a confirmação do último átomo fecha o
     #   ciclo alimentando btn.P (nunca MC_0.PL diretamente).
 
     def build_confirmation(k: int, atom: list[tuple[int, str, str]]) -> tuple[str, str]:
         pl_id = pl_ids[k]
-        completions: list[tuple[str, str]] = []
+        prev_output: tuple[str, str] | None = None
         for e_idx, letter, direction in atom:
             s_id   = f"gen-sig-{letter}-{'ext' if direction == '+' else 'ret'}-{e_idx}"
             s_role = f"signal_valve:{e_idx}"
@@ -276,20 +277,14 @@ def generate(events: list[tuple[str, str]]) -> dict:
                          "default_side": sig_default_side,
                      })
             connect(add_simple("Exhaust", f"exhaust:sig-{e_idx}"), "R", s_id, "R")
-            connect(pl_id, next_anchor(pl_id), s_id, "P")
+            if prev_output is None:
+                connect(pl_id, next_anchor(pl_id), s_id, "P")
+            else:
+                connect(prev_output[0], prev_output[1], s_id, "P")
 
-            completions.append((s_id, "A"))
+            prev_output = (s_id, "A")
 
-        if len(completions) == 1:
-            return completions[0]
-
-        current = completions[0]
-        for chain_i, nxt in enumerate(completions[1:]):
-            and_id = add_simple("AndValve", f"and_valve:{k}:{chain_i}")
-            connect(current[0], current[1], and_id, "X")
-            connect(nxt[0], nxt[1], and_id, "Y")
-            current = (and_id, "A")
-        return current
+        return prev_output
 
     for k, atom in enumerate(atoms):
         final_id, final_anchor = build_confirmation(k, atom)

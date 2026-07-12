@@ -46,6 +46,26 @@ class TestPistonValveRegion:
         cyl_b = _node(result, "gen-cyl-B")
         assert cyl_a["position"]["x"] != cyl_b["position"]["x"]
 
+    def test_one_empty_column_reserved_between_consecutive_cylinders(self):
+        # A pedido do usuário: cada letra ocupa coluna VIRTUAL 2*idx (não
+        # mais 1*idx) na região de pistões/válvulas -- deixa a coluna
+        # ímpar entre cilindros consecutivos vazia, reservada pra um
+        # bloco de OrValve associado a cada cilindro (feature futura).
+        # Distância real entre letras vizinhas passa a ser 2*group_gap.
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        group_gap = cfg["columns"]["group_gap"]
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        cyl_a = _node(result, "gen-cyl-A")
+        cyl_b = _node(result, "gen-cyl-B")
+        v42_a = _node(result, "gen-v42-A")
+        v42_b = _node(result, "gen-v42-B")
+
+        assert cyl_b["position"]["x"] - cyl_a["position"]["x"] == 2 * group_gap
+        assert v42_b["position"]["x"] - v42_a["position"]["x"] == 2 * group_gap
+
     def test_cylinder_row_above_main_valve_row(self):
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
@@ -81,14 +101,32 @@ class TestConfirmationChains:
 
 
 class TestLogicRegion:
-    def test_mc0_button_closure_sig_share_same_column(self):
+    def test_button_follows_the_same_diagonal_as_other_relays(self):
+        # Reversão de design: o bloco do átomo 0 (botão + sig de
+        # fechamento) antes ficava empilhado na MESMA coluna de MC_0 (ver
+        # histórico em docs/superpowers/specs/
+        # 2026-07-11-step-by-step-positioning-design.md). A pedido do
+        # usuário, o botão passa a seguir a MESMA regra diagonal geral de
+        # qualquer par Válvula1/Válvula2 (1 coluna à esquerda, 1 linha
+        # abaixo de quem alimenta): o botão é "Válvula 1" de MC_0. A sig
+        # de fechamento NÃO forma outro degrau diagonal -- está EM SÉRIE
+        # com o botão, então fica na MESMA coluna dele, 1 linha abaixo
+        # (ver test_closure_chain_tail_stacks_vertically_same_column).
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        logic_cell_w = cfg["columns"]["logic_cell_width"]
+        row_gap      = cfg["rows"]["logic_row_gap"]
+
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         mc0 = _node(result, "gen-mc-0")
         btn = _node(result, "gen-btn")
         closure_sig = _node(result, "gen-sig-B-ret-3")
-        assert mc0["position"]["x"] == btn["position"]["x"] == closure_sig["position"]["x"]
-        assert mc0["position"]["y"] < btn["position"]["y"] < closure_sig["position"]["y"]
+
+        assert btn["position"]["x"] == mc0["position"]["x"] - logic_cell_w
+        assert btn["position"]["y"] == mc0["position"]["y"] + row_gap
+        assert closure_sig["position"]["x"] == btn["position"]["x"]
+        assert closure_sig["position"]["y"] == btn["position"]["y"] + row_gap
 
     def test_relay_sig_one_column_left_of_its_memory(self):
         import json
@@ -124,7 +162,11 @@ class TestLogicRegion:
         assert sig_a["position"]["y"] != sig_b["position"]["y"]
 
     def test_closure_chain_tail_stacks_vertically_same_column(self):
-        # último átomo é um bloco paralelo -- fechamento tem 2 sigs em série
+        # último átomo é um bloco paralelo -- fechamento tem 2 sigs em série.
+        # A cadeia inteira (sig0 = closure_row, sig1 = cauda) fica na
+        # MESMA coluna do botão -- está em série com ele, não forma outro
+        # degrau diagonal (ver test_button_follows_the_same_diagonal_as_other_relays).
+        # Só mc0 -> btn é diagonal.
         data = step_by_step_pneumatic.generate(parse("A+B+(A-B-)"))
         result = layout.apply(data)
         mc0 = _node(result, "gen-mc-0")
@@ -134,8 +176,8 @@ class TestLogicRegion:
 
         assert sig0["position"] != {"x": 0, "y": 0}
         assert sig1["position"] != {"x": 0, "y": 0}
-        assert mc0["position"]["x"] == btn["position"]["x"] == \
-            sig0["position"]["x"] == sig1["position"]["x"]
+        assert mc0["position"]["x"] != btn["position"]["x"]
+        assert btn["position"]["x"] == sig0["position"]["x"] == sig1["position"]["x"]
         assert sig0["position"]["y"] != sig1["position"]["y"]
 
     def test_no_two_nodes_share_the_same_position(self):
@@ -229,7 +271,8 @@ class TestRouting:
             y = node["position"]["y"]
             if node["type"] == "PressureLine" and anchor.startswith("X"):
                 idx = int(anchor[1:])
-                return (x + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing, y)
+                list_origin = min(int(a[1:]) for a in node["properties"]["anchors"])
+                return (x + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, y)
             local = anchor_local_for_routing(node_type_map[node_id], anchor)
             return (x + local[0], y + local[1]) if local else (x, y)
 
@@ -314,8 +357,14 @@ class TestAnchorAssignmentByProximity:
 
     def test_pilot_connections_are_assigned_the_nearest_anchor(self):
         # gen-pl-step0 alimenta gen-v42-A.PL -- o anchor escolhido deve
-        # ser o mais próximo (ou empatado) da posição X de gen-v42-A
-        # entre TODOS os anchors da linha, não um arbitrário.
+        # ser o mais próximo (ou empatado) da posição X REAL do anchor PL
+        # de gen-v42-A (posição do nó + offset de anchor_local_for_routing,
+        # não a posição crua do nó -- ver sprite_metrics.py) entre todos
+        # os anchors da linha que ficam à esquerda do alvo (a conexão PL
+        # sempre entra pela esquerda por design, ver _nearest_pl_anchor
+        # side="left").
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         pl0 = next(n for n in result["nodes"] if n["id"] == "gen-pl-step0")
@@ -324,18 +373,26 @@ class TestAnchorAssignmentByProximity:
                     if c["source"]["node"] == "gen-pl-step0" and c["target"]["node"] == "gen-v42-A"
                     and c["target"]["anchor"] == "PL")
         chosen_idx = int(conn["source"]["anchor"][1:])
-        chosen_x = pl0["position"]["x"] + _pl_anchor_x_offset(chosen_idx)
-        target_x = v42a["position"]["x"]
-        # nenhum outro anchor da linha pode estar estritamente mais perto
+        chosen_x = pl0["position"]["x"] + _pl_anchor_x_offset(chosen_idx, pl0["properties"]["anchors"])
+        local = anchor_local_for_routing("Valve_4_2_Ways", "PL")
+        target_x = v42a["position"]["x"] + (local[0] if local else 0)
+        # nenhum outro anchor à esquerda do alvo pode estar estritamente mais perto
         for a in pl0["properties"]["anchors"]:
             idx = int(a[1:])
-            ax = pl0["position"]["x"] + _pl_anchor_x_offset(idx)
+            ax = pl0["position"]["x"] + _pl_anchor_x_offset(idx, pl0["properties"]["anchors"])
+            if ax >= target_x:
+                continue
             assert abs(ax - target_x) >= abs(chosen_x - target_x) - 1e-6
 
 
-def _pl_anchor_x_offset(idx):
+def _pl_anchor_x_offset(idx, anchors):
+    # PressureLine.layout_anchors() posiciona pelo índice na lista, não
+    # pelo número do nome -- usa a origem real (menor índice atual) do
+    # array, não a constante 1 (ver mesma ressalva em _pl_anchor_x,
+    # circuit_generator/step_by_step_layout.py).
     from circuit_generator.sprite_metrics import METRICS as _M
-    return _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+    list_origin = min(int(a[1:]) for a in anchors)
+    return _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
 
 
 class TestGlobalPruning:
@@ -377,7 +434,8 @@ class TestPressureLineReachesEveryTarget:
 
         def anchor_x(pl_node, anchor_name):
             idx = int(anchor_name[1:])
-            return pl_node["position"]["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+            list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
+            return pl_node["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
 
         checked = 0
         for c in result["connections"]:
@@ -416,7 +474,8 @@ class TestValvePilotEntryDoesNotJump:
             pos = node["position"]
             if ntype == "PressureLine" and anchor_name.startswith("X"):
                 idx = int(anchor_name[1:])
-                return pos["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+                list_origin = min(int(a[1:]) for a in node["properties"]["anchors"])
+                return pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
             local = _M.anchor_local.get(ntype, {}).get(anchor_name)
             return pos["x"] + local[0] if local else pos["x"]
 
@@ -460,7 +519,8 @@ class TestPilotAnchorRobustToCommutation:
                     if c["target"]["node"] == "gen-mc-3" and c["target"]["anchor"] == "PR")
         pl = node_by_id[conn["source"]["node"]]
         idx = int(conn["source"]["anchor"][1:])
-        anchor_x = pl["position"]["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
+        list_origin = min(int(a[1:]) for a in pl["properties"]["anchors"])
+        anchor_x = pl["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
 
         assert anchor_x > worst_case_x, (
             f"anchor x={anchor_x} não ficou à direita do pior caso "
@@ -563,3 +623,107 @@ class TestPressureLineAnchorYAccountsForSpriteHeight:
                     )
             checked += 1
         assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão saindo de uma PL
+
+
+class TestPressureLineToSigPAnchorClearsTheValve:
+    def test_anchor_is_left_of_the_valve_body_and_limit_switch(self):
+        # Regressão: o anchor de PressureLine escolhido pra uma conexão
+        # PL -> Valve_3_2_Ways.P (cadeia de confirmação) era sempre o
+        # "mais próximo" da válvula, sem levar em conta que o fio desce
+        # reto a partir desse anchor -- se a válvula (e outras no mesmo
+        # eixo X, como MC_0/botão na coluna de fechamento) estiverem bem
+        # abaixo, o traço passa por DENTRO delas. O anchor precisa ficar
+        # à esquerda do corpo da válvula E do atuador de fim-de-curso
+        # (limit_switch, mesma largura do pilot: METRICS.pilot_w).
+        # Reproduzido com parse("A+B+A-B-"):
+        # gen-pl-step3.X* -> gen-sig-B-ret-3.P.
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways":
+                continue
+            if node_type_map.get(s["node"]) != "PressureLine":
+                continue
+            pl = node_by_id[s["node"]]
+            idx = int(s["anchor"][1:])
+            list_origin = min(int(a[1:]) for a in pl["properties"]["anchors"])
+            anchor_x = pl["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
+            valve_left_x = node_by_id[t["node"]]["position"]["x"]
+            safe_x = valve_left_x - _M.pilot_w
+            assert anchor_x <= safe_x, (
+                f"{s} -> {t}: anchor x={anchor_x} não ficou à esquerda da "
+                f"válvula+fim-de-curso (limite seguro x={safe_x})"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão PL->sig.P
+
+    def test_wire_routes_around_other_valves_instead_of_through_them(self):
+        # Mesma regressão do teste acima, mas verificando o efeito real:
+        # nenhum segmento do fio atravessa o retângulo de OUTRA válvula
+        # no meio do caminho.
+        from circuit_generator.astar_router import SPRITE_SIZES
+        from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        def rect(node_id):
+            n = node_by_id[node_id]
+            w, h = SPRITE_SIZES.get(n["type"], (0, 0))
+            x, y = n["position"]["x"], n["position"]["y"]
+            return (x, y, x + w, y + h)
+
+        def anchor_xy(node_id, anchor_name):
+            n = node_by_id[node_id]
+            pos = n["position"]
+            if n["type"] == "PressureLine" and anchor_name.startswith("X"):
+                idx = int(anchor_name[1:])
+                list_origin = min(int(a[1:]) for a in n["properties"]["anchors"])
+                return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, pos["y"] + _M.pl_pix_h)
+            local = anchor_local_for_routing(n["type"], anchor_name)
+            return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
+
+        def seg_crosses_rect(p1, p2, r):
+            x0, y0, x1, y1 = r
+            if abs(p1[0] - p2[0]) < 0.01:
+                x = p1[0]
+                ylo, yhi = sorted([p1[1], p2[1]])
+                return x0 < x < x1 and not (yhi < y0 or ylo > y1)
+            y = p1[1]
+            xlo, xhi = sorted([p1[0], p2[0]])
+            return y0 < y < y1 and not (xhi < x0 or xlo > x1)
+
+        obstacle_types = {"Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways", "DoubleActingCylinder"}
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if t["anchor"] != "P" or node_type_map.get(s["node"]) != "PressureLine":
+                continue
+            wps = c.get("waypoints")
+            if not wps:
+                continue
+            pts = ([anchor_xy(s["node"], s["anchor"])]
+                   + [(wp["x"], wp["y"]) for wp in wps]
+                   + [anchor_xy(t["node"], t["anchor"])])
+            for other_id, other in node_by_id.items():
+                if other_id in (s["node"], t["node"]):
+                    continue
+                if node_type_map.get(other_id) not in obstacle_types:
+                    continue
+                r = rect(other_id)
+                for a, b in zip(pts, pts[1:]):
+                    assert not seg_crosses_rect(a, b, r), (
+                        f"{s} -> {t}: segmento {a}->{b} atravessa {other_id} "
+                        f"(retângulo {r}) em vez de desviar"
+                    )
+            checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão PL->sig.P

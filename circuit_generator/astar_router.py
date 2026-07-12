@@ -14,7 +14,7 @@ from __future__ import annotations
 import heapq
 import math
 
-from circuit_generator.sprite_metrics import METRICS as _M
+from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
 CELL      = 20    # pixels por célula
 EXIT_PX   = 40    # pixels de saída antes do A* (2 células)
@@ -137,11 +137,25 @@ def build_grid(nodes: list[dict]) -> Grid:
     global _NODE_BOUNDS
     _NODE_BOUNDS = {}
 
+    # Os limites do grid precisam alcançar qualquer anchor real que o
+    # roteamento vá mirar -- não só o tamanho bruto do sprite. PL/PR de
+    # válvulas direcionais protudem além do sprite (anchor_local_for_routing
+    # já embute a margem de comutação pro pior caso de PR, ver Task 1) --
+    # sem isso, um anchor de válvula perto da borda do circuito cai fora
+    # do grid e o roteamento falha silenciosamente (route_connection
+    # devolve None). Ver docs/superpowers/specs/
+    # 2026-07-11-directional-valve-pilot-anchor-offset-design.md.
     xs, ys = [], []
     for n in nodes:
         px, py = n["position"]["x"], n["position"]["y"]
-        w, h = SPRITE_SIZES.get(n["type"], (50, 50))
+        t = n["type"]
+        w, h = SPRITE_SIZES.get(t, (50, 50))
         xs += [px, px + w]; ys += [py, py + h]
+        for anchor_name in ("PL", "PR"):
+            local = anchor_local_for_routing(t, anchor_name)
+            if local:
+                xs.append(px + local[0])
+                ys.append(py + local[1])
 
     grid = Grid(min(xs), min(ys), max(xs), max(ys))
 

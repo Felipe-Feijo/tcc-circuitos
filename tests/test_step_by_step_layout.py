@@ -249,14 +249,7 @@ class TestRouting:
         assert len(needs_routing) > 0
         assert len(needs_routing) < len(pl_conns)
 
-        # Most connections that are far apart should be routed, but the A* router
-        # may legitimately skip routing for some paths (e.g., if no obstacles block
-        # the direct line). Check that at least some are routed.
-        routed = [c for c in needs_routing if "waypoints" in c]
-        assert len(routed) > 0, (
-            f"No connections were routed out of {len(needs_routing)} that needed routing. "
-            f"At least some should have waypoints."
-        )
+        assert all("waypoints" in c for c in needs_routing)
 
 
 class TestLogicRegionColumnSpacing:

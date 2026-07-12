@@ -8,6 +8,7 @@ from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
 from .....anchors.anchor import AnchorItem
 from graphics.utils.properties_dialog import PropertiesDialog
+from simulation.nodes.anchor_chain import real_anchor_chain
 
 class ExpandableItem(NodeItem):
     def setup(self) -> None:
@@ -122,23 +123,33 @@ class ExpandableItem(NodeItem):
             QTimer.singleShot(0, self.update_internal_connections)
             return
 
-
         anchors = self.anchor_list
         if len(anchors) < 2:
             return
 
-        # passo 2: garante que existe uma conexão para cada par adjacente
-        for i in range(len(anchors) - 1):
-            a1 = anchors[i]
-            a2 = anchors[i + 1]
+        def is_real(anchor):
+            return any(
+                conn not in self.internal_connections
+                and (conn.source_anchor is anchor or conn.target_anchor is anchor)
+                for conn in self.connections
+            )
 
+        desired_pairs = real_anchor_chain(anchors, is_real)
+        desired_keys = {frozenset((a, b)) for a, b in desired_pairs}
+
+        # remove conexões internas que não fazem mais parte do conjunto desejado
+        for conn in self.internal_connections[:]:
+            key = frozenset((conn.source_anchor, conn.target_anchor))
+            if key not in desired_keys:
+                self._remove_internal_connection(conn)
+
+        # garante que existe uma conexão para cada par desejado
+        for a1, a2 in desired_pairs:
             if not self._has_internal_connection(a1, a2):
                 conn = self._create_internal_connection(a1, a2)
                 self.internal_connections.append(conn)
 
-        # passo 3: atualiza visual de todas as conexões
         self.update_connections()
-
 
     def _has_internal_connection(self, a1, a2):
         for conn in self.internal_connections:
@@ -147,7 +158,14 @@ class ExpandableItem(NodeItem):
             if conn.source_anchor == a2 and conn.target_anchor == a1:
                 return True
         return False
-    
+
+    def _remove_internal_connection(self, conn):
+        conn.prepare_delete()
+        if conn.scene():
+            conn.scene().removeItem(conn)
+        if conn in self.internal_connections:
+            self.internal_connections.remove(conn)
+
     def _create_internal_connection(self, a1, a2):
         conn = ConnectionItem(self, a1, self, a2)
 

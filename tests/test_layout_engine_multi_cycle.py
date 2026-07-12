@@ -84,3 +84,60 @@ def test_three_cycle_chain_layout_does_not_crash():
     at_origin = [nid for nid, pos in _positions_by_id(data).items()
                  if pos["x"] == 0 and pos["y"] == 0]
     assert at_origin == []
+
+
+class TestPilotAnchorRobustToCommutation:
+    def test_signal_valve_feeding_left_memory_uses_the_commutation_margin(self):
+        # cascade.py seta default_side="left" pra toda memória de grupo
+        # com índice i > 0. DIFERENTE do passo a passo: em cascade, PR de
+        # uma memória NUNCA é alimentado direto por uma PressureLine --
+        # sempre por uma cadeia de sig (Valve_3_2_Ways), ver
+        # cascade.py:327 (`connect(final_id, final_anchor, mem_ids[...], "PR")`,
+        # onde final_id é sempre um Valve_3_2_Ways). O que muda com a
+        # correção é a posição X atribuída a esse sig
+        # (layout_engine.py:455, `sig_x`), que usa V52_PR_x pra se colocar
+        # relativo à própria memória -- precisa usar o valor com a margem
+        # de comutação (anchor_local_for_routing), não o valor base, senão
+        # o sig fica mais perto da memória do que deveria quando ela
+        # comuta.
+        import json
+        from circuit_generator.sequence_parser import parse
+        from circuit_generator.methods import cascade
+        from circuit_generator import layout_engine
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as _M
+
+        data = cascade.generate(parse("A+B+A-B-C+C-"))  # 2+ grupos
+        result = layout_engine.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+
+        left_memories = [n for n in result["nodes"]
+                         if n["type"] == "Valve_5_2_Ways"
+                         and n["properties"].get("default_side") == "left"]
+        assert left_memories, "cenário precisa ter pelo menos 1 memória com default_side=left"
+
+        cfg = json.loads(layout_engine._CONFIG_PATH.read_text(encoding="utf-8"))
+        cols = cfg["columns"]
+        n_mc_total = sum(1 for n in result["nodes"] if n["type"] == "Valve_5_2_Ways")
+        sig_pr_off = (cols.get("sig_mc_pilot_offset_PR", 500)
+                      + cols.get("sig_pilot_offset_PR_per_mc", 0) * (n_mc_total - 1))
+        base_pr_x = _M.anchor_local["Valve_5_2_Ways"]["PR"][0]
+        sig_a_x   = _M.anchor_local["Valve_3_2_Ways"]["A"][0]  # "A" não muda com a correção
+
+        checked = 0
+        for mc in left_memories:
+            conns = [c for c in result["connections"]
+                     if c["target"]["node"] == mc["id"] and c["target"]["anchor"] == "PR"]
+            for conn in conns:
+                sig = node_by_id[conn["source"]["node"]]
+                if sig["type"] != "Valve_3_2_Ways":
+                    continue
+                mc_x = mc["position"]["x"]
+                sig_x_actual     = sig["position"]["x"]
+                sig_x_without_fix = mc_x + base_pr_x - sig_a_x + sig_pr_off
+                assert sig_x_actual > sig_x_without_fix, (
+                    f"{sig['id']}: x={sig_x_actual} não ficou à direita do valor "
+                    f"SEM a margem de comutação (x={sig_x_without_fix}) -- "
+                    f"layout_engine ainda usa o V52_PR_x base, não anchor_local_for_routing"
+                )
+                checked += 1
+        assert checked > 0

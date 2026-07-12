@@ -7,7 +7,7 @@ em layout_config.json e nas métricas de sprites em sprite_metrics.py.
 
 import json
 from pathlib import Path
-from circuit_generator.sprite_metrics import METRICS as _M
+from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
 _CONFIG_PATH = Path(__file__).parent / "layout_config.json"
 
@@ -21,7 +21,7 @@ _CHILD_CONNECT_ANCHOR: dict[str, str] = {
 
 
 def _anchor_local(node_type: str, anchor_name: str) -> tuple[float, float] | None:
-    return _ANCHOR_LOCAL.get(node_type, {}).get(anchor_name)
+    return anchor_local_for_routing(node_type, anchor_name)
 
 
 def _scene_x(node_id: str, anchor_name: str,
@@ -208,7 +208,7 @@ def apply(data: dict) -> dict:
 
     _v42_aln      = cols.get("v42_align_offset_x", 65)
     _V42_PL_x     = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PL"][0]
-    _V42_PR_x     = _ANCHOR_LOCAL["Valve_4_2_Ways"]["PR"][0]
+    _V42_PR_x     = anchor_local_for_routing("Valve_4_2_Ways", "PR")[0]
     _SIG_A_x      = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
     _group_gap    = cols.get("group_gap", 300)
     _sig_base_off = cols.get("sig_base_offset", 400)  # offset do anchor A da 1a col a borda do sprite da 4/2
@@ -440,7 +440,7 @@ def apply(data: dict) -> dict:
 
     sig_pr_off = (cols.get("sig_mc_pilot_offset_PR", 500)
                   + cols.get("sig_pilot_offset_PR_per_mc", 0) * (n_mc_total - 1))
-    V52_PR_x = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0]
+    V52_PR_x = anchor_local_for_routing("Valve_5_2_Ways", "PR")[0]
     SIG_A_x  = _ANCHOR_LOCAL["Valve_3_2_Ways"]["A"][0]
 
     for node in btn_sig_nodes:
@@ -636,7 +636,7 @@ def apply(data: dict) -> dict:
             elif s_type == "Valve_5_2_Ways" and s_anc == "B":
                 bx      = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
                 safeguard = cols.get("mc_B_pl_safeguard", 20)
-                PR_B_diff = _ANCHOR_LOCAL["Valve_5_2_Ways"]["PR"][0] - _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
+                PR_B_diff = anchor_local_for_routing("Valve_5_2_Ways", "PR")[0] - _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
                 margin  = PR_B_diff + 2.5 * _M.mc_x_step + safeguard
                 anc = _nearest_pl_anchor(pl, bx + margin, node_pos, "right")
                 conn["target"]["anchor"] = anc  # mc.B sempre abaixo da PL, sem conflito real

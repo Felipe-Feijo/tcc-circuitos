@@ -57,29 +57,33 @@ class TestOrValveAnchors:
         assert "OrValve" in m.anchor_local
 
     def test_or_valve_sprite_size(self):
+        # Mesma base/tamanho da AndValve agora (250x165), ver or_valve.py.
         from circuit_generator.sprite_metrics import METRICS as m
-        assert m.or_width == 130
-        assert m.or_height == 71
+        assert m.or_width == 250
+        assert m.or_height == 165
 
     def test_or_valve_x_anchor(self):
-        # X = entrada esquerda: borda esquerda do sprite, y = 54.29% da altura
+        # X = entrada esquerda: borda esquerda do sprite, y = 90/165 da
+        # altura -- mesma proporção da AndValve (o sprite da OrValve usa
+        # agora a mesma base/tamanho dela, ver or_valve.py).
         from circuit_generator.sprite_metrics import METRICS as m
         x, y = m.anchor_local["OrValve"]["X"]
         assert x == 0.0
-        assert abs(y - 38.5459) < 0.001
+        assert abs(y - 165 * 90 / 165) < 0.001
 
     def test_or_valve_y_anchor(self):
         # Y = entrada direita: borda direita do sprite, mesma altura que X
         from circuit_generator.sprite_metrics import METRICS as m
         x, y = m.anchor_local["OrValve"]["Y"]
-        assert abs(x - 130.0) < 0.001
-        assert abs(y - 38.5459) < 0.001
+        assert abs(x - 250.0) < 0.001
+        assert abs(y - 165 * 90 / 165) < 0.001
 
     def test_or_valve_a_anchor(self):
-        # A = saída: topo do sprite, x = 50.39% da largura
+        # A = saída: topo do sprite, centralizado (x = 50% da largura,
+        # mesma proporção da AndValve)
         from circuit_generator.sprite_metrics import METRICS as m
         x, y = m.anchor_local["OrValve"]["A"]
-        assert abs(x - 65.507) < 0.001
+        assert abs(x - 125.0) < 0.001
         assert y == 0.0
 
 

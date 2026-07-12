@@ -29,9 +29,14 @@ class OrValve(NodeItem):
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        self.add_anchor(AnchorItem("X", QPointF(0, self.height * 0.5429), node=self, domain=self.domain, exit_directions={"external": ["left"]}))
-        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height * 0.5429), node=self, domain=self.domain, exit_directions={"external": ["right"]}))
-        self.add_anchor(AnchorItem("A", QPointF(self.width * 0.5039, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        # Mesma proporção da AndValve (graphics/items/base/nodes/
+        # logic_valve/and_valve.py) -- o sprite da OrValve passou a usar a
+        # mesma base/tamanho da AndValve, então os anchors seguem as
+        # mesmas frações de width/height (X/Y a 90/165 da altura, A
+        # centralizado no topo).
+        self.add_anchor(AnchorItem("X", QPointF(0, self.height * 90/165), node=self, domain=self.domain, exit_directions={"external": ["left"]}))
+        self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height * 90/165), node=self, domain=self.domain, exit_directions={"external": ["right"]}))
+        self.add_anchor(AnchorItem("A", QPointF(self.width * 0.5, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
 
     def reset_visual_state(self) -> None:
         # OrValve has no icon_default — x_side is the resting state

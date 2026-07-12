@@ -1,6 +1,8 @@
 """Nó de simulação de linha de pressão pneumática."""
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.anchor_chain import real_anchor_chain
+
 
 class PressureLine(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
@@ -8,15 +10,16 @@ class PressureLine(Node):
 
     def get_internal_connections(self):
         """
-        Conecta todas as anchors em série:
-        X1 -> X2 -> X3 -> ... -> Xn
+        Conecta apenas os anchors reais (com conexão externa) em série,
+        sempre incluindo as duas pontas da linha:
+        X1 -> X3 -> X40 -> ... -> Xn
         """
         names = list(self.anchors.keys())
 
         if len(names) < 2:
             return []
 
-        return [
-            (names[i], names[i + 1])
-            for i in range(len(names) - 1)
-        ]
+        def is_real(name):
+            return len(self.anchors[name].connections) > 0
+
+        return real_anchor_chain(names, is_real)

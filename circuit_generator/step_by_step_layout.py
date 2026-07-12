@@ -210,6 +210,47 @@ def apply(data: dict) -> dict:
         x, y = _place_aligned("main_valve", cyl_col[letter], v42_id)
         node_by_id[v42_id]["position"] = {"x": x, "y": y}
 
+    # ── Cadeia de OrValve (multi-ciclo): uma linha própria, alinhada às
+    # mesmas colunas virtuais de "cylinder"/"main_valve" ──────────────────
+    #
+    #   Cada OrValve tem virtual_col = cyl_col[letra] +/- (i+1) (esquerda
+    #   pra PL, direita pra PR) -- pode ser NEGATIVO (ex: primeira letra,
+    #   cadeia à esquerda). Grid.place indexa por ordem de chegada, nunca
+    #   negativo (mesmo problema já resolvido pros anchors de
+    #   PressureLine, ver "Dimensiona as PressureLines..." mais abaixo) --
+    #   por isso x_origin desta linha é deslocado pelo menor virtual_col
+    #   usado, e _place_aligned recebe (virtual_col - menor_virtual_col),
+    #   sempre >= 0. A subtração se cancela exatamente com o deslocamento
+    #   de x_origin, então a posição real continua
+    #   cols["cylinder_first_x"] + virtual_col * cyl_cell_w -- a MESMA
+    #   fórmula usada por "cylinder"/"main_valve".
+    or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
+    if or_nodes:
+        or_virtual_col: dict[str, int] = {}
+        for n in or_nodes:
+            _, or_letter, or_side, or_i = n["_role"].split(":")
+            sign = -1 if or_side == "PL" else 1
+            or_virtual_col[n["id"]] = cyl_col[or_letter] + sign * (int(or_i) + 1)
+
+        min_vcol = min(or_virtual_col.values())
+        grid.add_row("or_row", cyl_cell_w, _M.or_height, rows["or_row"],
+                     x_origin=cols["cylinder_first_x"] + min_vcol * cyl_cell_w)
+        # _place_aligned reserva placeholders 0..virtual_col-1 ANTES de
+        # colocar em virtual_col (ver definição acima) -- só funciona se as
+        # chamadas dentro da MESMA linha chegarem em ordem CRESCENTE de
+        # virtual_col. A ordem natural de or_nodes (ordem de geração, i
+        # crescente por cadeia) NÃO garante isso: pro lado PL, vcol =
+        # cyl_col[letra] - (i+1) DECRESCE quando i cresce. Sem ordenar
+        # aqui, a segunda OrValve de uma cadeia PL (vcol menor) chega DEPOIS
+        # da primeira (vcol maior) e colide com o placeholder que a
+        # primeira já reservou pra essa coluna -- confirmado rodando
+        # test_or_valve_chain_of_two_does_not_overlap_itself sem este sort
+        # (ValueError: célula já ocupada por __reserved__).
+        for n in sorted(or_nodes, key=lambda n: or_virtual_col[n["id"]]):
+            vcol = or_virtual_col[n["id"]]
+            x, y = _place_aligned("or_row", vcol - min_vcol, n["id"])
+            node_by_id[n["id"]]["position"] = {"x": x, "y": y}
+
     # ── PressureLines: uma linha do Grid por átomo, empilhadas ──────────────
     pl_cell_w = 200  # única coluna por linha, valor não usado pra alinhamento
     for k in sorted(roles["pl_by_idx"]):

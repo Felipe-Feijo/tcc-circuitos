@@ -744,3 +744,59 @@ class TestPressureLineToSigPAnchorClearsTheValve:
                     )
             checked += 1
         assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão PL->sig.P
+
+
+class TestOrValvePlacement:
+    def test_or_valve_chain_sits_on_its_own_row_between_cylinder_and_main_valve(self):
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        cyl_y  = cfg["rows"]["cylinder"]
+        mv_y   = cfg["rows"]["main_valve"]
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
+        result = layout.apply(data)
+        or_nodes = [n for n in result["nodes"] if n["type"] == "OrValve"]
+        assert len(or_nodes) == 2
+        for n in or_nodes:
+            assert n["position"] != {"x": 0, "y": 0}
+            assert cyl_y < n["position"]["y"] < mv_y
+        # todas as OrValve do circuito ficam na MESMA linha (crescem só em X)
+        assert len({n["position"]["y"] for n in or_nodes}) == 1
+
+    def test_or_valve_chain_grows_to_the_correct_side_of_its_cylinder(self):
+        # PL (lado "+") cresce à ESQUERDA do cilindro; PR (lado "-") à DIREITA.
+        #
+        # role_by_id é capturado ANTES de layout.apply(data): apply() muta
+        # data in-place e remove "_role" de todo nó no fim (ver "Limpeza
+        # final" em step_by_step_layout.py, e o invariante já coberto por
+        # test_every_node_has_role_removed) -- ler n["_role"] em result
+        # depois do apply() sempre daria KeyError, então a identificação
+        # por role precisa vir de um snapshot tirado antes da chamada.
+        data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
+        role_by_id = {n["id"]: n.get("_role", "") for n in data["nodes"]}
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        cyl_a_x = node_by_id["gen-cyl-A"]["position"]["x"]
+
+        pl_or_id = next(nid for nid, role in role_by_id.items() if role == "or_valve:A:PL:0")
+        pr_or_id = next(nid for nid, role in role_by_id.items() if role == "or_valve:A:PR:0")
+        assert node_by_id[pl_or_id]["position"]["x"] < cyl_a_x
+        assert node_by_id[pr_or_id]["position"]["x"] > cyl_a_x
+
+    def test_or_valve_chain_of_two_does_not_overlap_itself(self):
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        group_gap = cfg["columns"]["group_gap"]
+
+        # role_by_id: mesmo motivo do teste acima (snapshot antes do apply()).
+        data = step_by_step_pneumatic.generate(parse("A+A-A+A-A+A-"))
+        role_by_id = {n["id"]: n.get("_role", "") for n in data["nodes"]}
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        pl_or_ids = sorted(
+            (nid for nid, role in role_by_id.items() if role.startswith("or_valve:A:PL:")),
+            key=lambda nid: role_by_id[nid],
+        )
+        assert len(pl_or_ids) == 2
+        xs = sorted(node_by_id[nid]["position"]["x"] for nid in pl_or_ids)
+        assert xs[1] - xs[0] == group_gap

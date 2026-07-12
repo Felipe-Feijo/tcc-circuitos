@@ -11,6 +11,7 @@
     },
     "rows": {
         "cylinder": -220,
+        "or_row": -80,
         "main_valve": 120,
         "pl_base": 500,
         "pl_gap": 300,

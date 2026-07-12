@@ -441,20 +441,22 @@ def route_connection(
     # tratamento de PressureLine como src.
     if tgt_type == "PressureLine":
         ddx_t, ddy_t = DIR_VEC[tgt_dir_used]
-        # Andar na direção OPOSTA à chegada para posicionar o exit point
-        # do lado de onde a conexão vem:
-        #   tgt_dir_used="UP"   → chegada vindo de baixo  → exit deve estar ABAIXO → ddy_t=-1 → oposto=+1
-        #   tgt_dir_used="DOWN" → chegada vindo de cima   → exit deve estar ACIMA  → ddy_t=+1 → oposto=-1
-        # Mas o exit point é onde o A* TERMINA, portanto deve estar do lado de onde
-        # a conexão chega. Se src está abaixo (tgt_dir_used="UP", viajamos UP),
-        # o A* vem de baixo e termina logo abaixo da PL, então exit y > ty_c.
-        # Usamos a direção oposta para posicionar o exit point abaixo da PL quando
-        # a conexão sobe, ou acima quando a conexão desce.
-        opp_ddy = -ddy_t  # oposto: se tgt_dir_used=UP(ddy=-1) → opp=+1 (abaixo da PL)
+        # tgt_dir_used já foi calculado (bloco "FIX Bug 1" acima) para
+        # apontar pro lado de onde a conexão VEM, não pro lado de emissão:
+        #   src ABAIXO da PL (dy_total <= 0) → tgt_dir_used="DOWN" (ddy_t=+1)
+        #   src ACIMA  da PL (dy_total > 0)  → tgt_dir_used="UP"   (ddy_t=-1)
+        # O exit point (onde o A* termina antes do hop final até o anchor
+        # real) precisa ficar do MESMO lado -- por isso usa ddy_t direto,
+        # sem inverter. Uma versão anterior deste bloco invertia o sinal
+        # (opp_ddy = -ddy_t) por engano -- o comentário daquela versão
+        # descrevia a convenção OPOSTA da que o bloco "FIX Bug 1" realmente
+        # usa, colocando o exit point do lado ERRADO da PL: o fio cruzava
+        # a linha inteira e voltava (ver
+        # tests/test_step_by_step_layout.py::TestComponentToPressureLineDoesNotCrossThrough).
         t_exit = None
         steps = max(1, EXIT_PX // CELL)
         for i in range(1, steps + 3):
-            nx, ny = tx_c + 0 * i, ty_c + opp_ddy * i
+            nx, ny = tx_c + 0 * i, ty_c + ddy_t * i
             if grid.in_bounds(nx, ny) and grid.cost(nx, ny) < 1e6:
                 t_exit = (tx_c, ny)
                 break

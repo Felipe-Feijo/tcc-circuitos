@@ -466,3 +466,50 @@ class TestPilotAnchorRobustToCommutation:
             f"anchor x={anchor_x} não ficou à direita do pior caso "
             f"(com margem de comutação) x={worst_case_x}"
         )
+
+
+class TestComponentToPressureLineDoesNotCrossThrough:
+    def test_wire_approaches_the_pl_from_the_same_side_as_its_source(self):
+        # Regressão: quando o alvo de uma conexão é uma PressureLine,
+        # astar_router.route_connection calculava o "exit point" (ponto
+        # onde o A* termina, antes do hop final até o anchor real) do
+        # lado ERRADO da linha -- oposto de onde a conexão vem. O fio
+        # cruzava a PressureLine inteira e voltava, um pequeno "vai-e-volta"
+        # visível bem no ponto de conexão. Causa: dois comentários
+        # contraditórios no código sobre o que tgt_dir_used="UP"/"DOWN"
+        # significa quando a origem está abaixo/acima da PL -- o bloco que
+        # calcula o exit point usava a convenção OPOSTA da que o bloco
+        # anterior (que define tgt_dir_used) realmente usa.
+        # Reproduzido com parse("A+A-B+B-"): gen-mc-0.A -> gen-pl-step0.X5
+        # (origem abaixo da PL -- o exit point deveria ficar abaixo dela
+        # também, nunca acima).
+        data = step_by_step_pneumatic.generate(parse("A+A-B+B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if node_type_map.get(t["node"]) != "PressureLine":
+                continue
+            wps = c.get("waypoints")
+            if not wps:
+                continue
+            src_y = node_by_id[s["node"]]["position"]["y"]
+            pl_y = node_by_id[t["node"]]["position"]["y"]
+            last_y = wps[-1]["y"]
+            if src_y > pl_y:
+                assert last_y >= pl_y, (
+                    f"{s} -> {t}: origem está ABAIXO da PL (src_y={src_y} > "
+                    f"pl_y={pl_y}), mas o último waypoint fica ACIMA dela "
+                    f"(last_y={last_y}) -- o fio atravessa a PL e volta"
+                )
+            elif src_y < pl_y:
+                assert last_y <= pl_y, (
+                    f"{s} -> {t}: origem está ACIMA da PL (src_y={src_y} < "
+                    f"pl_y={pl_y}), mas o último waypoint fica ABAIXO dela "
+                    f"(last_y={last_y}) -- o fio atravessa a PL e volta"
+                )
+            checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão pra PL

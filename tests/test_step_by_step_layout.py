@@ -513,3 +513,53 @@ class TestComponentToPressureLineDoesNotCrossThrough:
                 )
             checked += 1
         assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão pra PL
+
+
+class TestPressureLineAnchorYAccountsForSpriteHeight:
+    def test_routing_uses_the_real_rendered_anchor_y_not_just_node_position_y(self):
+        # Regressão: graphics/items/base/nodes/expandable/pressure_line.py
+        # posiciona os anchors da PressureLine em y0=self.pix_h -- ou
+        # seja, pl_pix_h abaixo da posição do próprio nó. O roteamento
+        # (via _scene_xy em step_by_step_layout.py) usava só pos["y"],
+        # sem somar esse offset -- achava que o anchor estava pl_pix_h
+        # mais ACIMA do que ele realmente é renderizado. Isso fazia
+        # conexões que saem de uma PressureLine cruzarem de volta por
+        # cima (ou por baixo, se o alvo estiver acima) da posição REAL
+        # do anchor antes de seguir pro destino -- checa nos dois
+        # sentidos, usando a posição (aproximada) do alvo pra saber qual
+        # lado é o correto. Reproduzido com parse("A+A-B+B-"):
+        # gen-pl-step0.X110 -> gen-mc-3.PR (o reset em anel do último
+        # átomo, cuja fonte é a linha do PRIMEIRO átomo).
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        data = step_by_step_pneumatic.generate(parse("A+A-B+B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if node_type_map.get(s["node"]) != "PressureLine":
+                continue
+            wps = c.get("waypoints")
+            if not wps:
+                continue
+            pl = node_by_id[s["node"]]
+            real_pl_y = pl["position"]["y"] + _M.pl_pix_h
+            target_y = node_by_id[t["node"]]["position"]["y"]
+            for wp in wps:
+                if target_y > real_pl_y:
+                    assert wp["y"] >= real_pl_y - 1, (
+                        f"{s} -> {t}: alvo está ABAIXO da PL, mas waypoint "
+                        f"y={wp['y']} cruza de volta pra cima do anchor REAL "
+                        f"da PL (y={real_pl_y})"
+                    )
+                elif target_y < real_pl_y:
+                    assert wp["y"] <= real_pl_y + 1, (
+                        f"{s} -> {t}: alvo está ACIMA da PL, mas waypoint "
+                        f"y={wp['y']} cruza de volta pra baixo do anchor REAL "
+                        f"da PL (y={real_pl_y})"
+                    )
+            checked += 1
+        assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão saindo de uma PL

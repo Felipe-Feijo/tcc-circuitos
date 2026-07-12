@@ -141,3 +141,46 @@ class TestPilotAnchorRobustToCommutation:
                 )
                 checked += 1
         assert checked > 0
+
+
+class TestPressureLineAnchorYAccountsForSpriteHeight:
+    def test_routing_uses_the_real_rendered_anchor_y_not_just_node_position_y(self):
+        # Regressão: mesma causa raiz do passo a passo --
+        # graphics/items/base/nodes/expandable/pressure_line.py posiciona
+        # os anchors da PressureLine em y0=self.pix_h (pl_pix_h abaixo da
+        # posição do nó), mas layout_engine._scene_xy usava npos[1] direto,
+        # sem somar esse offset. Reproduzido com
+        # parse("A+B+A-B-C+C-"): gen-pl-grp1.X45 -> gen-sig-A-ext-0.P.
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        data = cascade.generate(parse("A+B+A-B-C+C-"))
+        result = apply_layout(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if node_type_map.get(s["node"]) != "PressureLine":
+                continue
+            wps = c.get("waypoints")
+            if not wps:
+                continue
+            pl = node_by_id[s["node"]]
+            real_pl_y = pl["position"]["y"] + _M.pl_pix_h
+            target_y = node_by_id[t["node"]]["position"]["y"]
+            for wp in wps:
+                if target_y > real_pl_y:
+                    assert wp["y"] >= real_pl_y - 1, (
+                        f"{s} -> {t}: alvo está ABAIXO da PL, mas waypoint "
+                        f"y={wp['y']} cruza de volta pra cima do anchor REAL "
+                        f"da PL (y={real_pl_y})"
+                    )
+                elif target_y < real_pl_y:
+                    assert wp["y"] <= real_pl_y + 1, (
+                        f"{s} -> {t}: alvo está ACIMA da PL, mas waypoint "
+                        f"y={wp['y']} cruza de volta pra baixo do anchor REAL "
+                        f"da PL (y={real_pl_y})"
+                    )
+            checked += 1
+        assert checked > 0

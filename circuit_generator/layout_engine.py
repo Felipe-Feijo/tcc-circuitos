@@ -47,7 +47,13 @@ def _scene_xy(node_id: str, anchor_name: str,
         return None
     if ntype == "PressureLine" and anchor_name.startswith("X"):
         idx = int(anchor_name[1:])
-        return (npos[0] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing, npos[1])
+        # PressureLine.layout_anchors() (graphics/items/base/nodes/
+        # expandable/pressure_line.py) posiciona cada anchor em
+        # y0=self.pix_h -- pl_pix_h abaixo da posição do nó, não na
+        # própria posição. Sem essa soma, o roteamento acha que o anchor
+        # está pl_pix_h mais acima do que é renderizado de verdade, e a
+        # conexão cruza de volta por cima dele.
+        return (npos[0] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing, npos[1] + _M.pl_pix_h)
     local = _anchor_local(ntype, anchor_name)
     return (npos[0] + local[0], npos[1] + local[1]) if local else npos
 

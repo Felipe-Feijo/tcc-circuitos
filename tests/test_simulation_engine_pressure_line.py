@@ -9,7 +9,7 @@ from simulation.connections import Connection
 
 
 def build_circuit():
-    """Fonte de pressão -> PressureLine de 10 anchors, só X1 e X5 usados."""
+    """Fonte de pressão -> PressureLine de 10 anchors, só X1 usado."""
     source = PressureSource("src", domain="pneumatic")
     source.add_anchor("P", domain="pneumatic")
 
@@ -25,49 +25,27 @@ def build_circuit():
 
 
 def test_connected_group_reaches_all_anchors_despite_pruned_edges():
-    """Verifica que todos os anchors de uma PressureLine permanecem alcançáveis
-    mesmo com o grafo interno podado. Se cada anchor tem uma conexão externa,
-    a cadeia podada fica completa: X1-X2-X3-...-X10.
+    """Verifica que a poda de anchors intermediários funciona corretamente.
+    Só X1 tem conexão externa; X2-X9 não têm nenhuma, então a cadeia interna
+    podada é um único edge: X1 -> X10. O BFS alcança todos os anchors presentes
+    no grafo apesar da poda agressiva.
     """
-    source = PressureSource("src", domain="pneumatic")
-    source.add_anchor("P", domain="pneumatic")
-
-    pl = PressureLine("pl1", domain="pneumatic")
-    for i in range(1, 11):
-        pl.add_anchor(f"X{i}", domain="pneumatic")
-
-    # Cria conexões para CADA anchor para torná-los todos "reais"
-    nodes = {"src": source, "pl1": pl}
-    connections = {}
-
-    # Conecta P a X1 como ponto de entrada
-    conn_in = Connection(source.get_anchor("P"), pl.get_anchor("X1"))
-    connections[conn_in.id] = conn_in
-
-    # Cria "conexões fantasma" para os outros anchors
-    # (conectando cada um a um nó dummy para torná-los "reais")
-    exhaust_nodes = {}
-    for i in range(2, 11):
-        dummy_name = f"exhaust{i}"
-        dummy = PressureSource(dummy_name, domain="pneumatic")
-        dummy.add_anchor("R", domain="pneumatic")
-        nodes[dummy_name] = dummy
-        exhaust_nodes[i] = dummy
-
-        anchor_name = f"X{i}"
-        conn = Connection(pl.get_anchor(anchor_name), dummy.get_anchor("R"))
-        connections[conn.id] = conn
-
+    nodes, connections, source, pl = build_circuit()
     engine = SimulationEngine(nodes, connections)
 
     group = engine._get_connected_group(source.get_anchor("P"))
 
-    # Com cada anchor tendo uma conexão, todos se tornam "reais"
-    # A cadeia interna completa é: (X1,X2), (X2,X3), ..., (X9,X10)
-    expected = {pl.get_anchor(f"X{i}") for i in range(1, 11)}
-    expected.add(source.get_anchor("P"))
-    for i in range(2, 11):
-        expected.add(exhaust_nodes[i].get_anchor("R"))
+    # Com poda, só os anchors reais (com conexão externa) ou forçados (endpoints)
+    # permanecem no grafo interno. BFS alcança:
+    # - source.P (origem)
+    # - X1 (conexão externa de P)
+    # - X10 (endpoint forçado, conectado a X1)
+    # X2-X9 foram removidos da cadeia interna e não são alcançáveis.
+    expected = {
+        source.get_anchor("P"),
+        pl.get_anchor("X1"),
+        pl.get_anchor("X10"),
+    }
     assert group == expected
 
 

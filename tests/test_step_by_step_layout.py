@@ -46,12 +46,12 @@ class TestPistonValveRegion:
         cyl_b = _node(result, "gen-cyl-B")
         assert cyl_a["position"]["x"] != cyl_b["position"]["x"]
 
-    def test_one_empty_column_reserved_between_consecutive_cylinders(self):
-        # A pedido do usuário: cada letra ocupa coluna VIRTUAL 2*idx (não
-        # mais 1*idx) na região de pistões/válvulas -- deixa a coluna
-        # ímpar entre cilindros consecutivos vazia, reservada pra um
-        # bloco de OrValve associado a cada cilindro (feature futura).
-        # Distância real entre letras vizinhas passa a ser 2*group_gap.
+    def test_column_gap_between_cylinders_is_sum_of_reserved_columns(self):
+        # Cada letra reserva 1 coluna à esquerda (lado PL) e 1 à direita
+        # (lado PR) no mínimo -- sem repetição (caso de "A+B+A-B-"), o
+        # espaço entre A e B é 1 (direita de A) + 1 (esquerda de B) + o
+        # próprio cilindro de A = 3 * group_gap, não 2 como antes (ver
+        # docs/superpowers/specs/2026-07-12-step-by-step-multi-cycle-or-valve-design.md).
         import json
         cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
         group_gap = cfg["columns"]["group_gap"]
@@ -60,11 +60,28 @@ class TestPistonValveRegion:
         result = layout.apply(data)
         cyl_a = _node(result, "gen-cyl-A")
         cyl_b = _node(result, "gen-cyl-B")
-        v42_a = _node(result, "gen-v42-A")
-        v42_b = _node(result, "gen-v42-B")
 
-        assert cyl_b["position"]["x"] - cyl_a["position"]["x"] == 2 * group_gap
-        assert v42_b["position"]["x"] - v42_a["position"]["x"] == 2 * group_gap
+        assert cyl_b["position"]["x"] - cyl_a["position"]["x"] == 3 * group_gap
+
+    def test_repeated_cylinder_reserves_extra_columns_for_its_or_chain(self):
+        # "A+B+A-A+B-A-": A+ e A- ocorrem 2x cada -> 1 OrValve por lado ->
+        # reserva 1 coluna de cada lado de A igual ao caso sem repetição
+        # (max(1, 2-1) == 1) -- não testa nada novo por si só, mas
+        # "A+A-A+A-A+A-" (3x cada) reserva max(1, 3-1) == 2 colunas de
+        # cada lado, o dobro do mínimo.
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        group_gap = cfg["columns"]["group_gap"]
+
+        data = step_by_step_pneumatic.generate(parse("A+A-A+A-A+A-B+B-"))
+        result = layout.apply(data)
+        cyl_a = _node(result, "gen-cyl-A")
+        cyl_b = _node(result, "gen-cyl-B")
+
+        # A reserva 2 colunas à direita (PR, 3 ocorrências de "-"), B
+        # reserva 1 coluna à esquerda (PL, mínimo) -> 2 + 1 + 1 (o próprio
+        # cilindro A) = 4 colunas de distância.
+        assert cyl_b["position"]["x"] - cyl_a["position"]["x"] == 4 * group_gap
 
     def test_cylinder_row_above_main_valve_row(self):
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))

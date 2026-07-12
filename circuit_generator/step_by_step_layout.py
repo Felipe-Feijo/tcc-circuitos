@@ -173,13 +173,41 @@ def apply(data: dict) -> dict:
     grid.add_row("main_valve", cyl_cell_w, _M.v42_height, rows["main_valve"],
                  x_origin=cols["cylinder_first_x"])
 
+    # Reserva de colunas por letra/lado: max(1, nº de OrValve daquele
+    # lado) -- cada OrValve na cadeia de um pilot ocupa 1 coluna dedicada
+    # (crescendo só em X, uma linha só -- ver "Posicionamento das
+    # OrValve", mais abaixo). O _role de cada OrValve
+    # (f"or_valve:{letra}:{PL|PR}:{i}") já entrega letra e lado
+    # diretamente -- não precisa reabrir a sequência original de eventos.
+    or_chain_len: dict[tuple[str, str], int] = {}
+    for n in data["nodes"]:
+        if n["type"] != "OrValve":
+            continue
+        _, or_letter, or_side, _or_i = n["_role"].split(":")
+        key = (or_letter, or_side)
+        or_chain_len[key] = or_chain_len.get(key, 0) + 1
+
+    def _pilot_reserve(letter: str, side: str) -> int:
+        # NOTA: nome deliberadamente diferente do "_reserved_cols" dict já
+        # usado por _place_aligned (definido no topo de apply()) -- reusar
+        # o mesmo nome aqui sombrearia aquele dict dentro deste escopo e
+        # quebraria _place_aligned silenciosamente.
+        return max(1, or_chain_len.get((letter, side), 0))
+
     letters = sorted(roles["cyl_by_letter"])
-    for idx, letter in enumerate(letters):
+    cyl_col: dict[str, int] = {}
+    col = 0
+    for letter in letters:
+        col += _pilot_reserve(letter, "PL")
+        cyl_col[letter] = col
+        col += 1 + _pilot_reserve(letter, "PR")
+
+    for letter in letters:
         cyl_id = roles["cyl_by_letter"][letter]
         v42_id = roles["v42_by_letter"][letter]
-        x, y = _place_aligned("cylinder", 2 * idx, cyl_id)
+        x, y = _place_aligned("cylinder", cyl_col[letter], cyl_id)
         node_by_id[cyl_id]["position"] = {"x": x, "y": y}
-        x, y = _place_aligned("main_valve", 2 * idx, v42_id)
+        x, y = _place_aligned("main_valve", cyl_col[letter], v42_id)
         node_by_id[v42_id]["position"] = {"x": x, "y": y}
 
     # ── PressureLines: uma linha do Grid por átomo, empilhadas ──────────────

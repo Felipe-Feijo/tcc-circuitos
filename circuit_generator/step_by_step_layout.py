@@ -29,7 +29,7 @@ import math
 from pathlib import Path
 
 from circuit_generator.grid_layout import Grid
-from circuit_generator.sprite_metrics import METRICS as _M
+from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
 _CONFIG_PATH = Path(__file__).parent / "step_by_step_layout_config.json"
 
@@ -434,7 +434,7 @@ def apply(data: dict) -> dict:
     def _target_x(node_id: str, anchor_name: str) -> float:
         ntype = node_type_map.get(node_id, "")
         pos = node_by_id[node_id]["position"]
-        local = _M.anchor_local.get(ntype, {}).get(anchor_name)
+        local = anchor_local_for_routing(ntype, anchor_name)
         return pos["x"] + local[0] if local else pos["x"]
 
     def _conn_sort_key(c: dict) -> tuple:
@@ -553,7 +553,7 @@ def apply(data: dict) -> dict:
         if ntype == "PressureLine" and anchor_name.startswith("X"):
             idx = int(anchor_name[1:])
             return (pos["x"] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing, pos["y"])
-        local = _M.anchor_local.get(ntype, {}).get(anchor_name)
+        local = anchor_local_for_routing(ntype, anchor_name)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
     astar_grid = build_grid(data["nodes"])

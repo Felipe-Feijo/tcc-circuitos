@@ -116,6 +116,12 @@ class ExpandableItem(NodeItem):
 
 
     def update_internal_connections(self):
+        # Só é chamado a partir de edições de layout (update_layout,
+        # remove_anchor_side) — criar/remover uma conexão externa em runtime
+        # não re-dispara isto. É seguro porque os anchors são colineares
+        # (um segmento único e uma cadeia dividida são visualmente idênticos)
+        # e a simulação é reconstruída do zero a cada rodada, então o
+        # agrupamento real nunca fica desatualizado ali.
         if getattr(self, "is_preview", False):
             return
 

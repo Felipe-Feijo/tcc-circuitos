@@ -800,3 +800,80 @@ class TestOrValvePlacement:
         assert len(pl_or_ids) == 2
         xs = sorted(node_by_id[nid]["position"]["x"] for nid in pl_or_ids)
         assert xs[1] - xs[0] == group_gap
+
+
+class TestMultiCycleEndToEnd:
+    def test_no_node_left_at_origin_for_multi_cycle_sequence(self):
+        data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
+        result = layout.apply(data)
+        at_origin = [n["id"] for n in result["nodes"]
+                     if n["position"]["x"] == 0 and n["position"]["y"] == 0]
+        assert at_origin == []
+
+    def test_or_valve_does_not_cross_any_valve_or_cylinder(self):
+        # Mesmo estilo geométrico já usado pra PL -> Valve_3_2_Ways.P
+        # (ver TestPressureLineToSigPAnchorClearsTheValve): nenhum
+        # segmento de fio que toca uma OrValve atravessa o retângulo de
+        # OUTRO componente.
+        from circuit_generator.astar_router import SPRITE_SIZES
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as _M
+
+        data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        def rect(node_id):
+            n = node_by_id[node_id]
+            w, h = SPRITE_SIZES.get(n["type"], (0, 0))
+            x, y = n["position"]["x"], n["position"]["y"]
+            return (x, y, x + w, y + h)
+
+        def anchor_xy(node_id, anchor_name):
+            n = node_by_id[node_id]
+            pos = n["position"]
+            if n["type"] == "PressureLine" and anchor_name.startswith("X"):
+                idx = int(anchor_name[1:])
+                list_origin = min(int(a[1:]) for a in n["properties"]["anchors"])
+                return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing,
+                        pos["y"] + _M.pl_pix_h)
+            local = anchor_local_for_routing(n["type"], anchor_name)
+            return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
+
+        def seg_crosses_rect(p1, p2, r):
+            x0, y0, x1, y1 = r
+            if abs(p1[0] - p2[0]) < 0.01:
+                x = p1[0]
+                ylo, yhi = sorted([p1[1], p2[1]])
+                return x0 < x < x1 and not (yhi < y0 or ylo > y1)
+            if abs(p1[1] - p2[1]) < 0.01:
+                y = p1[1]
+                xlo, xhi = sorted([p1[0], p2[0]])
+                return y0 < y < y1 and not (xhi < x0 or xlo > x1)
+            return False
+
+        obstacle_types = {"Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways",
+                           "DoubleActingCylinder", "OrValve"}
+        checked = 0
+        for c in result["connections"]:
+            s, t = c["source"], c["target"]
+            if node_type_map.get(s["node"]) != "OrValve" and node_type_map.get(t["node"]) != "OrValve":
+                continue
+            wps = c.get("waypoints")
+            if not wps:
+                continue
+            pts = ([anchor_xy(s["node"], s["anchor"])]
+                   + [(wp["x"], wp["y"]) for wp in wps]
+                   + [anchor_xy(t["node"], t["anchor"])])
+            for other_id, other in node_by_id.items():
+                if other_id in (s["node"], t["node"]):
+                    continue
+                if node_type_map.get(other_id) not in obstacle_types:
+                    continue
+                r = rect(other_id)
+                for i in range(len(pts) - 1):
+                    assert not seg_crosses_rect(pts[i], pts[i + 1], r), (
+                        f"{s} -> {t} crosses {other_id} ({node_type_map[other_id]})"
+                    )
+            checked += 1
+        assert checked > 0

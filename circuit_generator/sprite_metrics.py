@@ -151,7 +151,7 @@ class SpriteMetrics:
 
         v32_A_x  = self.anchor_local.get("Valve_3_2_Ways", {}).get("A", (254, 0))[0]
         fp_left  = int(v32_A_x + self.pilot_w)
-        fp_right = int((self.v32_width - v32_A_x) + self.pilot_w + self.pilot_side_offset_x["Valve_3_2_Ways"])
+        fp_right = int((self.v32_width - v32_A_x) + self.pilot_w + self.pilot_side_offset_x.get("Valve_3_2_Ways", 147.0))
         object.__setattr__(self, "sig_fp_left",  fp_left)
         object.__setattr__(self, "sig_fp_right", fp_right)
         object.__setattr__(self, "sig_spacing",  fp_left + fp_right)

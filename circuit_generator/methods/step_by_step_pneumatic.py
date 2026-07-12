@@ -247,12 +247,25 @@ def generate(events: list[tuple[str, str]]) -> dict:
             connect(src_id, src_anchor, f"gen-v42-{letter}", v42_pilot)
             continue
 
+        # X é a entrada ESQUERDA da OrValve, Y a DIREITA (anchor_local fixo,
+        # ver or_valve.py) -- e step_by_step_layout.py posiciona a cadeia
+        # crescendo pra ESQUERDA do cilindro no lado PL, mas pra DIREITA no
+        # lado PR (sign=-1/+1 em cyl_col +/- offset), com a OR anterior da
+        # cadeia (prev) sempre mais LONGE do cilindro que a nova. No lado
+        # PL isso já bate: prev fica à esquerda de cada nova OR, então
+        # prev->X (esquerda) é fisicamente correto. No lado PR o sentido
+        # inverte: prev fica à DIREITA de cada nova OR (mais longe do
+        # cilindro = mais pra direita nesse lado) -- por isso prev tem que
+        # ir em Y (direita) e a fonte nova em X (esquerda), senão o fio
+        # cruza por cima/baixo da própria OR pra alcançar o lado errado.
+        prev_anchor_name, new_anchor_name = ("X", "Y") if v42_pilot == "PL" else ("Y", "X")
+
         prev_id, prev_anchor = sources[0]
         for i in range(1, len(sources)):
             or_id = add_simple("OrValve", f"or_valve:{letter}:{v42_pilot}:{i - 1}")
-            connect(prev_id, prev_anchor, or_id, "X")
+            connect(prev_id, prev_anchor, or_id, prev_anchor_name)
             src_id, src_anchor = sources[i]
-            connect(src_id, src_anchor, or_id, "Y")
+            connect(src_id, src_anchor, or_id, new_anchor_name)
             prev_id, prev_anchor = or_id, "A"
         connect(prev_id, prev_anchor, f"gen-v42-{letter}", v42_pilot)
 

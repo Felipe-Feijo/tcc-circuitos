@@ -16,6 +16,50 @@ def _node(data, node_id):
     return next(n for n in data["nodes"] if n["id"] == node_id)
 
 
+def _obstacle_rect(node_by_id, node_id):
+    """Retângulo (x0, y0, x1, y1) do sprite de node_id, pra checagem de
+    cruzamento geométrico -- usa SPRITE_SIZES (0,0) se o tipo não tiver
+    tamanho conhecido."""
+    from circuit_generator.astar_router import SPRITE_SIZES
+    n = node_by_id[node_id]
+    w, h = SPRITE_SIZES.get(n["type"], (0, 0))
+    x, y = n["position"]["x"], n["position"]["y"]
+    return (x, y, x + w, y + h)
+
+
+def _anchor_xy(node_by_id, node_id, anchor_name):
+    """Posição real (x, y) de um anchor, pra checagem geométrica -- trata
+    anchors "Xi" de PressureLine à parte porque layout_anchors() (ver
+    step_by_step_layout._pl_anchor_x) posiciona pelo índice na lista, não
+    pelo número no nome."""
+    from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+    n = node_by_id[node_id]
+    pos = n["position"]
+    if n["type"] == "PressureLine" and anchor_name.startswith("X"):
+        idx = int(anchor_name[1:])
+        return (pos["x"] + _pl_anchor_x_offset(idx, n["properties"]["anchors"]), pos["y"] + _M.pl_pix_h)
+    local = anchor_local_for_routing(n["type"], anchor_name)
+    return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
+
+
+def _seg_crosses_rect(p1, p2, r):
+    """True se o segmento ortogonal p1->p2 atravessa o interior do
+    retângulo r. Só reconhece segmentos puramente verticais ou
+    horizontais -- um segmento diagonal nunca é considerado cruzamento
+    (não deveria existir num waypoint ortogonal, mas não trava o teste
+    silenciosamente tratando-o como horizontal)."""
+    x0, y0, x1, y1 = r
+    if abs(p1[0] - p2[0]) < 0.01:
+        x = p1[0]
+        ylo, yhi = sorted([p1[1], p2[1]])
+        return x0 < x < x1 and not (yhi < y0 or ylo > y1)
+    if abs(p1[1] - p2[1]) < 0.01:
+        y = p1[1]
+        xlo, xhi = sorted([p1[0], p2[0]])
+        return y0 < y < y1 and not (xhi < x0 or xlo > x1)
+    return False
+
+
 class TestRoleAndConnectionMaps:
     def test_role_maps_extract_cylinders_v42_pl_memory(self):
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
@@ -119,16 +163,12 @@ class TestConfirmationChains:
 
 class TestLogicRegion:
     def test_button_follows_the_same_diagonal_as_other_relays(self):
-        # Reversão de design: o bloco do átomo 0 (botão + sig de
-        # fechamento) antes ficava empilhado na MESMA coluna de MC_0 (ver
-        # histórico em docs/superpowers/specs/
-        # 2026-07-11-step-by-step-positioning-design.md). A pedido do
-        # usuário, o botão passa a seguir a MESMA regra diagonal geral de
-        # qualquer par Válvula1/Válvula2 (1 coluna à esquerda, 1 linha
-        # abaixo de quem alimenta): o botão é "Válvula 1" de MC_0. A sig
-        # de fechamento NÃO forma outro degrau diagonal -- está EM SÉRIE
-        # com o botão, então fica na MESMA coluna dele, 1 linha abaixo
-        # (ver test_closure_chain_tail_stacks_vertically_same_column).
+        # O botão segue a MESMA regra diagonal geral de qualquer par
+        # Válvula1/Válvula2 (1 coluna à esquerda, 1 linha abaixo de quem
+        # alimenta): é a "Válvula 1" de MC_0. A sig de fechamento NÃO
+        # forma outro degrau diagonal -- está EM SÉRIE com o botão, então
+        # fica na MESMA coluna dele, 1 linha abaixo (ver
+        # test_closure_chain_tail_stacks_vertically_same_column).
         import json
         cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
         logic_cell_w = cfg["columns"]["logic_cell_width"]
@@ -269,8 +309,6 @@ class TestRouting:
         Connections whose endpoints are NOT nearly aligned in x must still
         be routed -- if the router silently stopped routing those, this
         assertion should catch it."""
-        from circuit_generator.sprite_metrics import METRICS as _M
-
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         pl_conns = [c for c in result["connections"]
@@ -282,14 +320,17 @@ class TestRouting:
         nodes_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
-        def _anchor_xy(node_id: str, anchor: str) -> tuple[float, float]:
+        def _pl_anchor_xy_raw(node_id: str, anchor: str) -> tuple[float, float]:
+            # Como _anchor_xy (módulo), mas SEM o offset pl_pix_h em y --
+            # este teste só compara dx/dy contra STRAIGHT_THRESHOLD_PX pra
+            # decidir se a conexão precisa de roteamento, não a posição
+            # exata renderizada.
             node = nodes_by_id[node_id]
             x = node["position"]["x"]
             y = node["position"]["y"]
             if node["type"] == "PressureLine" and anchor.startswith("X"):
                 idx = int(anchor[1:])
-                list_origin = min(int(a[1:]) for a in node["properties"]["anchors"])
-                return (x + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, y)
+                return (x + _pl_anchor_x_offset(idx, node["properties"]["anchors"]), y)
             local = anchor_local_for_routing(node_type_map[node_id], anchor)
             return (x + local[0], y + local[1]) if local else (x, y)
 
@@ -297,8 +338,8 @@ class TestRouting:
 
         needs_routing = []
         for c in pl_conns:
-            sx, sy = _anchor_xy(c["source"]["node"], c["source"]["anchor"])
-            tx, ty = _anchor_xy(c["target"]["node"], c["target"]["anchor"])
+            sx, sy = _pl_anchor_xy_raw(c["source"]["node"], c["source"]["anchor"])
+            tx, ty = _pl_anchor_xy_raw(c["target"]["node"], c["target"]["anchor"])
             # A* router skips routing if either dx < 3 OR dy < 3 (straight line).
             # So connections only need routing if both dx >= 3 AND dy >= 3.
             if abs(sx - tx) >= STRAIGHT_THRESHOLD_PX and abs(sy - ty) >= STRAIGHT_THRESHOLD_PX:
@@ -441,7 +482,6 @@ class TestPressureLineReachesEveryTarget:
         # fallback de _nearest_pl_anchor silenciosamente devolvia um
         # anchor à ESQUERDA do alvo mesmo pedindo side="right".
         import string
-        from circuit_generator.sprite_metrics import METRICS as _M
 
         letters = list(string.ascii_uppercase[:16])
         events = [(l, "+", "ext") for l in letters] + [(l, "-", "ret") for l in letters]
@@ -451,8 +491,7 @@ class TestPressureLineReachesEveryTarget:
 
         def anchor_x(pl_node, anchor_name):
             idx = int(anchor_name[1:])
-            list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
-            return pl_node["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
+            return pl_node["position"]["x"] + _pl_anchor_x_offset(idx, pl_node["properties"]["anchors"])
 
         checked = 0
         for c in result["connections"]:
@@ -491,8 +530,7 @@ class TestValvePilotEntryDoesNotJump:
             pos = node["position"]
             if ntype == "PressureLine" and anchor_name.startswith("X"):
                 idx = int(anchor_name[1:])
-                list_origin = min(int(a[1:]) for a in node["properties"]["anchors"])
-                return pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
+                return pos["x"] + _pl_anchor_x_offset(idx, node["properties"]["anchors"])
             local = _M.anchor_local.get(ntype, {}).get(anchor_name)
             return pos["x"] + local[0] if local else pos["x"]
 
@@ -536,8 +574,7 @@ class TestPilotAnchorRobustToCommutation:
                     if c["target"]["node"] == "gen-mc-3" and c["target"]["anchor"] == "PR")
         pl = node_by_id[conn["source"]["node"]]
         idx = int(conn["source"]["anchor"][1:])
-        list_origin = min(int(a[1:]) for a in pl["properties"]["anchors"])
-        anchor_x = pl["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
+        anchor_x = pl["position"]["x"] + _pl_anchor_x_offset(idx, pl["properties"]["anchors"])
 
         assert anchor_x > worst_case_x, (
             f"anchor x={anchor_x} não ficou à direita do pior caso "
@@ -670,8 +707,7 @@ class TestPressureLineToSigPAnchorClearsTheValve:
                 continue
             pl = node_by_id[s["node"]]
             idx = int(s["anchor"][1:])
-            list_origin = min(int(a[1:]) for a in pl["properties"]["anchors"])
-            anchor_x = pl["position"]["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
+            anchor_x = pl["position"]["x"] + _pl_anchor_x_offset(idx, pl["properties"]["anchors"])
             valve_left_x = node_by_id[t["node"]]["position"]["x"]
             safe_x = valve_left_x - _M.pilot_w
             assert anchor_x <= safe_x, (
@@ -685,39 +721,10 @@ class TestPressureLineToSigPAnchorClearsTheValve:
         # Mesma regressão do teste acima, mas verificando o efeito real:
         # nenhum segmento do fio atravessa o retângulo de OUTRA válvula
         # no meio do caminho.
-        from circuit_generator.astar_router import SPRITE_SIZES
-        from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
-
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
-
-        def rect(node_id):
-            n = node_by_id[node_id]
-            w, h = SPRITE_SIZES.get(n["type"], (0, 0))
-            x, y = n["position"]["x"], n["position"]["y"]
-            return (x, y, x + w, y + h)
-
-        def anchor_xy(node_id, anchor_name):
-            n = node_by_id[node_id]
-            pos = n["position"]
-            if n["type"] == "PressureLine" and anchor_name.startswith("X"):
-                idx = int(anchor_name[1:])
-                list_origin = min(int(a[1:]) for a in n["properties"]["anchors"])
-                return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, pos["y"] + _M.pl_pix_h)
-            local = anchor_local_for_routing(n["type"], anchor_name)
-            return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
-
-        def seg_crosses_rect(p1, p2, r):
-            x0, y0, x1, y1 = r
-            if abs(p1[0] - p2[0]) < 0.01:
-                x = p1[0]
-                ylo, yhi = sorted([p1[1], p2[1]])
-                return x0 < x < x1 and not (yhi < y0 or ylo > y1)
-            y = p1[1]
-            xlo, xhi = sorted([p1[0], p2[0]])
-            return y0 < y < y1 and not (xhi < x0 or xlo > x1)
 
         obstacle_types = {"Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways", "DoubleActingCylinder"}
         checked = 0
@@ -728,17 +735,17 @@ class TestPressureLineToSigPAnchorClearsTheValve:
             wps = c.get("waypoints")
             if not wps:
                 continue
-            pts = ([anchor_xy(s["node"], s["anchor"])]
+            pts = ([_anchor_xy(node_by_id, s["node"], s["anchor"])]
                    + [(wp["x"], wp["y"]) for wp in wps]
-                   + [anchor_xy(t["node"], t["anchor"])])
+                   + [_anchor_xy(node_by_id, t["node"], t["anchor"])])
             for other_id, other in node_by_id.items():
                 if other_id in (s["node"], t["node"]):
                     continue
                 if node_type_map.get(other_id) not in obstacle_types:
                     continue
-                r = rect(other_id)
+                r = _obstacle_rect(node_by_id, other_id)
                 for a, b in zip(pts, pts[1:]):
-                    assert not seg_crosses_rect(a, b, r), (
+                    assert not _seg_crosses_rect(a, b, r), (
                         f"{s} -> {t}: segmento {a}->{b} atravessa {other_id} "
                         f"(retângulo {r}) em vez de desviar"
                     )
@@ -747,11 +754,13 @@ class TestPressureLineToSigPAnchorClearsTheValve:
 
 
 class TestOrValvePlacement:
-    def test_or_valve_chain_sits_on_its_own_row_between_cylinder_and_main_valve(self):
+    def test_or_valve_chain_sits_on_its_own_row_below_main_valve(self):
+        # A cadeia de OrValve fica um pouco ABAIXO da 4/2 (não entre
+        # cilindro e 4/2) -- ver docs/superpowers/specs/
+        # 2026-07-12-step-by-step-multi-cycle-or-valve-design.md.
         import json
         cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
-        cyl_y  = cfg["rows"]["cylinder"]
-        mv_y   = cfg["rows"]["main_valve"]
+        mv_y = cfg["rows"]["main_valve"]
 
         data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
         result = layout.apply(data)
@@ -759,7 +768,7 @@ class TestOrValvePlacement:
         assert len(or_nodes) == 2
         for n in or_nodes:
             assert n["position"] != {"x": 0, "y": 0}
-            assert cyl_y < n["position"]["y"] < mv_y
+            assert n["position"]["y"] > mv_y
         # todas as OrValve do circuito ficam na MESMA linha (crescem só em X)
         assert len({n["position"]["y"] for n in or_nodes}) == 1
 
@@ -815,42 +824,10 @@ class TestMultiCycleEndToEnd:
         # (ver TestPressureLineToSigPAnchorClearsTheValve): nenhum
         # segmento de fio que toca uma OrValve atravessa o retângulo de
         # OUTRO componente.
-        from circuit_generator.astar_router import SPRITE_SIZES
-        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as _M
-
         data = step_by_step_pneumatic.generate(parse("A+B+A-A+B-A-"))
         result = layout.apply(data)
         node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
-
-        def rect(node_id):
-            n = node_by_id[node_id]
-            w, h = SPRITE_SIZES.get(n["type"], (0, 0))
-            x, y = n["position"]["x"], n["position"]["y"]
-            return (x, y, x + w, y + h)
-
-        def anchor_xy(node_id, anchor_name):
-            n = node_by_id[node_id]
-            pos = n["position"]
-            if n["type"] == "PressureLine" and anchor_name.startswith("X"):
-                idx = int(anchor_name[1:])
-                list_origin = min(int(a[1:]) for a in n["properties"]["anchors"])
-                return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing,
-                        pos["y"] + _M.pl_pix_h)
-            local = anchor_local_for_routing(n["type"], anchor_name)
-            return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
-
-        def seg_crosses_rect(p1, p2, r):
-            x0, y0, x1, y1 = r
-            if abs(p1[0] - p2[0]) < 0.01:
-                x = p1[0]
-                ylo, yhi = sorted([p1[1], p2[1]])
-                return x0 < x < x1 and not (yhi < y0 or ylo > y1)
-            if abs(p1[1] - p2[1]) < 0.01:
-                y = p1[1]
-                xlo, xhi = sorted([p1[0], p2[0]])
-                return y0 < y < y1 and not (xhi < x0 or xlo > x1)
-            return False
 
         obstacle_types = {"Valve_3_2_Ways", "Valve_4_2_Ways", "Valve_5_2_Ways",
                            "DoubleActingCylinder", "OrValve"}
@@ -862,17 +839,17 @@ class TestMultiCycleEndToEnd:
             wps = c.get("waypoints")
             if not wps:
                 continue
-            pts = ([anchor_xy(s["node"], s["anchor"])]
+            pts = ([_anchor_xy(node_by_id, s["node"], s["anchor"])]
                    + [(wp["x"], wp["y"]) for wp in wps]
-                   + [anchor_xy(t["node"], t["anchor"])])
+                   + [_anchor_xy(node_by_id, t["node"], t["anchor"])])
             for other_id, other in node_by_id.items():
                 if other_id in (s["node"], t["node"]):
                     continue
                 if node_type_map.get(other_id) not in obstacle_types:
                     continue
-                r = rect(other_id)
+                r = _obstacle_rect(node_by_id, other_id)
                 for i in range(len(pts) - 1):
-                    assert not seg_crosses_rect(pts[i], pts[i + 1], r), (
+                    assert not _seg_crosses_rect(pts[i], pts[i + 1], r), (
                         f"{s} -> {t} crosses {other_id} ({node_type_map[other_id]})"
                     )
             checked += 1

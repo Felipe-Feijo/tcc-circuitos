@@ -376,6 +376,35 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
+    # ── OrValve.A → OrValve.X/Y (elo de cadeia multi-ciclo) ──────────────────
+    # A fica sempre no topo (exit "UP"). Sem este atalho, a A* geral às
+    # vezes prefere contornar por BAIXO das duas válvulas (passando pela
+    # folga entre or_row e a região de lógica, mais larga que a folga
+    # entre or_row e main_valve) -- confirmado pelo usuário, que pediu
+    # explicitamente pra passar por CIMA.
+    #
+    # PRECISA de um 3º waypoint que já pouse no Y real do alvo (tgt_px[1])
+    # ANTES do ponto final -- X/Y só aceitam entrada horizontal (exit_dir
+    # "left"/"right", ver or_valve.py), e connection_item.py
+    # (adjust_waypoints_for_node_move -> _shift_collinear_run) corrige
+    # automaticamente qualquer sequência de waypoints COLINEARES adjacente
+    # à borda do alvo pra bater com o Y real dele. Com só 2 waypoints (os
+    # dois na mesma altura "oy", ver versão anterior deste atalho), os DOIS
+    # compartilham o mesmo Y e a correção colapsa a ponte inteira pro Y do
+    # alvo -- destruindo a subida por cima (confirmado pelo usuário
+    # revendo o resultado: o fio ainda descia reto pelo meio). Com 3
+    # pontos, só o último (já no Y do alvo) é tocado -- os dois primeiros
+    # (na altura "oy", diferente) ficam fora da corrida colinear e
+    # preservam a ponte.
+    if src_type == "OrValve" and tgt_type == "OrValve":
+        ox, oy = src_off("UP")
+        tox, toy = tgt_off(tgt_dir)
+        return [
+            wp(src_px[0], oy),
+            wp(tox, oy),
+            wp(tox, toy),
+        ]
+
     # ── Direção de saída contextual ───────────────────────────────────────────
     # Para anchors verticais (UP/DOWN), usar a direção que aponta PARA o destino.
     # Para PressureLine (src ou tgt), a direção nominal é sempre "UP" (emissão),

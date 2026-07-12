@@ -12,9 +12,9 @@ Três regiões verticais (ver docs/superpowers/specs/
      cada uma É uma linha do Grid (diferente do cascata).
   3. Lógica (memória + sig de confirmação/relay), uma coluna por átomo.
      A Válvula 1 (relay) fica sempre 1 linha abaixo e 1 coluna à
-     esquerda da Válvula 2 (memória) que ela alimenta -- exceto o bloco
-     do átomo 0 (botão + sig de fechamento), que fica na MESMA coluna
-     que MC_0, empilhado verticalmente.
+     esquerda da Válvula 2 (memória) que ela alimenta -- inclusive o
+     bloco do átomo 0 (botão + sig de fechamento), tratado como mais um
+     par Válvula1/Válvula2 nessa mesma regra.
 
 Os anchors das PressureLines (X1, X2, ...) chegam do gerador de topologia
 com índices sequenciais arbitrários (sem noção de posição de tela) --
@@ -153,13 +153,10 @@ def apply(data: dict) -> dict:
 
     # ── Região de pistões/válvulas ────────────────────────────────────────
     #
-    #   Cada letra ocupa coluna VIRTUAL 2*idx (mesmo esquema de índice
-    #   dobrado da região de lógica, mais abaixo) -- deixa a coluna ÍMPAR
-    #   entre cilindros consecutivos vazia, de propósito: espaço
-    #   reservado para o bloco de uma OrValve associada a cada cilindro
-    #   (a implementar depois; ver pedido do usuário). cyl_cell_w
-    #   continua sendo a largura de UM slot -- a distância real entre
-    #   cilindros vizinhos passa a ser 2*cyl_cell_w.
+    #   Cada letra ocupa uma coluna virtual calculada mais abaixo (reserva
+    #   de colunas por letra/lado), não um índice fixo -- o espaço entre
+    #   cilindros consecutivos varia pra caber a cadeia de OrValve de cada
+    #   lado. cyl_cell_w é a largura de UM slot de coluna.
     cyl_cell_w = cols["group_gap"]
     grid.add_row("cylinder",   cyl_cell_w, _M.cyl_height, rows["cylinder"],
                  x_origin=cols["cylinder_first_x"])
@@ -179,10 +176,9 @@ def apply(data: dict) -> dict:
     # OrValve", mais abaixo). O _role de cada OrValve
     # (f"or_valve:{letra}:{PL|PR}:{i}") já entrega letra e lado
     # diretamente -- não precisa reabrir a sequência original de eventos.
+    or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
     or_chain_len: dict[tuple[str, str], int] = {}
-    for n in data["nodes"]:
-        if n["type"] != "OrValve":
-            continue
+    for n in or_nodes:
         _, or_letter, or_side, _or_i = n["_role"].split(":")
         key = (or_letter, or_side)
         or_chain_len[key] = or_chain_len.get(key, 0) + 1
@@ -213,7 +209,13 @@ def apply(data: dict) -> dict:
     # ── Cadeia de OrValve (multi-ciclo): uma linha própria, alinhada às
     # mesmas colunas virtuais de "cylinder"/"main_valve" ──────────────────
     #
-    #   Cada OrValve tem virtual_col = cyl_col[letra] +/- (i+1) (esquerda
+    #   A OR MAIS PRÓXIMA do cilindro tem que ser a ÚLTIMA da cadeia (cujo
+    #   "A" alimenta o pilot da 4/2 direto) -- fio final mais curto/central,
+    #   fontes brutas da PL mais longe. or_i=0 é a PRIMEIRA a ser criada
+    #   (mescla as 2 primeiras fontes), or_i=len-1 é a ÚLTIMA (a que
+    #   alimenta o pilot) -- por isso o offset é invertido:
+    #   (or_chain_len - or_i), não (or_i + 1).
+    #   Cada OrValve tem virtual_col = cyl_col[letra] +/- offset (esquerda
     #   pra PL, direita pra PR) -- pode ser NEGATIVO (ex: primeira letra,
     #   cadeia à esquerda). Grid.place indexa por ordem de chegada, nunca
     #   negativo (mesmo problema já resolvido pros anchors de
@@ -224,13 +226,13 @@ def apply(data: dict) -> dict:
     #   de x_origin, então a posição real continua
     #   cols["cylinder_first_x"] + virtual_col * cyl_cell_w -- a MESMA
     #   fórmula usada por "cylinder"/"main_valve".
-    or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
     if or_nodes:
         or_virtual_col: dict[str, int] = {}
         for n in or_nodes:
             _, or_letter, or_side, or_i = n["_role"].split(":")
             sign = -1 if or_side == "PL" else 1
-            or_virtual_col[n["id"]] = cyl_col[or_letter] + sign * (int(or_i) + 1)
+            offset = or_chain_len[(or_letter, or_side)] - int(or_i)
+            or_virtual_col[n["id"]] = cyl_col[or_letter] + sign * offset
 
         min_vcol = min(or_virtual_col.values())
         grid.add_row("or_row", cyl_cell_w, _M.or_height, rows["or_row"],
@@ -243,9 +245,7 @@ def apply(data: dict) -> dict:
         # cyl_col[letra] - (i+1) DECRESCE quando i cresce. Sem ordenar
         # aqui, a segunda OrValve de uma cadeia PL (vcol menor) chega DEPOIS
         # da primeira (vcol maior) e colide com o placeholder que a
-        # primeira já reservou pra essa coluna -- confirmado rodando
-        # test_or_valve_chain_of_two_does_not_overlap_itself sem este sort
-        # (ValueError: célula já ocupada por __reserved__).
+        # primeira já reservou pra essa coluna.
         for n in sorted(or_nodes, key=lambda n: or_virtual_col[n["id"]]):
             vcol = or_virtual_col[n["id"]]
             x, y = _place_aligned("or_row", vcol - min_vcol, n["id"])
@@ -272,13 +272,9 @@ def apply(data: dict) -> dict:
     # spec), nunca reaproveitando a coluna da memória do átomo anterior.
     # _place_aligned (definido acima, junto com _reserved_cols) evita que
     # a linha "memory" (esparsa em termos de índice virtual -- só usa os
-    # pares 0,2,4,...) sofra do problema de ordem-de-chegada do Grid --
-    # achado ao investigar um relato do usuário: o relay do átomo k
-    # estava caindo exatamente na MESMA coluna da memória do átomo k-1
-    # (confirmado rodando o código: sig.x == mc_anterior.x), porque antes
-    # desta correção a linha "memory" avançava 1 cell_width por átomo
-    # (não 2), fazendo o relay (memory.x - 1 cell_width) coincidir com a
-    # memória anterior.
+    # pares 0,2,4,...) sofra do problema de ordem-de-chegada do Grid: sem
+    # isso, o relay do átomo k cairia na mesma coluna da memória do átomo
+    # k-1.
     grid.add_row("memory", logic_cell_w, _M.v32_height, memory_y, x_origin=memory_x0)
     for k in sorted(roles["mc_by_idx"]):
         mc_id = roles["mc_by_idx"][k]
@@ -305,17 +301,13 @@ def apply(data: dict) -> dict:
     # cadeia de relay do átomo 1 (ex: gen-sig-A-ext-0) caem no mesmo
     # (x, y) -- em AMBAS as sequências de teste, não só na paralela.
     #
-    # Reversão de design (a pedido do usuário): o bloco do átomo 0 (botão
-    # + sig de fechamento) seguia antes uma regra própria -- MESMA coluna
-    # que MC_0, empilhado (ver histórico em
-    # docs/superpowers/specs/2026-07-11-step-by-step-positioning-design.md,
-    # seção "Bloco do átomo 0"). Agora o botão segue a MESMA regra
-    # diagonal geral de qualquer par Válvula1/Válvula2 (1 coluna à
-    # esquerda, 1 linha abaixo de quem alimenta): faz o papel de
-    # "Válvula 1" de MC_0. A cadeia de fechamento (closure_chain), por
-    # sua vez, está EM SÉRIE com o botão (não é outro par diagonal) --
-    # fica na MESMA coluna do botão, 1 linha abaixo, exatamente como
-    # relay_stack_N fica na mesma coluna do relay que ele estende.
+    # O botão segue a MESMA regra diagonal geral de qualquer par
+    # Válvula1/Válvula2 (1 coluna à esquerda, 1 linha abaixo de quem
+    # alimenta): faz o papel de "Válvula 1" de MC_0. A cadeia de
+    # fechamento (closure_chain), por sua vez, está EM SÉRIE com o botão
+    # (não é outro par diagonal) -- fica na MESMA coluna do botão, 1
+    # linha abaixo, exatamente como relay_stack_N fica na mesma coluna do
+    # relay que ele estende.
     #
     # Grid.place indexa colunas por ORDEM DE CHEGADA dentro da linha, não
     # pelo valor de column_key (ver grid_layout.py) -- col_idx nunca é
@@ -333,12 +325,11 @@ def apply(data: dict) -> dict:
     x, y = grid.place("btn_row", 0, btn_id)
     node_by_id[btn_id]["position"] = {"x": x, "y": y}
 
-    # A cadeia de fechamento é percorrida de trás pra frente ao posicionar
-    # (closure_chain[-1], cujo A alimenta btn.P, fica no topo -- mais
-    # perto do botão; closure_chain[0], que recebe P direto da PL do
-    # último átomo, fica no fundo) -- confirmado pelo usuário: o fio
-    # desce da PL até a válvula MAIS embaixo, e a cadeia de confirmação
-    # sobe (A -> P) até a última, que alimenta a Válvula 2 (aqui, o
+    # A cadeia de fechamento é percorrida de trás pra frente ao posicionar:
+    # closure_chain[-1] (cujo A alimenta btn.P) fica no topo, mais perto
+    # do botão; closure_chain[0] (recebe P direto da PL do último átomo)
+    # fica no fundo -- o fio desce da PL até a válvula mais embaixo, e a
+    # confirmação sobe (A -> P) até a última, que alimenta a Válvula 2 (o
     # botão) por cima. Mesmo princípio pro relay dos demais átomos, logo
     # abaixo.
     closure_chain_top_down = list(reversed(chains[btn_id]))
@@ -465,7 +456,7 @@ def apply(data: dict) -> dict:
     #   "coluna livre" que o cascata usa pro caso sig.P, porque a região
     #   de lógica do passo a passo está sempre abaixo de qualquer PL, sem
     #   a ambiguidade acima/abaixo que motiva aquela função lá).
-    def _pl_anchor_x(pl_node: dict, anchor_name: str) -> float:
+    def _pl_anchor_x(pl_node: dict, anchor_name: str, list_origin: int | None = None) -> float:
         # PressureLine.layout_anchors() (graphics/items/base/nodes/
         # expandable/pressure_line.py) posiciona cada anchor pelo seu
         # ÍNDICE NA LISTA (enumerate(self.anchor_list)), não pelo número
@@ -476,15 +467,20 @@ def apply(data: dict) -> dict:
         # qualquer reserva de anchors à esquerda -- mas só funciona se
         # aqui usarmos o menor índice ATUAL do array como origem (em vez
         # da constante 1), reproduzindo o mesmo deslocamento que
-        # layout_anchors() aplica de verdade.
+        # layout_anchors() aplica de verdade. list_origin pode ser
+        # passado pronto por quem já o calculou (ex: _nearest_pl_anchor,
+        # que chama isso uma vez por anchor -- recalcular aqui a cada vez
+        # tornaria essa varredura O(n²) no tamanho do array).
         pl_x = node_pos[pl_node["id"]][0]
-        list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
+        if list_origin is None:
+            list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
         return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - list_origin) * _M.pl_spacing
 
     def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any",
                             min_margin: float = 0.0) -> str:
         anchors = pl_node["properties"]["anchors"]
-        scored = [(int(n[1:]), _pl_anchor_x(pl_node, n), n) for n in anchors]
+        list_origin = min(int(a[1:]) for a in anchors)
+        scored = [(int(n[1:]), _pl_anchor_x(pl_node, n, list_origin), n) for n in anchors]
         if side == "left":
             candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x - min_margin]
             fallback = sorted(scored)[0][2]
@@ -508,9 +504,27 @@ def apply(data: dict) -> dict:
     pl_anchor_used: dict[tuple[str, int], tuple[str, float, float]] = {}
     conn_by_owner: dict[tuple[str, str], tuple] = {}
 
+    # Chaveado só por x arredondado (SEM o id da PL) -- ao contrário de
+    # pl_anchor_used acima. Usado pelas conexões que descem/sobem retas
+    # entre uma PL e outro componente (OrValve.X/Y, sig.P, e o fechamento
+    # de anel mc.A -> PL): duas fontes de PLs DIFERENTES escolhendo o
+    # mesmo X só viram um problema real quando os dois fios de fato SE
+    # CRUZAM -- não qualquer X repetido. Se a origem mais embaixo (maior Y)
+    # conecta na PL mais embaixo (maior YPL) e vice-versa, a ordem é
+    # consistente e os traços correm paralelos sem se cruzar. Só quando a
+    # ordem INVERTE (ex: origem mais embaixo mirando a PL mais em cima) é
+    # que os fios se cruzam de verdade e precisam ser empurrados -- mesmo
+    # critério "same_order" já usado abaixo pra colisão por-PL, aplicado
+    # aqui entre PLs diferentes. Não é reaproveitado pelas conexões PL/PR
+    # porque a nota acima (sobre pl_anchor_used) documenta um bug real que
+    # aconteceu ao tratar colisões de linhas DIFERENTES como se fossem da
+    # mesma linha -- aqui é deliberado, não
+    # repete aquele erro.
+    or_source_x_used: dict[int, tuple[str, float, float]] = {}
+
     def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
                            owner_y: float, conn_ref: dict, side: str,
-                           push_dir: int = 0) -> str:
+                           push_dir: int = 0, avoid_global_x: bool = False) -> str:
         # push_dir: direção forçada pra reempurrar em caso de colisão
         # (+1 = sempre mais pra direita, -1 = sempre mais pra esquerda,
         # 0 = heurística antiga baseada no meio da linha). Necessário pros
@@ -534,6 +548,17 @@ def apply(data: dict) -> dict:
                 return anc  # sem slot livre nessa direção -- desiste, mantém
             seen = seen | {anc}
             ax = _pl_anchor_x(pl_node, anc)
+
+            if avoid_global_x:
+                gx = round(ax)
+                prev_global = or_source_x_used.get(gx)
+                if prev_global is not None:
+                    prev_oid, prev_oy, prev_pl_y = prev_global
+                    same_order = (oy < prev_oy) == (pl_y < prev_pl_y)
+                    if prev_oid != oid and not same_order:
+                        return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
+                or_source_x_used[gx] = (oid, oy, pl_y)
+
             key = (pl_node["id"], round(ax))
             owner_key = (pl_node["id"], oid)
             if key not in pl_anchor_used:
@@ -589,6 +614,17 @@ def apply(data: dict) -> dict:
         if s_id in pl_node_map and s_anc.startswith("X"):
             pl = pl_node_map[s_id]
             tgt_x = _target_x(t_id, t_anc)
+            avoid_global_x = False
+            # owner identifica "o outro lado" da conexão pra fins de
+            # conflito -- normalmente t_id (o nó alvo) já é suficiente,
+            # porque cada nó só recebe 1 conexão por anchor relevante aqui
+            # (PL, PR, P). Mas uma OrValve recebe DUAS conexões distintas
+            # (X e Y, ambas com t_id igual) -- usando só t_id,
+            # _resolve_conflict trata a segunda como "mesmo owner, sem
+            # conflito" (linha "if prev_id == oid: return anc") e deixa as
+            # duas caírem no MESMO anchor. Inclui o anchor no owner só pra
+            # esse caso, pra tratá-las como donos DIFERENTES de verdade.
+            owner_id = f"{t_id}#{t_anc}" if node_type_map.get(t_id) == "OrValve" else t_id
             if t_anc == "PL":
                 anc = _nearest_pl_anchor(pl, tgt_x, "left")
                 push_dir = -1
@@ -608,18 +644,47 @@ def apply(data: dict) -> dict:
                 safe_x = valve_left_x - _M.pilot_w
                 anc = _nearest_pl_anchor(pl, safe_x, "left")
                 push_dir = -1
+                # Mesmo problema de cruzamento global do bloco X/Y da
+                # OrValve, mais abaixo: uma conexão PL -> sig.P pode
+                # escolher o mesmo X que uma conexão PL -> OrValve.X/Y de
+                # OUTRA PL, formando uma linha vertical contínua entre as
+                # duas -- usa o mesmo dict/critério de ordem.
+                avoid_global_x = True
+            elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
+                # X é a entrada ESQUERDA da OrValve (anchor_local fixo em
+                # x=0, ver sprite_metrics/or_valve.py) -- o anchor da PL
+                # precisa ficar à esquerda dela com uma margem de saída,
+                # senão o fio sobe reto e precisa de um jog lateral pra
+                # entrar.
+                anc = _nearest_pl_anchor(pl, tgt_x, "left", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "Y" and node_type_map.get(t_id) == "OrValve":
+                # Y é a entrada DIREITA da OrValve -- mesma ideia do X,
+                # espelhada.
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
+                avoid_global_x = True
             else:
                 anc = _nearest_pl_anchor(pl, tgt_x)
                 push_dir = 0
+                avoid_global_x = False
             conn["source"]["anchor"] = _resolve_conflict(
-                pl, anc, t_id, node_pos.get(t_id, (0, 0))[1], conn, "source", push_dir)
+                pl, anc, owner_id, node_pos.get(t_id, (0, 0))[1], conn, "source", push_dir,
+                avoid_global_x=avoid_global_x)
 
         elif t_id in pl_node_map and t_anc.startswith("X"):
             pl = pl_node_map[t_id]
             src_x = _target_x(s_id, s_anc)
             anc = _nearest_pl_anchor(pl, src_x)
+            # Mesmo cruzamento global do bloco acima (PL como FONTE, pra
+            # OrValve/sig.P): uma conexão com PL como ALVO (ex: mc.A ->
+            # PL, fechamento do anel) pode escolher o mesmo X que uma
+            # dessas em OUTRA linha, formando a mesma linha vertical
+            # contínua enganosa.
             conn["target"]["anchor"] = _resolve_conflict(
-                pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target")
+                pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target",
+                avoid_global_x=True)
 
     # ── Poda global das PressureLines ────────────────────────────────────
     #

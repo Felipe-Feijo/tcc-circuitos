@@ -27,9 +27,6 @@ Fluxo de pressão principal (anel):
 
 Pilots dos v42 (via linha do próprio átomo, sem duplicação):
   gen-pl-step{k} → v42.PL/PR             (um tap por evento do átomo)
-
-Multi-ciclo (mesma letra+direção repetida em átomos não-adjacentes) não é
-suportado -- ver `_check_no_multi_cycle` e a seção "Fora de escopo" do spec.
 """
 
 import uuid
@@ -73,27 +70,7 @@ def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
     return atoms
 
 
-def _check_no_multi_cycle(events: list[tuple]) -> None:
-    """Multi-ciclo (mesma letra+direção repetida em átomos não-adjacentes)
-    ainda não é suportado neste método -- ver spec, seção "Fora de escopo".
-    Levanta um erro claro em vez de gerar uma topologia fisicamente
-    incorreta (2 fontes de disparo diretas no mesmo pilot da 4/2, sem
-    OrValve para convergi-las)."""
-    seen: set[tuple[str, str]] = set()
-    for letter, direction, *_ in events:
-        key = (letter, direction)
-        if key in seen:
-            raise NotImplementedError(
-                f"Multi-ciclo não suportado: cilindro '{letter}' repete a "
-                f"direção '{direction}' em pontos não-adjacentes da "
-                f"sequência. Isso exigiria convergência via OrValve, fora "
-                f"do escopo deste método por enquanto."
-            )
-        seen.add(key)
-
-
 def generate(events: list[tuple[str, str]]) -> dict:
-    _check_no_multi_cycle(events)
     cylinders = extract_cylinders(events)
 
     nodes       = []
@@ -233,7 +210,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
     # Única fonte de SET do átomo 0: o botão.
     connect("gen-btn", "A", mc_ids[0], "PL")
 
-    # ── 5. Pilots das 4/2 alimentados direto pela linha do átomo ─────────
+    # ── 5. Pilots das 4/2 alimentados pela(s) linha(s) do(s) átomo(s) ────
     #
     #   Cada evento do átomo aciona o pilot correspondente da sua 4/2
     #   direto da linha do átomo -- sem duplicação (um único tap por
@@ -241,12 +218,43 @@ def generate(events: list[tuple[str, str]]) -> dict:
     #   eventos: a linha aceita quantos taps quiser, então alimentar 2+
     #   pilots ao mesmo tempo não exige nenhuma válvula extra (ao contrário
     #   do cascata, que precisa de fan_out/AndValve só pra isso).
+    #
+    #   Multi-ciclo (mesma letra+direção repetida em átomos não-adjacentes)
+    #   faz 2+ linhas independentes mirarem o MESMO pilot físico -- sem
+    #   convergência isso é fisicamente inválido (duas fontes de pressão na
+    #   mesma porta). Coleta em duas passadas (mesmo algoritmo usado em
+    #   cascade.py pro mesmo problema, ver docs/superpowers/specs/
+    #   2026-07-10-cascade-multi-cycle-or-valve-design.md): passada 1
+    #   acumula as fontes por pilot em vez de conectar na hora; passada 2
+    #   resolve -- 1 fonte conecta direto (idêntico ao código anterior,
+    #   mesma chamada na mesma ordem), 2+ fontes viram uma cadeia binária
+    #   de OrValve (só tem 2 entradas). _role de cada OrValve
+    #   (f"or_valve:{letra}:{pilot}:{i}") é o contrato lido por
+    #   step_by_step_layout.py pra saber quantas colunas reservar de cada
+    #   lado do cilindro.
 
+    triggers_for_pilot: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for k, atom in enumerate(atoms):
         pl_id = pl_ids[k]
         for e_idx, letter, direction in atom:
-            v42_pilot = "PL" if direction == "+" else "PR"
-            connect(pl_id, next_anchor(pl_id), f"gen-v42-{letter}", v42_pilot)
+            key = (letter, direction)
+            triggers_for_pilot.setdefault(key, []).append((pl_id, next_anchor(pl_id)))
+
+    for (letter, direction), sources in triggers_for_pilot.items():
+        v42_pilot = "PL" if direction == "+" else "PR"
+        if len(sources) == 1:
+            src_id, src_anchor = sources[0]
+            connect(src_id, src_anchor, f"gen-v42-{letter}", v42_pilot)
+            continue
+
+        prev_id, prev_anchor = sources[0]
+        for i in range(1, len(sources)):
+            or_id = add_simple("OrValve", f"or_valve:{letter}:{v42_pilot}:{i - 1}")
+            connect(prev_id, prev_anchor, or_id, "X")
+            src_id, src_anchor = sources[i]
+            connect(src_id, src_anchor, or_id, "Y")
+            prev_id, prev_anchor = or_id, "A"
+        connect(prev_id, prev_anchor, f"gen-v42-{letter}", v42_pilot)
 
     # ── 6. Confirmação por átomo ────────────────────────────────────────
     #

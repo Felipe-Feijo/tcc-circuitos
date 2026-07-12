@@ -5,8 +5,6 @@ docs/superpowers/specs/2026-07-10-step-by-step-pneumatic-design.md
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from circuit_generator.sequence_parser import parse
@@ -66,17 +64,64 @@ class TestAtomize:
         ]
 
 
-class TestMultiCycleGuard:
-    def test_repeated_letter_direction_pair_raises_not_implemented(self):
-        # "A+B+A-A+B-A-": A+ aparece em dois átomos não-adjacentes --
-        # multi-ciclo, fora de escopo (ver spec, seção "Fora de escopo").
-        events = parse("A+B+A-A+B-A-")
-        with pytest.raises(NotImplementedError):
-            sbs.generate(events)
+class TestMultiCyclePilotMerge:
+    def test_single_occurrence_still_connects_directly_no_or_valve(self):
+        # Regressão: sem repetição, comportamento idêntico ao atual.
+        data = sbs.generate(parse("A+B+A-B-"))
+        assert not [n for n in data["nodes"] if n["type"] == "OrValve"]
+        conns = _conns_to(data, "gen-v42-A", "PL")
+        assert len(conns) == 1
+        assert conns[0]["source"]["node"] == "gen-pl-step0"
 
-    def test_single_cycle_sequence_does_not_raise(self):
-        events = parse("A+B+A-B-")
-        sbs.generate(events)  # não deve levantar
+    def test_two_occurrences_merge_through_one_or_valve(self):
+        # "A+B+A-A+B-A-": A+ aparece nos átomos 0 e 3 (flat_idx 0 e 3);
+        # A- aparece nos átomos 2 e 5.
+        data = sbs.generate(parse("A+B+A-A+B-A-"))
+        or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
+        assert len(or_nodes) == 2  # 1 pro pilot PL de A, 1 pro PR de A
+
+        pl_or = next(n for n in or_nodes if n["_role"] == "or_valve:A:PL:0")
+        # entradas X/Y vêm das duas linhas dos átomos onde A+ ocorre
+        x_conn = next(c for c in data["connections"]
+                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "X")
+        y_conn = next(c for c in data["connections"]
+                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "Y")
+        assert {x_conn["source"]["node"], y_conn["source"]["node"]} == {"gen-pl-step0", "gen-pl-step3"}
+        # saída da OR alimenta o pilot PL da 4/2 de A
+        out_conn = next(c for c in data["connections"] if c["source"]["node"] == pl_or["id"])
+        assert out_conn == {
+            "source": {"node": pl_or["id"], "anchor": "A"},
+            "target": {"node": "gen-v42-A", "anchor": "PL"},
+        }
+
+    def test_three_occurrences_chain_two_or_valves(self):
+        data = sbs.generate(parse("A+A-A+A-A+A-"))
+        or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
+        assert len(or_nodes) == 4  # 2 pro PL de A (3 fontes), 2 pro PR de A (3 fontes)
+
+        pl_ors = sorted(
+            (n for n in or_nodes if n["_role"].startswith("or_valve:A:PL:")),
+            key=lambda n: n["_role"],
+        )
+        assert [n["_role"] for n in pl_ors] == ["or_valve:A:PL:0", "or_valve:A:PL:1"]
+
+        # a saída da primeira OR alimenta uma entrada da segunda
+        first_out = next(c for c in data["connections"] if c["source"]["node"] == pl_ors[0]["id"])
+        assert first_out["source"]["anchor"] == "A"
+        second_in = next(c for c in data["connections"]
+                          if c["target"]["node"] == pl_ors[1]["id"]
+                          and c["source"]["node"] == pl_ors[0]["id"])
+        assert second_in["target"]["anchor"] in ("X", "Y")
+
+        # a saída da segunda OR (última da cadeia) alimenta o pilot
+        final_out = next(c for c in data["connections"] if c["source"]["node"] == pl_ors[1]["id"])
+        assert final_out == {
+            "source": {"node": pl_ors[1]["id"], "anchor": "A"},
+            "target": {"node": "gen-v42-A", "anchor": "PL"},
+        }
+
+    def test_multi_cycle_sequence_does_not_raise(self):
+        sbs.generate(parse("A+B+A-A+B-A-"))  # não deve levantar NotImplementedError
 
 
 class TestBoilerplate:

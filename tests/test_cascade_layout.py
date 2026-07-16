@@ -327,3 +327,19 @@ class TestChildPositioningAndRouting:
         counts = {len(n["properties"]["anchors"]) for n in result["nodes"]
                   if n["type"] == "PressureLine"}
         assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"
+
+
+class TestEndToEndDispatch:
+    def test_layout_map_points_cascade_to_the_new_module(self):
+        from circuit_generator import circuit_generator as cg
+        assert cg.LAYOUT_MAP[("cascade", None)] is layout.apply
+
+    def test_full_pipeline_runs_without_raising_for_a_realistic_sequence(self):
+        # Sequência com múltiplos grupos, multi-ciclo e bloco paralelo --
+        # a mesma classe de estresse já usada nos testes de passo a passo.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        result = layout.apply(data)
+        assert len(result["nodes"]) == len(data["nodes"])
+        at_origin = [n["id"] for n in result["nodes"]
+                     if n["position"]["x"] == 0 and n["position"]["y"] == 0]
+        assert at_origin == []

@@ -800,7 +800,14 @@ def apply(data: dict) -> dict:
                     # anexado mostrando a rota esperada). mem[-1] (sem
                     # próxima memória acima) e o resto (PL/A) continuam
                     # com o stagger genérico abaixo.
-                    src_x = driving_x - _M.v32_width - _M.pilot_w
+                    #
+                    # REGRESSÃO REAL (feedback direto testando a UI, com
+                    # imagem anotada): a margem original (v32_width +
+                    # pilot_w = 400px) deixava o traço longe demais da
+                    # sig, criando um desvio visualmente grande em vez de
+                    # "colar" nela -- só pilot_w já é suficiente pra
+                    # limpar o atuador esquerdo (limit_switch) da sig.
+                    src_x = driving_x - _M.pilot_w
                 else:
                     # Espalha (stagger) o alvo por memória, crescendo pra
                     # direita conforme o índice -- cada memória passa a

@@ -604,9 +604,18 @@ class TestMemoryToPressureLineStagger:
             assert node_type_map.get(conn["target"]["node"]) == "PressureLine"
             wps = conn["waypoints"]
             entry_x = wps[-1]["x"]
-            assert entry_x <= driving_x - _M.v32_width, (
+            # Margem reduzida pra pilot_w (era v32_width+pilot_w -- feedback
+            # direto testando a UI: precisa "colar" na sig, não ficar
+            # longe dela). Tolerância de 1 pl_spacing pra quantização do
+            # anchor mais próximo (_nearest_pl_anchor nem sempre acerta o
+            # valor exato pedido).
+            assert entry_x <= driving_x - _M.pilot_w + _M.pl_spacing, (
                 f"mem[{i}].B entra em x={entry_x}, não fica à esquerda "
-                f"do corpo da sig que aciona mem[{i+1}] (x={driving_x})"
+                f"o suficiente da sig que aciona mem[{i+1}] (x={driving_x})"
+            )
+            assert entry_x > driving_x - _M.v32_width - _M.pilot_w, (
+                f"mem[{i}].B entra em x={entry_x}, longe demais da sig "
+                f"que aciona mem[{i+1}] (x={driving_x}) -- devia estar colado nela"
             )
             checked += 1
         assert checked > 0  # sanity check -- a sequência precisa exercitar isso

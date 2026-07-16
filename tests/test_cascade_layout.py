@@ -243,14 +243,34 @@ class TestLogicRegionRows:
         assert pl0["position"]["y"] < pl1["position"]["y"]
         assert pl0["position"] != {"x": 0, "y": 0}
 
-    def test_memory_sits_on_the_row_of_the_pl_it_drives_via_b(self):
-        # mem[0].B -> pl_grp[n_groups-1] (a última) -- mem[0] fica na
-        # mesma linha local M (a mais baixa) que pl_grp[1] (0-indexado).
-        data = cascade.generate(parse("A+B+A-B-"))
+    def test_memory_block_sits_entirely_below_every_pressure_line(self):
+        # Regressão real: a versão anterior colocava mem[i] na MESMA linha
+        # (mesmo y) da PL que ele aciona via B -- como a PL é desenhada
+        # como um traço fino nessa altura, o corpo bem mais alto da
+        # memória (v52_height) acabava cruzando por CIMA do traço da PL
+        # (visível testando na UI real). O bloco de memórias inteiro
+        # precisa ficar abaixo de TODAS as PLs, nunca na mesma altura de
+        # nenhuma delas -- mesmo padrão de step_by_step_layout.py (região
+        # de lógica sempre abaixo da região de PL, nunca intercalada).
+        data = cascade.generate(parse("A+B+A-B-A+A-C+C-"))  # 5 grupos, 4 memórias
+        result = layout.apply(data)
+        pl_ys = [_node(result, f"gen-pl-grp{g}")["position"]["y"] for g in range(1, 6)]
+        mem_ys = [_node(result, f"gen-mc-{i}")["position"]["y"] for i in range(4)]
+        assert min(mem_ys) > max(pl_ys), (
+            f"memória mais alta (y={min(mem_ys)}) não fica abaixo da PL "
+            f"mais baixa (y={max(pl_ys)})"
+        )
+
+    def test_memory_order_still_matches_the_pl_it_drives_via_b(self):
+        # O mapeamento lógico mem[i] <-> pl_grp[n_groups-1-i] continua
+        # valendo mesmo com o bloco de memórias deslocado pra baixo --
+        # mem[0] (a mais baixa) confirma o grupo mais baixo (pl_grp de
+        # maior índice), mem[n_mc-1] (a mais alta) confirma o mais alto.
+        data = cascade.generate(parse("A+B+A-B-A+A-C+C-"))
         result = layout.apply(data)
         mc0 = _node(result, "gen-mc-0")
-        pl1 = _node(result, "gen-pl-grp2")
-        assert mc0["position"]["y"] == pl1["position"]["y"]
+        mc3 = _node(result, "gen-mc-3")  # topo, per test_topmost_memory_confirmation...
+        assert mc0["position"]["y"] > mc3["position"]["y"]
 
     def test_button_sits_one_row_below_the_bottom_memory(self):
         import json

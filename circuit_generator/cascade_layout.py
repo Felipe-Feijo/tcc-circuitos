@@ -393,23 +393,30 @@ def apply(data: dict) -> dict:
         _region_a_bottom = rows["or_row"] + _M.or_height
     pl_base_y = _region_a_bottom + _region_a_margin
 
-    pl_row_y: dict[int, float] = {}  # group index (0-idx) -> y
     for g in range(n_groups):
         local_row = g + 1  # linha local 1..M
         y = pl_base_y + (local_row - 1) * rows["pl_gap"]
-        pl_row_y[g] = y
         pl_id = roles["pl_by_idx"][g]
         grid.add_row(f"pl_row_{g}", 200, _M.pl_pix_h, y, x_origin=memory_x0)
         x, y2 = grid.place(f"pl_row_{g}", 0, pl_id)
         node_by_id[pl_id]["position"] = {"x": x, "y": y2}
 
-    # linha da memória mem[i] = local row (M - i) -> mesma y de pl_grp[n_groups-1-i]
-    # -- uma linha de Grid dedicada por memória (mesmo padrão de
-    # pl_row_{g} acima), todas na coluna 0 = memory_x0.
+    # REGRESSÃO REAL (encontrada testando na UI de verdade, corrigida
+    # aqui): a versão anterior colocava mem[i] na MESMA linha (mesmo y)
+    # da PL que ele aciona via B -- como a PL é um barramento fino
+    # desenhado nessa altura exata, o corpo da memória (bem mais alto,
+    # v52_height) ficava literalmente por CIMA do traço da PL, cruzando
+    # o desenho. O mapeamento lógico mem[i] <-> pl_grp[n_groups-1-i]
+    # continua valendo (mesma ORDEM relativa: mem[n_mc-1] confirma o
+    # grupo mais alto, mem[0] o mais baixo), mas o bloco de memórias
+    # inteiro fica ABAIXO de TODAS as linhas de PL -- mesmo padrão já
+    # usado por step_by_step_layout.py (região de lógica inteira abaixo
+    # da região de PL, nunca intercalada linha a linha).
+    memory_y_base = pl_base_y + n_groups * rows["pl_gap"] + rows["logic_row_gap"]
     for i in range(n_mc):
         mem_id = roles["mc_by_idx"][i]
-        pl_group_idx = n_groups - 1 - i
-        y = pl_row_y[pl_group_idx]
+        local_rank = n_mc - 1 - i  # 0 = memória mais alta (mem[n_mc-1])
+        y = memory_y_base + local_rank * rows["pl_gap"]
         grid.add_row(f"memory_row_{i}", logic_cell_w, _M.v52_height, y, x_origin=memory_x0)
         x, y2 = grid.place(f"memory_row_{i}", 0, mem_id)
         node_by_id[mem_id]["position"] = {"x": x, "y": y2}

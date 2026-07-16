@@ -274,7 +274,23 @@ def apply(data: dict) -> dict:
             node_by_id[or_id]["position"] = {"x": x, "y": y}
 
     # ── Posiciona as cadeias de sig de cada folha (0+ linhas empilhadas) ──
+    #
+    # IMPORTANTE: _place_aligned pressupõe que, para uma dada row_id, as
+    # chamadas cheguem em ordem ASCENDENTE de virtual_col (ela pré-reserva
+    # placeholders pras colunas 0..virtual_col-1 ainda não usadas). O loop
+    # de folhas/leaves, porém, itera j = 0, 1, 2... e pro lado PR (sign=+1)
+    # o vcol correspondente é DESCENDENTE em j (offset = n pra j==0, depois
+    # n-j) -- ou seja, chamar _place_aligned na ordem de iteração de j
+    # quebraria a pré-condição e colidiria com um placeholder já reservado
+    # por uma chamada anterior de vcol maior (ValueError). Por isso,
+    # primeiro coletamos todas as colocações (por row_id) e só então
+    # chamamos _place_aligned em ordem ascendente de vcol dentro de cada
+    # row_id -- mesma estratégia já usada acima pro or_row
+    # (sorted(or_virtual_col, key=...)), generalizada aqui pra não depender
+    # de saber de antemão qual lado precisa ser revertido.
     sig_stack_row_ids_created: set[str] = set()  # rastreia linhas já criadas (Grid não expõe "já existe")
+    # row_id -> lista de (vcol, sig_id, depth)
+    pending_by_row: dict[str, list[tuple[int, str, int]]] = {}
     for letter in letters:
         for side, sign in (("PL", -1), ("PR", 1)):
             leaves = sources.get((letter, side), [])
@@ -285,12 +301,28 @@ def apply(data: dict) -> dict:
                 vcol = cyl_col[letter] + sign * offset
                 for depth, sig_id in enumerate(leaf):
                     row_id = f"sig_stack_{depth}"
-                    if row_id not in sig_stack_row_ids_created:
-                        grid.add_row(row_id, cyl_cell_w, _M.v32_height,
-                                     rows["or_row"] + (depth + 1) * _M.v32_height * 1.5,
-                                     x_origin=cols["cylinder_first_x"])
-                        sig_stack_row_ids_created.add(row_id)
-                    x, y = _place_aligned(row_id, vcol, sig_id)
-                    node_by_id[sig_id]["position"] = {"x": x, "y": y}
+                    pending_by_row.setdefault(row_id, []).append((vcol, sig_id, depth))
+
+    for row_id in sorted(pending_by_row, key=lambda rid: int(rid.rsplit("_", 1)[1])):
+        placements = pending_by_row[row_id]
+        depth = placements[0][2]
+        if row_id not in sig_stack_row_ids_created:
+            # NOTE pra Task 4/5: esta linha é GLOBAL (compartilhada por
+            # TODOS os cilindros/letras/lados do circuito), não uma linha
+            # por cilindro -- sig_stack_{depth} é chaveada só pela
+            # profundidade da cadeia. Isso satisfaz "PL e PR do MESMO
+            # cilindro compartilham a mesma altura de linha" como efeito
+            # colateral de um invariante mais amplo ("todo mundo na mesma
+            # profundidade compartilha a mesma linha", inclusive entre
+            # cilindros diferentes) -- não foi verificado se esse
+            # compartilhamento global continua correto quando a Região B
+            # (Tasks 4/5) for empilhada por cima destas linhas.
+            grid.add_row(row_id, cyl_cell_w, _M.v32_height,
+                         rows["or_row"] + (depth + 1) * _M.v32_height * 1.5,
+                         x_origin=cols["cylinder_first_x"])
+            sig_stack_row_ids_created.add(row_id)
+        for vcol, sig_id, _depth in sorted(placements, key=lambda p: p[0]):
+            x, y = _place_aligned(row_id, vcol, sig_id)
+            node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
     return data

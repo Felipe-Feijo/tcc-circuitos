@@ -144,3 +144,41 @@ class TestOrSigStaircase:
         pl_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:B:PL:"))
         pr_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:B:PR:"))
         assert node_by_id[pl_or]["position"]["y"] == node_by_id[pr_or]["position"]["y"]
+
+    def test_or_rows_are_shared_globally_across_different_cylinders(self):
+        # Documenta explicitamente o design ATUAL (intencional, não
+        # acidental): or_row e sig_stack_{depth} são linhas GLOBAIS,
+        # compartilhadas por TODOS os cilindros do circuito -- não uma
+        # linha por cilindro. Isso é uma consequência mais forte do que
+        # "PL e PR do MESMO cilindro compartilham altura" (que também vale,
+        # ver test_pl_and_pr_or_rows_align_at_the_same_height_per_cylinder),
+        # mas é o comportamento real hoje: aqui, tanto o OR de B (lado PL)
+        # quanto o OR de C (lado PL) caem na mesma or_row -> mesmo y.
+        data = cascade.generate(parse("A+B+C+A-B-C-A+B+C+A-B-C-"))
+        role_by_id = {n["id"]: n.get("_role", "") for n in data["nodes"]}
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        b_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:B:PL:"))
+        c_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:C:PL:"))
+        assert node_by_id[b_or]["position"]["y"] == node_by_id[c_or]["position"]["y"]
+        assert node_by_id[b_or]["position"]["x"] != node_by_id[c_or]["position"]["x"]
+
+    def test_multi_cylinder_multi_cycle_sequence_does_not_raise_and_has_no_collisions(self):
+        # Regressão: sequência com 3 cilindros e 2 ciclos completos produz,
+        # pro lado PR de cada cilindro, folhas cujo vcol é DESCENDENTE em j
+        # (offset = n pra j==0, depois n-j) -- chamar _place_aligned na
+        # ordem de iteração de j (em vez de ordem ascendente de vcol)
+        # colidia com um placeholder já reservado e lançava ValueError.
+        # Ver circuit_generator/cascade_layout.py, bloco "Posiciona as
+        # cadeias de sig de cada folha".
+        # Nem todo Valve_3_2_Ways gerado entra numa cadeia de folha desta
+        # Região A (alguns sigs só serão usados na Região B, Tasks 4/5,
+        # ainda não implementada) -- esses ficam no placeholder {0, 0} de
+        # cascade.generate e são ignorados aqui, mesma convenção já usada
+        # em test_multi_cycle_creates_one_or_and_two_leaf_columns acima.
+        data = cascade.generate(parse("A+B+C+A-B-C-A+B+C+A-B-C-"))
+        result = layout.apply(data)  # não deve lançar ValueError
+        positions = [(n["position"]["x"], n["position"]["y"]) for n in result["nodes"]
+                     if n["type"] in ("Valve_3_2_Ways", "OrValve")
+                     and n["position"] != {"x": 0, "y": 0}]
+        assert len(positions) == len(set(positions))

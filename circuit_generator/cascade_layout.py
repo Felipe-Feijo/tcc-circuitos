@@ -842,8 +842,43 @@ def apply(data: dict) -> dict:
         local = anchor_local_for_routing(ntype, anchor_name)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
+    # ── Roteamento manual determinístico: mem.PL/A/B -> PL ───────────────
+    #
+    #   Feedback direto testando a UI real: não dá pra confiar no A* pra
+    #   essas conexões -- mesmo com o stagger por memória (acima) evitando
+    #   que duas memórias mirem no mesmo anchor, o A* ainda podia escolher
+    #   um caminho que atravessa outra memória/sig no meio do caminho,
+    #   já que ele só evita OBSTÁCULOS conhecidos, não sabe que "cada
+    #   memória devia ficar na sua própria pista". Constrói a rota à mão:
+    #   sai na direção natural do anchor de origem (stub de EXIT_PX, igual
+    #   ao A*), dobra pra alinhar com a coluna (x) do anchor de destino já
+    #   escolhido acima, e sobe reto até ele -- 2 waypoints fixos, sem
+    #   nenhuma decisão de pathfinding envolvida.
+    _EXIT_DIR_VEC = {"UP": (0, -1), "DOWN": (0, 1), "LEFT": (-1, 0), "RIGHT": (1, 0)}
+    _MANUAL_EXIT_PX = 40  # mesmo EXIT_PX usado pelo astar_router, pra ficar visualmente coerente
+
+    manually_routed: set[int] = set()
+    for i, conn in enumerate(data.get("connections", [])):
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        if not (s_anc in ("PL", "A", "B") and node_type_map.get(s_id) == "Valve_5_2_Ways"
+                and node_type_map.get(t_id) == "PressureLine"):
+            continue
+        spos = _scene_xy(s_id, s_anc)
+        tpos = _scene_xy(t_id, t_anc)
+        if spos is None or tpos is None:
+            continue
+        src_dir = get_exit_dir("Valve_5_2_Ways", s_anc)
+        dx, dy = _EXIT_DIR_VEC[src_dir]
+        stub = (spos[0] + dx * _MANUAL_EXIT_PX, spos[1] + dy * _MANUAL_EXIT_PX)
+        corner = (tpos[0], stub[1])
+        conn["waypoints"] = [{"x": stub[0], "y": stub[1]}, {"x": corner[0], "y": corner[1]}]
+        manually_routed.add(i)
+
     astar_grid = build_grid(data["nodes"])
-    for conn in data.get("connections", []):
+    for i, conn in enumerate(data.get("connections", [])):
+        if i in manually_routed:
+            continue
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
         t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
         spos = _scene_xy(s_id, s_anc)

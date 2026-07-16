@@ -532,6 +532,47 @@ class TestMemoryToPressureLineStagger:
                 f"de origem {source_anchor!r}: {target_anchors}"
             )
 
+    def test_routing_is_manual_not_astar(self):
+        # Feedback direto do usuário: não dá pra confiar no A* pra essas
+        # conexões, mesmo com o stagger evitando anchors repetidos -- o
+        # A* podia escolher um caminho atravessando outra memória/sig no
+        # meio. Rota manual e determinística: stub reto na direção de
+        # saída do anchor (get_exit_dir), depois um cotovelo alinhando
+        # com a coluna do anchor de destino -- exatamente 2 waypoints,
+        # com o segundo já no MESMO x do anchor de destino (o trecho
+        # final até o anchor é reto, sem decisão de pathfinding).
+        from circuit_generator.astar_router import get_exit_dir
+
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for conn in result["connections"]:
+            s, t = conn["source"], conn["target"]
+            if (s["anchor"] not in ("PL", "A", "B")
+                    or node_type_map.get(s["node"]) != "Valve_5_2_Ways"
+                    or node_type_map.get(t["node"]) != "PressureLine"):
+                continue
+            wps = conn.get("waypoints")
+            assert wps is not None and len(wps) == 2, (
+                f"{s} -> {t}: esperava exatamente 2 waypoints (rota manual), achou {wps}"
+            )
+            src_pos = node_by_id[s["node"]]["position"]
+            src_dir = get_exit_dir("Valve_5_2_Ways", s["anchor"])
+            # o stub (1o waypoint) sai na direção correta a partir da origem;
+            # o cotovelo (2o waypoint) fica na MESMA altura do stub -- o
+            # trecho final até o anchor é sempre reto (mesmo x do anchor)
+            assert wps[1]["y"] == wps[0]["y"]
+            if src_dir == "UP":
+                assert wps[0]["y"] < src_pos["y"]
+            elif src_dir == "LEFT":
+                assert wps[0]["x"] < src_pos["x"]
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar isso
+
 
 class TestChildPositioningAndRouting:
     def test_every_node_has_role_removed(self):

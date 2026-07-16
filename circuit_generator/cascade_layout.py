@@ -920,8 +920,21 @@ def apply(data: dict) -> dict:
         if spos is None or tpos is None:
             continue
         src_dir = get_exit_dir("Valve_5_2_Ways", s_anc)
-        dx, dy = _EXIT_DIR_VEC[src_dir]
-        stub = (spos[0] + dx * _MANUAL_EXIT_PX, spos[1] + dy * _MANUAL_EXIT_PX)
+        if src_dir in ("LEFT", "RIGHT"):
+            # REGRESSÃO REAL (feedback direto testando a UI, com imagem
+            # anotada -- "rabinho"): PL (e PR, se algum dia usado aqui) já
+            # sai posicionado FORA do corpo por conta própria
+            # (anchor_local_for_routing = -pilot_w/+pilot_w, não em cima
+            # da borda como B/A) -- somar mais um stub de EXIT_PX podia
+            # jogar o ponto além de onde o anchor de destino realmente
+            # está (que costuma ficar mais perto do corpo, por causa do
+            # stagger), obrigando o traço a voltar pra trás logo na saída.
+            # Sem stub aqui: vai direto da origem até a coluna do anchor
+            # de destino.
+            stub = spos
+        else:
+            dx, dy = _EXIT_DIR_VEC[src_dir]
+            stub = (spos[0] + dx * _MANUAL_EXIT_PX, spos[1] + dy * _MANUAL_EXIT_PX)
         corner = (tpos[0], stub[1])
         conn["waypoints"] = [{"x": stub[0], "y": stub[1]}, {"x": corner[0], "y": corner[1]}]
         manually_routed.add(i)

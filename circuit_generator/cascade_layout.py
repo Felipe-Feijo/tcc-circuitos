@@ -37,6 +37,13 @@ _PL_ANCHOR_MIN_MARGIN = 20
 # específico (feedback direto testando a UI real).
 _CONFIRM_ROW_P_EXTRA_MARGIN = 90
 
+# Espalha (stagger) o alvo das conexões mem.PL/A/B -> PL por índice de
+# memória, em px, crescendo pra direita -- sem isso, toda memória mira no
+# MESMO anchor (mesmo src_x, não depende de qual memória), empilhando
+# várias conexões não-cruzantes na mesma coluna (feedback direto testando
+# a UI real).
+_MEM_PL_STAGGER = 60
+
 # Quantos anchors de sobra a poda global mantém além do range efetivamente
 # usado (used_min/used_max) em cada ponta da PressureLine -- ver
 # step_by_step_layout.py, mesma constante/motivo.
@@ -517,6 +524,10 @@ def apply(data: dict) -> dict:
     left_entry_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
     left_entry_sig_ids |= closure_sig_ids
 
+    # mem_id -> índice i (mc_by_idx invertido) -- usado abaixo pra
+    # espalhar (stagger) o alvo das conexões mem.PL/A/B -> PL por memória.
+    mc_idx_by_id = {mid: i for i, mid in roles["mc_by_idx"].items()}
+
     # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
     #
     #   Portado verbatim de step_by_step_layout.py (mesmo bloco, mesmo
@@ -742,6 +753,19 @@ def apply(data: dict) -> dict:
         elif t_id in pl_node_map and t_anc.startswith("X"):
             pl = pl_node_map[t_id]
             src_x = _target_x(s_id, s_anc)
+            # REGRESSÃO REAL (feedback direto testando a UI): toda
+            # memória calcula o MESMO src_x pra PL/A/B (o anchor local
+            # não depende de QUAL memória, só do tipo/anchor), então
+            # mem[0].B, mem[1].B, mem[2].B... miravam todas no MESMO
+            # anchor em suas respectivas PLs -- a checagem de conflito
+            # (avoid_global_x/same_order) não pega isso porque essas
+            # conexões não se CRUZAM entre si (mantêm ordem consistente),
+            # só ficam empilhadas na mesma coluna, atravessando o corpo de
+            # outras memórias/sigs no caminho. Espalha (stagger) o alvo
+            # por memória, crescendo pra direita conforme o índice --
+            # cada memória passa a mirar numa coluna própria.
+            if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
+                src_x += mc_idx_by_id[s_id] * _MEM_PL_STAGGER
             anc = _nearest_pl_anchor(pl, src_x)
             # Cobre, entre outros, mem[i].A/mem[i].B -> PL (fechamento de
             # anel / bus de grupo do cascata) -- já genérico, sem

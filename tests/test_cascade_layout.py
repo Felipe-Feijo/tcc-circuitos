@@ -493,6 +493,46 @@ class TestConfirmationStaircase:
         assert chain_sigs[0]["position"]["x"] != chain_sigs[1]["position"]["x"]
 
 
+class TestMemoryToPressureLineStagger:
+    def test_different_memories_never_share_the_same_pl_anchor(self):
+        # Regressão real (feedback direto testando a UI): mem[i].PL/A/B ->
+        # PL sempre mirava no MESMO src_x (o anchor local não depende de
+        # qual memória, só do tipo/anchor) -- diferentes memórias
+        # acabavam escolhendo o mesmo índice de anchor em suas respectivas
+        # PLs (não pega na checagem de conflito porque essas conexões não
+        # se cruzam entre si, só ficam empilhadas na mesma coluna,
+        # atravessando o corpo de outras memórias/sigs no caminho).
+        # Checa por tipo de anchor de origem (PL / A / B) separadamente --
+        # duas memórias diferentes usando o mesmo índice pra tipos DE
+        # ORIGEM diferentes (ex: mem[1].B e mem[3].A) não é o problema
+        # relatado (são conexões de natureza diferente, não ficam
+        # empilhadas uma sobre a outra); o que precisa ser único é o
+        # anchor entre memórias diferentes que usam o MESMO anchor de
+        # origem (ex: mem[0].B vs mem[1].B vs mem[2].B).
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        result = layout.apply(data)
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        anchors_by_source_anchor: dict[str, list[str]] = {}
+        checked = 0
+        for conn in result["connections"]:
+            s, t = conn["source"], conn["target"]
+            if (s["anchor"] not in ("PL", "A", "B")
+                    or node_type_map.get(s["node"]) != "Valve_5_2_Ways"
+                    or node_type_map.get(t["node"]) != "PressureLine"):
+                continue
+            anchors_by_source_anchor.setdefault(s["anchor"], []).append(t["anchor"])
+            checked += 1
+
+        assert checked > 0  # sanity check -- a sequência precisa exercitar isso
+        for source_anchor, target_anchors in anchors_by_source_anchor.items():
+            assert len(target_anchors) == len(set(target_anchors)), (
+                f"anchors repetidos entre memórias diferentes pro anchor "
+                f"de origem {source_anchor!r}: {target_anchors}"
+            )
+
+
 class TestChildPositioningAndRouting:
     def test_every_node_has_role_removed(self):
         data = cascade.generate(parse("A+B+A-B-A+A-"))

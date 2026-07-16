@@ -292,6 +292,54 @@ class TestLogicRegionRows:
         assert closure_sig["position"]["x"] == btn["position"]["x"]
         assert closure_sig["position"]["y"] > btn["position"]["y"]
 
+    def test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring(self):
+        # Regressão real (feedback direto testando a UI, com imagem
+        # anotada): a conexão PL -> sig.P das cadeias de confirmação da
+        # Região B (mem.PR e btn.P) entrava pela ESQUERDA (mesma lógica
+        # herdada do passo a passo para a Região A), passando por cima da
+        # mola quando a válvula estava no estado comutado (BODY_VISUALS[1]
+        # desloca o sprite +147px). Precisa sair pela DIREITA -- o
+        # endpoint final já é o pior-caso ajustado por
+        # anchor_local_for_routing("Valve_3_2_Ways","P") (mesmo fix de
+        # sprite_metrics.py), então o anchor de PL escolhido só precisa
+        # ficar à direita do sig (nunca à esquerda dele -- entrar pela
+        # esquerda é exatamente o bug original).
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        p_local_x = anchor_local_for_routing("Valve_3_2_Ways", "P")[0]
+        checked = 0
+        for conn in result["connections"]:
+            s, t = conn["source"], conn["target"]
+            if (t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways"
+                    or node_type_map.get(s["node"]) != "PressureLine"
+                    or t["node"] in region_a_sig_ids):
+                continue
+            wps = conn.get("waypoints")
+            assert wps, f"conexão {s} -> {t} sem waypoints"
+            entry_x = wps[-1]["x"]
+            sig_x = node_by_id[t["node"]]["position"]["x"]
+            assert entry_x >= sig_x, (
+                f"{s} -> {t}: entrada em x={entry_x} ficou à ESQUERDA do "
+                f"sig (x={sig_x}) -- exatamente o bug original"
+            )
+            # o endpoint final é sempre o pior-caso ajustado (sig_x + P local
+            # com deslocamento de comutação), independente do estado real
+            assert abs(entry_x - (sig_x + p_local_x)) < 1.0, (
+                f"{s} -> {t}: entrada em x={entry_x} não bate com o "
+                f"endpoint pior-caso esperado x={sig_x + p_local_x}"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar ao menos 1 dessas conexões
+
     def test_button_sits_one_row_below_the_bottom_memory(self):
         import json
         cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))

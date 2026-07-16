@@ -493,6 +493,13 @@ def apply(data: dict) -> dict:
     node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
     pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
 
+    # sig_ids que pertencem à Região A (folhas de _build_trigger_sources,
+    # empilhadas logo abaixo de or_row) -- usado abaixo pra diferenciar a
+    # direção de aproximação da conexão PL -> sig.P: Região A continua
+    # entrando pela esquerda (herdado do passo a passo), Região B
+    # (confirm_row, que alimenta mem.PR/btn.P) sai pela direita.
+    region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+
     # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
     #
     #   Portado verbatim de step_by_step_layout.py (mesmo bloco, mesmo
@@ -645,11 +652,32 @@ def apply(data: dict) -> dict:
             elif t_anc == "PR":
                 anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
                 push_dir = 1
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in region_a_sig_ids:
+                # Região A (folha de OR/sig-staircase, ver Task 3): entra
+                # pela esquerda -- mesma lógica herdada do passo a passo,
+                # onde a coluna à esquerda do sig costuma estar livre.
                 valve_left_x = node_by_id[t_id]["position"]["x"]
                 safe_x = valve_left_x - _M.pilot_w
                 anc = _nearest_pl_anchor(pl, safe_x, "left")
                 push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+                # Região B (confirm_row, alimenta mem.PR/btn.P -- ver
+                # Task 5): sai pela DIREITA em vez da esquerda (feedback
+                # direto testando a UI real, com imagem anotada mostrando
+                # a rota esperada: sai pra direita, depois sobe até o
+                # anchor mais próximo à direita). `tgt_x` (calculado acima
+                # via _target_x -> anchor_local_for_routing) já é o pior
+                # caso ajustado pro deslocamento de comutação (mesmo fix
+                # de anchor_local_for_routing("Valve_3_2_Ways","P") em
+                # sprite_metrics.py) -- usar um safe_x diferente aqui
+                # (ex: baseado só em v32_width+pilot_w) faria o roteador
+                # mirar num ponto MAIS À DIREITA do que o endpoint real
+                # (sempre tgt_x), obrigando o traço a voltar pra
+                # esquerda no último trecho -- exatamente o zigue-zague
+                # que este fix deveria eliminar, não criar.
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
                 avoid_global_x = True
             elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
                 anc = _nearest_pl_anchor(pl, tgt_x, "left", min_margin=_PL_ANCHOR_MIN_MARGIN)

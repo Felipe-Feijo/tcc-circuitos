@@ -536,11 +536,15 @@ class TestMemoryToPressureLineStagger:
         # Feedback direto do usuário: não dá pra confiar no A* pra essas
         # conexões, mesmo com o stagger evitando anchors repetidos -- o
         # A* podia escolher um caminho atravessando outra memória/sig no
-        # meio. Rota manual e determinística: stub reto na direção de
-        # saída do anchor (get_exit_dir), depois um cotovelo alinhando
-        # com a coluna do anchor de destino -- exatamente 2 waypoints,
-        # com o segundo já no MESMO x do anchor de destino (o trecho
-        # final até o anchor é reto, sem decisão de pathfinding).
+        # meio. Rota manual e determinística: pra B/A (saem retos da
+        # borda do corpo, sem margem própria), stub de EXIT_PX na direção
+        # de saída + um cotovelo -- 2 waypoints. Pra PL (já sai fora do
+        # corpo por conta própria, via anchor_local_for_routing =
+        # -pilot_w) SEM stub -- só o cotovelo, 1 waypoint -- REGRESSÃO
+        # REAL corrigida aqui: um stub == à própria origem produzia DOIS
+        # waypoints no MESMO ponto (segmento de comprimento zero),
+        # renderizado como um "rabinho" espúrio bem em cima do anchor
+        # (achado 2x testando a UI real, com imagem anotada).
         from circuit_generator.astar_router import get_exit_dir
 
         seq = "A+B+A-B-A+A-C+C-"
@@ -557,19 +561,21 @@ class TestMemoryToPressureLineStagger:
                     or node_type_map.get(t["node"]) != "PressureLine"):
                 continue
             wps = conn.get("waypoints")
-            assert wps is not None and len(wps) == 2, (
-                f"{s} -> {t}: esperava exatamente 2 waypoints (rota manual), achou {wps}"
-            )
+            assert wps, f"{s} -> {t}: sem waypoints"
             src_pos = node_by_id[s["node"]]["position"]
             src_dir = get_exit_dir("Valve_5_2_Ways", s["anchor"])
-            # o stub (1o waypoint) sai na direção correta a partir da origem;
-            # o cotovelo (2o waypoint) fica na MESMA altura do stub -- o
-            # trecho final até o anchor é sempre reto (mesmo x do anchor)
-            assert wps[1]["y"] == wps[0]["y"]
-            if src_dir == "UP":
-                assert wps[0]["y"] < src_pos["y"]
-            elif src_dir == "LEFT":
-                assert wps[0]["x"] < src_pos["x"]
+            if src_dir in ("LEFT", "RIGHT"):
+                # sem stub -- 1 waypoint só, nenhum ponto duplicado
+                assert len(wps) == 1, (
+                    f"{s} -> {t}: esperava 1 waypoint (sem stub, PL/PR), achou {wps}"
+                )
+            else:
+                # UP/DOWN (B/A): stub + cotovelo, sempre na MESMA altura
+                assert len(wps) == 2, (
+                    f"{s} -> {t}: esperava 2 waypoints (stub+cotovelo, B/A), achou {wps}"
+                )
+                assert wps[1]["y"] == wps[0]["y"]
+                assert wps[0]["y"] < src_pos["y"]  # stub sai pra cima (UP -- único caso B/A usam)
             checked += 1
         assert checked > 0  # sanity check -- a sequência precisa exercitar isso
 

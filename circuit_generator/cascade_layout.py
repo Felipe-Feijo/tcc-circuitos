@@ -937,11 +937,21 @@ def apply(data: dict) -> dict:
             # está (que costuma ficar mais perto do corpo, por causa do
             # stagger), obrigando o traço a voltar pra trás logo na saída.
             # Sem stub aqui: vai direto da origem até a coluna do anchor
-            # de destino.
-            stub = spos
-        else:
-            dx, dy = _EXIT_DIR_VEC[src_dir]
-            stub = (spos[0] + dx * _MANUAL_EXIT_PX, spos[1] + dy * _MANUAL_EXIT_PX)
+            # de destino -- SEGUNDA REGRESSÃO REAL (mesmo "rabinho",
+            # achada de novo testando a UI): como stub == spos nesse
+            # caso, os DOIS waypoints abaixo ficavam no mesmíssimo ponto
+            # (mesmo x, mesmo y) -- um segmento de comprimento zero, que o
+            # desenho renderiza como um "rabinho"/nó visual espúrio bem em
+            # cima do anchor. Um waypoint só (o cotovelo) já é suficiente:
+            # o primeiro segmento (anchor -> cotovelo) já é o trecho
+            # horizontal que sai da origem, sem precisar repetir o ponto
+            # de partida como waypoint.
+            corner = (tpos[0], spos[1])
+            conn["waypoints"] = [{"x": corner[0], "y": corner[1]}]
+            manually_routed.add(i)
+            continue
+        dx, dy = _EXIT_DIR_VEC[src_dir]
+        stub = (spos[0] + dx * _MANUAL_EXIT_PX, spos[1] + dy * _MANUAL_EXIT_PX)
         corner = (tpos[0], stub[1])
         conn["waypoints"] = [{"x": stub[0], "y": stub[1]}, {"x": corner[0], "y": corner[1]}]
         manually_routed.add(i)

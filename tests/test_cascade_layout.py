@@ -182,3 +182,54 @@ class TestOrSigStaircase:
                      if n["type"] in ("Valve_3_2_Ways", "OrValve")
                      and n["position"] != {"x": 0, "y": 0}]
         assert len(positions) == len(set(positions))
+
+
+class TestLogicRegionRows:
+    # NOTE: the brief's literal draft used "A+B+A-B-A+A-" for every test in
+    # this class, with a "# n_groups=2, n_mc=1" comment. As already found in
+    # TestRoleMaps above, that sequence actually produces n_groups=4,
+    # n_mc=3 under cascade.generate()'s grouping algorithm -- confirmed by
+    # running layout._build_role_maps() directly. With n_groups=4, mem[0].B
+    # connects to pl_grp[M-1-0] = pl_grp4 (0-idx 3), not pl_grp2 (0-idx 1)
+    # as test_memory_sits_on_the_row_of_the_pl_it_drives_via_b asserts --
+    # confirmed by dumping cascade.generate(parse("A+B+A-B-A+A-"))
+    # ["connections"]: it contains "gen-mc-0 B -> gen-pl-grp4 X1", never
+    # "-> gen-pl-grp2". "A+B+A-B-" (used by TestRoleMaps for the same
+    # reason) is the shortest sequence that actually yields the n_groups=2,
+    # n_mc=1 the brief's comment and assertions assume -- verified the same
+    # way: it produces "gen-mc-0 B -> gen-pl-grp2 X1", matching the test.
+    def test_pressure_lines_are_grid_rows_stacked_by_group_index(self):
+        data = cascade.generate(parse("A+B+A-B-"))  # n_groups=2, n_mc=1
+        result = layout.apply(data)
+        pl0 = _node(result, "gen-pl-grp1")
+        pl1 = _node(result, "gen-pl-grp2")
+        assert pl0["position"]["y"] < pl1["position"]["y"]
+        assert pl0["position"] != {"x": 0, "y": 0}
+
+    def test_memory_sits_on_the_row_of_the_pl_it_drives_via_b(self):
+        # mem[0].B -> pl_grp[n_groups-1] (a última) -- mem[0] fica na
+        # mesma linha local M (a mais baixa) que pl_grp[1] (0-indexado).
+        data = cascade.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        pl1 = _node(result, "gen-pl-grp2")
+        assert mc0["position"]["y"] == pl1["position"]["y"]
+
+    def test_button_sits_one_row_below_the_bottom_memory(self):
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        row_gap = cfg["rows"]["logic_row_gap"]
+
+        data = cascade.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        btn = _node(result, "gen-btn")
+        assert btn["position"]["y"] == mc0["position"]["y"] + row_gap
+        assert btn["position"]["x"] != mc0["position"]["x"]
+
+    def test_memories_and_button_occupy_distinct_columns(self):
+        data = cascade.generate(parse("A+B+A-B-"))
+        result = layout.apply(data)
+        mc0 = _node(result, "gen-mc-0")
+        btn = _node(result, "gen-btn")
+        assert mc0["position"]["x"] != btn["position"]["x"]

@@ -325,4 +325,51 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(row_id, vcol, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
+    # ── Região B: linhas de pressão + memórias (linhas locais 1..M) ──────
+    n_groups = roles["n_groups"]
+    n_mc     = roles["n_mc"]
+    memory_x0 = cols["cylinder_first_x"]
+    logic_cell_w = cols["logic_cell_width"]
+    # NOTE (interface from Task 3's actual implementation, not the original
+    # draft): Task 3 replaced a planned `max_rows_per_cyl` dict with
+    # `sig_stack_row_ids_created`, a `set[str]` of the `sig_stack_{depth}`
+    # row ids actually created (Region A's rows are global across all
+    # cylinders, keyed only by depth -- see Task 3's code comments). Since
+    # depths are always populated contiguously from 0, its length equals
+    # the max chain depth reached anywhere in Region A -- use that here
+    # instead of max_rows_per_cyl, which no longer exists.
+    pl_base_y = len(sig_stack_row_ids_created) * _M.v32_height * 1.5 + rows["pl_base"]
+
+    pl_row_y: dict[int, float] = {}  # group index (0-idx) -> y
+    for g in range(n_groups):
+        local_row = g + 1  # linha local 1..M
+        y = pl_base_y + (local_row - 1) * rows["pl_gap"]
+        pl_row_y[g] = y
+        pl_id = roles["pl_by_idx"][g]
+        grid.add_row(f"pl_row_{g}", 200, _M.pl_pix_h, y, x_origin=memory_x0)
+        x, y2 = grid.place(f"pl_row_{g}", 0, pl_id)
+        node_by_id[pl_id]["position"] = {"x": x, "y": y2}
+
+    # linha da memória mem[i] = local row (M - i) -> mesma y de pl_grp[n_groups-1-i]
+    # -- uma linha de Grid dedicada por memória (mesmo padrão de
+    # pl_row_{g} acima), todas na coluna 0 = memory_x0.
+    for i in range(n_mc):
+        mem_id = roles["mc_by_idx"][i]
+        pl_group_idx = n_groups - 1 - i
+        y = pl_row_y[pl_group_idx]
+        grid.add_row(f"memory_row_{i}", logic_cell_w, _M.v52_height, y, x_origin=memory_x0)
+        x, y2 = grid.place(f"memory_row_{i}", 0, mem_id)
+        node_by_id[mem_id]["position"] = {"x": x, "y": y2}
+
+    # ── Coluna do botão (coluna 1, à esquerda da coluna de memórias) ─────
+    if n_mc:
+        mc0_id = roles["mc_by_idx"][0]
+        mc0_y  = node_by_id[mc0_id]["position"]["y"]
+        btn_id = roles["btn_id"]
+        btn_x0 = memory_x0 - logic_cell_w
+        grid.add_row("btn_row", logic_cell_w, _M.v32_height,
+                     mc0_y + rows["logic_row_gap"], x_origin=btn_x0)
+        x, y = grid.place("btn_row", 0, btn_id)
+        node_by_id[btn_id]["position"] = {"x": x, "y": y}
+
     return data

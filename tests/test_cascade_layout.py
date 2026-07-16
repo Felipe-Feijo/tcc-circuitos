@@ -445,6 +445,30 @@ class TestConfirmationStaircase:
         confirm = _node(result, "gen-sig-B-ext-1")
         assert confirm["position"]["x"] == mem_col_x + layout._logic_cell_width()
 
+    def test_confirmation_sig_sits_diagonally_below_its_memory(self):
+        # Decisão confirmada com o usuário: a sig de confirmação PR fica
+        # na MESMA regra diagonal já usada pro par botão/mem[0] (1 linha
+        # abaixo de quem ela alimenta), não mais na mesma linha da
+        # memória -- consistência com o resto da Região B.
+        import json
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        row_gap = cfg["rows"]["logic_row_gap"]
+
+        data = cascade.generate(parse("A+B+A-B-A+A-C+C-"))
+        result = layout.apply(data)
+        mc3 = _node(result, "gen-mc-3")  # topo, per test acima
+        confirm = _node(result, "gen-sig-B-ext-1")
+        assert confirm["position"]["y"] == mc3["position"]["y"] + row_gap
+
+    def test_pl_gap_leaves_room_for_the_diagonal_confirmation_sig(self):
+        # rows["pl_gap"] (espaçamento entre linhas de memória) precisa ser
+        # >= logic_row_gap + v32_height, senão a sig diagonal de uma
+        # memória invade o espaço da próxima memória abaixo dela.
+        import json
+        from circuit_generator.sprite_metrics import METRICS as _M
+        cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))
+        assert cfg["rows"]["pl_gap"] >= cfg["rows"]["logic_row_gap"] + _M.v32_height
+
     def test_deep_row_confirmation_grows_in_columns_not_rows(self):
         # Se a confirmação de uma memória for uma cadeia de 2 sigs (bloco
         # paralelo antes dela), as 2 sigs ficam na MESMA linha (mesmo y),

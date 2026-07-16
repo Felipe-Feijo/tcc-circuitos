@@ -14,7 +14,7 @@
         "main_valve": 120,
         "or_row": 330,
         "pl_base": 500,
-        "pl_gap": 300,
+        "pl_gap": 550,
         "logic_row_gap": 350
     },
     "offsets": {

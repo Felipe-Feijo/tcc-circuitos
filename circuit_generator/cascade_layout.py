@@ -468,7 +468,12 @@ def apply(data: dict) -> dict:
         chain = _chain_feeding(target_id, target_anchor)
         if not chain:
             continue
-        target_y = node_by_id[target_id]["position"]["y"]
+        # Diagonal (1 linha abaixo da memória que alimenta), mesma regra
+        # já usada pro par botão/mem[0] -- decisão confirmada com o
+        # usuário (antes ficava na MESMA linha da memória). rows["pl_gap"]
+        # precisa ser >= logic_row_gap + v32_height pra essa diagonal não
+        # colidir com a próxima memória abaixo (ver cascade_layout_config.json).
+        target_y = node_by_id[target_id]["position"]["y"] + rows["logic_row_gap"]
         row_id = f"confirm_row_{target_id}"
         grid.add_row(row_id, logic_cell_w, _M.v32_height, target_y, x_origin=memory_x0)
         for k, sig_id in enumerate(chain):

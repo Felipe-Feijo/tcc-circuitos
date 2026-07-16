@@ -183,6 +183,43 @@ class TestOrSigStaircase:
                      and n["position"] != {"x": 0, "y": 0}]
         assert len(positions) == len(set(positions))
 
+    def test_pl_rows_start_below_the_deepest_sig_stack_row(self):
+        # Regressão real: pl_base_y (Região B) somava só
+        # `len(sig_stack_row_ids_created) * v32_height * 1.5` ao topo de
+        # or_row, esquecendo de somar a ALTURA do próprio corpo da linha
+        # mais funda -- com profundidade 2 (bloco paralelo antes de um
+        # multi-ciclo), a linha de PL mais alta (pl_base_y=1040) começava
+        # 10px ANTES do fim do sig_stack mais fundo (870..1050), uma
+        # sobreposição real de sprite.
+        #
+        # Só os sigs da REGIÃO A (folhas de _build_trigger_sources, que
+        # ficam empilhadas logo abaixo de or_row) importam aqui -- os sigs
+        # de confirmação da Região B (confirm_row) ficam ainda mais abaixo
+        # de qualquer forma, então incluí-los no cálculo do "mais fundo"
+        # tornaria este teste verdadeiro mesmo sem o fix (falso negativo).
+        from circuit_generator.sprite_metrics import METRICS as _M
+        seq = "(A+C+)B+A-B-C-B+B-A+A-"
+        data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        region_a_sig_ids = {
+            sig_id
+            for leaves in sources.values()
+            for leaf in leaves
+            for sig_id in leaf
+        }
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+
+        sig_stack_bottoms = [node_by_id[sid]["position"]["y"] + _M.v32_height
+                              for sid in region_a_sig_ids]
+        pl_tops = [n["position"]["y"] for n in result["nodes"] if n["type"] == "PressureLine"]
+        assert sig_stack_bottoms  # sanity check: a sequência precisa exercitar cadeia com profundidade > 0
+        assert min(pl_tops) >= max(sig_stack_bottoms), (
+            f"PL mais alta (y={min(pl_tops)}) sobrepõe o sig_stack mais "
+            f"fundo da Região A (termina em y={max(sig_stack_bottoms)})"
+        )
+
 
 class TestLogicRegionRows:
     # NOTE: the brief's literal draft used "A+B+A-B-A+A-" for every test in

@@ -371,7 +371,27 @@ def apply(data: dict) -> dict:
     # depths are always populated contiguously from 0, its length equals
     # the max chain depth reached anywhere in Region A -- use that here
     # instead of max_rows_per_cyl, which no longer exists.
-    pl_base_y = len(sig_stack_row_ids_created) * _M.v32_height * 1.5 + rows["pl_base"]
+    #
+    # REGRESSÃO REAL (encontrada testando na UI de verdade, corrigida
+    # aqui): a fórmula original somava só `N * v32_height * 1.5`
+    # (o ESPAÇAMENTO entre linhas de sig_stack) ao topo de or_row, sem
+    # somar a ALTURA do próprio corpo da linha mais funda -- com N=2, a
+    # linha de sig_stack mais funda termina em
+    # `or_row + 2*v32_height*1.5 + v32_height`, mas a fórmula antiga dava
+    # uma PL começando 1 v32_height ANTES disso: sobreposição real de
+    # sprite (ver test_pl_rows_start_below_the_deepest_sig_stack_row).
+    # Corrigido calculando o Y real do fundo da Região A (or_row sozinho
+    # se N==0, ou o fundo do sig_stack mais profundo se N>0) e preservando
+    # a MESMA margem que `rows["pl_base"]` já dava pro caso N==0 (a
+    # constante de config nunca mudou de significado, só o cálculo de onde
+    # a Região A realmente termina).
+    _region_a_margin = rows["pl_base"] - (rows["or_row"] + _M.or_height)
+    if sig_stack_row_ids_created:
+        _n_stack_rows = len(sig_stack_row_ids_created)
+        _region_a_bottom = rows["or_row"] + _n_stack_rows * _M.v32_height * 1.5 + _M.v32_height
+    else:
+        _region_a_bottom = rows["or_row"] + _M.or_height
+    pl_base_y = _region_a_bottom + _region_a_margin
 
     pl_row_y: dict[int, float] = {}  # group index (0-idx) -> y
     for g in range(n_groups):

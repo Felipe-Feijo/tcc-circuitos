@@ -449,11 +449,13 @@ def apply(data: dict) -> dict:
         return _walk_chain_to_leaf_generic(sig_in, head) if head else []
 
     # Linhas locais de cima pra baixo: mem[-1] (n_mc-1) é o topo (offset 0),
-    # mem[0] é o fundo. btn.P (fechamento) vem depois da última memória
-    # na ordem de acumulação -- tratado como mais uma "linha" abaixo de
-    # mem[0] pra fins de offset acumulado.
+    # mem[0] é o fundo. btn.P (fechamento) NÃO entra nesta escada -- ver
+    # bloco dedicado logo abaixo (mesma coluna do botão, não a escada à
+    # direita das memórias -- regressão real encontrada testando na UI:
+    # a versão anterior tratava btn.P como só mais uma "linha" da escada
+    # de confirmação das memórias, jogando a cadeia de fechamento pra
+    # bem longe da coluna do botão).
     ordered_targets = [(roles["mc_by_idx"][i], "PR") for i in range(n_mc - 1, -1, -1)]
-    ordered_targets.append((roles["btn_id"], "P"))
 
     offset = 0
     for target_id, target_anchor in ordered_targets:
@@ -467,6 +469,26 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(row_id, offset + 1 + k, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
         offset += len(chain)
+
+    # ── Cadeia de fechamento (btn.P): coluna do botão, empilhada abaixo ──
+    #
+    #   Mesma coluna de btn_x0 (não a coluna de memórias) -- igual ao
+    #   btn_row/closure_row/closure_stack_N do passo a passo. A cadeia é
+    #   percorrida de trás pra frente ao posicionar: o elo mais próximo do
+    #   botão (cujo A alimenta btn.P) fica na linha logo abaixo dele
+    #   (depth 1); elos mais distantes (mais perto da raiz alimentada pela
+    #   PL) ficam ainda mais abaixo.
+    if n_mc:
+        closure_chain = _chain_feeding(btn_id, "P")
+        if closure_chain:
+            closure_chain_top_down = list(reversed(closure_chain))
+            btn_y = node_by_id[btn_id]["position"]["y"]
+            for depth, sig_id in enumerate(closure_chain_top_down, start=1):
+                row_id = f"closure_stack_{depth}"
+                grid.add_row(row_id, logic_cell_w, _M.v32_height,
+                             btn_y + depth * rows["logic_row_gap"], x_origin=btn_x0)
+                x, y = grid.place(row_id, 0, sig_id)
+                node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
     node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
     pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}

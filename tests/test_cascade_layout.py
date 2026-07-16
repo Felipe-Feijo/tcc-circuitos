@@ -272,6 +272,26 @@ class TestLogicRegionRows:
         mc3 = _node(result, "gen-mc-3")  # topo, per test_topmost_memory_confirmation...
         assert mc0["position"]["y"] > mc3["position"]["y"]
 
+    def test_closure_sig_sits_in_the_button_column_not_the_confirmation_staircase(self):
+        # Regressão real (achada testando na UI): a cadeia de fechamento
+        # (btn.P) estava entrando na MESMA escada de confirmação das
+        # memórias (colunas à direita, offset acumulado) -- deveria ficar
+        # na coluna do PRÓPRIO botão, empilhada logo abaixo dele, igual
+        # ao btn_row/closure_row/closure_stack_N do passo a passo.
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        btn = node_by_id[roles["btn_id"]]
+        closure_sig_id = next(
+            c["source"]["node"] for c in result["connections"]
+            if c["target"]["node"] == roles["btn_id"] and c["target"]["anchor"] == "P"
+        )
+        closure_sig = node_by_id[closure_sig_id]
+        assert closure_sig["position"]["x"] == btn["position"]["x"]
+        assert closure_sig["position"]["y"] > btn["position"]["y"]
+
     def test_button_sits_one_row_below_the_bottom_memory(self):
         import json
         cfg = json.loads(layout._CONFIG_PATH.read_text(encoding="utf-8"))

@@ -181,6 +181,26 @@ def _build_trigger_sources(data: dict, roles: dict) -> dict[tuple[str, str], lis
     return sources
 
 
+def _logic_cell_width() -> float:
+    cfg = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+    return cfg["columns"]["logic_cell_width"]
+
+
+def _walk_chain_to_leaf_generic(sig_in: dict, sig_id: str) -> list[str]:
+    """Mesma lógica de _walk_chain_to_leaf (Task 2), fatorada pra reuso
+    aqui -- sobe sig.P <- sig.A até achar a raiz alimentada por uma
+    PressureLine."""
+    chain = [sig_id]
+    current = sig_id
+    while True:
+        src_type, src_id = sig_in.get(current, (None, None))
+        if src_type == "Valve_3_2_Ways":
+            chain.insert(0, src_id)
+            current = src_id
+        else:
+            return chain
+
+
 def apply(data: dict) -> dict:
     cfg  = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
     cols = cfg["columns"]
@@ -371,5 +391,41 @@ def apply(data: dict) -> dict:
                      mc0_y + rows["logic_row_gap"], x_origin=btn_x0)
         x, y = grid.place("btn_row", 0, btn_id)
         node_by_id[btn_id]["position"] = {"x": x, "y": y}
+
+    # ── Cadeias de confirmação PR (mem[i].PR) e fechamento (btn.P) ───────
+    node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+    sig_in: dict[str, tuple[str, str]] = {}
+    for conn in data["connections"]:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
+        if t_type == "Valve_3_2_Ways" and t_anc == "P":
+            sig_in[t_id] = (s_type, s_id)
+
+    def _chain_feeding(target_id: str, target_anchor: str) -> list[str]:
+        head = next((c["source"]["node"] for c in data["connections"]
+                     if c["target"]["node"] == target_id and c["target"]["anchor"] == target_anchor
+                     and node_type_map.get(c["source"]["node"]) == "Valve_3_2_Ways"), None)
+        return _walk_chain_to_leaf_generic(sig_in, head) if head else []
+
+    # Linhas locais de cima pra baixo: mem[-1] (n_mc-1) é o topo (offset 0),
+    # mem[0] é o fundo. btn.P (fechamento) vem depois da última memória
+    # na ordem de acumulação -- tratado como mais uma "linha" abaixo de
+    # mem[0] pra fins de offset acumulado.
+    ordered_targets = [(roles["mc_by_idx"][i], "PR") for i in range(n_mc - 1, -1, -1)]
+    ordered_targets.append((roles["btn_id"], "P"))
+
+    offset = 0
+    for target_id, target_anchor in ordered_targets:
+        chain = _chain_feeding(target_id, target_anchor)
+        if not chain:
+            continue
+        target_y = node_by_id[target_id]["position"]["y"]
+        row_id = f"confirm_row_{target_id}"
+        grid.add_row(row_id, logic_cell_w, _M.v32_height, target_y, x_origin=memory_x0)
+        for k, sig_id in enumerate(chain):
+            x, y = _place_aligned(row_id, offset + 1 + k, sig_id)
+            node_by_id[sig_id]["position"] = {"x": x, "y": y}
+        offset += len(chain)
 
     return data

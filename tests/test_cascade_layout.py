@@ -233,3 +233,62 @@ class TestLogicRegionRows:
         mc0 = _node(result, "gen-mc-0")
         btn = _node(result, "gen-btn")
         assert mc0["position"]["x"] != btn["position"]["x"]
+
+
+class TestConfirmationStaircase:
+    def test_no_two_confirmation_sigs_share_a_column_across_rows(self):
+        # 5 groups, 4 memories under cascade.generate()'s grouping (verified
+        # via layout._build_role_maps -- the brief's draft comment said
+        # "3 groups, 2 memories", which is not what this sequence produces).
+        data = cascade.generate(parse("A+B+A-B-A+A-C+C-"))
+        result = layout.apply(data)
+        role_by_id = {n["id"]: n.get("_role", "") for n in
+                      cascade.generate(parse("A+B+A-B-A+A-C+C-"))["nodes"]}
+        confirm_sigs = [n for n in result["nodes"]
+                        if n["type"] == "Valve_3_2_Ways"
+                        and role_by_id.get(n["id"], "").startswith("signal_valve:")
+                        and n["position"]["x"] > _node(result, "gen-mc-0")["position"]["x"]]
+        xs = [round(n["position"]["x"]) for n in confirm_sigs]
+        assert len(xs) == len(set(xs)), f"colunas repetidas: {xs}"
+
+    def test_topmost_memory_confirmation_is_the_innermost_column(self):
+        # NOTE: the brief's draft used a guessed id "gen-sig-C-ret-9" here.
+        # Verified the real id by running cascade.generate(parse(...)) and
+        # dumping data["connections"] for the (letter, "PR") edges into each
+        # mem[i].PR: with n_mc=4, mc_by_idx = {0: gen-mc-0, .., 3: gen-mc-3},
+        # and the topmost row (offset 0, processed first by apply()'s
+        # ordered_targets = mc_by_idx[n_mc-1 .. 0]) is gen-mc-3 (smallest y
+        # -- confirmed both by pl_row_y/local-row arithmetic in Task 4's
+        # code and by directly reading positions after layout.apply()).
+        # gen-mc-3.PR is fed straight from a PressureLine via a single sig,
+        # gen-sig-B-ext-1 (connection "gen-sig-B-ext-1.A -> gen-mc-3.PR",
+        # "gen-pl-grp1.X4 -> gen-sig-B-ext-1.P") -- chain length 1, so it
+        # lands at offset 0 -> virtual_col 1 -> mem_col_x + one cell width.
+        data = cascade.generate(parse("A+B+A-B-A+A-C+C-"))
+        result = layout.apply(data)
+        mem_col_x = _node(result, "gen-mc-1")["position"]["x"]  # any mem: shared column
+        confirm = _node(result, "gen-sig-B-ext-1")
+        assert confirm["position"]["x"] == mem_col_x + layout._logic_cell_width()
+
+    def test_deep_row_confirmation_grows_in_columns_not_rows(self):
+        # Se a confirmação de uma memória for uma cadeia de 2 sigs (bloco
+        # paralelo antes dela), as 2 sigs ficam na MESMA linha (mesmo y),
+        # colunas diferentes.
+        #
+        # NOTE: the brief's draft filtered on
+        # role.startswith("signal_valve:2") assuming role encodes chain
+        # depth -- it does not (cascade.py builds it as
+        # f"signal_valve:{g_idx*100+e_idx}{role_suffix}", verified by
+        # reading circuit_generator/methods/cascade.py line ~299 and by
+        # dumping the real roles for this sequence: no role starts with
+        # "signal_valve:2" at all here). Verified directly instead, by
+        # walking the mem[i].PR chains the same way apply() does: for
+        # "A+B+(A-B-)A+A-" (n_groups=4, n_mc=3), mem[1] (gen-mc-1) is the
+        # only target whose confirmation chain has length 2 --
+        # ["gen-sig-A-ret-2", "gen-sig-B-ret-3"] (the parallel block
+        # (A-B-) preceding it).
+        data = cascade.generate(parse("A+B+(A-B-)A+A-"))
+        result = layout.apply(data)
+        chain_sigs = [_node(result, "gen-sig-A-ret-2"), _node(result, "gen-sig-B-ret-3")]
+        assert chain_sigs[0]["position"]["y"] == chain_sigs[1]["position"]["y"]
+        assert chain_sigs[0]["position"]["x"] != chain_sigs[1]["position"]["x"]

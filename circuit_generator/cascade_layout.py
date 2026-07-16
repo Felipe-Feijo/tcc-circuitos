@@ -35,7 +35,7 @@ _PL_ANCHOR_MIN_MARGIN = 20
 # da escada de confirmação PR das memórias (Região B, confirm_row) --
 # _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava pouca folga nesse caso
 # específico (feedback direto testando a UI real).
-_CONFIRM_ROW_P_EXTRA_MARGIN = 90
+_CONFIRM_ROW_P_EXTRA_MARGIN = 150
 
 # Espalha (stagger) o alvo das conexões mem.PL/A/B -> PL por índice de
 # memória, em px, crescendo pra direita -- sem isso, toda memória mira no
@@ -538,14 +538,19 @@ def apply(data: dict) -> dict:
     mc_idx_by_id = {mid: i for i, mid in roles["mc_by_idx"].items()}
 
     # Rastreia os X (arredondados, globais -- não por PL) já usados pelas
-    # conexões mem.PL/A/B -> PL, pra garantir que memórias DIFERENTES
-    # nunca acabem na mesma coluna mesmo indo pra PLs diferentes --
-    # _resolve_conflict/avoid_global_x sozinho não pega isso quando as
-    # duas rotas não se cruzam (same_order), que é justamente o caso mais
-    # comum aqui (achado testando a UI real: mem[2] e mem[3] colidindo
-    # por coincidência, uma vinda do cálculo "à esquerda da 3/2" e outra
-    # do stagger genérico).
-    _mem_pl_used_x: set[int] = set()
+    # conexões mem.PL/A/B -> PL, SEPARADO POR TIPO de anchor de origem
+    # (PL/A/B cada um com seu próprio set) -- pra garantir que memórias
+    # DIFERENTES usando o MESMO tipo de anchor nunca acabem na mesma
+    # coluna mesmo indo pra PLs diferentes. _resolve_conflict/
+    # avoid_global_x sozinho não pega isso quando as duas rotas não se
+    # cruzam (same_order), que é justamente o caso mais comum aqui
+    # (achado testando a UI real: mem[2].B e mem[3].B colidindo por
+    # coincidência, um vindo do cálculo "à esquerda da 3/2" e outro do
+    # stagger genérico). Separado por tipo (não um set global único) pra
+    # não deixar o dedup de B empurrar o anchor de uma conexão PL sem
+    # necessidade -- regressão real: o usuário reportou o PL mudando de
+    # posição mesmo sem nenhum pedido de mudança ali.
+    _mem_pl_used_x: dict[str, set[int]] = {"PL": set(), "A": set(), "B": set()}
 
     # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
     #
@@ -802,15 +807,17 @@ def apply(data: dict) -> dict:
                     # mirar numa coluna própria.
                     src_x += mem_idx * _MEM_PL_STAGGER
             anc = _nearest_pl_anchor(pl, src_x)
-            if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
+            if (node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id
+                    and s_anc in _mem_pl_used_x):
+                used_x = _mem_pl_used_x[s_anc]
                 gx = round(_pl_anchor_x(pl, anc))
                 _guard = 0
-                while gx in _mem_pl_used_x and _guard < n_mc + 2:
+                while gx in used_x and _guard < n_mc + 2:
                     idx = int(anc[1:]) + 1
                     anc = f"X{idx}"
                     gx = round(_pl_anchor_x(pl, anc))
                     _guard += 1
-                _mem_pl_used_x.add(gx)
+                used_x.add(gx)
             # Cobre, entre outros, mem[i].A/mem[i].B -> PL (fechamento de
             # anel / bus de grupo do cascata) -- já genérico, sem
             # substituição (ver Task 6 brief, item 2: "a mirrored branch

@@ -310,48 +310,84 @@ class TestLogicRegionRows:
         assert closure_sig["position"]["x"] == btn["position"]["x"]
         assert closure_sig["position"]["y"] > btn["position"]["y"]
 
-    def test_confirmation_chain_sig_enters_from_the_left(self):
+    def test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring(self):
         # Regressão real (feedback direto testando a UI, com imagem
-        # anotada): a escada de confirmação PR das memórias (Região B,
-        # confirm_row) entrava pela DIREITA -- decisão de uma rodada de
-        # feedback anterior, que alegava que a esquerda cruzava a mola no
-        # estado comutado. Testado de novo com uma sequência real: é a
-        # entrada pela DIREITA que cruza a mola nessa geometria de sprite
-        # (mola desenhada à direita do corpo) -- o próprio traço passa por
-        # cima do zigue-zague a caminho de um anchor de PL à direita.
-        # Unificado com a cadeia de fechamento (mesmo formato de válvula,
-        # mesma mola à direita -- ver test_closure_sig_still_enters_from_the_left
-        # logo abaixo, que já evitava esse cruzamento entrando pela
-        # esquerda).
-        seq = "A+B+C+A-B-C-"
+        # anotada): a conexão PL -> sig.P das cadeias de confirmação da
+        # Região B (mem.PR e btn.P) entrava pela ESQUERDA (mesma lógica
+        # herdada do passo a passo para a Região A), passando por cima da
+        # mola quando a válvula estava no estado comutado (BODY_VISUALS[1]
+        # desloca o sprite +147px). Precisa sair pela DIREITA -- o
+        # endpoint final já é o pior-caso ajustado por
+        # anchor_local_for_routing("Valve_3_2_Ways","P") (mesmo fix de
+        # sprite_metrics.py), então o anchor de PL escolhido só precisa
+        # ficar à direita do sig (nunca à esquerda dele -- entrar pela
+        # esquerda é exatamente o bug original).
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+
+        seq = "A+B+A-B-A+A-C+C-"
         data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+
+        # A cadeia de fechamento (btn.P) também entra pela esquerda (ver
+        # test_closure_sig_still_enters_from_the_left abaixo) -- excluída
+        # aqui do jeito mesmo, andando pra trás a partir de btn.P via
+        # sig.A -> sig.P, sem duplicar _chain_feeding (privada do módulo).
+        raw_data = cascade.generate(parse(seq))
+        node_type_map_raw = {n["id"]: n["type"] for n in raw_data["nodes"]}
+        sig_in_raw: dict[str, str] = {}
+        for c in raw_data["connections"]:
+            if (node_type_map_raw.get(c["target"]["node"]) == "Valve_3_2_Ways"
+                    and c["target"]["anchor"] == "P"
+                    and node_type_map_raw.get(c["source"]["node"]) == "Valve_3_2_Ways"):
+                sig_in_raw[c["target"]["node"]] = c["source"]["node"]
+        closure_sig_ids = set()
+        head = next((c["source"]["node"] for c in raw_data["connections"]
+                     if c["target"]["node"] == roles["btn_id"] and c["target"]["anchor"] == "P"), None)
+        while head is not None:
+            closure_sig_ids.add(head)
+            head = sig_in_raw.get(head)
+
         result = layout.apply(data)
         node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
-        confirm_sig_id = next(
-            c["source"]["node"] for c in result["connections"]
-            if c["source"]["anchor"] == "A" and c["target"]["anchor"] == "PR"
-            and node_type_map.get(c["target"]["node"]) == "Valve_5_2_Ways"
-            and node_type_map.get(c["source"]["node"]) == "Valve_3_2_Ways"
-        )
-        conn = next(c for c in result["connections"]
-                    if c["target"]["node"] == confirm_sig_id and c["target"]["anchor"] == "P")
-        wps = conn.get("waypoints")
-        assert wps, f"conexão {conn['source']} -> {conn['target']} sem waypoints"
-        sig_x = node_by_id[confirm_sig_id]["position"]["x"]
-        assert any(wp["x"] < sig_x for wp in wps), (
-            f"caminho da sig de confirmação PR nunca visita x < {sig_x} -- "
-            f"não está entrando pela esquerda"
-        )
+        p_local_x = anchor_local_for_routing("Valve_3_2_Ways", "P")[0]
+        checked = 0
+        for conn in result["connections"]:
+            s, t = conn["source"], conn["target"]
+            if (t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways"
+                    or node_type_map.get(s["node"]) != "PressureLine"
+                    or t["node"] in region_a_sig_ids
+                    or t["node"] in closure_sig_ids):
+                continue
+            wps = conn.get("waypoints")
+            assert wps, f"conexão {s} -> {t} sem waypoints"
+            entry_x = wps[-1]["x"]
+            sig_x = node_by_id[t["node"]]["position"]["x"]
+            assert entry_x >= sig_x, (
+                f"{s} -> {t}: entrada em x={entry_x} ficou à ESQUERDA do "
+                f"sig (x={sig_x}) -- exatamente o bug original"
+            )
+            # o endpoint final é sempre o pior-caso ajustado (sig_x + P local
+            # com deslocamento de comutação), independente do estado real
+            assert abs(entry_x - (sig_x + p_local_x)) < 1.0, (
+                f"{s} -> {t}: entrada em x={entry_x} não bate com o "
+                f"endpoint pior-caso esperado x={sig_x + p_local_x}"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar ao menos 1 dessas conexões
 
     def test_closure_sig_still_enters_from_the_left(self):
         # Feedback direto do usuário: a sig que alimenta o botão (cadeia
-        # de fechamento) entra pela esquerda, igual ao passo a passo e
-        # igual à escada de confirmação PR das memórias (ver
-        # test_confirmation_chain_sig_enters_from_the_left acima).
-        # Verifica que o caminho passa por algum ponto à ESQUERDA do sig
-        # antes de entrar.
+        # de fechamento) deve CONTINUAR entrando pela esquerda, igual ao
+        # passo a passo -- só a escada de confirmação PR das memórias
+        # precisa da abordagem pela direita (ver
+        # test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring
+        # acima). Verifica que o caminho passa por algum ponto à ESQUERDA
+        # do sig antes de entrar (diferente da abordagem pela direita, que
+        # nunca visita um x menor que o do sig).
         seq = "A+B+A-B-A+A-C+C-"
         data = cascade.generate(parse(seq))
         roles = layout._build_role_maps(data)

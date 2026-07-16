@@ -31,12 +31,6 @@ _CONFIG_PATH = Path(__file__).parent / "cascade_layout_config.json"
 # Copiado de step_by_step_layout.py (mesma constante, mesmo motivo).
 _PL_ANCHOR_MIN_MARGIN = 20
 
-# Margem extra (além de _PL_ANCHOR_MIN_MARGIN) só pra conexão PL -> sig.P
-# da escada de confirmação PR das memórias (Região B, confirm_row) --
-# _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava pouca folga nesse caso
-# específico (feedback direto testando a UI real).
-_CONFIRM_ROW_P_EXTRA_MARGIN = 150
-
 # Espalha (stagger) o alvo das conexões mem.PL/A/B -> PL por índice de
 # memória, em px, crescendo pra direita -- sem isso, toda memória mira no
 # MESMO anchor (mesmo src_x, não depende de qual memória), empilhando
@@ -486,11 +480,20 @@ def apply(data: dict) -> dict:
     # anexado mostrando a rota esperada).
     driving_sig_x_by_mem: dict[str, float] = {}
 
+    # sig_ids da escada de confirmação PR das memórias -- usado abaixo pra
+    # incluí-los em left_entry_sig_ids (ver comentário lá: feedback direto
+    # testando a UI real, com imagem anotada, mostrou que a entrada pela
+    # DIREITA atravessa a mola do sprite nessas válvulas -- mesmo raciocínio
+    # e mesma geometria de mola já usados pra decidir a entrada pela
+    # esquerda da cadeia de fechamento, ver confirm_sig_ids abaixo).
+    confirm_sig_ids: set[str] = set()
+
     offset = 0
     for target_id, target_anchor in ordered_targets:
         chain = _chain_feeding(target_id, target_anchor)
         if not chain:
             continue
+        confirm_sig_ids.update(chain)
         # Diagonal (1 linha abaixo da memória que alimenta), mesma regra
         # já usada pro par botão/mem[0] -- decisão confirmada com o
         # usuário (antes ficava na MESMA linha da memória). rows["pl_gap"]
@@ -538,15 +541,24 @@ def apply(data: dict) -> dict:
     pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
 
     # sig_ids que entram pela ESQUERDA na conexão PL -> sig.P: folhas da
-    # Região A (empilhadas logo abaixo de or_row) E a cadeia de fechamento
-    # (closure_sig_ids, coluna do botão) -- ambas seguem a mesma lógica
-    # herdada do passo a passo (aproximação pela esquerda). Só as sigs da
-    # escada de confirmação PR das memórias (Região B, confirm_row) saem
-    # pela direita -- feedback direto do usuário testando a UI real: a
-    # sig do botão deve continuar entrando pela esquerda, igual ao passo
-    # a passo, só as PRs das 5/2 precisam da abordagem pela direita.
+    # Região A (empilhadas logo abaixo de or_row), a cadeia de fechamento
+    # (closure_sig_ids, coluna do botão) E a escada de confirmação PR das
+    # memórias (confirm_sig_ids, Região B) -- todas seguem a mesma lógica
+    # herdada do passo a passo (aproximação pela esquerda).
+    #
+    # REGRESSÃO REAL (feedback direto testando a UI real, com imagem
+    # anotada): confirm_sig_ids costumava entrar pela DIREITA (feedback
+    # anterior alegava que a esquerda cruzava a mola no estado comutado).
+    # Testando de novo com uma sequência real, a entrada pela direita é
+    # quem cruza a mola nesse layout -- o próprio traço passa por cima do
+    # símbolo em zigue-zague a caminho de um anchor de PL à direita,
+    # exatamente como o traço da cadeia de fechamento (closure_sig_ids,
+    # mesmo formato de válvula, mesmo lado de mola) já evita fazendo hoje
+    # ao entrar pela esquerda. Unificado: as duas cadeias usam a mesma
+    # abordagem pela esquerda.
     left_entry_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
     left_entry_sig_ids |= closure_sig_ids
+    left_entry_sig_ids |= confirm_sig_ids
 
     # mem_id -> índice i (mc_by_idx invertido) -- usado abaixo pra
     # espalhar (stagger) o alvo das conexões mem.PL/A/B -> PL por memória.
@@ -720,39 +732,17 @@ def apply(data: dict) -> dict:
                 anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
                 push_dir = 1
             elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in left_entry_sig_ids:
-                # Folha da Região A (OR/sig-staircase, ver Task 3) OU sig
-                # da cadeia de fechamento (coluna do botão): entram pela
-                # esquerda -- mesma lógica herdada do passo a passo. A sig
-                # do botão fica na sua própria coluna à esquerda de tudo
-                # (feedback direto do usuário: deve continuar entrando
-                # pela esquerda, só a escada de confirmação PR das
-                # memórias precisa da abordagem pela direita).
+                # Folha da Região A (OR/sig-staircase, ver Task 3), sig da
+                # cadeia de fechamento (coluna do botão) OU sig da escada
+                # de confirmação PR das memórias (confirm_sig_ids, Região
+                # B): todas entram pela esquerda -- mesma lógica herdada
+                # do passo a passo, e a única que não cruza a mola do
+                # sprite pra nenhum dos três grupos (ver comentário em
+                # left_entry_sig_ids acima).
                 valve_left_x = node_by_id[t_id]["position"]["x"]
                 safe_x = valve_left_x - _M.pilot_w
                 anc = _nearest_pl_anchor(pl, safe_x, "left")
                 push_dir = -1
-                avoid_global_x = True
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
-                # Região B (confirm_row, alimenta mem.PR/btn.P -- ver
-                # Task 5): sai pela DIREITA em vez da esquerda (feedback
-                # direto testando a UI real, com imagem anotada mostrando
-                # a rota esperada: sai pra direita, depois sobe até o
-                # anchor mais próximo à direita). `tgt_x` (calculado acima
-                # via _target_x -> anchor_local_for_routing) já é o pior
-                # caso ajustado pro deslocamento de comutação (mesmo fix
-                # de anchor_local_for_routing("Valve_3_2_Ways","P") em
-                # sprite_metrics.py) -- usar um safe_x diferente aqui
-                # (ex: baseado só em v32_width+pilot_w) faria o roteador
-                # mirar num ponto MAIS À DIREITA do que o endpoint real
-                # (sempre tgt_x), obrigando o traço a voltar pra
-                # esquerda no último trecho -- exatamente o zigue-zague
-                # que este fix deveria eliminar, não criar. Margem extra
-                # (_CONFIRM_ROW_P_EXTRA_MARGIN): a margem padrão sozinha
-                # ainda deixava pouca folga aqui especificamente (feedback
-                # direto testando a UI real).
-                anc = _nearest_pl_anchor(pl, tgt_x, "right",
-                                          min_margin=_PL_ANCHOR_MIN_MARGIN + _CONFIRM_ROW_P_EXTRA_MARGIN)
-                push_dir = 1
                 avoid_global_x = True
             elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
                 anc = _nearest_pl_anchor(pl, tgt_x, "left", min_margin=_PL_ANCHOR_MIN_MARGIN)

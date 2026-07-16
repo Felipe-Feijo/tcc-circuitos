@@ -304,11 +304,24 @@ def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, f
     pra direita, nunca pra esquerda. PL não precisa de ajuste (seu pior
     caso, mais à esquerda, já é o valor sem deslocamento). Ver
     docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
+
+    Valve_3_2_Ways.P recebe o MESMO ajuste, pelo mesmo motivo: é ele quem
+    recebe a conexão direta de uma PressureLine nas válvulas de sinalização
+    de confirmação (cascata e passo a passo), e seu anchor local também é
+    uma fração fixa de self.width (graphics/items/base/nodes/
+    directional_valve/valve_3_2_ways.py), sem compensar o deslocamento
+    visual de BODY_VISUALS[1] (comutado). Não estende pra Valve_4_2_Ways.P/
+    Valve_5_2_Ways.P: nesses tipos, P nunca é alimentado por uma
+    PressureLine (vem de um Exhaust/PressureSource dedicado -- ver
+    circuit_generator/methods/cascade.py), então o deslocamento nunca
+    importa ali.
     """
     base = METRICS.anchor_local.get(node_type, {}).get(anchor_name)
     if base is None:
         return None
     if anchor_name == "PR":
+        return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
+    if anchor_name == "P" and node_type == "Valve_3_2_Ways":
         return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
     return base
 

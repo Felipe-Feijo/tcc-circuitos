@@ -35,7 +35,7 @@ _PL_ANCHOR_MIN_MARGIN = 20
 # da escada de confirmação PR das memórias (Região B, confirm_row) --
 # _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava pouca folga nesse caso
 # específico (feedback direto testando a UI real).
-_CONFIRM_ROW_P_EXTRA_MARGIN = 70
+_CONFIRM_ROW_P_EXTRA_MARGIN = 90
 
 # Quantos anchors de sobra a poda global mantém além do range efetivamente
 # usado (used_min/used_max) em cada ponta da PressureLine -- ver

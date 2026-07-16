@@ -133,6 +133,34 @@ class Grid:
 # Guarda posição/tamanho de cada nó para calcular exits fora do bloco
 _NODE_BOUNDS: dict[str, tuple[float,float,float,float]] = {}  # id→(x,y,w,h)
 
+VALVE_TYPES = {"Valve_4_2_Ways", "Valve_5_2_Ways", "Valve_3_2_Ways"}
+
+
+def _commutation_shift(n: dict) -> float:
+    """Deslocamento horizontal REAL do sprite de uma válvula direcional
+    quando renderizada no estado comutado (body_state=1, default_side ==
+    "left" -- ver graphics/items/base/nodes/directional_valve/
+    directional_valve_item.py: `self.body_state = 1 if default_side ==
+    "left" else 0`, e cada Valve_*_ways.py's BODY_VISUALS[1]["offset"]).
+    0.0 pra qualquer outro tipo ou estado -- o sprite nunca desloca pra
+    esquerda, só pra direita, então isso é sempre o pior caso (mais à
+    direita) que o corpo pode realmente ocupar.
+
+    Sem isso, build_grid() bloqueava o retângulo de colisão na posição
+    LÓGICA (não-deslocada) da válvula -- quando ela estava no estado
+    comutado, o sprite de verdade renderizava mais à direita do que o
+    retângulo de bloqueio previa, e um fio podia entrar "por dentro" do
+    corpo real mesmo o A* achando aquele trecho livre (achado testando a
+    UI real: conexão sig.A -> mem.PR cruzando o corpo de uma memória
+    comutada).
+    """
+    if n["type"] not in VALVE_TYPES:
+        return 0.0
+    if n.get("properties", {}).get("default_side") != "left":
+        return 0.0
+    return _M.pilot_side_offset_x.get(n["type"], 0.0)
+
+
 def build_grid(nodes: list[dict]) -> Grid:
     global _NODE_BOUNDS
     _NODE_BOUNDS = {}
@@ -148,6 +176,7 @@ def build_grid(nodes: list[dict]) -> Grid:
     xs, ys = [], []
     for n in nodes:
         px, py = n["position"]["x"], n["position"]["y"]
+        px += _commutation_shift(n)
         t = n["type"]
         w, h = SPRITE_SIZES.get(t, (50, 50))
         xs += [px, px + w]; ys += [py, py + h]
@@ -159,7 +188,6 @@ def build_grid(nodes: list[dict]) -> Grid:
 
     grid = Grid(min(xs), min(ys), max(xs), max(ys))
 
-    VALVE_TYPES = {"Valve_4_2_Ways", "Valve_5_2_Ways", "Valve_3_2_Ways"}
     CYL_TYPES   = {"DoubleActingCylinder"}
     SMALL_OBS   = {"Exhaust", "PressureSource"}  # pequenos obstáculos sem margem
     SKIP_TYPES  = {"PressureLine"}                # PLs não bloqueiam
@@ -168,6 +196,7 @@ def build_grid(nodes: list[dict]) -> Grid:
     for n in nodes:
         t = n["type"]
         px, py = n["position"]["x"], n["position"]["y"]
+        px += _commutation_shift(n)
         w, h = SPRITE_SIZES.get(t, (50, 50))
 
         if t in SKIP_TYPES:

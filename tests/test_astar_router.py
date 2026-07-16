@@ -36,3 +36,48 @@ class TestSpriteSizesMatchMetrics:
 
     def test_pressure_line_size_matches_sprite_metrics(self):
         assert SPRITE_SIZES["PressureLine"] == (M.pl_pix_w, M.pl_pix_h)
+
+
+class TestCommutationShiftInBlockingRect:
+    """Regressão real (achada testando a UI real): build_grid() bloqueava
+    o retângulo de colisão na posição LÓGICA (não-deslocada) de uma
+    válvula direcional -- quando ela está no estado comutado
+    (default_side == "left" -> body_state=1), o sprite de verdade
+    (BODY_VISUALS[1]["offset"]) renderiza deslocado pra direita, mas o
+    retângulo de bloqueio não acompanhava. Um fio podia entrar "por
+    dentro" do corpo real (achado com sig.A -> mem.PR cruzando uma
+    memória comutada), porque o A* achava aquele trecho livre baseado no
+    retângulo desatualizado."""
+
+    def _valve_node(self, node_id: str, x: float, y: float, node_type: str, default_side: str) -> dict:
+        return {
+            "id": node_id, "type": node_type,
+            "position": {"x": x, "y": y},
+            "properties": {"default_side": default_side},
+        }
+
+    def test_commuted_valve_blocks_the_shifted_position(self):
+        import math
+        from circuit_generator.astar_router import build_grid
+
+        node = self._valve_node("mem", 1000, 1000, "Valve_5_2_Ways", "left")  # comutada
+        grid = build_grid([node])
+        shift = M.pilot_side_offset_x["Valve_5_2_Ways"]
+        # perto da borda direita do corpo deslocado -- fora do alcance do
+        # corpo NAO deslocado + margem (MH=80), so bloqueia se o
+        # deslocamento de comutacao for aplicado de verdade
+        target_x = 1000 + shift + M.v52_width - 10
+        cx, cy = grid.px_to_cell(target_x, 1000 + M.v52_height / 2)
+        assert grid.cost(cx, cy) == math.inf
+
+    def test_non_commuted_valve_does_not_block_the_shifted_position(self):
+        import math
+        from circuit_generator.astar_router import build_grid
+
+        node = self._valve_node("mem", 1000, 1000, "Valve_5_2_Ways", "right")  # nao comutada
+        grid = build_grid([node])
+        shift = M.pilot_side_offset_x["Valve_5_2_Ways"]
+        # mesma posicao do teste acima -- sem comutacao, deve estar livre
+        target_x = 1000 + shift + M.v52_width - 10
+        cx, cy = grid.px_to_cell(target_x, 1000 + M.v52_height / 2)
+        assert grid.cost(cx, cy) != math.inf

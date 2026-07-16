@@ -292,3 +292,38 @@ class TestConfirmationStaircase:
         chain_sigs = [_node(result, "gen-sig-A-ret-2"), _node(result, "gen-sig-B-ret-3")]
         assert chain_sigs[0]["position"]["y"] == chain_sigs[1]["position"]["y"]
         assert chain_sigs[0]["position"]["x"] != chain_sigs[1]["position"]["x"]
+
+
+class TestChildPositioningAndRouting:
+    def test_every_node_has_role_removed(self):
+        data = cascade.generate(parse("A+B+A-B-A+A-"))
+        result = layout.apply(data)
+        assert all("_role" not in n for n in result["nodes"])
+
+    def test_no_node_left_at_origin_by_accident(self):
+        data = cascade.generate(parse("A+B+A-B-A+A-"))
+        result = layout.apply(data)
+        at_origin = [n["id"] for n in result["nodes"]
+                     if n["position"]["x"] == 0 and n["position"]["y"] == 0]
+        assert at_origin == []
+
+    def test_no_two_nodes_share_the_same_position(self):
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        result = layout.apply(data)
+        positions = [(n["id"], n["position"]["x"], n["position"]["y"]) for n in result["nodes"]]
+        coords = [(x, y) for _, x, y in positions]
+        assert len(coords) == len(set(coords)), (
+            f"duplicate positions: {[p for p in positions if coords.count((p[1], p[2])) > 1]}")
+
+    def test_connections_get_waypoints(self):
+        data = cascade.generate(parse("A+B+A-B-A+A-"))
+        result = layout.apply(data)
+        with_waypoints = [c for c in result["connections"] if "waypoints" in c]
+        assert len(with_waypoints) > 0
+
+    def test_all_pressure_lines_share_the_same_anchor_count(self):
+        data = cascade.generate(parse("A+B+A-B-A+A-"))
+        result = layout.apply(data)
+        counts = {len(n["properties"]["anchors"]) for n in result["nodes"]
+                  if n["type"] == "PressureLine"}
+        assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"

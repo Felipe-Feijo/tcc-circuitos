@@ -16,12 +16,25 @@ Duas regiões:
 """
 
 import json
+import math
 from pathlib import Path
 
 from circuit_generator.grid_layout import Grid
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
 _CONFIG_PATH = Path(__file__).parent / "cascade_layout_config.json"
+
+# Precisa bater com o _OFFSET de astar_router.route_connection (offset de
+# entrada aplicado na direção do anchor de destino) -- um anchor de PL
+# escolhido a menos dessa distância do X do pilot PR produz um caminho
+# apertado/ruim (jog quase nulo seguido de reentrada no próprio offset).
+# Copiado de step_by_step_layout.py (mesma constante, mesmo motivo).
+_PL_ANCHOR_MIN_MARGIN = 20
+
+# Quantos anchors de sobra a poda global mantém além do range efetivamente
+# usado (used_min/used_max) em cada ponta da PressureLine -- ver
+# step_by_step_layout.py, mesma constante/motivo.
+_PL_PRUNE_MARGIN = 8
 
 
 def _build_role_maps(data: dict) -> dict:
@@ -427,5 +440,296 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(row_id, offset + 1 + k, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
         offset += len(chain)
+
+    node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
+    pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
+
+    # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
+    #
+    #   Portado verbatim de step_by_step_layout.py (mesmo bloco, mesmo
+    #   comentário-guia) -- já genérico sobre pl_node_map/
+    #   grid.occupied_x_range, nenhuma substituição necessária (ver Task 6
+    #   brief, item 1).
+    pl_row_ids = {f"pl_row_{g}" for g in roles["pl_by_idx"]}
+    x_range = grid.occupied_x_range(exclude_rows=pl_row_ids)
+    if x_range is not None:
+        min_x, max_x = x_range
+        reach_margin = cols["logic_cell_width"]
+        left_margin = _M.pilot_w
+        for pl_id, pl_node in pl_node_map.items():
+            existing_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+            needed_max = max(1, math.ceil(
+                (max_x + reach_margin - pl_node["position"]["x"] - _M.pl_pix_w / 2) / _M.pl_spacing
+            ) + 1)
+            needed_min = math.floor(
+                (min_x - left_margin - pl_node["position"]["x"] - _M.pl_pix_w / 2) / _M.pl_spacing
+            ) + 1
+            lo = min(needed_min, min(existing_idxs) if existing_idxs else 1)
+            hi = max(needed_max, max(existing_idxs) if existing_idxs else 1)
+            pl_node["properties"]["anchors"] = [f"X{i}" for i in range(lo, hi + 1)]
+            if lo < 1:
+                pl_node["position"]["x"] += (lo - 1) * _M.pl_spacing
+                node_pos[pl_id] = (pl_node["position"]["x"], pl_node["position"]["y"])
+
+    # ── Reatribuição dos anchors das PressureLines por proximidade ──────────
+    #
+    #   Portado de step_by_step_layout.py (_pl_anchor_x/_nearest_pl_anchor/
+    #   _resolve_conflict, mesmos nomes e corpo) -- a única mudança real é
+    #   no elif chain de connections_sorted mais abaixo, que reconhece as
+    #   formas de conexão PL/PR/A/B <-> PressureLine específicas do cascata
+    #   (mc é Valve_5_2_Ways, step-by-step só tem Valve_3_2_Ways).
+    def _pl_anchor_x(pl_node: dict, anchor_name: str, list_origin: int | None = None) -> float:
+        pl_x = node_pos[pl_node["id"]][0]
+        if list_origin is None:
+            list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
+        return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - list_origin) * _M.pl_spacing
+
+    def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any",
+                            min_margin: float = 0.0) -> str:
+        anchors = pl_node["properties"]["anchors"]
+        list_origin = min(int(a[1:]) for a in anchors)
+        scored = [(int(n[1:]), _pl_anchor_x(pl_node, n, list_origin), n) for n in anchors]
+        if side == "left":
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x - min_margin]
+            fallback = sorted(scored)[0][2]
+        elif side == "right":
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x + min_margin]
+            fallback = sorted(scored, reverse=True)[0][2]
+        else:
+            candidates = [(abs(ax - target_x), n) for _, ax, n in scored]
+            fallback = anchors[0]
+        return min(candidates)[1] if candidates else fallback
+
+    pl_anchor_used: dict[tuple[str, int], tuple[str, float, float]] = {}
+    conn_by_owner: dict[tuple[str, str], tuple] = {}
+    or_source_x_used: dict[int, tuple[str, float, float]] = {}
+
+    def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
+                           owner_y: float, conn_ref: dict, side: str,
+                           push_dir: int = 0, avoid_global_x: bool = False) -> str:
+        anchors = pl_node["properties"]["anchors"]
+        n, mid = len(anchors), len(anchors) / 2
+
+        def _next(anc: str, direction: int) -> str:
+            idx = int(anc[1:])
+            step = direction if direction else ((-1) if idx <= mid else 1)
+            return f"X{max(1, min(n, idx + step))}"
+
+        pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
+
+        def _reg(anc: str, oid: str, oy: float, cref: dict, seen: set, pdir: int) -> str:
+            if anc in seen:
+                return anc  # sem slot livre nessa direção -- desiste, mantém
+            seen = seen | {anc}
+            ax = _pl_anchor_x(pl_node, anc)
+
+            if avoid_global_x:
+                gx = round(ax)
+                prev_global = or_source_x_used.get(gx)
+                if prev_global is not None:
+                    prev_oid, prev_oy, prev_pl_y = prev_global
+                    same_order = (oy < prev_oy) == (pl_y < prev_pl_y)
+                    if prev_oid != oid and not same_order:
+                        return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
+                or_source_x_used[gx] = (oid, oy, pl_y)
+
+            key = (pl_node["id"], round(ax))
+            owner_key = (pl_node["id"], oid)
+            if key not in pl_anchor_used:
+                pl_anchor_used[key] = (oid, oy, pl_y)
+                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
+                return anc
+            prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
+            if prev_id == oid:
+                return anc
+            curr_above = oy < pl_y
+            prev_above = prev_y < prev_pl_y
+            opp_sides = curr_above != prev_above
+            if pl_y != prev_pl_y:
+                same_order = (oy < prev_y) == (pl_y < prev_pl_y)
+            else:
+                same_order = True
+            if opp_sides and same_order:
+                return anc
+            if oy >= prev_y:
+                return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
+            else:
+                pl_anchor_used[key] = (oid, oy, pl_y)
+                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
+                prev_owner_key = (pl_node["id"], prev_id)
+                prev_conn, prev_side, prev_pl, prev_pdir = conn_by_owner.get(
+                    prev_owner_key, (None, None, None, 0))
+                if prev_conn is not None:
+                    new_anc = _reg(_next(anc, prev_pdir), prev_id, prev_y, prev_conn, set(), prev_pdir)
+                    prev_conn[prev_side]["anchor"] = new_anc
+                return anc
+
+        return _reg(anchor, owner, owner_y, conn_ref, set(), push_dir)
+
+    def _target_x(node_id: str, anchor_name: str) -> float:
+        ntype = node_type_map.get(node_id, "")
+        pos = node_by_id[node_id]["position"]
+        local = anchor_local_for_routing(ntype, anchor_name)
+        return pos["x"] + local[0] if local else pos["x"]
+
+    def _conn_sort_key(c: dict) -> tuple:
+        t_id = c["target"]["node"]
+        return (0, 0) if t_id in pl_node_map else (1, 0)
+
+    connections_sorted = sorted(
+        [c for c in data["connections"] if c["source"]["node"] != c["target"]["node"]],
+        key=_conn_sort_key,
+    )
+
+    for conn in connections_sorted:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+
+        if s_id in pl_node_map and s_anc.startswith("X"):
+            pl = pl_node_map[s_id]
+            tgt_x = _target_x(t_id, t_anc)
+            avoid_global_x = False
+            owner_id = f"{t_id}#{t_anc}" if node_type_map.get(t_id) == "OrValve" else t_id
+            if t_anc == "PL":
+                anc = _nearest_pl_anchor(pl, tgt_x, "left")
+                push_dir = -1
+            elif t_anc == "PR":
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+                valve_left_x = node_by_id[t_id]["position"]["x"]
+                safe_x = valve_left_x - _M.pilot_w
+                anc = _nearest_pl_anchor(pl, safe_x, "left")
+                push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
+                anc = _nearest_pl_anchor(pl, tgt_x, "left", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "Y" and node_type_map.get(t_id) == "OrValve":
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
+                avoid_global_x = True
+            # ── Formas específicas do cascata: PL/PR/A/B de Valve_5_2_Ways
+            #   (memória) alimentados DIRETO por uma PressureLine (sem sig
+            #   no meio) -- step_by_step_layout.py nunca tem essa forma
+            #   porque suas memórias são Valve_3_2_Ways, e o único caso
+            #   "PL como fonte" delas é P (já coberto acima). Verificado
+            #   rodando cascade.generate() em várias sequências reais
+            #   (ver Task 6 report): o gerador atual NUNCA produz uma
+            #   PressureLine como origem de conexão pra mem.PL/PR/A/B --
+            #   essas conexões vêm sempre de mem ou de um sig (lado
+            #   "t_id in pl_node_map" abaixo, ou o "else" genérico do sig).
+            #   Mantido por simetria/robustez com o pedido do brief, caso
+            #   uma topologia futura produza essa forma diretamente.
+            elif t_anc in ("PL", "PR") and node_type_map.get(t_id) == "Valve_5_2_Ways":
+                anc = _nearest_pl_anchor(pl, tgt_x, "left" if t_anc == "PL" else "right",
+                                          min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = -1 if t_anc == "PL" else 1
+            elif t_anc in ("A", "B") and node_type_map.get(t_id) == "Valve_5_2_Ways":
+                anc = _nearest_pl_anchor(pl, tgt_x)
+                push_dir = 0
+            else:
+                anc = _nearest_pl_anchor(pl, tgt_x)
+                push_dir = 0
+                avoid_global_x = False
+            conn["source"]["anchor"] = _resolve_conflict(
+                pl, anc, owner_id, node_pos.get(t_id, (0, 0))[1], conn, "source", push_dir,
+                avoid_global_x=avoid_global_x)
+
+        elif t_id in pl_node_map and t_anc.startswith("X"):
+            pl = pl_node_map[t_id]
+            src_x = _target_x(s_id, s_anc)
+            anc = _nearest_pl_anchor(pl, src_x)
+            # Cobre, entre outros, mem[i].A/mem[i].B -> PL (fechamento de
+            # anel / bus de grupo do cascata) -- já genérico, sem
+            # substituição (ver Task 6 brief, item 2: "a mirrored branch
+            # ... needs no change").
+            conn["target"]["anchor"] = _resolve_conflict(
+                pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target",
+                avoid_global_x=True)
+
+    # ── Poda global das PressureLines ────────────────────────────────────
+    #
+    #   Portado verbatim de step_by_step_layout.py (mesmo bloco).
+    used_min, used_max = float("inf"), float("-inf")
+    for conn in data["connections"]:
+        for side in (conn["source"], conn["target"]):
+            if side["node"] in pl_node_map and side["anchor"].startswith("X"):
+                idx = int(side["anchor"][1:])
+                used_min = min(used_min, idx)
+                used_max = max(used_max, idx)
+
+    if used_min != float("inf"):
+        for pl_id, pl_node in pl_node_map.items():
+            all_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+            keep_min = max(min(all_idxs), used_min - _PL_PRUNE_MARGIN)
+            keep_max = min(max(all_idxs), used_max + _PL_PRUNE_MARGIN)
+            pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
+            removed_left = keep_min - min(all_idxs)
+            pl_node["position"]["x"] += removed_left * _M.pl_spacing
+            node_pos[pl_id] = (pl_node["position"]["x"], pl_node["position"]["y"])
+
+    # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ──────
+    #
+    #   Portado verbatim de step_by_step_layout.py (mesmo bloco).
+    _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
+    child_parent: dict[str, tuple[str, str]] = {}
+    for conn in data["connections"]:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        for child, parent, p_anc in [(s_id, t_id, t_anc), (t_id, s_id, s_anc)]:
+            if node_type_map.get(child) in _CHILD_ANCHOR:
+                child_parent.setdefault(child, (parent, p_anc))
+
+    gap = cols.get("anchor_child_gap", 32)
+    for child_id, (parent_id, parent_anchor) in child_parent.items():
+        parent_pos   = node_by_id[parent_id]["position"]
+        parent_local = _M.anchor_local.get(node_type_map[parent_id], {}).get(parent_anchor)
+        if parent_local is None:
+            node_by_id[child_id]["position"] = {"x": parent_pos["x"], "y": parent_pos["y"] + 100}
+            continue
+        anc_x = parent_pos["x"] + parent_local[0]
+        anc_y = parent_pos["y"] + parent_local[1]
+        child_type  = node_type_map[child_id]
+        child_local = _M.anchor_local.get(child_type, {}).get(_CHILD_ANCHOR[child_type])
+        cx = anc_x - (child_local[0] if child_local else 0.0)
+        cy = anc_y + gap
+        node_by_id[child_id]["position"] = {"x": cx, "y": cy}
+
+    # ── Limpeza final: remove _role de todos os nós ──────────────────────────
+    for node in data["nodes"]:
+        node.pop("_role", None)
+
+    # ── Roteamento A* ─────────────────────────────────────────────────────
+    #
+    #   Portado verbatim de step_by_step_layout.py (mesmo bloco).
+    from circuit_generator.astar_router import build_grid, route_connection, get_exit_dir
+
+    def _scene_xy(node_id: str, anchor_name: str) -> tuple[float, float] | None:
+        pos = node_by_id[node_id]["position"]
+        ntype = node_type_map.get(node_id, "")
+        if ntype == "PressureLine" and anchor_name.startswith("X"):
+            idx = int(anchor_name[1:])
+            list_origin = min(int(a[1:]) for a in node_by_id[node_id]["properties"]["anchors"])
+            return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, pos["y"] + _M.pl_pix_h)
+        local = anchor_local_for_routing(ntype, anchor_name)
+        return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
+
+    astar_grid = build_grid(data["nodes"])
+    for conn in data.get("connections", []):
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        spos = _scene_xy(s_id, s_anc)
+        tpos = _scene_xy(t_id, t_anc)
+        if spos is None or tpos is None:
+            continue
+        s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
+        wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),
+                                tpos, get_exit_dir(t_type, t_anc),
+                                src_type=s_type, tgt_type=t_type,
+                                src_id=s_id, tgt_id=t_id)
+        if wps is not None:
+            conn["waypoints"] = wps
 
     return data

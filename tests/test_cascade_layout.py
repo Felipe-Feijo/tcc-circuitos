@@ -311,6 +311,26 @@ class TestLogicRegionRows:
         roles = layout._build_role_maps(data)
         sources = layout._build_trigger_sources(data, roles)
         region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+
+        # A cadeia de fechamento (btn.P) também entra pela esquerda (ver
+        # test_closure_sig_still_enters_from_the_left abaixo) -- excluída
+        # aqui do jeito mesmo, andando pra trás a partir de btn.P via
+        # sig.A -> sig.P, sem duplicar _chain_feeding (privada do módulo).
+        raw_data = cascade.generate(parse(seq))
+        node_type_map_raw = {n["id"]: n["type"] for n in raw_data["nodes"]}
+        sig_in_raw: dict[str, str] = {}
+        for c in raw_data["connections"]:
+            if (node_type_map_raw.get(c["target"]["node"]) == "Valve_3_2_Ways"
+                    and c["target"]["anchor"] == "P"
+                    and node_type_map_raw.get(c["source"]["node"]) == "Valve_3_2_Ways"):
+                sig_in_raw[c["target"]["node"]] = c["source"]["node"]
+        closure_sig_ids = set()
+        head = next((c["source"]["node"] for c in raw_data["connections"]
+                     if c["target"]["node"] == roles["btn_id"] and c["target"]["anchor"] == "P"), None)
+        while head is not None:
+            closure_sig_ids.add(head)
+            head = sig_in_raw.get(head)
+
         result = layout.apply(data)
         node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
@@ -321,7 +341,8 @@ class TestLogicRegionRows:
             s, t = conn["source"], conn["target"]
             if (t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways"
                     or node_type_map.get(s["node"]) != "PressureLine"
-                    or t["node"] in region_a_sig_ids):
+                    or t["node"] in region_a_sig_ids
+                    or t["node"] in closure_sig_ids):
                 continue
             wps = conn.get("waypoints")
             assert wps, f"conexão {s} -> {t} sem waypoints"
@@ -339,6 +360,35 @@ class TestLogicRegionRows:
             )
             checked += 1
         assert checked > 0  # sanity check -- a sequência precisa exercitar ao menos 1 dessas conexões
+
+    def test_closure_sig_still_enters_from_the_left(self):
+        # Feedback direto do usuário: a sig que alimenta o botão (cadeia
+        # de fechamento) deve CONTINUAR entrando pela esquerda, igual ao
+        # passo a passo -- só a escada de confirmação PR das memórias
+        # precisa da abordagem pela direita (ver
+        # test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring
+        # acima). Verifica que o caminho passa por algum ponto à ESQUERDA
+        # do sig antes de entrar (diferente da abordagem pela direita, que
+        # nunca visita um x menor que o do sig).
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+
+        closure_sig_id = next(
+            c["source"]["node"] for c in result["connections"]
+            if c["target"]["node"] == roles["btn_id"] and c["target"]["anchor"] == "P"
+        )
+        conn = next(c for c in result["connections"]
+                    if c["target"]["node"] == closure_sig_id and c["target"]["anchor"] == "P")
+        wps = conn.get("waypoints")
+        assert wps, f"conexão {conn['source']} -> {conn['target']} sem waypoints"
+        sig_x = node_by_id[closure_sig_id]["position"]["x"]
+        assert any(wp["x"] < sig_x for wp in wps), (
+            f"caminho da sig de fechamento nunca visita x < {sig_x} -- "
+            f"não está entrando pela esquerda"
+        )
 
     def test_button_sits_one_row_below_the_bottom_memory(self):
         import json

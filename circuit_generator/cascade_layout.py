@@ -31,6 +31,12 @@ _CONFIG_PATH = Path(__file__).parent / "cascade_layout_config.json"
 # Copiado de step_by_step_layout.py (mesma constante, mesmo motivo).
 _PL_ANCHOR_MIN_MARGIN = 20
 
+# Margem extra (além de _PL_ANCHOR_MIN_MARGIN) só pra conexão PL -> sig.P
+# da escada de confirmação PR das memórias (Região B, confirm_row) --
+# _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava pouca folga nesse caso
+# específico (feedback direto testando a UI real).
+_CONFIRM_ROW_P_EXTRA_MARGIN = 70
+
 # Quantos anchors de sobra a poda global mantém além do range efetivamente
 # usado (used_min/used_max) em cada ponta da PressureLine -- ver
 # step_by_step_layout.py, mesma constante/motivo.
@@ -478,9 +484,11 @@ def apply(data: dict) -> dict:
     #   botão (cujo A alimenta btn.P) fica na linha logo abaixo dele
     #   (depth 1); elos mais distantes (mais perto da raiz alimentada pela
     #   PL) ficam ainda mais abaixo.
+    closure_sig_ids: set[str] = set()
     if n_mc:
         closure_chain = _chain_feeding(btn_id, "P")
         if closure_chain:
+            closure_sig_ids = set(closure_chain)
             closure_chain_top_down = list(reversed(closure_chain))
             btn_y = node_by_id[btn_id]["position"]["y"]
             for depth, sig_id in enumerate(closure_chain_top_down, start=1):
@@ -493,12 +501,16 @@ def apply(data: dict) -> dict:
     node_pos = {nid: (n["position"]["x"], n["position"]["y"]) for nid, n in node_by_id.items()}
     pl_node_map = {pid: node_by_id[pid] for pid in roles["pl_by_idx"].values()}
 
-    # sig_ids que pertencem à Região A (folhas de _build_trigger_sources,
-    # empilhadas logo abaixo de or_row) -- usado abaixo pra diferenciar a
-    # direção de aproximação da conexão PL -> sig.P: Região A continua
-    # entrando pela esquerda (herdado do passo a passo), Região B
-    # (confirm_row, que alimenta mem.PR/btn.P) sai pela direita.
-    region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+    # sig_ids que entram pela ESQUERDA na conexão PL -> sig.P: folhas da
+    # Região A (empilhadas logo abaixo de or_row) E a cadeia de fechamento
+    # (closure_sig_ids, coluna do botão) -- ambas seguem a mesma lógica
+    # herdada do passo a passo (aproximação pela esquerda). Só as sigs da
+    # escada de confirmação PR das memórias (Região B, confirm_row) saem
+    # pela direita -- feedback direto do usuário testando a UI real: a
+    # sig do botão deve continuar entrando pela esquerda, igual ao passo
+    # a passo, só as PRs das 5/2 precisam da abordagem pela direita.
+    left_entry_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
+    left_entry_sig_ids |= closure_sig_ids
 
     # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
     #
@@ -652,10 +664,14 @@ def apply(data: dict) -> dict:
             elif t_anc == "PR":
                 anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
                 push_dir = 1
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in region_a_sig_ids:
-                # Região A (folha de OR/sig-staircase, ver Task 3): entra
-                # pela esquerda -- mesma lógica herdada do passo a passo,
-                # onde a coluna à esquerda do sig costuma estar livre.
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in left_entry_sig_ids:
+                # Folha da Região A (OR/sig-staircase, ver Task 3) OU sig
+                # da cadeia de fechamento (coluna do botão): entram pela
+                # esquerda -- mesma lógica herdada do passo a passo. A sig
+                # do botão fica na sua própria coluna à esquerda de tudo
+                # (feedback direto do usuário: deve continuar entrando
+                # pela esquerda, só a escada de confirmação PR das
+                # memórias precisa da abordagem pela direita).
                 valve_left_x = node_by_id[t_id]["position"]["x"]
                 safe_x = valve_left_x - _M.pilot_w
                 anc = _nearest_pl_anchor(pl, safe_x, "left")
@@ -675,8 +691,12 @@ def apply(data: dict) -> dict:
                 # mirar num ponto MAIS À DIREITA do que o endpoint real
                 # (sempre tgt_x), obrigando o traço a voltar pra
                 # esquerda no último trecho -- exatamente o zigue-zague
-                # que este fix deveria eliminar, não criar.
-                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                # que este fix deveria eliminar, não criar. Margem extra
+                # (_CONFIRM_ROW_P_EXTRA_MARGIN): a margem padrão sozinha
+                # ainda deixava pouca folga aqui especificamente (feedback
+                # direto testando a UI real).
+                anc = _nearest_pl_anchor(pl, tgt_x, "right",
+                                          min_margin=_PL_ANCHOR_MIN_MARGIN + _CONFIRM_ROW_P_EXTRA_MARGIN)
                 push_dir = 1
                 avoid_global_x = True
             elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":

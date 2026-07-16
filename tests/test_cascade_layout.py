@@ -134,6 +134,24 @@ class TestOrSigStaircase:
         assert sig0["position"]["x"] == sig1["position"]["x"]
         assert sig0["position"]["y"] != sig1["position"]["y"]
 
+    def test_deep_leaf_chain_tip_is_closest_to_or_row_not_the_root(self):
+        # Regressão real (feedback direto testando a UI): `leaf` vem em
+        # ordem raiz->ponta (leaf[0] alimentada pela PL, leaf[-1] cujo A
+        # alimenta o pilot/OrValve) -- a PONTA precisa ficar mais perto de
+        # or_row (menor y), não a raiz. A ordem estava saindo invertida.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        deep_leaf = next(leaf for leaf in sources[("B", "PL")] if len(leaf) == 2)
+        root_id, tip_id = deep_leaf[0], deep_leaf[-1]
+        result = layout.apply(data)
+        root = _node(result, root_id)
+        tip = _node(result, tip_id)
+        assert tip["position"]["y"] < root["position"]["y"], (
+            "a ponta (conecta no pilot/OrValve) devia ficar mais perto de "
+            "or_row (menor y) que a raiz (alimentada pela PL)"
+        )
+
     def test_pl_and_pr_or_rows_align_at_the_same_height_per_cylinder(self):
         # A altura (linhas) da região de OR/sig é uniforme pros dois lados
         # do MESMO cilindro -- mesmo se só um lado tiver cadeia profunda.
@@ -491,6 +509,22 @@ class TestConfirmationStaircase:
         chain_sigs = [_node(result, "gen-sig-A-ret-2"), _node(result, "gen-sig-B-ret-3")]
         assert chain_sigs[0]["position"]["y"] == chain_sigs[1]["position"]["y"]
         assert chain_sigs[0]["position"]["x"] != chain_sigs[1]["position"]["x"]
+
+    def test_confirmation_chain_tip_is_closest_to_the_memory_not_the_root(self):
+        # Regressão real (feedback direto testando a UI): `chain` vem em
+        # ordem raiz->ponta (chain[0] alimentada pela PL, chain[-1] cujo A
+        # alimenta mem.PR) -- a PONTA precisa ficar mais perto da coluna
+        # de memórias (menor x), não a raiz. A ordem estava saindo
+        # invertida (raiz colada na memória, ponta longe).
+        data = cascade.generate(parse("A+B+(A-B-)A+A-"))
+        result = layout.apply(data)
+        root = _node(result, "gen-sig-A-ret-2")   # chain[0]
+        tip = _node(result, "gen-sig-B-ret-3")    # chain[-1], A -> gen-mc-1.PR
+        mc1 = _node(result, "gen-mc-1")
+        assert abs(tip["position"]["x"] - mc1["position"]["x"]) < abs(root["position"]["x"] - mc1["position"]["x"]), (
+            "a ponta (conecta na memória) devia ficar mais perto da coluna "
+            "de memórias que a raiz (alimentada pela PL)"
+        )
 
 
 class TestMemoryToPressureLineStagger:

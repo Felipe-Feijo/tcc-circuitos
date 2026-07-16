@@ -345,7 +345,15 @@ def apply(data: dict) -> dict:
                     continue  # folha crua -- nenhuma válvula, nenhuma linha
                 offset = leaf_virtual_col[(letter, side, j)]
                 vcol = cyl_col[letter] + sign * offset
-                for depth, sig_id in enumerate(leaf):
+                # REGRESSÃO REAL (feedback direto testando a UI): `leaf`
+                # vem em ordem raiz->ponta (leaf[0] = alimentada pela PL,
+                # leaf[-1] = cujo A alimenta o pilot/OrValve). A ponta
+                # precisa ficar mais PERTO do pilot/OrValve que alimenta
+                # (linha de MENOR y, mais perto de or_row) -- a raiz, que
+                # só precisa alcançar a PL (mais abaixo), fica mais longe
+                # (maior y). Sem o reversed(), a ordem saía invertida:
+                # raiz em cima, ponta embaixo.
+                for depth, sig_id in enumerate(reversed(leaf)):
                     row_id = f"sig_stack_{depth}"
                     pending_by_row.setdefault(row_id, []).append((vcol, sig_id, depth))
 
@@ -491,7 +499,14 @@ def apply(data: dict) -> dict:
         target_y = node_by_id[target_id]["position"]["y"] + rows["logic_row_gap"]
         row_id = f"confirm_row_{target_id}"
         grid.add_row(row_id, logic_cell_w, _M.v32_height, target_y, x_origin=memory_x0)
-        for k, sig_id in enumerate(chain):
+        # REGRESSÃO REAL (feedback direto testando a UI): `chain` vem em
+        # ordem raiz->ponta (chain[0] = alimentada pela PL, chain[-1] =
+        # cujo A alimenta target_id.PR). A ponta (que conecta na memória)
+        # precisa ficar mais PERTO da coluna de memórias (menor offset,
+        # mais à esquerda) -- a raiz, que só precisa alcançar a PL (mais
+        # longe), fica mais à direita. Sem o reversed(), a ordem saía
+        # invertida: raiz colada na memória, ponta longe.
+        for k, sig_id in enumerate(reversed(chain)):
             x, y = _place_aligned(row_id, offset + 1 + k, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
         offset += len(chain)

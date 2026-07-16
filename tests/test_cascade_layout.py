@@ -661,6 +661,54 @@ class TestMemoryToPressureLineStagger:
         assert checked > 0  # sanity check -- a sequência precisa exercitar isso
 
 
+class TestSigChainLinkRouting:
+    # sig.A -> sig.P (elos de cadeia: sig_stack da Região A, confirm_row
+    # da Região B, cadeia de fechamento) não devem passar pelo A* --
+    # feedback direto testando a UI real: até o caso "mesma coluna"
+    # (deveria ser uma reta vertical simples) estava saindo com um
+    # zigue-zague de 4 waypoints.
+
+    def test_same_column_link_is_a_straight_line(self):
+        # sig_stack da Região A: leaf com profundidade 2, ambos na mesma
+        # coluna (mesmo vcol) -- reta vertical, sem waypoint nenhum.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        deep_leaf = next(leaf for leaf in sources[("B", "PL")] if len(leaf) == 2)
+        result = layout.apply(data)
+        conn = next(c for c in result["connections"]
+                    if c["source"]["node"] == deep_leaf[0] and c["source"]["anchor"] == "A"
+                    and c["target"]["node"] == deep_leaf[1] and c["target"]["anchor"] == "P")
+        assert conn.get("waypoints") == []
+
+    def test_closure_chain_link_is_a_straight_line(self):
+        # Cadeia de fechamento: mesma coluna do botão (btn_x0), reta.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        roles = layout._build_role_maps(data)
+        result = layout.apply(data)
+        conn = next(c for c in result["connections"]
+                    if c["target"]["node"] == roles["btn_id"] and c["target"]["anchor"] == "P"
+                    and c["source"]["node"] != roles["btn_id"])
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+        assert node_type_map[conn["source"]["node"]] == "Valve_3_2_Ways"
+        assert conn.get("waypoints") == []
+
+    def test_different_column_link_is_a_horizontal_vertical_horizontal_z(self):
+        # confirm_row da Região B: cadeia de 2 sigs na MESMA linha,
+        # colunas diferentes (bloco paralelo antes da memória) -- sai de
+        # A na horizontal até o meio do caminho, desce pra altura de P,
+        # entra em P na horizontal. Exatamente 2 waypoints, mesmo x.
+        data = cascade.generate(parse("A+B+(A-B-)A+A-"))
+        result = layout.apply(data)
+        conn = next(c for c in result["connections"]
+                    if c["source"]["node"] == "gen-sig-A-ret-2" and c["source"]["anchor"] == "A"
+                    and c["target"]["node"] == "gen-sig-B-ret-3" and c["target"]["anchor"] == "P")
+        wps = conn.get("waypoints")
+        assert wps is not None and len(wps) == 2
+        assert wps[0]["x"] == wps[1]["x"]  # cotovelo: mesmo x nos dois waypoints
+        assert wps[0]["y"] != wps[1]["y"]  # segmento vertical entre eles
+
+
 class TestChildPositioningAndRouting:
     def test_every_node_has_role_removed(self):
         data = cascade.generate(parse("A+B+A-B-A+A-"))

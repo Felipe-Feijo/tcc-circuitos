@@ -971,6 +971,54 @@ def apply(data: dict) -> dict:
         conn["waypoints"] = [{"x": stub[0], "y": stub[1]}, {"x": corner[0], "y": corner[1]}]
         manually_routed.add(i)
 
+    # ── Roteamento manual determinístico: sig.A -> sig.P (elos de cadeia) ──
+    #
+    #   Cobre tanto os elos do sig_stack da Região A (mesma coluna, ver
+    #   Task 3) quanto os do confirm_row da Região B (mesma linha, colunas
+    #   diferentes, ver Task 5) e a cadeia de fechamento (mesma coluna do
+    #   botão) -- todos usam a MESMA forma de conexão (sig.A ->
+    #   próximo_sig.P ou sig.A -> btn.P, já que btn também é
+    #   Valve_3_2_Ways). Feedback direto testando a UI real: não dá pra
+    #   confiar no A* aqui também -- mesmo o caso "mesma coluna" (que
+    #   deveria ser uma reta vertical simples) estava saindo com um
+    #   zigue-zague de 4 waypoints.
+    #
+    #   Mesma coluna (A e P compartilham x, caso mais comum -- sig_stack e
+    #   cadeia de fechamento): reta vertical, sem waypoint nenhum (A* nem
+    #   precisa entrar em ação, o segmento reto entre os dois anchors já
+    #   é o caminho certo).
+    #   Colunas diferentes (confirm_row, quando o átomo confirmado é um
+    #   bloco paralelo): sai de A na horizontal até o meio do caminho,
+    #   desce/sobe pra altura de P, entra em P na horizontal -- 2
+    #   waypoints, formando um "Z" (H-V-H) em vez de zigue-zaguear.
+    for i, conn in enumerate(data.get("connections", [])):
+        if i in manually_routed:
+            continue
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        if not (s_anc == "A" and t_anc == "P"
+                and node_type_map.get(s_id) == "Valve_3_2_Ways"
+                and node_type_map.get(t_id) == "Valve_3_2_Ways"):
+            continue
+        spos = _scene_xy(s_id, s_anc)
+        tpos = _scene_xy(t_id, t_anc)
+        if spos is None or tpos is None:
+            continue
+        # Detecta "mesma coluna" pela posição do NÓ, não do anchor: "P"
+        # sempre soma o offset de pior-caso de comutação
+        # (anchor_local_for_routing, ver fix anterior), "A" nunca soma
+        # nada -- comparar spos/tpos diretamente faz um sig_stack/cadeia
+        # de fechamento (mesma coluna de verdade) parecer "coluna
+        # diferente" só por causa desse offset, disparando o Z
+        # desnecessariamente.
+        same_column = round(node_by_id[s_id]["position"]["x"]) == round(node_by_id[t_id]["position"]["x"])
+        if same_column:
+            conn["waypoints"] = []
+        else:
+            mid_x = (spos[0] + tpos[0]) / 2
+            conn["waypoints"] = [{"x": mid_x, "y": spos[1]}, {"x": mid_x, "y": tpos[1]}]
+        manually_routed.add(i)
+
     astar_grid = build_grid(data["nodes"])
     for i, conn in enumerate(data.get("connections", [])):
         if i in manually_routed:

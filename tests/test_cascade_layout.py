@@ -573,6 +573,44 @@ class TestMemoryToPressureLineStagger:
             checked += 1
         assert checked > 0  # sanity check -- a sequência precisa exercitar isso
 
+    def test_mem_b_targets_left_of_the_sig_driving_the_memory_above(self):
+        # Feedback direto do usuário (com desenho anexado): mem[i].B (i
+        # != mem[-1], a mais alta) deve mirar bem à ESQUERDA do sprite da
+        # 3/2 que aciona mem[i+1].PR diretamente -- não um stagger
+        # genérico -- senão o traço atravessa essa válvula subindo.
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        seq = "A+B+A-B-A+A-C+C-"
+        data = cascade.generate(parse(seq))
+        roles = layout._build_role_maps(data)
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        n_mc = roles["n_mc"]
+        checked = 0
+        for i in range(n_mc - 1):  # exclui a mais alta (mem[n_mc-1])
+            mem_id = roles["mc_by_idx"][i]
+            next_mem_id = roles["mc_by_idx"][i + 1]
+            # acha a sig que alimenta next_mem_id.PR diretamente (chain[-1])
+            driving_sig_id = next(
+                c["source"]["node"] for c in result["connections"]
+                if c["target"]["node"] == next_mem_id and c["target"]["anchor"] == "PR"
+            )
+            driving_x = node_by_id[driving_sig_id]["position"]["x"]
+
+            conn = next(c for c in result["connections"]
+                        if c["source"]["node"] == mem_id and c["source"]["anchor"] == "B")
+            assert node_type_map.get(conn["target"]["node"]) == "PressureLine"
+            wps = conn["waypoints"]
+            entry_x = wps[-1]["x"]
+            assert entry_x <= driving_x - _M.v32_width, (
+                f"mem[{i}].B entra em x={entry_x}, não fica à esquerda "
+                f"do corpo da sig que aciona mem[{i+1}] (x={driving_x})"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar isso
+
 
 class TestChildPositioningAndRouting:
     def test_every_node_has_role_removed(self):

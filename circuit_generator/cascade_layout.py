@@ -470,6 +470,14 @@ def apply(data: dict) -> dict:
     # bem longe da coluna do botão).
     ordered_targets = [(roles["mc_by_idx"][i], "PR") for i in range(n_mc - 1, -1, -1)]
 
+    # mem_id -> x da válvula que ALIMENTA (aciona) diretamente o PR dessa
+    # memória (o último elo da cadeia, chain[-1] -- o mais à direita na
+    # escada) -- usado abaixo pra rotear mem[i].B (i != mem[-1], a mais
+    # alta) até logo à esquerda do sprite dessa válvula, em vez de um
+    # stagger genérico (feedback direto testando a UI real, com desenho
+    # anexado mostrando a rota esperada).
+    driving_sig_x_by_mem: dict[str, float] = {}
+
     offset = 0
     for target_id, target_anchor in ordered_targets:
         chain = _chain_feeding(target_id, target_anchor)
@@ -487,6 +495,7 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned(row_id, offset + 1 + k, sig_id)
             node_by_id[sig_id]["position"] = {"x": x, "y": y}
         offset += len(chain)
+        driving_sig_x_by_mem[target_id] = node_by_id[chain[-1]]["position"]["x"]
 
     # ── Cadeia de fechamento (btn.P): coluna do botão, empilhada abaixo ──
     #
@@ -527,6 +536,16 @@ def apply(data: dict) -> dict:
     # mem_id -> índice i (mc_by_idx invertido) -- usado abaixo pra
     # espalhar (stagger) o alvo das conexões mem.PL/A/B -> PL por memória.
     mc_idx_by_id = {mid: i for i, mid in roles["mc_by_idx"].items()}
+
+    # Rastreia os X (arredondados, globais -- não por PL) já usados pelas
+    # conexões mem.PL/A/B -> PL, pra garantir que memórias DIFERENTES
+    # nunca acabem na mesma coluna mesmo indo pra PLs diferentes --
+    # _resolve_conflict/avoid_global_x sozinho não pega isso quando as
+    # duas rotas não se cruzam (same_order), que é justamente o caso mais
+    # comum aqui (achado testando a UI real: mem[2] e mem[3] colidindo
+    # por coincidência, uma vinda do cálculo "à esquerda da 3/2" e outra
+    # do stagger genérico).
+    _mem_pl_used_x: set[int] = set()
 
     # ── Dimensiona as PressureLines pelo alcance real do grid ───────────────
     #
@@ -761,12 +780,37 @@ def apply(data: dict) -> dict:
             # (avoid_global_x/same_order) não pega isso porque essas
             # conexões não se CRUZAM entre si (mantêm ordem consistente),
             # só ficam empilhadas na mesma coluna, atravessando o corpo de
-            # outras memórias/sigs no caminho. Espalha (stagger) o alvo
-            # por memória, crescendo pra direita conforme o índice --
-            # cada memória passa a mirar numa coluna própria.
+            # outras memórias/sigs no caminho.
             if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
-                src_x += mc_idx_by_id[s_id] * _MEM_PL_STAGGER
+                mem_idx = mc_idx_by_id[s_id]
+                next_mem_id = roles["mc_by_idx"].get(mem_idx + 1)
+                driving_x = (driving_sig_x_by_mem.get(next_mem_id)
+                             if s_anc == "B" and next_mem_id else None)
+                if driving_x is not None:
+                    # mem[i].B (i != mem[-1], a mais alta): mira bem à
+                    # esquerda do sprite da 3/2 que aciona mem[i+1]
+                    # diretamente (chain[-1] daquela confirmação) --
+                    # senão o traço atravessa essa válvula no caminho pra
+                    # cima (feedback direto testando a UI, com desenho
+                    # anexado mostrando a rota esperada). mem[-1] (sem
+                    # próxima memória acima) e o resto (PL/A) continuam
+                    # com o stagger genérico abaixo.
+                    src_x = driving_x - _M.v32_width - _M.pilot_w
+                else:
+                    # Espalha (stagger) o alvo por memória, crescendo pra
+                    # direita conforme o índice -- cada memória passa a
+                    # mirar numa coluna própria.
+                    src_x += mem_idx * _MEM_PL_STAGGER
             anc = _nearest_pl_anchor(pl, src_x)
+            if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
+                gx = round(_pl_anchor_x(pl, anc))
+                _guard = 0
+                while gx in _mem_pl_used_x and _guard < n_mc + 2:
+                    idx = int(anc[1:]) + 1
+                    anc = f"X{idx}"
+                    gx = round(_pl_anchor_x(pl, anc))
+                    _guard += 1
+                _mem_pl_used_x.add(gx)
             # Cobre, entre outros, mem[i].A/mem[i].B -> PL (fechamento de
             # anel / bus de grupo do cascata) -- já genérico, sem
             # substituição (ver Task 6 brief, item 2: "a mirrored branch

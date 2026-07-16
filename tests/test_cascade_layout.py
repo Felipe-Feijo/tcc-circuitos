@@ -105,3 +105,42 @@ class TestTriggerSourceChains:
         assert len(leaves) == 2
         depths = sorted(len(leaf) for leaf in leaves)
         assert depths == [0, 2]
+
+
+class TestOrSigStaircase:
+    def test_multi_cycle_creates_one_or_and_two_leaf_columns(self):
+        # "A+B+A-B-B+B-": B+ tem 2 fontes -> 1 OrValve, 2 colunas de folha.
+        data = cascade.generate(parse("A+B+A-B-B+B-"))
+        result = layout.apply(data)
+        or_nodes = [n for n in result["nodes"] if n["type"] == "OrValve"]
+        assert len(or_nodes) == 2  # 1 no lado PL de B, 1 no lado PR de B
+        for n in or_nodes:
+            assert n["position"] != {"x": 0, "y": 0}
+        # 2 colunas distintas por lado -> 2 x distintos entre as 2 OrValve
+        xs = {round(n["position"]["x"]) for n in or_nodes}
+        assert len(xs) == 2
+
+    def test_deep_leaf_chain_stacks_vertically_without_colliding(self):
+        # "(A+C+)B+A-B-C-B+B-": uma das folhas de B+ tem cadeia de
+        # profundidade 2 -- as 2 sigs dessa cadeia ficam na MESMA coluna,
+        # linhas diferentes.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        roles = layout._build_role_maps(data)
+        sources = layout._build_trigger_sources(data, roles)
+        deep_leaf = next(leaf for leaf in sources[("B", "PL")] if len(leaf) == 2)
+        result = layout.apply(data)
+        sig0 = _node(result, deep_leaf[0])
+        sig1 = _node(result, deep_leaf[1])
+        assert sig0["position"]["x"] == sig1["position"]["x"]
+        assert sig0["position"]["y"] != sig1["position"]["y"]
+
+    def test_pl_and_pr_or_rows_align_at_the_same_height_per_cylinder(self):
+        # A altura (linhas) da região de OR/sig é uniforme pros dois lados
+        # do MESMO cilindro -- mesmo se só um lado tiver cadeia profunda.
+        data = cascade.generate(parse("(A+C+)B+A-B-C-B+B-"))
+        role_by_id = {n["id"]: n.get("_role", "") for n in data["nodes"]}
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        pl_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:B:PL:"))
+        pr_or = next(nid for nid, r in role_by_id.items() if r.startswith("or_valve:B:PR:"))
+        assert node_by_id[pl_or]["position"]["y"] == node_by_id[pr_or]["position"]["y"]

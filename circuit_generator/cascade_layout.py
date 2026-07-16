@@ -188,28 +188,109 @@ def apply(data: dict) -> dict:
 
     roles = _build_role_maps(data)
     node_by_id = {n["id"]: n for n in data["nodes"]}
+    sources = _build_trigger_sources(data, roles)
 
     grid = Grid()
+    _reserved_cols: dict[str, set[int]] = {}
 
-    # ── Região A (parcial): pistão/válvula, 1 coluna sequencial por letra ──
-    #
-    #   Índice sequencial simples por enquanto (ordem alfabética) -- a
-    #   Task 3 substitui esse índice por um cálculo que reserva espaço
-    #   extra pra escada de OR/sig de cada lado, igual ao já feito em
-    #   step_by_step_layout.py.
+    def _place_aligned(row_id: str, virtual_col: int, node_id: str) -> tuple[float, float]:
+        """Como grid.place, mas garante que virtual_col receba o índice de
+        chegada `virtual_col` na linha (reservando as colunas 0..virtual_col-1
+        com placeholders fictícios se ainda não tiverem sido usadas), pra que
+        colunas puladas continuem alinhadas em X entre linhas diferentes."""
+        reserved = _reserved_cols.setdefault(row_id, set())
+        for kk in range(virtual_col):
+            if kk not in reserved:
+                grid.place(row_id, kk, f"__reserved__{row_id}__{kk}__")
+                reserved.add(kk)
+        reserved.add(virtual_col)
+        return grid.place(row_id, virtual_col, node_id)
+
+    # ── Largura de cada lado (nº de colunas = nº de folhas, N) ───────────
+    def _side_width(letter: str, side: str) -> int:
+        leaves = sources.get((letter, side), [])
+        return len(leaves)  # N folhas -> N colunas (ver fórmula da Task 3)
+
+    letters = sorted(roles["cyl_by_letter"])
+    cyl_col: dict[str, int] = {}
+    col = 0
+    for letter in letters:
+        col += _side_width(letter, "PL")
+        cyl_col[letter] = col
+        col += 1 + _side_width(letter, "PR")
+
     cyl_cell_w = cols["group_gap"]
     grid.add_row("cylinder",   cyl_cell_w, _M.cyl_height, rows["cylinder"],
                  x_origin=cols["cylinder_first_x"])
     grid.add_row("main_valve", cyl_cell_w, _M.v42_height, rows["main_valve"],
                  x_origin=cols["cylinder_first_x"])
 
-    letters = sorted(roles["cyl_by_letter"])
     for letter in letters:
         cyl_id = roles["cyl_by_letter"][letter]
         v42_id = roles["v42_by_letter"][letter]
-        x, y = grid.place("cylinder", letter, cyl_id)
+        x, y = _place_aligned("cylinder", cyl_col[letter], cyl_id)
         node_by_id[cyl_id]["position"] = {"x": x, "y": y}
-        x, y = grid.place("main_valve", letter, v42_id)
+        x, y = _place_aligned("main_valve", cyl_col[letter], v42_id)
         node_by_id[v42_id]["position"] = {"x": x, "y": y}
+
+    # ── Colunas virtuais de cada folha/OrValve, por (letra, lado) ────────
+    #
+    #   N folhas -> colunas de offset 1..N a partir de cyl_col[letra]
+    #   (sinal invertido pro lado PL). offset(leaf_j) = N-j pra j>=1
+    #   (mesma coluna da OrValve or_i=j-1, empilhada abaixo dela);
+    #   offset(leaf_0) = N (1 coluna a mais que a OrValve mais distante).
+    #   offset(OrValve em or_i) = N-1-or_i (fórmula já usada em
+    #   step_by_step_layout._or_valve_xy, reaproveitada sem alteração).
+    # (max chain length per (letter, side) is not tracked separately -- the
+    # "same row height for both sides of a cylinder" requirement holds for
+    # free below, since sig_stack_{depth} rows are keyed by depth alone and
+    # shared across ALL letters/sides, not allocated per-cylinder.)
+    leaf_virtual_col: dict[tuple[str, str, int], int] = {}   # (letter, side, j) -> offset
+    or_virtual_col:   dict[str, int] = {}                    # or_id -> offset (absoluto, cyl_col +/- offset)
+
+    for letter in letters:
+        for side, sign in (("PL", -1), ("PR", 1)):
+            leaves = sources.get((letter, side), [])
+            n = len(leaves)
+            for j, leaf in enumerate(leaves):
+                offset = n if j == 0 else (n - j)
+                leaf_virtual_col[(letter, side, j)] = offset
+            if n >= 2:
+                for or_i in range(n - 1):
+                    or_offset = n - 1 - or_i
+                    role_prefix = f"or_valve:{letter}:{side}:{or_i}"
+                    or_id = next(nid for nid, node in node_by_id.items()
+                                 if node.get("_role", "") == role_prefix)
+                    or_virtual_col[or_id] = cyl_col[letter] + sign * or_offset
+
+    # ── Posiciona OrValve (linha própria, mesma altura pros 2 lados) ─────
+    if or_virtual_col:
+        min_vcol = min(or_virtual_col.values())
+        grid.add_row("or_row", cyl_cell_w, _M.or_height, rows["or_row"],
+                     x_origin=cols["cylinder_first_x"] + min_vcol * cyl_cell_w)
+        for or_id in sorted(or_virtual_col, key=lambda k: or_virtual_col[k]):
+            vcol = or_virtual_col[or_id]
+            x, y = _place_aligned("or_row", vcol - min_vcol, or_id)
+            node_by_id[or_id]["position"] = {"x": x, "y": y}
+
+    # ── Posiciona as cadeias de sig de cada folha (0+ linhas empilhadas) ──
+    sig_stack_row_ids_created: set[str] = set()  # rastreia linhas já criadas (Grid não expõe "já existe")
+    for letter in letters:
+        for side, sign in (("PL", -1), ("PR", 1)):
+            leaves = sources.get((letter, side), [])
+            for j, leaf in enumerate(leaves):
+                if not leaf:
+                    continue  # folha crua -- nenhuma válvula, nenhuma linha
+                offset = leaf_virtual_col[(letter, side, j)]
+                vcol = cyl_col[letter] + sign * offset
+                for depth, sig_id in enumerate(leaf):
+                    row_id = f"sig_stack_{depth}"
+                    if row_id not in sig_stack_row_ids_created:
+                        grid.add_row(row_id, cyl_cell_w, _M.v32_height,
+                                     rows["or_row"] + (depth + 1) * _M.v32_height * 1.5,
+                                     x_origin=cols["cylinder_first_x"])
+                        sig_stack_row_ids_created.add(row_id)
+                    x, y = _place_aligned(row_id, vcol, sig_id)
+                    node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
     return data

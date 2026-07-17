@@ -93,6 +93,11 @@ class SpriteMetrics:
     # Pilot actuator
     pilot_w:    int  # largura do sprite de pilot (usado nos anchors PL/PR)
 
+    # Atuadores das sigs do cascata (limit_switch à esquerda, spring à
+    # direita -- ver Valve_3_2_Ways.actuators em cascade.py)
+    limit_switch_w: int
+    spring_w:       int
+
     # Exhaust
     exh_width:  int
     exh_height: int
@@ -134,6 +139,17 @@ class SpriteMetrics:
     sig_fp_right: int = field(init=False)  # px a direita do anchor A (com shift)
     sig_spacing:  int = field(init=False)  # sig_fp_left + sig_fp_right
 
+    # Pitch mínimo de coluna pra colocar duas sigs do cascata (limit_switch
+    # + corpo + spring) lado a lado sem sobrepor, no pior caso em que a da
+    # esquerda está comutada (corpo inteiro deslocado +pilot_side_offset_x
+    # pra direita, ver BODY_VISUALS[1]) e a da direita não. Ao contrário de
+    # sig_fp_right acima (que usa pilot_w como aproximação genérica pro
+    # atuador direito), usa a largura REAL do sprite de spring -- achado
+    # testando a UI real: sig_spacing (647px) ficava 36px curto do pitch
+    # de fato necessário (683px), exatamente a diferença entre spring_w
+    # (136px) e pilot_w (100px).
+    sig_col_pitch: int = field(init=False)
+
     # Deslocamento horizontal do corpo/pilots no estado comutado ("ativo")
     # de cada válvula direcional -- lido de BODY_VISUALS[1]["offset"] em
     # cada arquivo gráfico. Chave = node_type. É sempre >= 0 (comutar só
@@ -155,6 +171,10 @@ class SpriteMetrics:
         object.__setattr__(self, "sig_fp_left",  fp_left)
         object.__setattr__(self, "sig_fp_right", fp_right)
         object.__setattr__(self, "sig_spacing",  fp_left + fp_right)
+
+        object.__setattr__(self, "sig_col_pitch", int(
+            self.limit_switch_w + self.v32_width + self.spring_w
+            + self.pilot_side_offset_x.get("Valve_3_2_Ways", 147.0)))
 
 
 def _ratio_from_expr(expr: str, axis: str) -> float:
@@ -264,6 +284,8 @@ def _load() -> SpriteMetrics:
     spacing      = _read_expandable_spacing()
 
     pilot_w, _    = _sprite_size("resources/actuators/pilot/pilot.png")
+    limit_switch_w, _ = _sprite_size("resources/actuators/limit_switch/limit_switch_active.png")
+    spring_w, _       = _sprite_size("resources/actuators/spring/spring_active.png")
 
     pilot_side_offset_x = {
         "Valve_3_2_Ways": _read_body_state1_offset_x(
@@ -284,6 +306,8 @@ def _load() -> SpriteMetrics:
         ps_width=ps_w,   ps_height=ps_h,
         or_width=or_w,   or_height=or_h,
         pilot_w=pilot_w,
+        limit_switch_w=limit_switch_w,
+        spring_w=spring_w,
         anchor_local={},
         pilot_side_offset_x=pilot_side_offset_x,
     )
@@ -304,11 +328,24 @@ def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, f
     pra direita, nunca pra esquerda. PL não precisa de ajuste (seu pior
     caso, mais à esquerda, já é o valor sem deslocamento). Ver
     docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
+
+    Valve_3_2_Ways.P recebe o MESMO ajuste, pelo mesmo motivo: é ele quem
+    recebe a conexão direta de uma PressureLine nas válvulas de sinalização
+    de confirmação (cascata e passo a passo), e seu anchor local também é
+    uma fração fixa de self.width (graphics/items/base/nodes/
+    directional_valve/valve_3_2_ways.py), sem compensar o deslocamento
+    visual de BODY_VISUALS[1] (comutado). Não estende pra Valve_4_2_Ways.P/
+    Valve_5_2_Ways.P: nesses tipos, P nunca é alimentado por uma
+    PressureLine (vem de um Exhaust/PressureSource dedicado -- ver
+    circuit_generator/methods/cascade.py), então o deslocamento nunca
+    importa ali.
     """
     base = METRICS.anchor_local.get(node_type, {}).get(anchor_name)
     if base is None:
         return None
     if anchor_name == "PR":
+        return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
+    if anchor_name == "P" and node_type == "Valve_3_2_Ways":
         return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
     return base
 

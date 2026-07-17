@@ -304,9 +304,18 @@ class ConnectionItem(DiagramItemBase):
         — parando assim que encontra uma curva real, que é edição manual do
         usuário e não deve ser tocada.
 
-        Caso especial: com um único waypoint compartilhando as duas bordas,
-        se exit_dir e entry_dir caem no mesmo eixo (ambos H ou ambos V), um
-        ponto só não pode satisfazer as duas pontas — rerroteia esse trecho.
+        Caso especial: quando TODOS os waypoints são colineares entre si
+        no eixo compartilhado por exit_dir/entry_dir (ambos H ou ambos V —
+        um único waypoint compartilhando as duas bordas é o caso mais
+        comum, mas uma dobra deliberada de 2+ waypoints nesse mesmo eixo
+        cai na mesma armadilha), os dois deslocamentos abaixo reivindicam
+        o array inteiro e o segundo sobrescreve o primeiro por completo,
+        colapsando a dobra num único segmento diagonal (achado testando a
+        UI real com um Z horizontal-vertical-horizontal entre dois anchors
+        que saem na vertical — os 2 waypoints do meio, colineares em x,
+        eram "engolidos" pelo lado do source e depois pelo lado do
+        target). Nenhuma combinação de deslocamento individual resolve
+        isso; rerroteia esse trecho, como já fazíamos para n==1.
         """
         if getattr(self, '_being_deleted', False) or not self._waypoints_initialized:
             return
@@ -318,9 +327,12 @@ class ConnectionItem(DiagramItemBase):
         wps = self.waypoints
         n   = len(wps)
 
-        if n == 1 and moved_source and moved_target and exit_h == entry_h:
-            self._reroute_waypoints()
-            return
+        if moved_source and moved_target and exit_h == entry_h:
+            axis_val = (lambda p: p.x()) if not exit_h else (lambda p: p.y())
+            ref = axis_val(wps[0])
+            if all(abs(axis_val(p) - ref) < 0.5 for p in wps):
+                self._reroute_waypoints()
+                return
 
         self.prepareGeometryChange()
         if moved_source:

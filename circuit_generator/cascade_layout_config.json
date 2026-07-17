@@ -1,0 +1,26 @@
+{
+    "_comment": "Todos os valores em pixels. Edite aqui para ajustar o espaçamento do circuito cascata gerado.",
+    "columns": {
+        "cylinder_first_x": -880,
+        "group_gap": 650,
+        "v42_align_offset_x": 65,
+        "logic_cell_width": 1000,
+        "v42_ps_offset_x": 240,
+        "v42_exh_offset_x": 160,
+        "sig_exh_offset_x": 180
+    },
+    "rows": {
+        "cylinder": -220,
+        "main_valve": 120,
+        "or_row": 330,
+        "pl_base": 500,
+        "pl_gap": 550,
+        "logic_row_gap": 350
+    },
+    "offsets": {
+        "exhaust_dx": 80,
+        "exhaust_dy": 60,
+        "sig_exh_dy": 240,
+        "mc_exh_dy": 250
+    }
+}

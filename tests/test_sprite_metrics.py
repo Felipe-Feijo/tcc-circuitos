@@ -111,6 +111,27 @@ class TestPilotSideOffsetX:
         assert m.pilot_side_offset_x["Valve_5_2_Ways"] == 222.0
 
 
+class TestSigColPitch:
+    def test_covers_worst_case_commutation_shift(self):
+        # sig_col_pitch precisa ser >= limit_switch_w + v32_width +
+        # spring_w + pilot_side_offset_x -- o pior caso de duas sigs
+        # adjacentes onde a da esquerda está comutada (corpo inteiro
+        # deslocado pra direita) e a da direita não.
+        from circuit_generator.sprite_metrics import METRICS as m
+        expected = int(m.limit_switch_w + m.v32_width + m.spring_w
+                       + m.pilot_side_offset_x["Valve_3_2_Ways"])
+        assert m.sig_col_pitch == expected
+
+    def test_wider_than_the_generic_pilot_based_sig_spacing(self):
+        # sig_spacing (usado por layout_engine.py) aproxima o atuador
+        # direito com pilot_w (100px) -- mas a sig do cascata usa spring
+        # (136px) do lado direito, um sprite mais largo. sig_col_pitch
+        # precisa refletir a largura REAL do spring, não a aproximação.
+        from circuit_generator.sprite_metrics import METRICS as m
+        assert m.spring_w > m.pilot_w
+        assert m.sig_col_pitch > m.sig_spacing
+
+
 class TestAnchorLocalForRouting:
     def test_pr_always_gets_the_commutation_margin(self):
         # Sempre, incondicionalmente -- não depende de default_side, já
@@ -130,7 +151,28 @@ class TestAnchorLocalForRouting:
     def test_other_anchors_unchanged(self):
         from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as m
         assert anchor_local_for_routing("Valve_4_2_Ways", "A") == m.anchor_local["Valve_4_2_Ways"]["A"]
-        assert anchor_local_for_routing("Valve_3_2_Ways", "P") == m.anchor_local["Valve_3_2_Ways"]["P"]
+        # Valve_3_2_Ways.P NAO fica inalterado -- ver test_p_gets_the_commutation_margin_only_for_valve_3_2_ways
+        # abaixo. Valve_4_2_Ways.P/Valve_5_2_Ways.P continuam inalterados: nesta base de código
+        # nenhuma delas jamais tem seu P alimentado por uma PressureLine (v42.P/mc.P vêm de um
+        # Exhaust/PressureSource dedicado -- ver circuit_generator/methods/cascade.py), então o
+        # deslocamento de comutação nunca é relevante ali.
+        assert anchor_local_for_routing("Valve_4_2_Ways", "P") == m.anchor_local["Valve_4_2_Ways"]["P"]
+        assert anchor_local_for_routing("Valve_5_2_Ways", "P") == m.anchor_local["Valve_5_2_Ways"]["P"]
+
+    def test_p_gets_the_commutation_margin_only_for_valve_3_2_ways(self):
+        # As válvulas de sinalização (Valve_3_2_Ways) que confirmam o
+        # acionamento de uma 5/2 (cascata) ou de um pilot de 4/2 (ambos os
+        # métodos) têm seu P alimentado direto por uma PressureLine -- o
+        # mesmo mecanismo de deslocamento de comutação (BODY_VISUALS[1],
+        # +147px) que já empurra PR pra direita também empurra P (calculado
+        # como fração fixa de self.width, sem compensar o offset visual do
+        # sprite) -- ver graphics/items/base/nodes/directional_valve/
+        # valve_3_2_ways.py. Mesmo pior-caso incondicional já usado pra PR:
+        # comutar só empurra pra direita, nunca pra esquerda.
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS as m
+        base_p = m.anchor_local["Valve_3_2_Ways"]["P"]
+        expected = (base_p[0] + m.pilot_side_offset_x["Valve_3_2_Ways"], base_p[1])
+        assert anchor_local_for_routing("Valve_3_2_Ways", "P") == expected
 
     def test_unknown_anchor_returns_none(self):
         from circuit_generator.sprite_metrics import anchor_local_for_routing

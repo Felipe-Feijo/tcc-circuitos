@@ -6,7 +6,7 @@ o resultado na cena gráfica.
 """
 
 from circuit_generator.sequence_parser import parse
-from circuit_generator import layout_engine, step_by_step_layout
+from circuit_generator import layout_engine, step_by_step_layout, cascade_layout
 from circuit_generator.methods import cascade, step_by_step_pneumatic, step_by_step_electric
 from persistence.serializer import deserialize_scene
 from graphics.sensor_registry.sensor_registry import SensorRegistry
@@ -19,7 +19,7 @@ METHOD_MAP = {
 }
 
 LAYOUT_MAP = {
-    ("cascade",      None):          layout_engine.apply,
+    ("cascade",      None):          cascade_layout.apply,
     ("step_by_step", "pneumatic"):   step_by_step_layout.apply,
 }
 

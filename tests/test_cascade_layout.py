@@ -158,6 +158,38 @@ class TestOrSigStaircase:
             checked += 1
         assert checked > 0  # sanity check -- a sequência precisa exercitar ao menos 1 OrValve com 2 sigs
 
+    def test_or_to_or_link_enters_the_side_matching_its_own_position(self):
+        # Regressão real (feedback direto testando a UI, com imagem
+        # anotada): num encadeamento de 3+ fontes, a OrValve intermediária
+        # (cujo output "A" sempre sai por CIMA, sem lado flexível como um
+        # sig/PL) entrava sempre pela DIREITA da próxima OrValve da
+        # cadeia, mesmo quando estava fisicamente à ESQUERDA dela --
+        # comparar com a fonte irmã (heurística geral acima) não resolve
+        # esse caso porque as duas fontes podem estar do MESMO lado do
+        # alvo. O lado certo depende só da posição da OrValve de origem
+        # RELATIVA AO ALVO: à esquerda -> X, à direita -> Y.
+        data = cascade.generate(parse("A+B+A-B-A+B+A-B-A+B+A-B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        for conn in result["connections"]:
+            s, t = conn["source"], conn["target"]
+            if (node_type_map.get(s["node"]) != "OrValve"
+                    or node_type_map.get(t["node"]) != "OrValve"):
+                continue
+            src_x = node_by_id[s["node"]]["position"]["x"]
+            tgt_x = node_by_id[t["node"]]["position"]["x"]
+            expected_anchor = "X" if src_x <= tgt_x else "Y"
+            assert t["anchor"] == expected_anchor, (
+                f"OrValve {s['node']} (x={src_x}) alimentando OrValve "
+                f"{t['node']} (x={tgt_x}) entrou por {t['anchor']}, "
+                f"esperado {expected_anchor}"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar uma cadeia de 3+ fontes
+
     def test_deep_leaf_chain_stacks_vertically_without_colliding(self):
         # "(A+C+)B+A-B-C-B+B-": uma das folhas de B+ tem cadeia de
         # profundidade 2 -- as 2 sigs dessa cadeia ficam na MESMA coluna,

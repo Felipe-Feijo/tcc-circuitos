@@ -743,12 +743,38 @@ def apply(data: dict) -> dict:
         if node_type_map.get(t_id) == "OrValve" and t_anc in ("X", "Y"):
             or_xy_conns.setdefault(t_id, {})[t_anc] = conn
 
-    for sides in or_xy_conns.values():
+    for or_id, sides in or_xy_conns.items():
         x_conn, y_conn = sides.get("X"), sides.get("Y")
         if x_conn is None or y_conn is None:
             continue
-        x_src_x = _or_source_x(x_conn["source"]["node"], x_conn["source"]["anchor"])
-        y_src_x = _or_source_x(y_conn["source"]["node"], y_conn["source"]["anchor"])
+        x_src_id, y_src_id = x_conn["source"]["node"], y_conn["source"]["node"]
+        x_is_or = node_type_map.get(x_src_id) == "OrValve"
+        y_is_or = node_type_map.get(y_src_id) == "OrValve"
+
+        if x_is_or or y_is_or:
+            # Elo OrValve -> OrValve (chain de 3+ fontes, ver methods/
+            # cascade.py seção 6b: "current" -- sempre o acumulador da
+            # OrValve anterior -- vai sempre em X, "nxt" -- sempre uma
+            # folha crua -- vai sempre em Y). O output "A" de uma OrValve
+            # sai sempre por CIMA (exit_directions top, or_valve.py), sem
+            # "lado flexível" como um sig ou PL têm -- comparar com a
+            # OUTRA entrada (heurística abaixo) não basta, porque as duas
+            # podem estar do MESMO lado do alvo (feedback direto testando
+            # a UI real, com imagem anotada: a OrValve de origem, à
+            # esquerda do alvo, entrava pela direita mesmo assim). O lado
+            # certo depende só da posição da OrValve de origem RELATIVA
+            # AO ALVO, não da outra entrada.
+            or_src_id = x_src_id if x_is_or else y_src_id
+            or_src_x = node_by_id[or_src_id]["position"]["x"]
+            target_x = node_by_id[or_id]["position"]["x"]
+            wants_x = or_src_x <= target_x
+            currently_x = x_is_or
+            if wants_x != currently_x:
+                x_conn["target"]["anchor"], y_conn["target"]["anchor"] = "Y", "X"
+            continue
+
+        x_src_x = _or_source_x(x_src_id, x_conn["source"]["anchor"])
+        y_src_x = _or_source_x(y_src_id, y_conn["source"]["anchor"])
         if x_src_x is None or y_src_x is None:
             continue
         if x_src_x > y_src_x:

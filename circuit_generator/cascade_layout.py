@@ -32,10 +32,13 @@ _CONFIG_PATH = Path(__file__).parent / "cascade_layout_config.json"
 _PL_ANCHOR_MIN_MARGIN = 20
 
 # Margem extra (além de _PL_ANCHOR_MIN_MARGIN) só pra conexão PL -> sig.P
-# das sigs que entram pela direita (Região A e confirm_row da Região B,
-# ver left_entry_sig_ids) -- _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava
-# pouca folga nesse caso específico (feedback direto testando a UI real).
-_RIGHT_ENTRY_P_EXTRA_MARGIN = 150
+# da escada de confirmação PR das memórias (Região B, confirm_row) --
+# _PL_ANCHOR_MIN_MARGIN sozinho ainda deixava pouca folga nesse caso
+# específico (feedback direto testando a UI real). A Região A usa só a
+# margem base -- não tem o mesmo aperto de geometria que justificou essa
+# folga extra aqui (feedback direto testando a UI real: "vai tão longe
+# mesmo sem nenhum anchor bloqueado").
+_CONFIRM_ROW_P_EXTRA_MARGIN = 150
 
 # Espalha (stagger) o alvo das conexões mem.PL/A/B -> PL por índice de
 # memória, em px, crescendo pra direita -- sem isso, toda memória mira no
@@ -728,16 +731,27 @@ def apply(data: dict) -> dict:
                 # continuar entrando pela esquerda). É a ÚNICA exceção --
                 # tanto a Região A (folha do OR/sig-staircase que alimenta
                 # o pilot da 4/2) quanto a Região B (confirm_row, alimenta
-                # mem.PR) saem pela direita, ver branch abaixo.
+                # mem.PR) saem pela direita, ver branches abaixo.
                 valve_left_x = node_by_id[t_id]["position"]["x"]
                 safe_x = valve_left_x - _M.pilot_w
                 anc = _nearest_pl_anchor(pl, safe_x, "left")
                 push_dir = -1
                 avoid_global_x = True
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in region_a_sig_ids:
                 # Região A (folha do OR/sig-staircase que alimenta o pilot
-                # da 4/2 direto ou via OrValve) e Região B (confirm_row,
-                # alimenta mem.PR): saem pela DIREITA em vez da esquerda
+                # da 4/2 direto ou via OrValve): sai pela DIREITA (feedback
+                # direto testando a UI real, com imagem anotada mostrando a
+                # rota esperada: sai pra direita, depois sobe até o anchor
+                # mais próximo à direita). Só a margem BASE
+                # (_PL_ANCHOR_MIN_MARGIN) -- sem a margem extra do
+                # confirm_row abaixo, que nesse caso não tem nenhum
+                # obstáculo pra justificar (feedback direto testando a UI
+                # real: "vai tão longe mesmo sem nenhum anchor bloqueado").
+                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
+                push_dir = 1
+                avoid_global_x = True
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+                # Região B (confirm_row, alimenta mem.PR): sai pela DIREITA
                 # (feedback direto testando a UI real, com imagem anotada
                 # mostrando a rota esperada: sai pra direita, depois sobe
                 # até o anchor mais próximo à direita). `tgt_x` (calculado
@@ -750,11 +764,12 @@ def apply(data: dict) -> dict:
                 # (sempre tgt_x), obrigando o traço a voltar pra
                 # esquerda no último trecho -- exatamente o zigue-zague
                 # que este fix deveria eliminar, não criar. Margem extra
-                # (_RIGHT_ENTRY_P_EXTRA_MARGIN): a margem padrão sozinha
+                # (_CONFIRM_ROW_P_EXTRA_MARGIN): a margem padrão sozinha
                 # ainda deixava pouca folga aqui especificamente (feedback
-                # direto testando a UI real).
+                # direto testando a UI real) -- diferente da Região A
+                # acima, que não precisa dessa folga extra.
                 anc = _nearest_pl_anchor(pl, tgt_x, "right",
-                                          min_margin=_PL_ANCHOR_MIN_MARGIN + _RIGHT_ENTRY_P_EXTRA_MARGIN)
+                                          min_margin=_PL_ANCHOR_MIN_MARGIN + _CONFIRM_ROW_P_EXTRA_MARGIN)
                 push_dir = 1
                 avoid_global_x = True
             elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":

@@ -191,7 +191,14 @@ def build_grid(nodes: list[dict]) -> Grid:
     CYL_TYPES   = {"DoubleActingCylinder"}
     SMALL_OBS   = {"Exhaust", "PressureSource"}  # pequenos obstáculos sem margem
     SKIP_TYPES  = {"PressureLine"}                # PLs não bloqueiam
+    OR_TYPES    = {"OrValve"}
     MH = 80   # margem horizontal para válvulas
+    # Margem vertical só pra OrValve -- feedback direto testando a UI
+    # real: sem nenhuma margem (caía no ramo genérico, bloqueio exato do
+    # sprite), um fio podia passar rente por cima/embaixo da OrValve. X/Y
+    # (esquerda/direita) já têm folga própria via _find_free_exit e não
+    # precisam de margem horizontal aqui.
+    MV_OR = 20
 
     for n in nodes:
         t = n["type"]
@@ -216,6 +223,9 @@ def build_grid(nodes: list[dict]) -> Grid:
             mh = 30
             grid.block_rect_px(px - mh, py, px + w + mh, py + h)
             _NODE_BOUNDS[n["id"]] = (px - mh, py, w + 2*mh, h)
+        elif t in OR_TYPES:
+            grid.block_rect_px(px, py - MV_OR, px + w, py + h + MV_OR)
+            _NODE_BOUNDS[n["id"]] = (px, py - MV_OR, w, h + 2*MV_OR)
         else:
             grid.block_rect_px(px, py, px + w, py + h)
             _NODE_BOUNDS[n["id"]] = (px, py, w, h)

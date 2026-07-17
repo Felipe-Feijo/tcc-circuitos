@@ -81,3 +81,40 @@ class TestCommutationShiftInBlockingRect:
         target_x = 1000 + shift + M.v52_width - 10
         cx, cy = grid.px_to_cell(target_x, 1000 + M.v52_height / 2)
         assert grid.cost(cx, cy) != math.inf
+
+
+class TestOrValveVerticalMargin:
+    """Feedback direto testando a UI real: OrValve caía no ramo genérico
+    de build_grid() (bloqueio exato do sprite, sem margem nenhuma) -- um
+    fio podia passar rente por cima/embaixo do corpo. Adicionada uma
+    margem vertical pequena (MV_OR) só pra esse tipo -- X/Y (esquerda/
+    direita) já tinham folga própria via _find_free_exit, não precisam
+    de margem horizontal."""
+
+    def test_blocks_a_small_margin_above_and_below(self):
+        import math
+        from circuit_generator.astar_router import build_grid
+
+        node = {"id": "or1", "type": "OrValve", "position": {"x": 1000, "y": 1000},
+                "properties": {}}
+        grid = build_grid([node])
+        mid_x = 1000 + M.or_width / 2
+        above = grid.px_to_cell(mid_x, 1000 - 10)
+        below = grid.px_to_cell(mid_x, 1000 + M.or_height + 10)
+        assert grid.cost(*above) == math.inf
+        assert grid.cost(*below) == math.inf
+
+    def test_margin_does_not_extend_too_far(self):
+        import math
+        from circuit_generator.astar_router import build_grid
+
+        node = {"id": "or1", "type": "OrValve", "position": {"x": 1000, "y": 1000},
+                "properties": {}}
+        grid = build_grid([node])
+        # +CELL de folga além da margem, pra não cair na mesma célula de
+        # 20px que ainda está dentro do bloqueio por arredondamento.
+        mid_x = 1000 + M.or_width / 2
+        above = grid.px_to_cell(mid_x, 1000 - 20 - 20)
+        below = grid.px_to_cell(mid_x, 1000 + M.or_height + 20 + 20)
+        assert grid.cost(*above) != math.inf
+        assert grid.cost(*below) != math.inf

@@ -268,7 +268,16 @@ def apply(data: dict) -> dict:
         cyl_col[letter] = col
         col += 1 + _side_width(letter, "PR")
 
-    cyl_cell_w = cols["group_gap"]
+    # REGRESSÃO REAL (feedback direto testando a UI real, com imagem
+    # anotada): com cols["group_gap"] sozinho, duas sigs adjacentes de
+    # colunas vizinhas (ex: PR de um cilindro e PL do próximo) podiam se
+    # sobrepor visualmente -- a folga (group_gap - largura do sprite da
+    # sig) não cobria o pior caso em que a sig da esquerda está no estado
+    # comutado (BODY_VISUALS[1] desloca o corpo INTEIRO, incluindo os
+    # atuadores, +pilot_side_offset_x pra direita -- ver sig_col_pitch em
+    # sprite_metrics.py). Usa o maior entre o valor configurado e o pitch
+    # mínimo que garante não-sobreposição nesse pior caso.
+    cyl_cell_w = max(cols["group_gap"], _M.sig_col_pitch)
     grid.add_row("cylinder",   cyl_cell_w, _M.cyl_height, rows["cylinder"],
                  x_origin=cols["cylinder_first_x"])
     grid.add_row("main_valve", cyl_cell_w, _M.v42_height, rows["main_valve"],

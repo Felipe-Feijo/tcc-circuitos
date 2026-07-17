@@ -111,6 +111,27 @@ class TestPilotSideOffsetX:
         assert m.pilot_side_offset_x["Valve_5_2_Ways"] == 222.0
 
 
+class TestSigColPitch:
+    def test_covers_worst_case_commutation_shift(self):
+        # sig_col_pitch precisa ser >= limit_switch_w + v32_width +
+        # spring_w + pilot_side_offset_x -- o pior caso de duas sigs
+        # adjacentes onde a da esquerda está comutada (corpo inteiro
+        # deslocado pra direita) e a da direita não.
+        from circuit_generator.sprite_metrics import METRICS as m
+        expected = int(m.limit_switch_w + m.v32_width + m.spring_w
+                       + m.pilot_side_offset_x["Valve_3_2_Ways"])
+        assert m.sig_col_pitch == expected
+
+    def test_wider_than_the_generic_pilot_based_sig_spacing(self):
+        # sig_spacing (usado por layout_engine.py) aproxima o atuador
+        # direito com pilot_w (100px) -- mas a sig do cascata usa spring
+        # (136px) do lado direito, um sprite mais largo. sig_col_pitch
+        # precisa refletir a largura REAL do spring, não a aproximação.
+        from circuit_generator.sprite_metrics import METRICS as m
+        assert m.spring_w > m.pilot_w
+        assert m.sig_col_pitch > m.sig_spacing
+
+
 class TestAnchorLocalForRouting:
     def test_pr_always_gets_the_commutation_margin(self):
         # Sempre, incondicionalmente -- não depende de default_side, já

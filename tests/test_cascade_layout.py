@@ -152,6 +152,29 @@ class TestOrSigStaircase:
             "or_row (menor y) que a raiz (alimentada pela PL)"
         )
 
+    def test_adjacent_sig_columns_dont_overlap_when_commuted(self):
+        # Regressão real (feedback direto testando a UI, com imagem
+        # anotada): duas sigs de colunas vizinhas (PR de um cilindro e PL
+        # do próximo) podiam se sobrepor visualmente -- a folga entre
+        # colunas (cols["group_gap"]) não cobria o pior caso em que a sig
+        # da esquerda está no estado comutado (BODY_VISUALS[1] desloca o
+        # corpo INTEIRO, incluindo atuadores, +pilot_side_offset_x pra
+        # direita). Verifica que o pitch de coluna real (dx entre as duas
+        # sigs adjacentes) é pelo menos o mínimo necessário pra não
+        # sobrepor nesse pior caso (sig_col_pitch).
+        from circuit_generator.sprite_metrics import METRICS as _M
+
+        data = cascade.generate(parse("(A+B+)C+A-B-C-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        left_x = node_by_id["gen-sig-A-ret-3"]["position"]["x"]
+        right_x = node_by_id["gen-sig-B-ext-1"]["position"]["x"]
+        assert right_x - left_x >= _M.sig_col_pitch, (
+            f"colunas adjacentes de sig ficaram a {right_x - left_x}px, "
+            f"menos que o pitch mínimo {_M.sig_col_pitch}px -- sobrepõem "
+            f"se a sig da esquerda estiver comutada"
+        )
+
     def test_pl_and_pr_or_rows_align_at_the_same_height_per_cylinder(self):
         # A altura (linhas) da região de OR/sig é uniforme pros dois lados
         # do MESMO cilindro -- mesmo se só um lado tiver cadeia profunda.

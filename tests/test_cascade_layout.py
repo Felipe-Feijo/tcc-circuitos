@@ -120,6 +120,44 @@ class TestOrSigStaircase:
         xs = {round(n["position"]["x"]) for n in or_nodes}
         assert len(xs) == 2
 
+    def test_or_valve_x_gets_the_leftmost_source_y_the_rightmost(self):
+        # Regressão real (feedback direto testando a UI, com imagem
+        # anotada): cascade.py conecta X à fonte cronologicamente mais
+        # cedo e Y à mais tarde, sem saber onde cada uma cai no layout --
+        # funciona por coincidência no lado PL, mas inverte no lado PR
+        # (a fonte mais tardia fica mais à ESQUERDA fisicamente nesse
+        # lado, então caía em Y, o anchor da DIREITA da OrValve, forçando
+        # o fio a cruzar por cima da OrValve inteira). X é sempre o
+        # anchor esquerdo da OrValve, Y o direito (or_valve.py) -- a
+        # fonte ligada em X precisa estar à esquerda da fonte em Y.
+        data = cascade.generate(parse("A+B+A-B-A+B+A-B-"))
+        result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+
+        checked = 0
+        or_conns: dict[str, dict[str, dict]] = {}
+        for conn in result["connections"]:
+            t = conn["target"]
+            if node_type_map.get(t["node"]) == "OrValve" and t["anchor"] in ("X", "Y"):
+                or_conns.setdefault(t["node"], {})[t["anchor"]] = conn
+
+        for sides in or_conns.values():
+            x_conn, y_conn = sides.get("X"), sides.get("Y")
+            if x_conn is None or y_conn is None:
+                continue
+            x_src = node_by_id.get(x_conn["source"]["node"])
+            y_src = node_by_id.get(y_conn["source"]["node"])
+            if x_src is None or y_src is None:
+                continue  # fonte crua (PressureLine) -- não coberta por este teste
+            assert x_src["position"]["x"] <= y_src["position"]["x"], (
+                f"OrValve.X ligada a {x_conn['source']['node']} "
+                f"(x={x_src['position']['x']}) ficou à DIREITA de OrValve.Y "
+                f"ligada a {y_conn['source']['node']} (x={y_src['position']['x']})"
+            )
+            checked += 1
+        assert checked > 0  # sanity check -- a sequência precisa exercitar ao menos 1 OrValve com 2 sigs
+
     def test_deep_leaf_chain_stacks_vertically_without_colliding(self):
         # "(A+C+)B+A-B-C-B+B-": uma das folhas de B+ tem cadeia de
         # profundidade 2 -- as 2 sigs dessa cadeia ficam na MESMA coluna,

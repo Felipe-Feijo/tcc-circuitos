@@ -709,6 +709,51 @@ def apply(data: dict) -> dict:
         local = anchor_local_for_routing(ntype, anchor_name)
         return pos["x"] + local[0] if local else pos["x"]
 
+    # ── Corrige orientação X/Y das OrValve (evita fio cruzado) ───────────
+    #
+    #   cascade.py conecta X à fonte cronologicamente mais cedo e Y à mais
+    #   tarde (ver methods/cascade.py seção 6b), sem saber onde cada uma
+    #   vai parar no layout. Isso funciona por coincidência no lado PL (a
+    #   fonte mais distante cronologicamente também fica mais à ESQUERDA
+    #   física, ver sign=-1 em leaf_virtual_col acima), mas inverte no
+    #   lado PR (a fonte mais distante fica mais à DIREITA física, ver
+    #   sign=+1) -- feedback direto testando a UI real, com imagem
+    #   anotada: no lado PR a fonte mais à direita entrava em X (anchor
+    #   ESQUERDO da OrValve, exit_directions left), obrigando o fio a
+    #   cruzar por cima da OrValve inteira pra entrar do lado errado.
+    #
+    #   X é sempre o anchor da ESQUERDA da OrValve e Y o da DIREITA (ver
+    #   or_valve.py). Troca as duas pontas sempre que a fonte ligada em X
+    #   está fisicamente à direita da fonte ligada em Y -- garante que a
+    #   fonte mais à esquerda sempre entra em X e a mais à direita em Y,
+    #   não importa a ordem cronológica que cascade.py usou pra ligar.
+    def _or_source_x(node_id: str, anchor_name: str) -> float | None:
+        ntype = node_type_map.get(node_id, "")
+        if ntype == "PressureLine" and anchor_name.startswith("X"):
+            return _pl_anchor_x(node_by_id[node_id], anchor_name)
+        pos = node_by_id.get(node_id, {}).get("position")
+        if pos is None:
+            return None
+        local = anchor_local_for_routing(ntype, anchor_name)
+        return pos["x"] + (local[0] if local else 0.0)
+
+    or_xy_conns: dict[str, dict[str, dict]] = {}
+    for conn in data["connections"]:
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+        if node_type_map.get(t_id) == "OrValve" and t_anc in ("X", "Y"):
+            or_xy_conns.setdefault(t_id, {})[t_anc] = conn
+
+    for sides in or_xy_conns.values():
+        x_conn, y_conn = sides.get("X"), sides.get("Y")
+        if x_conn is None or y_conn is None:
+            continue
+        x_src_x = _or_source_x(x_conn["source"]["node"], x_conn["source"]["anchor"])
+        y_src_x = _or_source_x(y_conn["source"]["node"], y_conn["source"]["anchor"])
+        if x_src_x is None or y_src_x is None:
+            continue
+        if x_src_x > y_src_x:
+            x_conn["target"]["anchor"], y_conn["target"]["anchor"] = "Y", "X"
+
     def _conn_sort_key(c: dict) -> tuple:
         t_id = c["target"]["node"]
         return (0, 0) if t_id in pl_node_map else (1, 0)

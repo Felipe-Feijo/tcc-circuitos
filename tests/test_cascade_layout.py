@@ -312,25 +312,22 @@ class TestLogicRegionRows:
 
     def test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring(self):
         # Regressão real (feedback direto testando a UI, com imagem
-        # anotada): a conexão PL -> sig.P das cadeias de confirmação da
-        # Região B (mem.PR e btn.P) entrava pela ESQUERDA (mesma lógica
-        # herdada do passo a passo para a Região A), passando por cima da
-        # mola quando a válvula estava no estado comutado (BODY_VISUALS[1]
-        # desloca o sprite +147px). Precisa sair pela DIREITA -- o
+        # anotada): a conexão PL -> sig.P das sigs da Região A (folha que
+        # alimenta o pilot da 4/2, direto ou via OrValve) e da Região B
+        # (confirm_row, alimenta mem.PR) precisa sair pela DIREITA -- o
         # endpoint final já é o pior-caso ajustado por
         # anchor_local_for_routing("Valve_3_2_Ways","P") (mesmo fix de
         # sprite_metrics.py), então o anchor de PL escolhido só precisa
-        # ficar à direita do sig (nunca à esquerda dele -- entrar pela
-        # esquerda é exatamente o bug original).
+        # ficar à direita do sig (nunca à esquerda dele). Só a cadeia de
+        # fechamento (btn.P) é exceção -- ver
+        # test_closure_sig_still_enters_from_the_left abaixo.
         from circuit_generator.sprite_metrics import anchor_local_for_routing
 
         seq = "A+B+A-B-A+A-C+C-"
         data = cascade.generate(parse(seq))
         roles = layout._build_role_maps(data)
-        sources = layout._build_trigger_sources(data, roles)
-        region_a_sig_ids = {sid for leaves in sources.values() for leaf in leaves for sid in leaf}
 
-        # A cadeia de fechamento (btn.P) também entra pela esquerda (ver
+        # A cadeia de fechamento (btn.P) entra pela esquerda (ver
         # test_closure_sig_still_enters_from_the_left abaixo) -- excluída
         # aqui do jeito mesmo, andando pra trás a partir de btn.P via
         # sig.A -> sig.P, sem duplicar _chain_feeding (privada do módulo).
@@ -359,7 +356,6 @@ class TestLogicRegionRows:
             s, t = conn["source"], conn["target"]
             if (t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways"
                     or node_type_map.get(s["node"]) != "PressureLine"
-                    or t["node"] in region_a_sig_ids
                     or t["node"] in closure_sig_ids):
                 continue
             wps = conn.get("waypoints")
@@ -382,8 +378,8 @@ class TestLogicRegionRows:
     def test_closure_sig_still_enters_from_the_left(self):
         # Feedback direto do usuário: a sig que alimenta o botão (cadeia
         # de fechamento) deve CONTINUAR entrando pela esquerda, igual ao
-        # passo a passo -- só a escada de confirmação PR das memórias
-        # precisa da abordagem pela direita (ver
+        # passo a passo -- é a ÚNICA exceção, todo o resto (Região A e
+        # confirm_row da Região B) entra pela direita (ver
         # test_confirmation_chain_p_connections_exit_to_the_right_clearing_the_spring
         # acima). Verifica que o caminho passa por algum ponto à ESQUERDA
         # do sig antes de entrar (diferente da abordagem pela direita, que

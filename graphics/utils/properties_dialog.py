@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QComboBox, QPushButton, QFrame,
+    QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QFrame,
 )
 from PyQt6.QtCore import Qt
 
@@ -66,6 +66,12 @@ class PropertiesDialog(QDialog):
             combo.setCurrentText(current)
         self._form_layout.addRow(label, combo)
         return combo
+
+    def add_bool_field(self, label: str, value: bool = False) -> QCheckBox:
+        field = QCheckBox()
+        field.setChecked(value)
+        self._form_layout.addRow(label, field)
+        return field
 
     def add_no_properties_message(self):
         msg = QLabel("This node has no editable properties.")

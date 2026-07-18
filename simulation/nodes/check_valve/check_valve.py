@@ -19,12 +19,17 @@ of X actively vents it.
 
 Instead, X acts as its own pressure driver (anchor.is_driver = True --
 exactly like PressureSource/Exhaust do for their own anchors in
-simulation/nodes/nodes.py) and this node only ever pushes X to
-state=True; it never pushes X back to False itself. Downstream circuits
-can still vent X normally: SimulationEngine computes
-group_state = all(driver.state for driver in group), so a real exhaust
-anywhere in X's own connected group still forces that group (and X) to
-False -- this component just never does that job itself.
+simulation/nodes/nodes.py) ONLY WHILE CONDUCTING (Y=1 or piloted), and
+this node only ever pushes X to state=True; it never pushes X back to
+False itself. The moment conducting stops, X.is_driver goes back to
+False -- X becomes an ordinary follower again. This matters: if X stayed
+a driver forever, SimulationEngine's group algorithm would never update
+X's OWN state again (drivers are never overwritten by
+_update_pneumatic_domain), so X would keep reporting a stale True even
+after a real exhaust downstream vented the rest of its group to False.
+As a plain follower, X correctly freezes (no driver anywhere in its
+group -- trapped pressure held) or correctly follows a real driver
+(exhaust or new source) that's actually there.
 
 This also removes the one-step propagation lag the previous
 get_internal_connections-based design had: update() runs every
@@ -63,10 +68,19 @@ class CheckValve(Node):
 
     def update(self, outputs=None):
         x_anchor = self.anchors["X"]
-        x_anchor.is_driver = True
         if self._is_conducting():
+            x_anchor.is_driver = True
             x_anchor.state = True
-        # else: leave X.state untouched -- latched/trapped pressure.
+        else:
+            # Não conduzindo: X deixa de ser driver e volta a ser um
+            # seguidor comum. Isso é essencial -- se X ficasse driver pra
+            # sempre, o algoritmo de grupo nunca mais atualizaria o
+            # PRÓPRIO X (drivers não são sobrescritos), mesmo que uma
+            # exaustão real a jusante derrube o resto do grupo a zero.
+            # Como seguidor, X congela (retido) se não houver nenhum
+            # driver no seu grupo, ou acompanha corretamente um driver
+            # real (exaustão ou nova fonte) que esteja de fato lá.
+            x_anchor.is_driver = False
 
     def get_internal_connections(self):
         # Deliberately always empty -- see module docstring.

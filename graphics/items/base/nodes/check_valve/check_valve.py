@@ -131,7 +131,31 @@ class CheckValve(NodeItem):
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self) -> PropertiesDialog:
-        return None
+        dialog = PropertiesDialog(title="Check Valve — Properties")
+
+        dialog._field_piloted = dialog.add_bool_field(
+            "Piloted", value=self.properties.get("piloted", False),
+        )
+        dialog._field_pilot_exit = dialog.add_combo_field(
+            "Pilot exit", ["top", "bottom"],
+            current=self.properties.get("pilot_exit", "top"),
+        )
+
+        def _set_pilot_exit_visible(visible: bool) -> None:
+            form = dialog._form_layout
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, form.ItemRole.FieldRole)
+                if item and item.widget() is dialog._field_pilot_exit:
+                    form.setRowVisible(row, visible)
+                    return
+
+        dialog._field_piloted.toggled.connect(_set_pilot_exit_visible)
+        _set_pilot_exit_visible(dialog._field_piloted.isChecked())
+
+        return dialog
 
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
-        pass
+        self.properties["piloted"] = dialog._field_piloted.isChecked()
+        self.properties["pilot_exit"] = dialog._field_pilot_exit.currentText()
+        self._update_pilot_anchor()
+        self.update()

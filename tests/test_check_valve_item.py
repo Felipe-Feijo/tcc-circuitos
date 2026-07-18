@@ -96,3 +96,57 @@ def test_reset_visual_state_restores_open_pixmap():
     node.pixmap = node._pixmap_closed
     node.reset_visual_state()
     assert node.pixmap is node._pixmap_open
+
+
+def test_build_properties_dialog_reflects_current_properties():
+    node = CheckValve(domain="pneumatic")
+    node.properties["piloted"] = True
+    node.properties["pilot_exit"] = "bottom"
+
+    dialog = node.build_properties_dialog()
+
+    assert dialog._field_piloted.isChecked() is True
+    assert dialog._field_pilot_exit.currentText() == "bottom"
+
+
+def test_apply_properties_from_dialog_updates_properties_and_anchors():
+    node = CheckValve(domain="pneumatic")
+    dialog = node.build_properties_dialog()
+    dialog._field_piloted.setChecked(True)
+    dialog._field_pilot_exit.setCurrentText("bottom")
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node.properties["piloted"] is True
+    assert node.properties["pilot_exit"] == "bottom"
+    assert "Z" in node.anchors
+    assert (node.anchors["Z"].pos().x(), node.anchors["Z"].pos().y()) == (150, 108)
+
+
+def test_pilot_exit_row_hidden_when_not_piloted():
+    node = CheckValve(domain="pneumatic")
+    dialog = node.build_properties_dialog()
+
+    form = dialog._form_layout
+    row_visible = None
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, form.ItemRole.FieldRole)
+        if item and item.widget() is dialog._field_pilot_exit:
+            row_visible = form.isRowVisible(row)
+            break
+    assert row_visible is False
+
+
+def test_pilot_exit_row_visible_when_piloted():
+    node = CheckValve(domain="pneumatic")
+    node.properties["piloted"] = True
+    dialog = node.build_properties_dialog()
+
+    form = dialog._form_layout
+    row_visible = None
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, form.ItemRole.FieldRole)
+        if item and item.widget() is dialog._field_pilot_exit:
+            row_visible = form.isRowVisible(row)
+            break
+    assert row_visible is True

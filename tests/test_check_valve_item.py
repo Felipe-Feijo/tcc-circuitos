@@ -25,6 +25,12 @@ def test_palette_meta():
     meta = CheckValve.palette_meta()
     assert meta.domains == ("pneumatic",)
     assert meta.name == "Check Valve"
+    assert meta.sprite.endswith("check_valve_closed.png")
+
+
+def test_default_pixmap_is_closed():
+    node = CheckValve(domain="pneumatic")
+    assert node.pixmap is node._pixmap_closed
 
 
 def test_simulation_cls_linkage():
@@ -91,11 +97,11 @@ def test_update_from_domain_switches_pixmap_to_open():
     assert node.pixmap is node._pixmap_open
 
 
-def test_reset_visual_state_restores_open_pixmap():
+def test_reset_visual_state_restores_closed_pixmap():
     node = CheckValve(domain="pneumatic")
-    node.pixmap = node._pixmap_closed
+    node.pixmap = node._pixmap_open
     node.reset_visual_state()
-    assert node.pixmap is node._pixmap_open
+    assert node.pixmap is node._pixmap_closed
 
 
 def test_build_properties_dialog_reflects_current_properties():

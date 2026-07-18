@@ -45,7 +45,7 @@ class CheckValve(NodeItem):
     def palette_meta(cls):
         return PaletteMeta(
             domains=("pneumatic",),
-            sprite=f"{_SPRITE_DIR}/check_valve_open.png",
+            sprite=f"{_SPRITE_DIR}/check_valve_closed.png",
             name="Check Valve",
         )
 
@@ -60,7 +60,7 @@ class CheckValve(NodeItem):
         self._pixmap_closed = QPixmap(f"{_SPRITE_DIR}/check_valve_closed.png")
         self._pixmap_pilot  = QPixmap(f"{_SPRITE_DIR}/check_valve_pilot.png")
 
-        self.pixmap = self._pixmap_open
+        self.pixmap = self._pixmap_closed
         self.width  = self.pixmap.width()   # 150
         self.height = self.pixmap.height()  # 150
 
@@ -123,7 +123,7 @@ class CheckValve(NodeItem):
 
     def reset_visual_state(self) -> None:
         super().reset_visual_state()
-        self.pixmap = self._pixmap_open
+        self.pixmap = self._pixmap_closed
         self.update()
 
     # ------------------------------------------------------------------

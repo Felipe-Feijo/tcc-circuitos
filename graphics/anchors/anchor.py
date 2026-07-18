@@ -112,6 +112,15 @@ class AnchorItem(QGraphicsEllipseItem):
         """
         self.exit_directions = directions
 
+    def reposition_hydraulic_label(self) -> None:
+        """Recalcula e aplica o offset do label hidráulico.
+
+        Chamado por NodeItem.rotate() depois de cada rotação, pra manter
+        o label crescendo pro lado de fora certo (ver _default_label_offset).
+        """
+        if hasattr(self, "_label_hydraulic"):
+            self._label_hydraulic.setPos(self._default_label_offset())
+
     def set_hydraulic_labels_visible(self, visible: bool):
         """Mostra ou oculta os labels hidráulicos."""
         if hasattr(self, "_label_hydraulic"):
@@ -130,38 +139,52 @@ class AnchorItem(QGraphicsEllipseItem):
         self._label_hydraulic.setPos(self._default_label_offset())
 
     def _default_label_offset(self) -> QPointF:
-        """Calcula um offset inicial que empurra o label para fora do componente.
+        """Calcula um offset que empurra o label para fora do componente.
 
-        Usa a posição da âncora relativa ao bounding box do node (self.node.width/
-        height) para descobrir em qual borda ela está (topo/base/esquerda/direita)
-        e desloca o label para o lado de fora dessa borda, evitando que ele nasça
-        sobreposto ao sprite do componente.
+        Classifica a borda (topo/base/esquerda/direita) em coordenadas de
+        CENA -- não locais -- porque o label é filho da âncora (que gira
+        junto com o node) mas tem ItemIgnoresTransformations (ver
+        LabelItem): sua ORIENTAÇÃO fica sempre reta, mas sua POSIÇÃO
+        continua sendo mapeada pela transformação herdada. Se a borda
+        fosse classificada em coordenadas locais (pré-rotação), o offset
+        cresceria sempre na mesma direção "de fábrica" mesmo depois do
+        componente girar -- fazendo o label crescer pro lado errado
+        (sobrepondo o sprite) assim que o node é rotacionado.
+
+        Reutilizável a qualquer momento (não só na criação da âncora) --
+        NodeItem.rotate() chama de novo depois de cada rotação, pra manter
+        o label no lado de fora certo.
         """
         margin = 4
         rect = self._label_hydraulic.boundingRect()
         w, h = rect.width(), rect.height()
 
         node = self.node
-        node_w = getattr(node, "width", 0)
-        node_h = getattr(node, "height", 0)
-        x, y = self.pos().x(), self.pos().y()
+        anchor_scene_pos = self.scenePos()
+        node_scene_rect = node.sceneBoundingRect()
 
-        on_top = y <= 0
-        on_bottom = bool(node_h) and y >= node_h
-        on_left = x <= 0
-        on_right = bool(node_w) and x >= node_w
+        on_top    = anchor_scene_pos.y() <= node_scene_rect.top() + 1
+        on_bottom = anchor_scene_pos.y() >= node_scene_rect.bottom() - 1
+        on_left   = anchor_scene_pos.x() <= node_scene_rect.left() + 1
+        on_right  = anchor_scene_pos.x() >= node_scene_rect.right() - 1
 
         if on_top:
-            return QPointF(-w / 2, -h - margin)
-        if on_bottom:
-            return QPointF(-w / 2, margin)
-        if on_left:
-            return QPointF(-w - margin, -h / 2)
-        if on_right:
-            return QPointF(margin, -h / 2)
+            scene_offset = QPointF(-w / 2, -h - margin)
+        elif on_bottom:
+            scene_offset = QPointF(-w / 2, margin)
+        elif on_left:
+            scene_offset = QPointF(-w - margin, -h / 2)
+        elif on_right:
+            scene_offset = QPointF(margin, -h / 2)
+        else:
+            # Âncora interna (não está em nenhuma borda): mantém o padrão antigo.
+            scene_offset = QPointF(margin, -h - margin)
 
-        # Âncora interna (não está em nenhuma borda): mantém o padrão antigo.
-        return QPointF(margin, -h - margin)
+        # scene_offset está em coordenadas de cena (já reta); converte pra
+        # coordenada LOCAL da âncora, que é o que setPos() espera -- o Qt
+        # vai remapear pra cena aplicando a rotação de novo, cancelando
+        # essa conversão e deixando o label exatamente onde calculamos.
+        return self.mapFromScene(anchor_scene_pos + scene_offset)
 
     def update_hydraulic_labels(self):
         """Atualiza o texto dos labels de pressão e vazão com os valores atuais."""

@@ -351,6 +351,9 @@ class NodeItem(DiagramItemBase):
         if steps:
             self._apply_exit_direction_rotation(steps)
 
+        for anchor in self.anchors.values():
+            anchor.reposition_hydraulic_label()
+
         self.update_connections()
 
     def _apply_exit_direction_rotation(self, steps: int) -> None:

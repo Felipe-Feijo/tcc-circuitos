@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from PyQt6.QtWidgets import QApplication, QCheckBox, QFormLayout
+from PyQt6.QtWidgets import QApplication, QCheckBox
 
 app = QApplication.instance() or QApplication([])
 

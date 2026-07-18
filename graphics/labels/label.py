@@ -49,6 +49,11 @@ class LabelItem(QGraphicsTextItem):
         self.movable = self.properties["movable"]
         self.setFlag(self.GraphicsItemFlag.ItemIsMovable, self.movable)
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, self.editable or self.movable)
+        # A posição continua acompanhando a rotação do componente pai
+        # (mapeada pela transformação herdada), mas a orientação do texto
+        # em si fica sempre reta -- sem isso, girar o componente também
+        # giraria o label de cabeça pra baixo/de lado.
+        self.setFlag(self.GraphicsItemFlag.ItemIgnoresTransformations, True)
 
         font = QFont()
         font.setPointSize(self.properties["font_size"])

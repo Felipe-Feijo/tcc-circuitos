@@ -1,4 +1,4 @@
-"""Graphic node for the check valve (pneumatic only).
+"""Graphic node for the check valve (pneumatic and hydraulic).
 
 Sprite layout
 -------------
@@ -49,7 +49,7 @@ class CheckValve(NodeItem):
     @classmethod
     def palette_meta(cls):
         return PaletteMeta(
-            domains=("pneumatic",),
+            domains=("pneumatic", "hydraulic"),
             sprite=f"{_SPRITE_DIR}/check_valve_closed.png",
             name="Check Valve",
         )

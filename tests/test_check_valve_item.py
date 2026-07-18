@@ -23,7 +23,7 @@ def test_x_and_y_positions_match_sprite():
 
 def test_palette_meta():
     meta = CheckValve.palette_meta()
-    assert meta.domains == ("pneumatic",)
+    assert meta.domains == ("pneumatic", "hydraulic")
     assert meta.name == "Check Valve"
     assert meta.sprite.endswith("check_valve_closed.png")
 

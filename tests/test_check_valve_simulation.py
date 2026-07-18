@@ -69,12 +69,18 @@ def test_x_stays_latched_true_after_y_drops_back_to_false():
     assert node.get_visual_state() == "closed"  # válvula fecha, mas pressão fica retida
 
 
-def test_pilot_forces_x_true_even_when_y_false():
+def test_piloted_open_merges_x_and_y_symmetrically():
+    """Pilotado e Z=1: o piloto mantém a esfera afastada do assento --
+    vira uma passagem aberta nos dois sentidos (igual uma válvula comum
+    aberta), não um empurrão de um lado só. X para de fingir ser driver
+    (quem decide agora são os drivers reais dos dois lados) e
+    get_internal_connections() passa a unir X e Y de verdade."""
     node = make_node(piloted=True)
     node.anchors["Y"].state = False
     node.anchors["Z"].state = True
     node.update()
-    assert node.anchors["X"].state is True
+    assert node.get_internal_connections() == [("X", "Y")]
+    assert node.anchors["X"].is_driver is False
     assert node.get_visual_state() == "open"
 
 
@@ -85,13 +91,15 @@ def test_piloted_false_ignores_z_state_even_if_anchor_present():
     node.update()
     assert node.anchors["X"].state is False
     assert node.get_visual_state() == "closed"
+    assert node.get_internal_connections() == []
 
 
-def test_get_internal_connections_is_always_empty():
-    """X e Y nunca são unidos num grupo simétrico -- ver docstring do
-    módulo simulation/nodes/check_valve/check_valve.py para o porquê
-    (união simétrica não representa um diodo: um exaustão alcançável
-    later por Y arrastaria X pra baixo também)."""
+def test_get_internal_connections_is_empty_outside_piloted_open():
+    """Fora do modo pilotado-aberto (com ou sem fluxo livre por Y), X e Y
+    nunca são unidos num grupo simétrico -- ver docstring do módulo
+    simulation/nodes/check_valve/check_valve.py para o porquê (união
+    simétrica não representa um diodo: uma exaustão alcançável mais tarde
+    por Y arrastaria X pra baixo também)."""
     node = make_node()
     node.anchors["Y"].state = True
     node.update()
@@ -202,3 +210,53 @@ def test_trapped_pressure_can_still_be_vented_by_a_real_downstream_exhaust():
 
     assert downstream.get_anchor("D").state is False
     assert valve.get_anchor("X").state is False  # X também é corrigido, não fica obsoleto
+
+
+def test_pilot_releases_trapped_pressure_through_y_end_to_end():
+    """O caso de uso real de uma retenção pilotada: um cilindro travado
+    pela retenção (pressão retida em X) precisa poder ser destravado --
+    ligando o piloto, a pressão retida deve conseguir escoar de volta por
+    Y até uma exaustão do outro lado, já que a válvula virou passagem
+    aberta nos dois sentidos."""
+    from simulation.simulation_engine import SimulationEngine
+    from simulation.nodes.nodes import Node, Exhaust
+    from simulation.connections import Connection
+
+    valve = CheckValve("cv", domain="pneumatic", properties={"piloted": True})
+    valve.add_anchor("X", domain="pneumatic")
+    valve.add_anchor("Y", domain="pneumatic")
+    valve.add_anchor("Z", domain="pneumatic")
+
+    downstream = Node("dn", "generic", domain="pneumatic")
+    downstream.add_anchor("D", domain="pneumatic")
+
+    exhaust = Exhaust("exh", domain="pneumatic")
+    exhaust.add_anchor("R", domain="pneumatic")
+
+    conn_x = Connection(valve.get_anchor("X"), downstream.get_anchor("D"))
+    conn_y = Connection(valve.get_anchor("Y"), exhaust.get_anchor("R"))
+    nodes = {"cv": valve, "dn": downstream, "exh": exhaust}
+    connections = {conn_x.id: conn_x, conn_y.id: conn_y}
+
+    engine = SimulationEngine(nodes, connections)
+
+    # Retém pressão em X/downstream sem piloto (Y momentaneamente alto).
+    valve.get_anchor("Y").connections.remove(conn_y)
+    exhaust.get_anchor("R").connections.remove(conn_y)
+    valve.get_anchor("Y").state = True
+    engine.run_until_stable()
+    assert downstream.get_anchor("D").state is True
+
+    # Reconecta Y na exaustão (sem piloto ainda) -- pressão continua retida.
+    conn_y2 = Connection(valve.get_anchor("Y"), exhaust.get_anchor("R"))
+    connections[conn_y2.id] = conn_y2
+    engine.run_until_stable()
+    assert downstream.get_anchor("D").state is True
+
+    # Liga o piloto: a passagem vira simétrica e a exaustão em Y agora
+    # alcança X também -- a pressão retida escoa.
+    valve.get_anchor("Z").state = True
+    engine.run_until_stable()
+
+    assert downstream.get_anchor("D").state is False
+    assert valve.get_anchor("X").state is False

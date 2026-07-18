@@ -41,7 +41,7 @@ def test_node_type():
     assert CheckValve.node_type == "check_valve"
 
 
-def test_piloted_true_adds_z_anchor_top_by_default():
+def test_piloted_true_adds_z_anchor_unmirrored_by_default():
     node = CheckValve(domain="pneumatic")
     node.properties["piloted"] = True
     node.apply_properties()
@@ -51,10 +51,10 @@ def test_piloted_true_adds_z_anchor_top_by_default():
     assert node._pilot_overlay is not None
 
 
-def test_pilot_exit_bottom_moves_z_anchor():
+def test_pilot_mirrored_moves_z_anchor():
     node = CheckValve(domain="pneumatic")
     node.properties["piloted"] = True
-    node.properties["pilot_exit"] = "bottom"
+    node.properties["pilot_mirrored"] = True
     node.apply_properties()
 
     assert (node.anchors["Z"].pos().x(), node.anchors["Z"].pos().y()) == (150, 108)
@@ -107,29 +107,29 @@ def test_reset_visual_state_restores_closed_pixmap():
 def test_build_properties_dialog_reflects_current_properties():
     node = CheckValve(domain="pneumatic")
     node.properties["piloted"] = True
-    node.properties["pilot_exit"] = "bottom"
+    node.properties["pilot_mirrored"] = True
 
     dialog = node.build_properties_dialog()
 
     assert dialog._field_piloted.isChecked() is True
-    assert dialog._field_pilot_exit.currentText() == "bottom"
+    assert dialog._field_pilot_mirrored.isChecked() is True
 
 
 def test_apply_properties_from_dialog_updates_properties_and_anchors():
     node = CheckValve(domain="pneumatic")
     dialog = node.build_properties_dialog()
     dialog._field_piloted.setChecked(True)
-    dialog._field_pilot_exit.setCurrentText("bottom")
+    dialog._field_pilot_mirrored.setChecked(True)
 
     node.apply_properties_from_dialog(dialog)
 
     assert node.properties["piloted"] is True
-    assert node.properties["pilot_exit"] == "bottom"
+    assert node.properties["pilot_mirrored"] is True
     assert "Z" in node.anchors
     assert (node.anchors["Z"].pos().x(), node.anchors["Z"].pos().y()) == (150, 108)
 
 
-def test_pilot_exit_row_hidden_when_not_piloted():
+def test_pilot_mirrored_row_hidden_when_not_piloted():
     node = CheckValve(domain="pneumatic")
     dialog = node.build_properties_dialog()
 
@@ -137,13 +137,13 @@ def test_pilot_exit_row_hidden_when_not_piloted():
     row_visible = None
     for row in range(form.rowCount()):
         item = form.itemAt(row, form.ItemRole.FieldRole)
-        if item and item.widget() is dialog._field_pilot_exit:
+        if item and item.widget() is dialog._field_pilot_mirrored:
             row_visible = form.isRowVisible(row)
             break
     assert row_visible is False
 
 
-def test_pilot_exit_row_visible_when_piloted():
+def test_pilot_mirrored_row_visible_when_piloted():
     node = CheckValve(domain="pneumatic")
     node.properties["piloted"] = True
     dialog = node.build_properties_dialog()
@@ -152,7 +152,7 @@ def test_pilot_exit_row_visible_when_piloted():
     row_visible = None
     for row in range(form.rowCount()):
         item = form.itemAt(row, form.ItemRole.FieldRole)
-        if item and item.widget() is dialog._field_pilot_exit:
+        if item and item.widget() is dialog._field_pilot_mirrored:
             row_visible = form.isRowVisible(row)
             break
     assert row_visible is True

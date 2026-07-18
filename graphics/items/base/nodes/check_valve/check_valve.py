@@ -5,9 +5,14 @@ Sprite layout
 Width x Height: 150 x 150 px
 Anchor X (left)  : (0, 75)      exit -> left
 Anchor Y (right) : (150, 75)    exit -> right
-Anchor Z (pilot) : (150, 42) se pilot_exit == "top" (padrão)
-                   (150, 108) se pilot_exit == "bottom"
+Anchor Z (pilot) : (150, 42) por padrão
+                   (150, 108) se properties["pilot_mirrored"] for True
                    presente apenas quando properties["piloted"] é True
+
+Nota: "pilot_mirrored" é relativo ao sprite (coordenada local), não à
+tela -- ao contrário de rótulos "top"/"bottom", continua correto depois
+de o componente ser rotacionado (a rotação do NodeItem já gira a âncora
+e o overlay junto, então um rótulo absoluto de tela ficaria enganoso).
 
 Sprites
 -------
@@ -18,7 +23,7 @@ check_valve_pilot.png   -- overlay de pilotagem (moldura + rabo pontilhado
                            padrão). Desenhado por cima do corpo quando
                            piloted=True. Espelhado verticalmente
                            (QTransform().scale(1, -1)) quando
-                           pilot_exit == "bottom".
+                           pilot_mirrored=True.
 """
 
 from PyQt6.QtGui import QPixmap, QTransform
@@ -34,7 +39,7 @@ from .....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/check_valve"
 
-_PILOT_ANCHOR_Y = {"top": 42, "bottom": 108}
+_PILOT_ANCHOR_Y = {False: 42, True: 108}
 
 
 class CheckValve(NodeItem):
@@ -54,7 +59,7 @@ class CheckValve(NodeItem):
     # ------------------------------------------------------------------
 
     def setup(self) -> None:
-        self.properties = {"piloted": False, "pilot_exit": "top"}
+        self.properties = {"piloted": False, "pilot_mirrored": False}
 
         self._pixmap_open   = QPixmap(f"{_SPRITE_DIR}/check_valve_open.png")
         self._pixmap_closed = QPixmap(f"{_SPRITE_DIR}/check_valve_closed.png")
@@ -81,15 +86,15 @@ class CheckValve(NodeItem):
         self.properties. Chamado em setup() e sempre que a propriedade
         muda (apply_properties / apply_properties_from_dialog)."""
         if self.properties.get("piloted"):
-            pilot_exit = self.properties.get("pilot_exit", "top")
-            anchor_y = _PILOT_ANCHOR_Y[pilot_exit]
+            mirrored = self.properties.get("pilot_mirrored", False)
+            anchor_y = _PILOT_ANCHOR_Y[mirrored]
             self.add_anchor(AnchorItem(
                 "Z", QPointF(self.width, anchor_y), node=self, domain=self.domain,
                 exit_directions={"external": ["right"]},
             ))
             self._pilot_overlay = (
-                self._pixmap_pilot if pilot_exit == "top"
-                else self._pixmap_pilot.transformed(QTransform().scale(1, -1))
+                self._pixmap_pilot.transformed(QTransform().scale(1, -1)) if mirrored
+                else self._pixmap_pilot
             )
         else:
             self.remove_anchor("Z")
@@ -136,26 +141,25 @@ class CheckValve(NodeItem):
         dialog._field_piloted = dialog.add_bool_field(
             "Piloted", value=self.properties.get("piloted", False),
         )
-        dialog._field_pilot_exit = dialog.add_combo_field(
-            "Pilot exit", ["top", "bottom"],
-            current=self.properties.get("pilot_exit", "top"),
+        dialog._field_pilot_mirrored = dialog.add_bool_field(
+            "Mirror pilot side", value=self.properties.get("pilot_mirrored", False),
         )
 
-        def _set_pilot_exit_visible(visible: bool) -> None:
+        def _set_pilot_mirrored_visible(visible: bool) -> None:
             form = dialog._form_layout
             for row in range(form.rowCount()):
                 item = form.itemAt(row, form.ItemRole.FieldRole)
-                if item and item.widget() is dialog._field_pilot_exit:
+                if item and item.widget() is dialog._field_pilot_mirrored:
                     form.setRowVisible(row, visible)
                     return
 
-        dialog._field_piloted.toggled.connect(_set_pilot_exit_visible)
-        _set_pilot_exit_visible(dialog._field_piloted.isChecked())
+        dialog._field_piloted.toggled.connect(_set_pilot_mirrored_visible)
+        _set_pilot_mirrored_visible(dialog._field_piloted.isChecked())
 
         return dialog
 
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
         self.properties["piloted"] = dialog._field_piloted.isChecked()
-        self.properties["pilot_exit"] = dialog._field_pilot_exit.currentText()
+        self.properties["pilot_mirrored"] = dialog._field_pilot_mirrored.isChecked()
         self._update_pilot_anchor()
         self.update()

@@ -300,6 +300,9 @@ class NodeItem(DiagramItemBase):
             steps = int(round(rotation / 90)) % 4
             if steps:
                 node._apply_exit_direction_rotation(steps)
+            for anchor in node.anchors.values():
+                anchor.reposition_hydraulic_label()
+            node._counter_rotate_labels()
 
         for key, label_data in data.get("labels", {}).items():
             props = dict(label_data["properties"])
@@ -354,7 +357,28 @@ class NodeItem(DiagramItemBase):
         for anchor in self.anchors.values():
             anchor.reposition_hydraulic_label()
 
+        self._counter_rotate_labels()
+
         self.update_connections()
+
+    def _counter_rotate_labels(self) -> None:
+        """Cancela a rotação do node em cada label filho, mantendo o
+        texto sempre reto.
+
+        Ao contrário de ItemIgnoresTransformations (não usada em
+        LabelItem de propósito -- ver comentário lá), isso só neutraliza
+        a ROTAÇÃO herdada; a posição e a escala (zoom da view) continuam
+        seguindo a cadeia de transformação normal do Qt.
+        """
+        angle = -self.rotation()
+        for label in self.labels.values():
+            label.setRotation(angle)
+        for label in self.special_labels.values():
+            label.setRotation(angle)
+        for anchor in self.anchors.values():
+            hydraulic_label = getattr(anchor, "_label_hydraulic", None)
+            if hydraulic_label is not None:
+                hydraulic_label.setRotation(angle)
 
     def _apply_exit_direction_rotation(self, steps: int) -> None:
         """Rotate exit_directions on all anchors by *steps* clockwise 90° turns."""
@@ -417,6 +441,7 @@ class NodeItem(DiagramItemBase):
             return
         label.setParentItem(self)
         label_dict[key] = label
+        label.setRotation(-self.rotation())
 
     def remove_label(self, key: str, special: bool = False) -> None:
         label_dict = self.special_labels if special else self.labels

@@ -136,6 +136,11 @@ class AnchorItem(QGraphicsEllipseItem):
             "font_size": 8,
         })
         self._label_hydraulic.setParentItem(self)
+        # Se a âncora nascer depois do node já ter girado (ex: anchor Z
+        # de pilotagem adicionada em runtime), o label precisa da
+        # contra-rotação certa desde já, não só na próxima vez que o
+        # node girar.
+        self._label_hydraulic.setRotation(-self.node.rotation())
         self._label_hydraulic.setPos(self._default_label_offset())
 
     def _default_label_offset(self) -> QPointF:

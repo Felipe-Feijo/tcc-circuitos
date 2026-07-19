@@ -49,11 +49,14 @@ class LabelItem(QGraphicsTextItem):
         self.movable = self.properties["movable"]
         self.setFlag(self.GraphicsItemFlag.ItemIsMovable, self.movable)
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, self.editable or self.movable)
-        # A posição continua acompanhando a rotação do componente pai
-        # (mapeada pela transformação herdada), mas a orientação do texto
-        # em si fica sempre reta -- sem isso, girar o componente também
-        # giraria o label de cabeça pra baixo/de lado.
-        self.setFlag(self.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        # A orientação do texto é mantida reta pelo NodeItem, que
+        # contra-rotaciona cada label (label.setRotation(-node.rotation()))
+        # sempre que o componente gira -- ver NodeItem._counter_rotate_labels().
+        # Deliberadamente NÃO usamos ItemIgnoresTransformations aqui: essa
+        # flag ignora QUALQUER transformação herdada, não só rotação --
+        # inclusive o zoom da view, fazendo o label parar de escalar com
+        # o zoom. Contra-rotacionar cancela só a rotação, preservando o
+        # resto da cadeia de transformação (zoom) normalmente.
 
         font = QFont()
         font.setPointSize(self.properties["font_size"])

@@ -14,8 +14,12 @@ _SPRITE_DIR = "resources/nodes/accumulator"
 # Faixa de curso do marcador, no espaço do body (85x195px) -- parede reta
 # entre os dois arcos da cápsula. Ver docs/superpowers/specs/
 # 2026-07-19-accumulator-design.md para o levantamento de pixels.
-_TRAVEL_Y_TOP    = 39   # Vf=0 -- marcador no topo da parede reta (vazio)
-_TRAVEL_Y_BOTTOM = 124  # Vf=V0 -- marcador no fundo da parede reta (cheio)
+#
+# Leitura visual tipo "nível de tanque": o fluido entra por baixo, então o
+# marcador sobe (y menor) conforme Vf cresce -- Vf=0 fica no fundo (vazio,
+# leitura intuitiva de "tanque baixo"), Vf=V0 fica no topo (cheio).
+_TRAVEL_Y_TOP    = 39   # Vf=V0 -- marcador no topo da parede reta (cheio)
+_TRAVEL_Y_BOTTOM = 124  # Vf=0 -- marcador no fundo da parede reta (vazio)
 _LEVEL_LINE_Y    = 18   # y local em accumulator_level.png onde fica a linha de referência
 _LEVEL_OFFSET_X  = 6    # centraliza os 72px do marcador nos 85px do body
 
@@ -28,7 +32,7 @@ class Accumulator(NodeItem):
     def palette_meta(cls):
         return PaletteMeta(
             domains=("hydraulic",),
-            sprite=f"{_SPRITE_DIR}/accumulator_body.png",
+            sprite=f"{_SPRITE_DIR}/accumulator.png",
             name="Accumulator",
         )
 
@@ -59,8 +63,8 @@ class Accumulator(NodeItem):
 
     def _level_marker_y(self) -> float:
         return (
-            _TRAVEL_Y_TOP
-            + self._level * (_TRAVEL_Y_BOTTOM - _TRAVEL_Y_TOP)
+            _TRAVEL_Y_BOTTOM
+            - self._level * (_TRAVEL_Y_BOTTOM - _TRAVEL_Y_TOP)
             - _LEVEL_LINE_Y
         )
 

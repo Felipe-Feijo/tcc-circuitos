@@ -14,6 +14,7 @@ def test_palette_meta():
     meta = Accumulator.palette_meta()
     assert meta.domains == ("hydraulic",)
     assert meta.name == "Accumulator"
+    assert meta.sprite == "resources/nodes/accumulator/accumulator.png"
 
 
 def test_simulation_cls_linkage():
@@ -43,13 +44,13 @@ def test_properties_dialog_requires_v0_and_p0():
 def test_level_marker_y_at_empty():
     node = Accumulator(domain="hydraulic")
     node._level = 0.0
-    assert node._level_marker_y() == 39 - 18  # topo da parede reta menos a linha do marcador
+    assert node._level_marker_y() == 124 - 18  # fundo da parede reta (vazio) menos a linha do marcador
 
 
 def test_level_marker_y_at_full():
     node = Accumulator(domain="hydraulic")
     node._level = 1.0
-    assert node._level_marker_y() == 124 - 18  # fundo da parede reta menos a linha do marcador
+    assert node._level_marker_y() == 39 - 18  # topo da parede reta (cheio) menos a linha do marcador
 
 
 def test_level_marker_y_at_half():

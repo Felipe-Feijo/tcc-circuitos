@@ -38,6 +38,17 @@ omega_target) é obrigatória:
 
 `D` é sempre obrigatório. Só um dos dois campos (T_load / omega_target)
 é obrigatório, conforme control_mode.
+
+`P_max` (Pa) e `n_max` (rad/s) são OPCIONAIS -- limites estruturais do
+motor real (rolamento, vedação, cavitação), não física de conversão de
+energia (ao contrário da curva da bomba centrífuga, a relação T=D·Δp /
+Q=D·ω continua linear em toda a faixa; os limites só travam onde ela
+para de ser válida). Só dá pra validar na CONSTRUÇÃO o lado que é
+determinístico em cada modo: T_load implica Δp direto (checa contra
+P_max no modo torque); omega_target implica Q=D·ω direto (checa contra
+n_max no modo speed). O lado oposto em cada modo (ω no modo torque, Δp
+no modo speed) só emerge depois do solve com o resto do circuito -- não
+validado aqui.
 """
 
 from simulation.nodes.nodes import Node
@@ -56,6 +67,11 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
                 )
             self.D = float(d)
 
+            p_max = self.properties.get("P_max")
+            self.P_max = float(p_max) if p_max is not None else None
+            n_max = self.properties.get("n_max")
+            self.n_max = float(n_max) if n_max is not None else None
+
             self.control_mode = self.properties.get("control_mode", "torque")
             if self.control_mode not in ("torque", "speed"):
                 raise ValueError(
@@ -71,6 +87,14 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
                         "não preenchida (control_mode='torque')."
                     )
                 self.T_load = float(t_load)
+
+                if self.P_max is not None:
+                    implied_delta_p = abs(self.T_load / self.D)
+                    if implied_delta_p > self.P_max:
+                        raise ValueError(
+                            f"FixedDisplacementMotor '{self.id}': T_load={self.T_load:.3g} N·m implica "
+                            f"Δp={implied_delta_p:.3g} Pa, acima do limite P_max={self.P_max:.3g} Pa."
+                        )
             else:
                 omega_target = self.properties.get("omega_target")
                 if omega_target is None:
@@ -79,6 +103,12 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
                         "não preenchida (control_mode='speed')."
                     )
                 self.omega_target = float(omega_target)
+
+                if self.n_max is not None and abs(self.omega_target) > self.n_max:
+                    raise ValueError(
+                        f"FixedDisplacementMotor '{self.id}': omega_target={self.omega_target:.3g} rad/s "
+                        f"acima do limite n_max={self.n_max:.3g} rad/s."
+                    )
 
             self.flow_var_a = f"Q_{self.id}_A"
             self.flow_var_b = f"Q_{self.id}_B"

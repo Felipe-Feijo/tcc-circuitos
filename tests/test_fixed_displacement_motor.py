@@ -46,6 +46,44 @@ def test_missing_omega_target_in_speed_mode_raises_value_error():
         FixedDisplacementMotor("m1", domain="hydraulic", properties={"D": 1e-6, "control_mode": "speed"})
 
 
+def test_p_max_and_n_max_default_to_none():
+    motor = make_motor()
+    assert motor.P_max is None
+    assert motor.n_max is None
+
+
+def test_torque_mode_within_p_max_is_accepted():
+    D, T_load, P_max = 1.5e-6, 50.0, 1e8  # delta_p implicado = 3.33e7, abaixo do limite
+    motor = FixedDisplacementMotor("m1", domain="hydraulic", properties={
+        "D": D, "control_mode": "torque", "T_load": T_load, "P_max": P_max,
+    })
+    assert motor.P_max == P_max
+
+
+def test_torque_mode_exceeding_p_max_raises_value_error():
+    D, T_load = 1.5e-6, 50.0  # delta_p implicado = 3.33e7
+    with pytest.raises(ValueError):
+        FixedDisplacementMotor("m1", domain="hydraulic", properties={
+            "D": D, "control_mode": "torque", "T_load": T_load, "P_max": 1e6,
+        })
+
+
+def test_speed_mode_within_n_max_is_accepted():
+    D, omega_target, n_max = 1.5e-6, 100.0, 200.0
+    motor = FixedDisplacementMotor("m1", domain="hydraulic", properties={
+        "D": D, "control_mode": "speed", "omega_target": omega_target, "n_max": n_max,
+    })
+    assert motor.n_max == n_max
+
+
+def test_speed_mode_exceeding_n_max_raises_value_error():
+    D, omega_target = 1.5e-6, 500.0
+    with pytest.raises(ValueError):
+        FixedDisplacementMotor("m1", domain="hydraulic", properties={
+            "D": D, "control_mode": "speed", "omega_target": omega_target, "n_max": 200.0,
+        })
+
+
 def test_hydraulic_ports_and_variables():
     motor = make_motor()
     assert motor.hydraulic_ports() == {"A": motor.flow_var_a, "B": motor.flow_var_b}

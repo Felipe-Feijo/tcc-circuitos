@@ -81,6 +81,41 @@ def test_dialog_shows_t_load_field_hidden_when_speed_mode():
     assert omega_visible is True
 
 
+def test_dialog_has_optional_p_max_and_n_max_fields():
+    node = FixedDisplacementMotor(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+    assert dialog._field_p_max is not None
+    assert dialog._field_n_max is not None
+
+
+def test_apply_properties_from_dialog_saves_p_max_and_n_max():
+    node = FixedDisplacementMotor(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+    dialog._field_d.setText("1.5e-6")
+    dialog._combo_mode.setCurrentText("torque")
+    dialog._field_t.setText("50")
+    dialog._field_p_max.setText("1e8")
+    dialog._field_n_max.setText("300")
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node.properties["P_max"] == 1e8
+    assert node.properties["n_max"] == 300.0
+
+
+def test_apply_properties_from_dialog_leaves_p_max_none_when_empty():
+    node = FixedDisplacementMotor(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+    dialog._field_d.setText("1.5e-6")
+    dialog._combo_mode.setCurrentText("torque")
+    dialog._field_t.setText("50")
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node.properties["P_max"] is None
+    assert node.properties["n_max"] is None
+
+
 def test_preview_shows_required_delta_p_in_torque_mode():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()

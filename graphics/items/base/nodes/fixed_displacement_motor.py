@@ -113,6 +113,8 @@ class FixedDisplacementMotor(NodeItem):
             dialog._combo_mode = None
             dialog._field_t = None
             dialog._field_omega = None
+            dialog._field_p_max = None
+            dialog._field_n_max = None
             return dialog
 
         dialog._field_d = dialog.add_number_field(
@@ -138,6 +140,21 @@ class FixedDisplacementMotor(NodeItem):
         dialog._field_omega = dialog.add_number_field(
             "Velocidade alvo ω (rad/s)", placeholder="ex: 100",
             value=self.properties.get("omega_target"),
+            required=False,
+        )
+
+        # P_max/n_max são opcionais e independentes do control_mode --
+        # limites estruturais do motor (rolamento, vedação), não física
+        # de conversão. required=False -- ausência é uma escolha válida
+        # (sem checagem), não um erro de preenchimento.
+        dialog._field_p_max = dialog.add_number_field(
+            "Limite P_max (Pa) — opcional", placeholder="ex: 1e7",
+            value=self.properties.get("P_max"),
+            required=False,
+        )
+        dialog._field_n_max = dialog.add_number_field(
+            "Limite n_max (rad/s) — opcional", placeholder="ex: 300",
+            value=self.properties.get("n_max"),
             required=False,
         )
 
@@ -205,6 +222,12 @@ class FixedDisplacementMotor(NodeItem):
             o_text = dialog._field_omega.text().strip()
             self.properties["omega_target"] = float(o_text) if o_text else None
             self.properties["T_load"] = None
+
+        p_max_text = dialog._field_p_max.text().strip()
+        self.properties["P_max"] = float(p_max_text) if p_max_text else None
+
+        n_max_text = dialog._field_n_max.text().strip()
+        self.properties["n_max"] = float(n_max_text) if n_max_text else None
 
         self._reset_output_label_for_mode()
 

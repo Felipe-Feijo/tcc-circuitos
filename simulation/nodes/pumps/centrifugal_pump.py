@@ -11,6 +11,11 @@ em qualquer ponto:
 Em Q_S=0 (bomba afogada, sem vazão): Δp = H_shutoff (pressão de shutoff).
 Em Q_S=Q_max (vazão livre, sem carga): Δp = 0.
 
+A parábola só tem solução real pra Δp <= H_shutoff (o máximo, em Q_S=0) --
+`bounds` trava Q_S em [0, Q_max] pra que uma contrapressão além do shutoff
+resulte em vazão zero (o ponto mais próximo alcançável), não numa vazão
+negativa espúria (não haveria raiz real pra encontrar sem esse limite).
+
 Convenção de sinal (node_protocol.py: Q>0 = entrando no componente): S
 (sucção, embaixo do sprite) é positivo -- fluido entra ali; P (descarga,
 topo) é negativo -- fluido sai ali. Mesma convenção, mesmas portas e
@@ -60,6 +65,22 @@ class CentrifugalPump(Node, HydraulicMixin):
     @property
     def variables(self):
         return [self.flow_var_p, self.flow_var_s]
+
+    @property
+    def bounds(self):
+        # A curva Δp=H_shutoff*(1-(Q_S/Q_max)²) só tem solução real pra
+        # Δp <= H_shutoff (o máximo da parábola, em Q_S=0) -- sem limites,
+        # uma contrapressão além do shutoff não tem raiz nenhuma, e o
+        # solver pode escorregar pra vazão negativa tentando achar uma.
+        # Limitando ao envelope de operação válido (0 <= Q_S <= Q_max), o
+        # ponto mais próximo alcançável quando a contrapressão excede o
+        # shutoff fica em Q_S=0 -- vazão trava em zero, que é o
+        # comportamento físico esperado (a bomba não vence a
+        # contrapressão, não passa a girar em reverso sozinha).
+        return {
+            self.flow_var_s: (0.0, self.Q_max),
+            self.flow_var_p: (-self.Q_max, 0.0),
+        }
 
     @property
     def initial_guess(self):

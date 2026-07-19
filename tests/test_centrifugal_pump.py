@@ -135,3 +135,41 @@ def test_end_to_end_pump_between_two_reservoirs():
     expected_q_s = q_max / math.sqrt(2)  # H/2 = H*(1-(Q/Qmax)^2) -> Q=Qmax/sqrt(2)
     assert abs(sol[pump.flow_var_s] - expected_q_s) < expected_q_s * 1e-3
     assert abs(sol[pump.flow_var_p] + sol[pump.flow_var_s]) < 1e-9
+
+
+def test_end_to_end_backpressure_beyond_shutoff_clamps_to_zero_flow():
+    """Regressão do bug relatado: contrapressão acima de H_shutoff não tem
+    raiz real na parábola -- sem os bounds, o solver escorregava pra
+    vazão negativa. Com Q_S travado em [0, Q_max], o ponto mais próximo
+    alcançável é vazão zero, não negativa."""
+    from simulation.hydraulic.solver import NonlinearSystemSolver, NodeContinuity
+    from simulation.hydraulic.scale_context import ScaleContext
+    from simulation.nodes.reservoir import Reservoir
+
+    h_shutoff, q_max = 2e6, 1e-3
+    pump = make_pump(h_shutoff, q_max)
+
+    # Contrapressão 50% acima do shutoff -- além do que a bomba consegue vencer.
+    res_p = Reservoir("res_p", domain="hydraulic", properties={"pressure": h_shutoff * 1.5})
+    res_p.add_anchor("T", domain="hydraulic")
+    res_s = Reservoir("res_s", domain="hydraulic", properties={"pressure": 0.0})
+    res_s.add_anchor("T", domain="hydraulic")
+
+    pump.anchors["P"].pressure_var = res_p.anchors["T"].pressure_var = "P_P"
+    pump.anchors["S"].pressure_var = res_s.anchors["T"].pressure_var = "P_S"
+
+    ctx = ScaleContext(p_ref=h_shutoff, q_ref=q_max, zc=1e12)
+    cont_p = NodeContinuity("P_P", [pump.flow_var_p, res_p.flow_var])
+    cont_s = NodeContinuity("P_S", [pump.flow_var_s, res_s.flow_var])
+    cont_p.apply_context(ctx)
+    cont_s.apply_context(ctx)
+
+    solver = NonlinearSystemSolver([pump, res_p, res_s, cont_p, cont_s])
+    sol = solver.solve(
+        {pump.flow_var_p: -q_max / 2, pump.flow_var_s: q_max / 2,
+         "P_P": h_shutoff * 1.5, "P_S": 0.0},
+        ctx,
+    )
+
+    assert sol[pump.flow_var_s] >= -1e-9  # nunca negativa
+    assert sol[pump.flow_var_s] < q_max * 1e-3  # praticamente zero

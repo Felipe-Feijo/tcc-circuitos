@@ -33,8 +33,8 @@ class FixedDisplacementPump(Node, HydraulicMixin):
     def bounds(self):
         eps = self.Q_set * 1e-6
         return {
-            self.flow_in_var:  (-self.Q_set - eps, -self.Q_set + eps),
-            self.flow_out_var: (self.Q_set - eps, self.Q_set + eps)
+            self.flow_in_var:  (self.Q_set - eps, self.Q_set + eps),
+            self.flow_out_var: (-self.Q_set - eps, -self.Q_set + eps)
         }
     
     @property
@@ -56,9 +56,12 @@ class FixedDisplacementPump(Node, HydraulicMixin):
 
         # Conservação interna: o que entra sai
         # Imposição de vazão: a saída é Q_set
-        # Convenção: Q_in positivo = entrando na bomba, Q_out positivo = saindo
+        # Convenção do domínio (simulation/hydraulic/node_protocol.py): Q > 0
+        # significa fluido ENTRANDO no componente por aquela porta. Fluido
+        # entra na bomba por P (sucção) e sai por S (descarga) -- por isso
+        # Q_in é forçado positivo e Q_out negativo.
         return [
             Q_in + Q_out,        # Q_in = -Q_out (conservação)
-            Q_out - self.Q_set,       # Q_out = Q_set (bomba fixa)
+            Q_out + self.Q_set,       # Q_out = -Q_set (saindo pela descarga)
         ]
     

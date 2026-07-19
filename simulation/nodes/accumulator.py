@@ -1,5 +1,7 @@
 """Nó de simulação de acumulador hidráulico a gás (lei de Boyle, bexiga)."""
 
+import math
+
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
 
@@ -18,6 +20,11 @@ class Accumulator(Node, HydraulicMixin):
         self.Vf = 0.0
         self.flow_var = f"Q_{self.id}"
 
+    @property
+    def _eps(self) -> float:
+        """Margem de segurança nos dois batentes (vazio e cheio), como fração de V0."""
+        return self.V0 * 1e-3
+
     def _p_gas(self, Vf: float) -> float:
         """Lei de Boyle isotérmica (n=1): P0*V0/(V0-Vf).
 
@@ -26,8 +33,7 @@ class Accumulator(Node, HydraulicMixin):
         antes), é só para nunca cair em divisão por zero/negativo se Vf
         chegar exatamente em V0 pelo clip de post_step_update.
         """
-        EPS = self.V0 * 1e-3
-        Vf = min(Vf, self.V0 - EPS)
+        Vf = min(Vf, self.V0 - self._eps)
         return self.P0 * self.V0 / (self.V0 - Vf)
 
     # ------------------------------------------------------------------
@@ -46,18 +52,47 @@ class Accumulator(Node, HydraulicMixin):
 
     @property
     def bounds(self):
-        EPS = self.V0 * 1e-3
+        EPS = self._eps
         if self.Vf <= EPS:
             return {self.flow_var: (0.0, None)}
+        if self.Vf >= self.V0 - EPS:
+            return {self.flow_var: (None, 0.0)}
         return {}
 
     def hydraulic_ports(self):
         return {"P": self.flow_var}
 
     def equations(self, x, idx):
+        Q = x[idx[self.flow_var]]
         P = x[idx[self.anchors["P"].pressure_var]]
         P_gas = self._p_gas(self.Vf)
         P_scale = max(abs(P_gas), self.p_ref)
+        EPS = self._eps
+
+        if self.Vf <= EPS:
+            # Batente vazio: complementaridade suave (Fischer-Burmeister),
+            # igual ao padrão de single_acting_cylinder.py -- ou o
+            # acumulador não recebe fluido (Q=0, pressão do resto do
+            # circuito livre para ficar abaixo de P0) ou a pressão do
+            # circuito atinge P0 e o fluido começa a entrar (P=P0). Sem
+            # isso, P=P_gas(Vf) incondicional travava o solver sempre que
+            # o resto do circuito não sustentava P0 (ex: acumulador
+            # ocioso ligado só a um reservatório em P=0).
+            a = Q / self.q_ref
+            b = (P_gas - P) / P_scale
+            return [a + b - math.sqrt(a * a + b * b)]
+
+        if self.Vf >= self.V0 - EPS:
+            # Batente cheio, espelhado: ou o acumulador para de receber
+            # fluido (Q<=0, podendo devolver) ou a pressão do circuito
+            # alcança o P_gas (já enorme, travado no clamp de _p_gas).
+            # Sem isso, perto do cheio a equação exigia uma pressão que o
+            # resto do circuito não sustentava -- sintoma real: Vf
+            # oscilando entre cheio e quase-vazio de um passo pro outro.
+            a = -Q / self.q_ref
+            b = (P_gas - P) / P_scale
+            return [a + b - math.sqrt(a * a + b * b)]
+
         return [(P - P_gas) / P_scale]
 
     # ------------------------------------------------------------------

@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import math
 import pytest
 import numpy as np
 
@@ -87,7 +88,53 @@ def test_equations_nonzero_residual_when_pressure_off_boyle_curve():
 
 
 # ---------------------------------------------------------------------------
-# Bounds -- só do lado vazio
+# Complementaridade nos batentes (vazio e cheio) -- regressão de bug real:
+# a igualdade dura P=P_gas(Vf) travava o solver sempre que o resto do
+# circuito não sustentava a pressão exigida (P0 no vazio -- acumulador
+# ocioso ligado só a um reservatório em P=0; P_gas gigante no cheio -- uma
+# válvula de alívio travando a pressão bem abaixo). No lado cheio isso
+# aparecia como Vf oscilando entre cheio e quase-vazio de um passo pro
+# outro. Mesmo padrão de complementaridade suave (Fischer-Burmeister) do
+# batente de single_acting_cylinder.py.
+# ---------------------------------------------------------------------------
+
+def test_equations_at_empty_satisfied_when_q_zero_and_pressure_below_p0():
+    acc = make_accumulator(V0=1e-3, P0=3e6, Vf=0.0)
+    idx = make_idx()
+    x = np.array([0.0, 0.0])  # P_P=0.0, Q_acc=0.0 -- circuito não sustenta P0
+    (residual,) = acc.equations(x, idx)
+    assert abs(residual) < 1e-9
+
+
+def test_equations_at_empty_still_pins_pressure_when_flow_forced_in():
+    acc = make_accumulator(V0=1e-3, P0=3e6, Vf=0.0)
+    idx = make_idx()
+    x = np.array([3e6, 1e-4])  # P_P=P0, Q_acc>0 (bomba empurrando)
+    (residual,) = acc.equations(x, idx)
+    assert abs(residual) < 1e-6
+
+
+def test_equations_at_full_satisfied_when_q_zero_and_pressure_below_p_gas():
+    V0 = 1e-3
+    acc = make_accumulator(V0=V0, P0=3e6, Vf=V0 - V0 * 1e-3)  # no batente cheio
+    idx = make_idx()
+    x = np.array([5e6, 0.0])  # P_P bem abaixo do P_gas gigante, Q_acc=0
+    (residual,) = acc.equations(x, idx)
+    assert abs(residual) < 1e-9
+
+
+def test_equations_at_full_still_pins_pressure_when_flow_leaving():
+    V0 = 1e-3
+    acc = make_accumulator(V0=V0, P0=3e6, Vf=V0 - V0 * 1e-3)
+    idx = make_idx()
+    p_gas = acc._p_gas(acc.Vf)
+    x = np.array([p_gas, -1e-4])  # P_P = P_gas, Q_acc<0 (devolvendo fluido)
+    (residual,) = acc.equations(x, idx)
+    assert abs(residual) < 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Bounds -- vazio (Q>=0) e cheio (Q<=0), simétrico
 # ---------------------------------------------------------------------------
 
 def test_bounds_force_q_nonnegative_near_empty():
@@ -97,18 +144,35 @@ def test_bounds_force_q_nonnegative_near_empty():
     assert hi is None
 
 
-def test_bounds_empty_dict_away_from_empty():
+def test_bounds_force_q_nonpositive_near_full():
+    V0 = 1e-3
+    acc = make_accumulator(V0=V0, Vf=V0)
+    lo, hi = acc.bounds[acc.flow_var]
+    assert lo is None
+    assert hi == 0.0
+
+
+def test_bounds_empty_dict_away_from_boundaries():
     acc = make_accumulator(V0=1e-3, Vf=0.5e-3)
     assert acc.bounds == {}
 
 
-def test_bounds_threshold_matches_v0_times_1em3():
+def test_bounds_empty_threshold_matches_v0_times_1em3():
     V0 = 1e-3
     EPS = V0 * 1e-3
     acc_at_eps = make_accumulator(V0=V0, Vf=EPS)
     acc_above_eps = make_accumulator(V0=V0, Vf=EPS * 1.1)
     assert acc_at_eps.bounds != {}
     assert acc_above_eps.bounds == {}
+
+
+def test_bounds_full_threshold_matches_v0_minus_eps():
+    V0 = 1e-3
+    EPS = V0 * 1e-3
+    acc_at_eps = make_accumulator(V0=V0, Vf=V0 - EPS)
+    acc_below_eps = make_accumulator(V0=V0, Vf=V0 - EPS * 1.1)
+    assert acc_at_eps.bounds != {}
+    assert acc_below_eps.bounds == {}
 
 
 # ---------------------------------------------------------------------------

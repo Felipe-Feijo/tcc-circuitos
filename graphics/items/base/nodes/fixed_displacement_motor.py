@@ -2,6 +2,7 @@
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QLabel
 from simulation.nodes.fixed_displacement_motor import FixedDisplacementMotor as FixedDisplacementMotorNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -121,6 +122,9 @@ class FixedDisplacementMotor(NodeItem):
             required=True,
         )
 
+        dialog._preview_label = QLabel("—")
+        dialog._form_layout.addRow("Requisito calculado", dialog._preview_label)
+
         def _update_mode_visibility(mode_text: str) -> None:
             form = dialog._form_layout
             for row in range(form.rowCount()):
@@ -133,8 +137,34 @@ class FixedDisplacementMotor(NodeItem):
                 elif widget is dialog._field_omega:
                     form.setRowVisible(row, mode_text == "speed")
 
+        def _update_preview(*_args) -> None:
+            try:
+                d = float(dialog._field_d.text())
+            except ValueError:
+                dialog._preview_label.setText("—")
+                return
+
+            mode = dialog._combo_mode.currentText()
+            try:
+                if mode == "torque":
+                    t_load = float(dialog._field_t.text())
+                    delta_p = t_load / d
+                    dialog._preview_label.setText(f"Δp necessário: {delta_p:.3g} Pa")
+                else:
+                    omega_target = float(dialog._field_omega.text())
+                    q = d * omega_target
+                    dialog._preview_label.setText(f"Vazão necessária: {q:.3g} m³/s")
+            except (ValueError, ZeroDivisionError):
+                dialog._preview_label.setText("—")
+
         dialog._combo_mode.currentTextChanged.connect(_update_mode_visibility)
+        dialog._combo_mode.currentTextChanged.connect(_update_preview)
+        dialog._field_d.textChanged.connect(_update_preview)
+        dialog._field_t.textChanged.connect(_update_preview)
+        dialog._field_omega.textChanged.connect(_update_preview)
+
         _update_mode_visibility(dialog._combo_mode.currentText())
+        _update_preview()
 
         return dialog
 

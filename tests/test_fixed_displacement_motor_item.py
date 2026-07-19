@@ -33,6 +33,32 @@ def test_output_label_created_on_setup():
     assert hasattr(node, "_label_output")
 
 
+def test_output_label_switches_to_torque_immediately_after_confirming_speed_mode():
+    """Regressão: antes, o label só trocava de rótulo (ω <-> T) quando a
+    simulação rodava de fato -- confirmando o diálogo, ficava preso no
+    texto do modo anterior até lá."""
+    node = FixedDisplacementMotor(domain="hydraulic")
+    assert node._label_output.toPlainText().startswith("ω")
+
+    dialog = node.build_properties_dialog()
+    dialog._field_d.setText("1.5e-6")
+    dialog._combo_mode.setCurrentText("speed")
+    dialog._field_omega.setText("100")
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node._label_output.toPlainText().startswith("T")
+
+
+def test_output_label_matches_mode_after_apply_properties():
+    """Mesma correção pro caminho de carregar um circuito salvo
+    (apply_properties(), chamado pelo from_dict)."""
+    node = FixedDisplacementMotor(domain="hydraulic")
+    node.properties["control_mode"] = "speed"
+    node.apply_properties()
+    assert node._label_output.toPlainText().startswith("T")
+
+
 def test_dialog_shows_t_load_field_hidden_when_speed_mode():
     node = FixedDisplacementMotor(domain="hydraulic")
     node.properties["control_mode"] = "speed"

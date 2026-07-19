@@ -53,6 +53,19 @@ class FixedDisplacementMotor(NodeItem):
         self._label_output.setParentItem(self)
         self._label_output.setPos(QPointF(self.width / 2, -18))
 
+    def _reset_output_label_for_mode(self) -> None:
+        """Mostra o rótulo certo (ω ou T) assim que o modo é confirmado
+        no diálogo (ou carregado de um circuito salvo) -- sem isso, o
+        texto só trocava quando a simulação rodava de fato, ficando
+        preso no rótulo do modo anterior até lá."""
+        if not hasattr(self, "_label_output"):
+            return
+        mode = self.properties.get("control_mode", "torque")
+        if mode == "torque":
+            self._label_output.set_text("ω: 0 rad/s")
+        else:
+            self._label_output.set_text("T: 0 N·m")
+
     def _update_output_label(self, domain_node) -> None:
         try:
             mode = getattr(domain_node, "control_mode", "torque")
@@ -192,3 +205,8 @@ class FixedDisplacementMotor(NodeItem):
             o_text = dialog._field_omega.text().strip()
             self.properties["omega_target"] = float(o_text) if o_text else None
             self.properties["T_load"] = None
+
+        self._reset_output_label_for_mode()
+
+    def apply_properties(self) -> None:
+        self._reset_output_label_for_mode()

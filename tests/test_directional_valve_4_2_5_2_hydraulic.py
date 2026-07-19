@@ -181,7 +181,7 @@ def test_5_2_orifice_equation_exact_root():
 def test_4_2_end_to_end_active_pair_builds_pressure_idle_pair_stays_at_zero():
     from simulation.simulation_engine import SimulationEngine
     from simulation.nodes.reservoir import Reservoir
-    from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
+    from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.connections import Connection
 
     pump = FixedDisplacementPump("pump", domain="hydraulic", properties={"Q": 1e-4})

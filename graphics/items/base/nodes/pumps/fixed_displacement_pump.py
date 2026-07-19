@@ -2,12 +2,12 @@
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
-from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode
+from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode
 
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
-from ....anchors.anchor import AnchorItem
+from .....anchors.anchor import AnchorItem
 
 
 class FixedDisplacementPump(NodeItem):

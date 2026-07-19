@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
+from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
 
 
 def make_pump(Q=1e-4):

@@ -78,7 +78,7 @@ def test_active_state_orifice_equation_exact_root():
 def test_end_to_end_active_valve_builds_pressure():
     from simulation.simulation_engine import SimulationEngine
     from simulation.nodes.reservoir import Reservoir
-    from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
+    from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.connections import Connection
 
     pump = FixedDisplacementPump("pump", domain="hydraulic", properties={"Q": 1e-4})
@@ -113,7 +113,7 @@ def test_end_to_end_active_valve_builds_pressure():
 def test_end_to_end_blocked_valve_does_not_crash_and_stays_isolated():
     from simulation.simulation_engine import SimulationEngine
     from simulation.nodes.reservoir import Reservoir
-    from simulation.nodes.fixed_displacement_pump import FixedDisplacementPump
+    from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.connections import Connection
 
     pump = FixedDisplacementPump("pump", domain="hydraulic", properties={"Q": 1e-4})

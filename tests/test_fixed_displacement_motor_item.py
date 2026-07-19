@@ -83,6 +83,21 @@ def test_preview_shows_placeholder_when_fields_incomplete():
     assert dialog._preview_label.text() == "—"
 
 
+def test_ok_button_enabled_after_filling_only_the_field_for_current_mode():
+    """Regressão: T_load/omega_target sendo required=True nos dois travava
+    o OK mesmo preenchendo só o campo do modo atual, porque a validação
+    olha todo campo numérico obrigatório, visível ou não."""
+    node = FixedDisplacementMotor(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+
+    dialog._field_d.setText("1.5e-6")
+    dialog._combo_mode.setCurrentText("torque")
+    dialog._field_t.setText("50")
+    # omega_target fica vazio (escondido, não se aplica no modo torque)
+
+    assert dialog._ok_btn.isEnabled() is True
+
+
 def test_apply_properties_from_dialog_torque_mode_clears_omega_target():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()

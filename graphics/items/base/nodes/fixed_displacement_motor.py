@@ -111,15 +111,21 @@ class FixedDisplacementMotor(NodeItem):
             "Modo de controle", ["torque", "speed"],
             current=self.properties.get("control_mode", "torque"),
         )
+        # required=False nos dois -- a obrigatoriedade real depende do
+        # control_mode (só um dos dois vale de cada vez), e o campo
+        # escondido pela visibilidade condicional continua contando pra
+        # validação do botão OK (que não olha linha visível/escondida),
+        # travando o OK se os dois fossem required=True. Mesmo padrão já
+        # usado pelos campos de timer condicionais em directional_valve_item.py.
         dialog._field_t = dialog.add_number_field(
             "Torque de carga T_load (N·m)", placeholder="ex: 50",
             value=self.properties.get("T_load"),
-            required=True,
+            required=False,
         )
         dialog._field_omega = dialog.add_number_field(
             "Velocidade alvo ω (rad/s)", placeholder="ex: 100",
             value=self.properties.get("omega_target"),
-            required=True,
+            required=False,
         )
 
         dialog._preview_label = QLabel("—")

@@ -39,16 +39,26 @@ orifício já dá a relação contínua ΔP–Q direto.
 
     b = P_X - P_Y
 
-    b <= 0  (Y empurra, sentido favorável):
+    Q_Y >= 0  (Y empurra, sentido favorável):
         resistência zero -- P_X = P_Y, igual ao ramo aberto da retenção
         pura (check_valve.py).
 
-    b > 0  (sentido restrito):
+    Q_Y < 0  (sentido restrito):
         NÃO bloqueia -- passa pelo orifício fixo (condutância `k`):
         b = copysign((Q_Y / k)², -Q_Y)
         (mesma equação de orifício turbulento que Valve_3_2_Ways usa;
         o sinal amarrado a -Q_Y garante que o fluxo seja negativo em Y
         -- saindo por Y, entrando por X -- nesse ramo).
+
+A ramificação usa o sinal de Q_Y -- não o de P_X-P_Y -- de propósito:
+P_X/P_Y são as próprias incógnitas deste solve, então ramificar por elas
+é circular. O ramo favorável não menciona Q_Y em nenhuma equação, então
+se a ramificação fosse por pressão, P_X=P_Y=0 satisfaria o ramo
+"favorável" mesmo com um Q_Y claramente do sentido restrito (imposto de
+fora, por uma bomba de vazão fixa por exemplo) -- uma raiz espúria onde
+a pressão nunca sobe pra vencer o orifício. Q_Y já vem determinado pela
+conservação + o que estiver ligado à válvula, então ramificar por ele
+elimina essa ambiguidade.
 
 Diferente da retenção pura, isso NÃO é complementaridade (nunca força
 vazão ou pressão exatamente a zero) -- é uma resistência que muda de
@@ -225,8 +235,18 @@ class ThrottleCheckValve(Node, HydraulicMixin):
 
         eq_conservation = (Q_x + Q_y) / Q_scale
 
+        # A ramificação usa o sinal de Q_y -- imposto de fora pelo resto do
+        # circuito (ex: uma bomba de vazão fixa) -- e não o de P_X - P_Y.
+        # Ramificar por pressão seria circular: P_X/P_Y são as próprias
+        # incógnitas que este solve está resolvendo, então o ramo "favorável"
+        # (que não menciona Q_y) pode ser satisfeito por P_X=P_Y=0 mesmo
+        # quando Q_y é claramente o do sentido restrito (forçado de fora),
+        # já que nada naquele ramo valida a direção real do fluxo -- uma
+        # raiz espúria. Ramificando por Q_y (que já vem determinado pela
+        # conservação + o que estiver ligado à válvula) elimina essa
+        # ambiguidade.
         b = P_x - P_y
-        if b <= 0:
+        if Q_y >= 0:
             # Sentido favorável -- resistência zero, mesmo ramo da
             # retenção pura quando aberta.
             eq_valve = (P_x - P_y) / P_scale

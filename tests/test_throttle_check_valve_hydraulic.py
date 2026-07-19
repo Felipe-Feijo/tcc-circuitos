@@ -88,8 +88,9 @@ def test_restricted_direction_follows_orifice_equation():
 
 
 def test_wrong_sign_flow_is_not_a_root_in_restricted_direction():
-    """Sanity check: Q_Y positivo (sentido errado) com P_X > P_Y não
-    deveria satisfazer a equação do ramo restrito."""
+    """Sanity check: Q_Y positivo seleciona o ramo favorável (a
+    ramificação é por sinal de Q_Y, não de P_X-P_Y -- ver docstring do
+    módulo), então P_X=9e6 != P_Y não deveria satisfazer esse ramo."""
     k = 1e-7
     valve = make_valve(k=k)
     idx = make_idx()
@@ -104,6 +105,20 @@ def test_wrong_sign_flow_is_not_a_root_in_restricted_direction():
 # ---------------------------------------------------------------------------
 # Visual state
 # ---------------------------------------------------------------------------
+
+def test_spurious_zero_pressure_root_is_rejected_for_restricted_flow():
+    """Regressão do bug real: com a ramificação antiga (por P_X-P_Y), o
+    solver encontrava P_X=P_Y=0 como raiz mesmo com Q_Y no sentido
+    restrito (forçado de fora, ex: por uma bomba) -- porque o ramo
+    favorável nunca menciona Q_Y. Isso não pode mais ser uma raiz."""
+    k = 1e-7
+    valve = make_valve(k=k)
+    idx = make_idx()
+    Q_y = -1e-4  # sentido restrito, forçado de fora
+    x = np.array([1e-4, Q_y, 0.0, 0.0])  # P_X = P_Y = 0 -- raiz espúria antiga
+    _, eq_valve = valve.equations(x, idx)
+    assert abs(eq_valve) > 1e-3
+
 
 def test_visual_state_open_when_favorable():
     valve = make_valve()

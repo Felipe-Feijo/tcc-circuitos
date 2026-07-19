@@ -25,7 +25,7 @@ class Valve_5_2_Ways(DirectionalValveItem):
     @classmethod
     def palette_meta(cls):
         return PaletteMeta(
-            domains=("pneumatic",),
+            domains=("pneumatic", "hydraulic"),
             sprite=cls.BODY_VISUALS[0]["sprite"],
             name="Valve 5/2 Ways",
         )

@@ -36,7 +36,7 @@ class Accumulator(Node, HydraulicMixin):
 
     @property
     def variables(self):
-        anchor = self.anchors["P"]
+        anchor = self.anchors.get("P")
         pvar = getattr(anchor, "pressure_var", None) if anchor else None
         return ([pvar] if pvar else []) + [self.flow_var]
 

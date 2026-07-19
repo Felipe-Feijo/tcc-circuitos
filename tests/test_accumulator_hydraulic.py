@@ -43,6 +43,18 @@ def test_hydraulic_ports_and_variables():
     assert set(acc.variables) == {"P_P", acc.flow_var}
 
 
+def test_variables_no_keyerror_before_anchor_wired():
+    """Verify that .variables doesn't raise KeyError when "P" anchor hasn't been
+    added yet. This tests the defensive .get("P") pattern instead of direct
+    dictionary access."""
+    from simulation.nodes.accumulator import Accumulator
+    acc = Accumulator("acc", domain="hydraulic", properties={"V0": 1e-3, "P0": 3e6})
+    # Don't add anchor yet -- test that .variables is defensive
+    variables = acc.variables  # Should not raise KeyError
+    # Without anchor, only flow_var should be in variables list
+    assert variables == [acc.flow_var]
+
+
 # ---------------------------------------------------------------------------
 # Lei de Boyle -- p_hint e equations()
 # ---------------------------------------------------------------------------

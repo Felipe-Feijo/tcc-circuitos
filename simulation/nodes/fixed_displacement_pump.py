@@ -14,6 +14,12 @@ class FixedDisplacementPump(Node, HydraulicMixin):
             if Q is None:
                 raise ValueError(f"FixedDisplacementPump '{self.id}': propriedade obrigatória 'Q' não preenchida.")
             self.Q_set = float(Q)
+            # Nomes de variável mantidos por compatibilidade -- não deixe o
+            # "in"/"out" enganar: flow_in_var é a porta P (descarga/pressão,
+            # topo do sprite) e flow_out_var é a porta S (sucção, embaixo,
+            # ligada ao reservatório). "in"/"out" aqui só rotulam o par de
+            # variáveis do sistema de equações, não o sentido físico do
+            # fluxo -- esse é decidido pelos valores forçados abaixo.
             self.flow_in_var  = f"Q_{self.id}_P"
             self.flow_out_var = f"Q_{self.id}_S"
 
@@ -28,15 +34,15 @@ class FixedDisplacementPump(Node, HydraulicMixin):
     @property
     def variables(self):
         return [self.flow_in_var, self.flow_out_var]
-    
+
     @property
     def bounds(self):
         eps = self.Q_set * 1e-6
         return {
-            self.flow_in_var:  (self.Q_set - eps, self.Q_set + eps),
-            self.flow_out_var: (-self.Q_set - eps, -self.Q_set + eps)
+            self.flow_in_var:  (-self.Q_set - eps, -self.Q_set + eps),
+            self.flow_out_var: (self.Q_set - eps, self.Q_set + eps)
         }
-    
+
     @property
     def initial_guess(self):
         return {
@@ -57,11 +63,13 @@ class FixedDisplacementPump(Node, HydraulicMixin):
         # Conservação interna: o que entra sai
         # Imposição de vazão: a saída é Q_set
         # Convenção do domínio (simulation/hydraulic/node_protocol.py): Q > 0
-        # significa fluido ENTRANDO no componente por aquela porta. Fluido
-        # entra na bomba por P (sucção) e sai por S (descarga) -- por isso
-        # Q_in é forçado positivo e Q_out negativo.
+        # significa fluido ENTRANDO no componente por aquela porta. P
+        # (descarga/pressão) é por onde o fluido SAI da bomba -- por isso
+        # Q_in (a variável ligada à porta P) é forçado NEGATIVO aqui. S
+        # (sucção) é por onde o fluido ENTRA -- Q_out (ligada à porta S) é
+        # forçado POSITIVO. Os nomes "Q_in"/"Q_out" são só rótulos do par
+        # de variáveis, não uma descrição do sentido físico.
         return [
             Q_in + Q_out,        # Q_in = -Q_out (conservação)
-            Q_out + self.Q_set,       # Q_out = -Q_set (saindo pela descarga)
+            Q_out - self.Q_set,       # Q_out = Q_set (bomba fixa)
         ]
-    

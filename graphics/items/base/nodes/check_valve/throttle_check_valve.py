@@ -1,4 +1,4 @@
-"""Graphic node for the throttle check valve (pneumatic only).
+"""Graphic node for the throttle check valve (pneumatic and hydraulic).
 
 Sprite layout
 -------------
@@ -33,7 +33,7 @@ class ThrottleCheckValve(NodeItem):
     @classmethod
     def palette_meta(cls):
         return PaletteMeta(
-            domains=("pneumatic",),
+            domains=("pneumatic", "hydraulic"),
             sprite=f"{_SPRITE_DIR}/throttle_check_valve_open.png",
             name="Throttle Check Valve",
         )
@@ -94,18 +94,33 @@ class ThrottleCheckValve(NodeItem):
 
     def build_properties_dialog(self) -> PropertiesDialog:
         dialog = PropertiesDialog(title="Throttle Check Valve — Properties")
-        dialog._field_delay = dialog.add_number_field(
-            "Delay steps (restricted direction)",
-            placeholder="ex: 3",
-            value=self.properties.get("delay_steps", 3),
-            required=True,
-        )
+        if self.domain == "hydraulic":
+            dialog._field_delay = None
+            dialog._field_k = dialog.add_number_field(
+                "Condutância k (m³/s/√Pa) — sentido restrito",
+                placeholder="ex: 1.5e-8",
+                value=self.properties.get("k"),
+                required=True,
+            )
+        else:
+            dialog._field_delay = dialog.add_number_field(
+                "Delay steps (restricted direction)",
+                placeholder="ex: 3",
+                value=self.properties.get("delay_steps", 3),
+                required=True,
+            )
+            dialog._field_k = None
         return dialog
 
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
-        text = dialog._field_delay.text().strip()
-        try:
-            steps = max(1, int(float(text)))
-        except (ValueError, TypeError):
-            steps = 3
-        self.properties["delay_steps"] = steps
+        if dialog._field_delay is not None:
+            text = dialog._field_delay.text().strip()
+            try:
+                steps = max(1, int(float(text)))
+            except (ValueError, TypeError):
+                steps = 3
+            self.properties["delay_steps"] = steps
+
+        if dialog._field_k is not None:
+            k_text = dialog._field_k.text().strip()
+            self.properties["k"] = float(k_text) if k_text else None

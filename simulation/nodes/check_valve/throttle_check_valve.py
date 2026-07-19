@@ -1,7 +1,7 @@
-"""Simulation node for the throttle check valve.
+"""Simulation node for the throttle check valve (pneumatic and hydraulic).
 
-Behaviour
----------
+Behaviour (pneumatic)
+----------------------
 The valve exposes two anchors X (left) and Y (right).  State propagation
 is handled entirely by the engine through get_internal_connections().
 
@@ -24,35 +24,86 @@ Visual state (latched in post_step_update):
     Default: "open"
 
 `delay_steps` is read from ``properties["delay_steps"]`` (default: 3).
+`delay_steps` só é usado no domínio pneumático.
+
+Behaviour (hydraulic)
+-----------------------
+Um "one-way flow control valve" de verdade: caminho de retenção livre em
+paralelo com um orifício fixo -- diferente da válvula de retenção pura
+(simulation/nodes/check_valve/check_valve.py), o sentido restrito NUNCA
+bloqueia, só resiste. É por isso que o pneumático usa um atraso
+(`delay_steps`) em vez de bloquear: o atraso aproxima, no domínio
+booleano, o tempo que um fluxo resistido levaria pra pressurizar o lado
+de baixo -- no hidráulico não precisa de atraso nenhum, a equação de
+orifício já dá a relação contínua ΔP–Q direto.
+
+    b = P_X - P_Y
+
+    b <= 0  (Y empurra, sentido favorável):
+        resistência zero -- P_X = P_Y, igual ao ramo aberto da retenção
+        pura (check_valve.py).
+
+    b > 0  (sentido restrito):
+        NÃO bloqueia -- passa pelo orifício fixo (condutância `k`):
+        b = copysign((Q_Y / k)², -Q_Y)
+        (mesma equação de orifício turbulento que Valve_3_2_Ways usa;
+        o sinal amarrado a -Q_Y garante que o fluxo seja negativo em Y
+        -- saindo por Y, entrando por X -- nesse ramo).
+
+Diferente da retenção pura, isso NÃO é complementaridade (nunca força
+vazão ou pressão exatamente a zero) -- é uma resistência que muda de
+valor conforme o sentido, então usa uma ramificação dura (if/else, igual
+ao já usado em DirectOperatedReliefValve) em vez de Fischer-Burmeister.
+
+`k` é obrigatório no domínio hidráulico (mesmo padrão de Valve_3_2_Ways).
+Mais a conservação de vazão: Q_X + Q_Y = 0.
+
+Visual state (ver get_visual_state):
+    "open"   -- b <= 0 (sentido favorável, sem resistência)
+    "closed" -- b > 0 (sentido restrito, passando pelo orifício)
 """
 
 from __future__ import annotations
+
+import math
+
 from simulation.nodes.nodes import Node
+from simulation.hydraulic import HydraulicMixin
 
 _DEFAULT_DELAY = 3
 
 
-class ThrottleCheckValve(Node):
+class ThrottleCheckValve(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(
             node_id, "throttle_check_valve", domain=domain, properties=properties
         )
 
-        self._delay_steps: int = int(
-            (self.properties or {}).get("delay_steps", _DEFAULT_DELAY)
-        )
+        if self.domain == "hydraulic":
+            k = self.properties.get("k")
+            if k is None:
+                raise ValueError(
+                    f"ThrottleCheckValve '{self.id}': propriedade obrigatória 'k' não preenchida."
+                )
+            self.k = float(k)
+            self.flow_var_x = f"Q_{self.id}_X"
+            self.flow_var_y = f"Q_{self.id}_Y"
+        else:
+            self._delay_steps: int = int(
+                (self.properties or {}).get("delay_steps", _DEFAULT_DELAY)
+            )
 
-        # 0 = idle. >0 = counting down.
-        self._steps_remaining: int = 0
+            # 0 = idle. >0 = counting down.
+            self._steps_remaining: int = 0
 
-        # Whether the valve is open (X ↔ Y connected).
-        self._open: bool = False
+            # Whether the valve is open (X ↔ Y connected).
+            self._open: bool = False
 
-        # Latched sprite — only updated in post_step_update on stabilised states.
-        self._sprite: str = "open"
+            # Latched sprite — only updated in post_step_update on stabilised states.
+            self._sprite: str = "open"
 
     # ------------------------------------------------------------------
-    # Simulation contract
+    # Domínio pneumático
     # ------------------------------------------------------------------
 
     def update(self, outputs=None):
@@ -61,6 +112,8 @@ class ThrottleCheckValve(Node):
 
     def post_step_update(self, dt=None):
         """All logic runs here on fully stabilised anchor states."""
+        if self.domain != "pneumatic":
+            return
         super().post_step_update(dt=dt)
 
         x = self.anchors["X"].state
@@ -96,33 +149,89 @@ class ThrottleCheckValve(Node):
             self._open = True
 
     def get_internal_connections(self):
+        if self.domain != "pneumatic":
+            return []
         if self._open:
             return [("X", "Y")]
         return []
 
-    # ------------------------------------------------------------------
-    # Visual state
-    # ------------------------------------------------------------------
-
     def get_visual_state(self) -> str:
+        if self.domain == "hydraulic":
+            p_x = self.anchors["X"].pressure
+            p_y = self.anchors["Y"].pressure
+            if isinstance(p_x, (int, float)) and isinstance(p_y, (int, float)):
+                return "closed" if (p_x - p_y) > 0 else "open"
+            return "open"
         return self._sprite
 
     # ------------------------------------------------------------------
-    # Undo / history
+    # Undo / history (pneumático apenas -- hidráulico não tem estado
+    # próprio, tudo decidido a cada solve pelas equações)
     # ------------------------------------------------------------------
 
     def get_state(self) -> dict:
         state = super().get_state()
-        state["steps_remaining"] = self._steps_remaining
-        state["open"] = self._open
-        state["sprite"] = self._sprite
+        if self.domain == "pneumatic":
+            state["steps_remaining"] = self._steps_remaining
+            state["open"] = self._open
+            state["sprite"] = self._sprite
         return state
 
     def set_state(self, state: dict):
         super().set_state(state)
+        if self.domain != "pneumatic":
+            return
         self._steps_remaining = state.get("steps_remaining", 0)
         self._open = state.get("open", False)
         self._sprite = state.get("sprite", "open")
         self._delay_steps = int(
             (self.properties or {}).get("delay_steps", _DEFAULT_DELAY)
         )
+
+    # ------------------------------------------------------------------
+    # Domínio hidráulico
+    # ------------------------------------------------------------------
+
+    @property
+    def variables(self):
+        if self.domain != "hydraulic":
+            return []
+        vars_ = [self.flow_var_x, self.flow_var_y]
+        for anchor_name in self.hydraulic_ports().keys():
+            anchor = self.anchors.get(anchor_name)
+            if anchor and anchor.pressure_var:
+                vars_.append(anchor.pressure_var)
+        return vars_
+
+    def hydraulic_ports(self):
+        if self.domain != "hydraulic":
+            return {}
+        return {"X": self.flow_var_x, "Y": self.flow_var_y}
+
+    @property
+    def initial_guess(self):
+        if self.domain != "hydraulic":
+            return {}
+        return {self.flow_var_x: -1.0, self.flow_var_y: 1.0}
+
+    def equations(self, x, idx):
+        Q_x = x[idx[self.flow_var_x]]
+        Q_y = x[idx[self.flow_var_y]]
+        P_x = x[idx[self.anchors["X"].pressure_var]]
+        P_y = x[idx[self.anchors["Y"].pressure_var]]
+
+        Q_scale = max(self.q_ref, 1e-12)
+        P_scale = max(self.p_ref, 1e-3)
+
+        eq_conservation = (Q_x + Q_y) / Q_scale
+
+        b = P_x - P_y
+        if b <= 0:
+            # Sentido favorável -- resistência zero, mesmo ramo da
+            # retenção pura quando aberta.
+            eq_valve = (P_x - P_y) / P_scale
+        else:
+            # Sentido restrito -- não bloqueia, passa pelo orifício fixo.
+            eq_valve = (b - math.copysign((Q_y / self.k) ** 2, -Q_y)) / P_scale
+
+        return [eq_conservation, eq_valve]

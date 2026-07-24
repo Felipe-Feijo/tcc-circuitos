@@ -1,7 +1,7 @@
 """Classe base para válvulas direcionais com suporte a atuadores configuráveis."""
 
 from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtWidgets import QMenu
 
 
@@ -70,6 +70,8 @@ ACTUATOR_DICT = {
 }
 
 SPRING_SCALE = 0.65  # redução de ~35% em relação ao sprite normal do atuador "spring"
+
+THREE_POSITION_SIDE_MAP = {"right": 0, "center": 1, "left": 2}
 
 class DirectionalValveItem(NodeItem):
 
@@ -284,7 +286,7 @@ class DirectionalValveItem(NodeItem):
 
         if self.THREE_POSITION:
             default_side = self.properties.get("default_side", "center")
-            self.body_state = {"right": 0, "center": 1, "left": 2}.get(default_side, 1)
+            self.body_state = THREE_POSITION_SIDE_MAP.get(default_side, 1)
         else:
             default_side = self.properties.get("default_side", "right")
             self.body_state = 1 if default_side == "left" else 0
@@ -416,10 +418,12 @@ class DirectionalValveItem(NodeItem):
             active = active.scaled(
                 round(active.width() * SPRING_SCALE),
                 round(active.height() * SPRING_SCALE),
+                transformMode=Qt.TransformationMode.SmoothTransformation,
             )
             inactive = inactive.scaled(
                 round(inactive.width() * SPRING_SCALE),
                 round(inactive.height() * SPRING_SCALE),
+                transformMode=Qt.TransformationMode.SmoothTransformation,
             )
 
             if side == "right":
@@ -545,7 +549,7 @@ class DirectionalValveItem(NodeItem):
         self.properties["default_side"] = side
         if not self.simulation_mode:
             if self.THREE_POSITION:
-                self.body_state = {"right": 0, "center": 1, "left": 2}.get(side, 1)
+                self.body_state = THREE_POSITION_SIDE_MAP.get(side, 1)
             else:
                 self.body_state = 1 if side == "left" else 0
             self.update_body_visuals()
@@ -762,7 +766,7 @@ class DirectionalValveItem(NodeItem):
         side = self.properties["default_side"]
         if not self.simulation_mode:
             if self.THREE_POSITION:
-                self.body_state = {"right": 0, "center": 1, "left": 2}.get(side, 1)
+                self.body_state = THREE_POSITION_SIDE_MAP.get(side, 1)
             else:
                 self.body_state = 1 if side == "left" else 0
             self.update_body_visuals()

@@ -87,3 +87,23 @@ def test_three_position_item_respects_default_side_property_for_initial_appearan
     item.properties["default_side"] = "center"
     item.initialize_body_visuals()
     assert item.body_state == 1
+
+
+def test_two_position_item_reset_visual_state_still_uses_2_way_mapping():
+    item = Valve_4_2_Ways(domain="pneumatic")
+    item.properties["default_side"] = "left"
+    item.simulation_mode = True
+    item.body_state = 0  # estado qualquer deixado pela simulação
+    item.reset_visual_state()
+    assert item.body_state == 1  # "left" -> 1, mapeamento de 2 posições intacto
+
+
+def test_three_position_item_reset_visual_state_uses_3_way_mapping():
+    item = _ThreePositionItem(domain="pneumatic")
+    item.simulation_mode = True
+
+    for side, expected_state in [("right", 0), ("center", 1), ("left", 2)]:
+        item.properties["default_side"] = side
+        item.body_state = 1  # estado qualquer deixado pela simulação
+        item.reset_visual_state()
+        assert item.body_state == expected_state, side

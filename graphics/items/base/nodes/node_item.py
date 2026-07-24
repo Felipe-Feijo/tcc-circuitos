@@ -10,6 +10,12 @@ from graphics.sensor_registry.sensor_registry import SensorRegistry
 from graphics.utils.properties_dialog import PropertiesDialog
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
+# Mapeamento genérico "default_side" -> body_state para nós de 3 posições
+# (THREE_POSITION=True). Vive aqui, na classe base, porque reset_visual_state()
+# precisa dele e não pode depender de um módulo de subclasse específico
+# (ex.: directional_valve_item.py, que importa esta constante daqui).
+THREE_POSITION_SIDE_MAP = {"right": 0, "center": 1, "left": 2}
+
 
 class NodeItem(DiagramItemBase):
     """Base class for all diagram nodes.
@@ -197,7 +203,10 @@ class NodeItem(DiagramItemBase):
         if hasattr(self, "update_body_visuals"):
             props = getattr(self, "properties", {})
             if "default_side" in props:
-                self.body_state = 1 if props["default_side"] == "left" else 0
+                if getattr(self, "THREE_POSITION", False):
+                    self.body_state = THREE_POSITION_SIDE_MAP.get(props["default_side"], 1)
+                else:
+                    self.body_state = 1 if props["default_side"] == "left" else 0
             elif "default_state" in props:
                 self.body_state = 1 if props["default_state"] == "extended" else 0
             else:

@@ -5,7 +5,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtWidgets import QMenu
 
 
-from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.node_item import NodeItem, THREE_POSITION_SIDE_MAP
 from graphics.utils.properties_dialog import PropertiesDialog
 from .....anchors.anchor import AnchorItem
 from graphics.labels.label import LabelItem
@@ -70,8 +70,6 @@ ACTUATOR_DICT = {
 }
 
 SPRING_SCALE = 0.5  # redução de ~50% em relação ao sprite normal do atuador "spring"
-
-THREE_POSITION_SIDE_MAP = {"right": 0, "center": 1, "left": 2}
 
 class DirectionalValveItem(NodeItem):
 

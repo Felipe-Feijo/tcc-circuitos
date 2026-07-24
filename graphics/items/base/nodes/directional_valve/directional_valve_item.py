@@ -441,7 +441,7 @@ class DirectionalValveItem(NodeItem):
 
             w, h = active.width(), active.height()
             x = body.left() - w if side == "left" else body.right()
-            y = body.top() - h  # encostada acima do topo do body, no canto superior da câmara
+            y = body.top() - h / 2  # sobreposta à metade superior do body, no canto superior da câmara
 
             self.spring_rects[side] = QRectF(x, y, w, h)
 

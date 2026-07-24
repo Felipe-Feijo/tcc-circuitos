@@ -18,7 +18,7 @@ class Valve_4_3_Ways(DirectionalValveItem):
         # (offset 0) -- não em relação ao state 0, como nas válvulas 2-posições.
         0: {  # ativo-direita
             "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_right.png",
-            "offset": QPointF(150, 0),
+            "offset": QPointF(-150, 0),
         },
         1: {  # centro (repouso) -- referência
             "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_middle.png",

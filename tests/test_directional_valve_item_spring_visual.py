@@ -51,12 +51,12 @@ def test_spring_rects_positioned_above_body_flush_to_each_side():
     right_rect = item.spring_rects["right"]
     assert left_rect.right() == 0        # encostada na borda esquerda do body
     assert right_rect.left() == item.width  # encostada na borda direita do body
-    # a mola fica encostada acima do topo do body (bottom() == 0), não mais
-    # começando em y=0 e descendo para dentro do body
-    assert left_rect.bottom() == 0
-    assert right_rect.bottom() == 0
+    # a mola fica sobreposta à metade superior do body -- metade acima do
+    # topo (y<0), metade dentro do body (bottom > 0)
     assert left_rect.top() < 0
     assert right_rect.top() < 0
+    assert left_rect.bottom() == left_rect.height() / 2
+    assert right_rect.bottom() == right_rect.height() / 2
 
 
 def test_bounding_rect_covers_spring_extent_above_body():

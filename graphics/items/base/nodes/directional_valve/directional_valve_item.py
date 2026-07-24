@@ -71,6 +71,8 @@ ACTUATOR_DICT = {
 
 class DirectionalValveItem(NodeItem):
 
+    THREE_POSITION = False
+
     def setup(self) -> None:
         self.properties = {
             "actuators": {"left": None, "right": None},
@@ -267,8 +269,11 @@ class DirectionalValveItem(NodeItem):
             for visual in self.body_visuals.values()
         )
 
-        default_side = self.properties.get("default_side", "right")
-        self.body_state = 1 if default_side == "left" else 0
+        if self.THREE_POSITION:
+            self.body_state = 1  # repouso é sempre o centro
+        else:
+            default_side = self.properties.get("default_side", "right")
+            self.body_state = 1 if default_side == "left" else 0
         self.body_sprite = self.body_visuals[self.body_state]["sprite"]
         self.visual_offset = self.body_visuals[self.body_state]["offset"]
 
@@ -394,13 +399,14 @@ class DirectionalValveItem(NodeItem):
         self._populate_actuator_menu(left_menu, side="left")
         self._populate_actuator_menu(right_menu, side="right")
 
-        menu.addSeparator()
-        rest_menu = menu.addMenu("Posição de repouso")
-        for opt, label in [("right", "Direita (0)"), ("left", "Esquerda (1)")]:
-            action = QAction(label, menu, checkable=True)
-            action.setChecked(self.properties.get("default_side", "right") == opt)
-            action.triggered.connect(lambda _, o=opt: self._set_default_side(o))
-            rest_menu.addAction(action)
+        if not self.THREE_POSITION:
+            menu.addSeparator()
+            rest_menu = menu.addMenu("Posição de repouso")
+            for opt, label in [("right", "Direita (0)"), ("left", "Esquerda (1)")]:
+                action = QAction(label, menu, checkable=True)
+                action.setChecked(self.properties.get("default_side", "right") == opt)
+                action.triggered.connect(lambda _, o=opt: self._set_default_side(o))
+                rest_menu.addAction(action)
 
     def _populate_actuator_menu(self, menu: QMenu, side: str):
         current = self.actuators.get(side)
@@ -421,6 +427,8 @@ class DirectionalValveItem(NodeItem):
         # -----------------------
         for name, desc in ACTUATOR_DICT.items():
             if not desc.get("menu", True):
+                continue
+            if self.THREE_POSITION and name == "spring":
                 continue
             action = QAction(desc["label"], menu, checkable=True)
             action.setChecked(current is not None and current.get("type") == name)
@@ -585,9 +593,12 @@ class DirectionalValveItem(NodeItem):
         options = ["None"]
         dialog._actuator_key_map = {}
         for key, desc in ACTUATOR_DICT.items():
-            if desc.get("menu", True):
-                options.append(desc["label"])
-                dialog._actuator_key_map[desc["label"]] = key
+            if not desc.get("menu", True):
+                continue
+            if self.THREE_POSITION and key == "spring":
+                continue
+            options.append(desc["label"])
+            dialog._actuator_key_map[desc["label"]] = key
 
         if self.sensor_registry:
             options += self.sensor_registry.list_names(sensor_type="cylinder_end")
@@ -629,11 +640,14 @@ class DirectionalValveItem(NodeItem):
             value=_timer_delay("right"), required=False,
         )
 
-        dialog._combo_default_side = dialog.add_combo_field(
-            "Posição de repouso",
-            ["right", "left"],
-            current=self.properties.get("default_side", "right"),
-        )
+        if self.THREE_POSITION:
+            dialog._combo_default_side = None
+        else:
+            dialog._combo_default_side = dialog.add_combo_field(
+                "Posição de repouso",
+                ["right", "left"],
+                current=self.properties.get("default_side", "right"),
+            )
 
         # Show/hide timer delay rows based on combo selection
         dialog._combo_left.currentTextChanged.connect(
@@ -676,10 +690,11 @@ class DirectionalValveItem(NodeItem):
                     actuator_type = "limit_switch" if info.sensor_type == "cylinder_end" else "solenoid"
                     self.set_actuator(side, actuator_type, selected)
 
-        self.properties["default_side"] = dialog._combo_default_side.currentText()
-        side = self.properties["default_side"]
-        if not self.simulation_mode:
-            self.body_state = 1 if side == "left" else 0
-            self.update_body_visuals()
-            self.update_connections()
-            self.update()
+        if dialog._combo_default_side is not None:
+            self.properties["default_side"] = dialog._combo_default_side.currentText()
+            side = self.properties["default_side"]
+            if not self.simulation_mode:
+                self.body_state = 1 if side == "left" else 0
+                self.update_body_visuals()
+                self.update_connections()
+                self.update()

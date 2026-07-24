@@ -69,6 +69,8 @@ ACTUATOR_DICT = {
     }
 }
 
+SPRING_SCALE = 0.65  # redução de ~35% em relação ao sprite normal do atuador "spring"
+
 class DirectionalValveItem(NodeItem):
 
     THREE_POSITION = False
@@ -86,6 +88,8 @@ class DirectionalValveItem(NodeItem):
         self.actuator_visuals = {}
         self.actuator_rects = {}
         self.bits = {"left": 0, "right": 0}
+        self.spring_visuals = {}
+        self.spring_rects = {}
 
         self.initialize_body_visuals()
         self.initialize_anchors()
@@ -151,6 +155,13 @@ class DirectionalValveItem(NodeItem):
 
             sprite = visuals["active"] if self.bits.get(side, 0) else visuals["inactive"]
 
+            self.draw_pixmap(painter, QPointF(int(rect.x() + self.visual_offset.x()), int(rect.y() + self.visual_offset.y()),), sprite)
+
+        # desenha molas de centralização (sempre presentes em válvulas 3-posições)
+        for side, rect in self.spring_rects.items():
+            sprite = self._spring_pixmap_for(side)
+            if sprite is None:
+                continue
             self.draw_pixmap(painter, QPointF(int(rect.x() + self.visual_offset.x()), int(rect.y() + self.visual_offset.y()),), sprite)
 
         self.paint_selection_feedback(painter)
@@ -385,6 +396,49 @@ class DirectionalValveItem(NodeItem):
 
                 self.add_label(label_name, label, special=True)
 
+        self._initialize_spring_visuals(body)
+
+    def _initialize_spring_visuals(self, body: QRectF) -> None:
+        """Mola de centralização: sempre presente nos dois lados de uma
+        válvula 3-posições, nunca um atuador selecionável de verdade."""
+        self.spring_visuals.clear()
+        self.spring_rects.clear()
+
+        if not self.THREE_POSITION:
+            return
+
+        spring_desc = ACTUATOR_DICT["spring"]
+
+        for side in ("left", "right"):
+            active = QPixmap(spring_desc["sprite_active_path"])
+            inactive = QPixmap(spring_desc["sprite_inactive_path"])
+
+            active = active.scaled(
+                round(active.width() * SPRING_SCALE),
+                round(active.height() * SPRING_SCALE),
+            )
+            inactive = inactive.scaled(
+                round(inactive.width() * SPRING_SCALE),
+                round(inactive.height() * SPRING_SCALE),
+            )
+
+            if side == "right":
+                active = active.transformed(QTransform().scale(-1, 1))
+                inactive = inactive.transformed(QTransform().scale(-1, 1))
+
+            self.spring_visuals[side] = {"active": active, "inactive": inactive}
+
+            w, h = active.width(), active.height()
+            x = body.left() - w if side == "left" else body.right()
+            y = body.top()  # canto superior da câmara
+
+            self.spring_rects[side] = QRectF(x, y, w, h)
+
+    def _spring_pixmap_for(self, side: str):
+        visuals = self.spring_visuals.get(side)
+        if not visuals:
+            return None
+        return visuals["active"] if self.bits.get(side, 0) else visuals["inactive"]
 
     def apply_properties(self):
         self.initialize_body_visuals()

@@ -3,6 +3,8 @@
 from simulation.nodes.nodes import Node
 
 class DirectionalValve(Node):
+    THREE_POSITION = False
+
     def __init__(self, node_id: str, node_type: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, node_type, domain=domain, properties=properties)
 
@@ -12,8 +14,11 @@ class DirectionalValve(Node):
         # Nova estrutura: {"left": {"type": "pilot"}, "right": None}
         self.actuators = self.properties.get("actuators", {"left": None, "right": None})
 
-        default_side = self.properties.get("default_side", "right")
-        self.body_state = 1 if default_side == "left" else 0
+        if self.THREE_POSITION:
+            self.body_state = 1  # repouso é sempre o centro -- default_side não se aplica
+        else:
+            default_side = self.properties.get("default_side", "right")
+            self.body_state = 1 if default_side == "left" else 0
 
         # Timer actuator state: steps remaining per side (0 = idle)
         self._timer_steps: dict[str, int] = {"left": 0, "right": 0}
@@ -94,6 +99,16 @@ class DirectionalValve(Node):
     def _compute_body_state(self):
         left = self.bits["left"]
         right = self.bits["right"]
+
+        if self.THREE_POSITION:
+            if left and not right:
+                self.body_state = 2
+            elif right and not left:
+                self.body_state = 0
+            else:
+                # 00 (repouso) e 11 (pilotos se anulam) -- só a mola atua -> centro
+                self.body_state = 1
+            return
 
         if left and not right:
             self.body_state = 1

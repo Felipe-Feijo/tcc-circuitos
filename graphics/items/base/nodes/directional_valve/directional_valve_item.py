@@ -131,8 +131,12 @@ class DirectionalValveItem(NodeItem):
         if right_rect:
             right_w, right_h = right_rect.width(), right_rect.height()
 
-        leftmost_x = -left_w - margin
-        total_width = body_w + left_w + right_w + getattr(self, "max_offset_x", 0) + 2*margin
+        # Alguns estados (ex.: Valve_4_3_Ways, offset relativo ao centro) têm
+        # offset negativo -- o body é pintado à esquerda de x=0 nesses casos,
+        # então o retângulo precisa se estender até lá também.
+        min_offset_x = min(0, getattr(self, "min_offset_x", 0))
+        leftmost_x = min_offset_x - left_w - margin
+        total_width = body_w + left_w + right_w + getattr(self, "max_offset_x", 0) - min_offset_x + 2*margin
 
         # Molas de centralização podem se estender acima do topo do body --
         # o bounding rect precisa cobrir essa extensão, senão o Qt deixa
@@ -286,10 +290,9 @@ class DirectionalValveItem(NodeItem):
             }
             for state, desc in self.BODY_VISUALS.items()
         }
-        self.max_offset_x = max(
-            visual["offset"].x()
-            for visual in self.body_visuals.values()
-        )
+        offsets_x = [visual["offset"].x() for visual in self.body_visuals.values()]
+        self.max_offset_x = max(offsets_x)
+        self.min_offset_x = min(offsets_x)
 
         if self.THREE_POSITION:
             default_side = self.properties.get("default_side", "center")
@@ -441,7 +444,7 @@ class DirectionalValveItem(NodeItem):
 
             w, h = active.width(), active.height()
             x = body.left() - w if side == "left" else body.right()
-            y = body.top() - h / 2  # sobreposta à metade superior do body, no canto superior da câmara
+            y = body.top() - h / 3  # sobreposta à parte superior do body, no canto superior da câmara
 
             self.spring_rects[side] = QRectF(x, y, w, h)
 

@@ -68,3 +68,16 @@ def test_spring_excluded_from_actuator_menu():
     node._populate_actuator_menu(menu, side="left")
     labels = [a.text() for a in menu.actions()]
     assert "Spring" not in labels
+
+
+def test_bounding_rect_covers_every_state_including_negative_offset():
+    # state 0 (direita) tem offset negativo (-150) -- o body é pintado à
+    # esquerda de x=0 nesse estado. boundingRect() precisa cobrir isso ou o
+    # Qt deixa rastros de repintura fora da área declarada (bug real
+    # encontrado após o usuário ver o render com os 3 estados).
+    node = Valve_4_3_Ways(domain="pneumatic")
+    bounds = node.boundingRect()
+    for visual in node.BODY_VISUALS.values():
+        offset_x = visual["offset"].x()
+        assert bounds.left() <= offset_x
+        assert bounds.right() >= offset_x + node.width

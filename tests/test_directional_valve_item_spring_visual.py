@@ -27,12 +27,12 @@ def test_three_position_item_has_spring_visuals_both_sides():
         assert not visuals["inactive"].isNull()
 
 
-def test_spring_sprite_scaled_down_65_percent():
+def test_spring_sprite_scaled_down_50_percent():
     item = Valve_4_3_Ways(domain="pneumatic")
     full = QPixmap("resources/actuators/spring/spring_active.png")
     scaled = item.spring_visuals["left"]["active"]
-    assert abs(scaled.width() - round(full.width() * 0.65)) <= 1
-    assert abs(scaled.height() - round(full.height() * 0.65)) <= 1
+    assert abs(scaled.width() - round(full.width() * 0.5)) <= 1
+    assert abs(scaled.height() - round(full.height() * 0.5)) <= 1
 
 
 def test_spring_pixmap_swaps_with_bit_state():
@@ -45,11 +45,22 @@ def test_spring_pixmap_swaps_with_bit_state():
     assert inactive is item.spring_visuals["left"]["inactive"]
 
 
-def test_spring_rects_positioned_at_top_of_body_flush_to_each_side():
+def test_spring_rects_positioned_above_body_flush_to_each_side():
     item = Valve_4_3_Ways(domain="pneumatic")
     left_rect = item.spring_rects["left"]
     right_rect = item.spring_rects["right"]
     assert left_rect.right() == 0        # encostada na borda esquerda do body
     assert right_rect.left() == item.width  # encostada na borda direita do body
-    assert left_rect.top() == 0
-    assert right_rect.top() == 0
+    # a mola fica encostada acima do topo do body (bottom() == 0), não mais
+    # começando em y=0 e descendo para dentro do body
+    assert left_rect.bottom() == 0
+    assert right_rect.bottom() == 0
+    assert left_rect.top() < 0
+    assert right_rect.top() < 0
+
+
+def test_bounding_rect_covers_spring_extent_above_body():
+    item = Valve_4_3_Ways(domain="pneumatic")
+    spring_top = min(rect.top() for rect in item.spring_rects.values())
+    bounds = item.boundingRect()
+    assert bounds.top() <= spring_top

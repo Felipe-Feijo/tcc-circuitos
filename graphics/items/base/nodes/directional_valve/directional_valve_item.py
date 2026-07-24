@@ -69,7 +69,7 @@ ACTUATOR_DICT = {
     }
 }
 
-SPRING_SCALE = 0.65  # redução de ~35% em relação ao sprite normal do atuador "spring"
+SPRING_SCALE = 0.5  # redução de ~50% em relação ao sprite normal do atuador "spring"
 
 THREE_POSITION_SIDE_MAP = {"right": 0, "center": 1, "left": 2}
 
@@ -134,7 +134,14 @@ class DirectionalValveItem(NodeItem):
         leftmost_x = -left_w - margin
         total_width = body_w + left_w + right_w + getattr(self, "max_offset_x", 0) + 2*margin
 
-        top_margin = max(0, (left_h - body_h)/2)
+        # Molas de centralização podem se estender acima do topo do body --
+        # o bounding rect precisa cobrir essa extensão, senão o Qt deixa
+        # rastros de repintura fora da área declarada.
+        spring_top_extent = 0.0
+        for rect in self.spring_rects.values():
+            spring_top_extent = max(spring_top_extent, -rect.top())
+
+        top_margin = max(0, (left_h - body_h)/2, (right_h - body_h)/2, spring_top_extent)
         bottom_margin = max(0, (right_h - body_h)/2)
         top_y = -top_margin - margin
         total_height = body_h + top_margin + bottom_margin + 2*margin
@@ -434,7 +441,7 @@ class DirectionalValveItem(NodeItem):
 
             w, h = active.width(), active.height()
             x = body.left() - w if side == "left" else body.right()
-            y = body.top()  # canto superior da câmara
+            y = body.top() - h  # encostada acima do topo do body, no canto superior da câmara
 
             self.spring_rects[side] = QRectF(x, y, w, h)
 

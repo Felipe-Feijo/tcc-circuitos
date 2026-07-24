@@ -25,10 +25,12 @@ def test_three_position_flag_set():
 
 
 def test_body_visuals_has_three_states_with_confirmed_offsets():
+    # Offsets são relativos ao centro (state 1), que é a referência (0) --
+    # não ao state 0, diferente do padrão da 4/2 vias.
     node = Valve_4_3_Ways(domain="pneumatic")
     assert set(node.BODY_VISUALS.keys()) == {0, 1, 2}
-    assert node.BODY_VISUALS[0]["offset"].x() == 0
-    assert node.BODY_VISUALS[1]["offset"].x() == 150
+    assert node.BODY_VISUALS[0]["offset"].x() == 150
+    assert node.BODY_VISUALS[1]["offset"].x() == 0
     assert node.BODY_VISUALS[2]["offset"].x() == 147
 
 

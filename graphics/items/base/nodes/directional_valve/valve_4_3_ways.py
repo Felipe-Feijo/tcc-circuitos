@@ -14,13 +14,15 @@ class Valve_4_3_Ways(DirectionalValveItem):
     THREE_POSITION = True
 
     BODY_VISUALS = {
+        # Offsets medidos em relação ao centro (state 1), que é a referência
+        # (offset 0) -- não em relação ao state 0, como nas válvulas 2-posições.
         0: {  # ativo-direita
             "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_right.png",
-            "offset": QPointF(0, 0),
-        },
-        1: {  # centro (repouso)
-            "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_middle.png",
             "offset": QPointF(150, 0),
+        },
+        1: {  # centro (repouso) -- referência
+            "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_middle.png",
+            "offset": QPointF(0, 0),
         },
         2: {  # ativo-esquerda
             "sprite": "resources/nodes/valve_4_3_ways/valve_4_3_body_left.png",

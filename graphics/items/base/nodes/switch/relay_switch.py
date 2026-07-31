@@ -98,7 +98,10 @@ class RelaySwitch(SwitchItem):
 
         relay_signals = []
         if self.sensor_registry:
-            relay_signals = self.sensor_registry.list_names(sensor_type="relay_coil")
+            relay_signals = (
+                self.sensor_registry.list_names(sensor_type="relay_coil")
+                + self.sensor_registry.list_names(sensor_type="cylinder_end")
+            )
 
         current_sensor = self.properties.get("relay_sensor") or ""
         options = ["(nenhum)"] + relay_signals
@@ -118,13 +121,15 @@ class RelaySwitch(SwitchItem):
         super().extend_context_menu(menu)
 
         if self.sensor_registry:
-            relay_signals = self.sensor_registry.list_names(sensor_type="relay_coil")
+            relay_signals = (
+                self.sensor_registry.list_names(sensor_type="relay_coil")
+                + self.sensor_registry.list_names(sensor_type="cylinder_end")
+            )
             if relay_signals:
                 menu.addSeparator()
                 for sensor_name in relay_signals:
                     action = QAction(sensor_name, menu, checkable=True)
 
-                    # marcar se já está associado
                     is_checked = (
                         getattr(self, "current_relay", None) == sensor_name
                     )

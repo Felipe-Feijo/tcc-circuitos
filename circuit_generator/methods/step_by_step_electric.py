@@ -26,6 +26,7 @@ Anel de lógica (auto-mantido, self-holding):
   VoltageSource --> [sensor(s) fim de curso átomo k-1] --> [K_{k-1} NO] --\
   VoltageSource --> [K_k NO self-hold] -------------------------------------+--> [K_{k+1} NC] --> K_k --> Ground
   (só o átomo M-1) VoltageSource --> [botão NO] -----------------------/
+  (só o átomo 0) VoltageSource --> [K_último NO] --> [botão de início NO] --/
 
 Zona de potência (independente por (cilindro, direção)):
   VoltageSource --> [K_k1 NO] --\
@@ -232,7 +233,20 @@ def generate(events: list[tuple[str, str]]) -> dict:
 
         # Os dois ramos convergem no contato de reset (NC do próximo K).
         reset_contact = contact(f"{k}-reset_nc", "NC", f"K{next_k + 1}")
-        connect(ramo_a_prev_contact, "B", reset_contact, "T")
+
+        # Botão de início do ciclo: só o PRIMEIRO átomo, em série no fim do
+        # ramo A (depois do contato do K anterior, antes de convergir com o
+        # ramo B) -- K0 só energiza se sensor(es) + K_último + este botão
+        # estiverem todos fechados, dando controle manual exato de quando o
+        # ciclo começa (em vez de K0 disparar sozinho assim que sensor+K
+        # ficarem satisfeitos automaticamente).
+        if k == 0:
+            add_node("gen-btn-start", "ButtonSwitch", "button_start", domain="electric",
+                     properties={"contact_type": "NO"})
+            connect(ramo_a_prev_contact, "B", "gen-btn-start", "T")
+            connect("gen-btn-start", "B", reset_contact, "T")
+        else:
+            connect(ramo_a_prev_contact, "B", reset_contact, "T")
         connect(ramo_b_contact, "B", reset_contact, "T")
 
         # Bootstrap: só o último átomo do ciclo ganha o ramo do botão.

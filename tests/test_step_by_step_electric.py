@@ -107,9 +107,24 @@ class TestRungWiring:
 
     def test_reset_contact_receives_both_branches(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        incoming = _conns_to(data, "gen-contact-0-reset_nc", "T")
-        sources = {c["source"]["node"] for c in incoming}
-        assert sources == {"gen-contact-0-ramo_a_prev", "gen-contact-0-ramo_b_self"}
+        n_atoms = 4
+        # Atom 0 has gen-btn-start inserted between ramo_a_prev and reset_contact
+        incoming_0 = _conns_to(data, "gen-contact-0-reset_nc", "T")
+        sources_0 = {c["source"]["node"] for c in incoming_0}
+        assert sources_0 == {"gen-btn-start", "gen-contact-0-ramo_b_self"}
+
+        # Atoms 1 and 2 receive connections from both ramo_a_prev and ramo_b_self
+        for k in range(1, n_atoms - 1):
+            incoming = _conns_to(data, f"gen-contact-{k}-reset_nc", "T")
+            sources = {c["source"]["node"] for c in incoming}
+            assert sources == {f"gen-contact-{k}-ramo_a_prev", f"gen-contact-{k}-ramo_b_self"}
+
+        # Last atom receives connections from ramo_a_prev, ramo_b_self, and bootstrap button
+        incoming_last = _conns_to(data, f"gen-contact-{n_atoms - 1}-reset_nc", "T")
+        sources_last = {c["source"]["node"] for c in incoming_last}
+        assert sources_last == {f"gen-contact-{n_atoms - 1}-ramo_a_prev",
+                                f"gen-contact-{n_atoms - 1}-ramo_b_self",
+                                "gen-btn"}
 
     def test_ramo_a_prev_contact_references_previous_atom_coil_ring_wraps(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -190,6 +205,55 @@ class TestBootstrap:
         assert into_btn[0]["source"]["node"] == "gen-vsource"
 
 
+class TestStartButton:
+    """Segundo botão, em série no fim do ramo A do PRIMEIRO átomo (não o
+    último, que já tem o gen-btn de arme) -- K0 só energiza se sensor(es) +
+    K_último + este botão estiverem todos fechados."""
+
+    def test_start_button_created_with_electric_domain(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        btn = _node(data, "gen-btn-start")
+        assert btn["type"] == "ButtonSwitch"
+        assert btn["domain"] == "electric"
+        assert btn["properties"]["contact_type"] == "NO"
+
+    def test_start_button_in_series_between_ramo_a_prev_and_reset(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        into_btn = _conns_to(data, "gen-btn-start", "T")
+        assert len(into_btn) == 1
+        assert into_btn[0]["source"]["node"] == "gen-contact-0-ramo_a_prev"
+        assert into_btn[0]["source"]["anchor"] == "B"
+
+        out_of_btn = _conns_from(data, "gen-btn-start", "B")
+        assert len(out_of_btn) == 1
+        assert out_of_btn[0]["target"]["node"] == "gen-contact-0-reset_nc"
+        assert out_of_btn[0]["target"]["anchor"] == "T"
+
+    def test_ramo_a_prev_no_longer_connects_directly_to_reset(self):
+        # A conexão antiga (direta) não deve mais existir pro átomo 0 --
+        # foi substituída pelas duas que passam pelo botão de início.
+        data = sbe.generate(parse("A+B+A-B-"))
+        direct = [
+            c for c in _conns_from(data, "gen-contact-0-ramo_a_prev", "B")
+            if c["target"]["node"] == "gen-contact-0-reset_nc"
+        ]
+        assert direct == []
+
+    def test_other_atoms_ramo_a_prev_unaffected(self):
+        # Só o átomo 0 ganha o botão -- os demais mantêm a conexão direta.
+        data = sbe.generate(parse("A+B+A-B-"))
+        for k in range(1, 4):
+            direct = _conns_from(data, f"gen-contact-{k}-ramo_a_prev", "B")
+            assert len(direct) == 1
+            assert direct[0]["target"]["node"] == f"gen-contact-{k}-reset_nc"
+
+    def test_only_one_start_button_exists(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        btn_starts = [n for n in data["nodes"] if n["type"] == "ButtonSwitch"
+                      and n["id"] == "gen-btn-start"]
+        assert len(btn_starts) == 1
+
+
 class TestPowerZoneSingleOccurrence:
     """A+B+A-B- -- nenhum cilindro repete direção: 1 bobina Y por
     (cilindro, direção), 1 contato de potência cada."""
@@ -250,8 +314,8 @@ class TestPowerZoneSingleOccurrence:
 
     def test_full_node_and_connection_counts(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        assert len(data["nodes"]) == 39
-        assert len(data["connections"]) == 50
+        assert len(data["nodes"]) == 40
+        assert len(data["connections"]) == 51
 
 
 class TestPowerZoneMultiCycle:
@@ -292,15 +356,15 @@ class TestPowerZoneMultiCycle:
 
     def test_full_node_and_connection_counts(self):
         data = sbe.generate(parse("A+B+A-A+B-A-"))
-        assert len(data["nodes"]) == 51
-        assert len(data["connections"]) == 68
+        assert len(data["nodes"]) == 52
+        assert len(data["connections"]) == 69
 
 
 class TestPowerZoneParallelBlock:
     def test_full_node_and_connection_counts(self):
         data = sbe.generate(parse("C+(A+B+)C-A-B-"))
-        assert len(data["nodes"]) == 53
-        assert len(data["connections"]) == 68
+        assert len(data["nodes"]) == 54
+        assert len(data["connections"]) == 69
 
 
 class TestBusAnchors:

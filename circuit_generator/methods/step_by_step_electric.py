@@ -220,6 +220,68 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(reset_contact, "B", y_ids[k], "T")
         connect(y_ids[k], "B", "gen-ground", next_bus_anchor("gen-ground"))
 
+    # ── 5. Pilotagem das 4/2: solenoid direto (ocorrência única) ou sig +
+    #      OrValve encadeada (multi-ciclo) ─────────────────────────────
+    #
+    #   Reaproveita o algoritmo de duas passadas já usado pelo pneumático
+    #   pra multi-ciclo (ver docs/superpowers/specs/
+    #   2026-07-12-step-by-step-multi-cycle-or-valve-design.md), com duas
+    #   diferenças: a "fonte" de cada sig é um PressureSource dedicado (não
+    #   um tap de PressureLine, que não existe mais aqui) e o atuador da
+    #   sig é "solenoid" (lê o Y_k do átomo daquela ocorrência) em vez de
+    #   "limit_switch".
+
+    triggers_for_pilot: dict[tuple[str, str], list[int]] = {}
+    for k, atom in enumerate(atoms):
+        for e_idx, letter, direction in atom:
+            triggers_for_pilot.setdefault((letter, direction), []).append(k)
+
+    for (letter, direction), atom_indexes in triggers_for_pilot.items():
+        pilot_anchor = "PL" if direction == "+" else "PR"
+        side = "left" if pilot_anchor == "PL" else "right"
+        v42 = v42_node_by_letter[letter]
+
+        if len(atom_indexes) == 1:
+            k = atom_indexes[0]
+            v42["properties"]["actuators"][side] = {
+                "type": "solenoid", "sensor_name": f"Y{k + 1}",
+            }
+            continue
+
+        v42["properties"]["actuators"][side] = {"type": "pneumatic_pilot"}
+
+        sig_outputs: list[tuple[str, str]] = []
+        for k in atom_indexes:
+            dir_tag = "ext" if direction == "+" else "ret"
+            sig_id = f"gen-pilot-sig-{letter}-{dir_tag}-{k}"
+            add_node(sig_id, "Valve_3_2_Ways", f"pilot_sig:{letter}:{direction}:{k}",
+                     properties={
+                         "actuators": {
+                             "left":  {"type": "solenoid", "sensor_name": f"Y{k + 1}"},
+                             "right": {"type": "spring"},
+                         },
+                         "default_side": "right",
+                     })
+            ps  = add_simple("PressureSource", f"pressure_source:pilot-sig-{letter}-{direction}-{k}")
+            exh = add_simple("Exhaust", f"exhaust:pilot-sig-{letter}-{direction}-{k}")
+            connect(ps, "P", sig_id, "P")
+            connect(sig_id, "R", exh, "R")
+            sig_outputs.append((sig_id, "A"))
+
+        # Mesma convenção de lateralidade X/Y da OrValve usada no
+        # pneumático: no lado PL a cadeia cresce pra esquerda do cilindro
+        # (prev entra em X), no lado PR cresce pra direita (prev entra em Y).
+        prev_anchor_name, new_anchor_name = ("X", "Y") if pilot_anchor == "PL" else ("Y", "X")
+
+        prev_id, prev_anchor = sig_outputs[0]
+        for i in range(1, len(sig_outputs)):
+            or_id = add_simple("OrValve", f"or_valve:{letter}:{pilot_anchor}:{i - 1}")
+            connect(prev_id, prev_anchor, or_id, prev_anchor_name)
+            src_id, src_anchor = sig_outputs[i]
+            connect(src_id, src_anchor, or_id, new_anchor_name)
+            prev_id, prev_anchor = or_id, "A"
+        connect(prev_id, prev_anchor, v42["id"], pilot_anchor)
+
     return {
         "version":     1,
         "nodes":       nodes,

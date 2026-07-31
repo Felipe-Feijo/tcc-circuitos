@@ -198,3 +198,95 @@ class TestBusAnchors:
             if n["type"] in ("VoltageSource", "Ground"):
                 anchors = n["properties"]["anchors"]
                 assert len(anchors) == len(set(anchors))
+
+
+class TestPilotWiringSingleOccurrence:
+    """A+B+A-B- -- nenhum cilindro repete direção, então nenhuma sig/OrValve
+    deve ser criada; o atuador da 4/2 lê o Y do átomo direto."""
+
+    def test_v42_actuators_are_solenoid_direct(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        v42_a = _node(data, "gen-v42-A")
+        v42_b = _node(data, "gen-v42-B")
+        # A+ é o átomo 0 (Y1), A- é o átomo 2 (Y3)
+        assert v42_a["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y1"}
+        assert v42_a["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y3"}
+        # B+ é o átomo 1 (Y2), B- é o átomo 3 (Y4)
+        assert v42_b["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y2"}
+        assert v42_b["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y4"}
+
+    def test_no_pilot_sig_or_or_valve_created(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        assert [n for n in data["nodes"] if n["_role"].startswith("pilot_sig")] == []
+        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []
+
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        assert len(data["nodes"]) == 31
+        assert len(data["connections"]) == 38
+
+
+class TestPilotWiringMultiCycle:
+    """A+B+A-A+B-A- -- A+ ocorre nos átomos 0 e 3; A- ocorre nos átomos 2 e 5."""
+
+    def test_v42_a_actuators_become_pneumatic_pilot(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        v42_a = _node(data, "gen-v42-A")
+        assert v42_a["properties"]["actuators"]["left"] == {"type": "pneumatic_pilot"}
+        assert v42_a["properties"]["actuators"]["right"] == {"type": "pneumatic_pilot"}
+
+    def test_v42_b_actuators_stay_solenoid_direct(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        v42_b = _node(data, "gen-v42-B")
+        assert v42_b["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y2"}
+        assert v42_b["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y5"}
+
+    def test_two_pilot_sigs_per_repeated_direction_each_reading_own_coil(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        s0 = _node(data, "gen-pilot-sig-A-ext-0")
+        s3 = _node(data, "gen-pilot-sig-A-ext-3")
+        assert s0["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y1"}
+        assert s3["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y4"}
+        assert s0["properties"]["actuators"]["right"] == {"type": "spring"}
+
+    def test_pilot_sig_has_dedicated_pressure_source_and_exhaust(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        p_in = _conns_to(data, "gen-pilot-sig-A-ext-0", "P")
+        r_out = _conns_from(data, "gen-pilot-sig-A-ext-0", "R")
+        assert len(p_in) == 1 and _node(data, p_in[0]["source"]["node"])["type"] == "PressureSource"
+        assert len(r_out) == 1 and _node(data, r_out[0]["target"]["node"])["type"] == "Exhaust"
+
+    def test_or_valve_merges_the_two_pilot_sigs_and_feeds_v42_pilot(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
+        assert len(or_nodes) == 2  # 1 pra PL de A, 1 pra PR de A
+
+        pl_or = next(n for n in or_nodes if n["_role"] == "or_valve:A:PL:0")
+        x_conn = next(c for c in data["connections"]
+                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "X")
+        y_conn = next(c for c in data["connections"]
+                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "Y")
+        assert {x_conn["source"]["node"], y_conn["source"]["node"]} == {
+            "gen-pilot-sig-A-ext-0", "gen-pilot-sig-A-ext-3",
+        }
+        out_conn = next(c for c in data["connections"] if c["source"]["node"] == pl_or["id"])
+        assert out_conn == {
+            "source": {"node": pl_or["id"], "anchor": "A"},
+            "target": {"node": "gen-v42-A", "anchor": "PL"},
+        }
+
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        assert len(data["nodes"]) == 55
+        assert len(data["connections"]) == 66
+
+
+class TestPilotWiringParallelBlock:
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("C+(A+B+)C-A-B-"))
+        assert len(data["nodes"]) == 41
+        assert len(data["connections"]) == 50
+
+    def test_no_or_valve_no_repeats(self):
+        data = sbe.generate(parse("C+(A+B+)C-A-B-"))
+        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []

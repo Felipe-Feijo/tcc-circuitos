@@ -41,6 +41,11 @@ SPRITE_SIZES: dict[str, tuple[int, int]] = {
     "Exhaust":               (_M.exh_width, _M.exh_height),
     "PressureSource":        (_M.ps_width,  _M.ps_height),
     "OrValve":               (_M.or_width,  _M.or_height),
+    "RelaySwitch":           (_M.relay_switch_width,  _M.relay_switch_height),
+    "SolenoidCoil":          (_M.solenoid_coil_width, _M.solenoid_coil_height),
+    "ButtonSwitch":          (_M.button_switch_width, _M.button_switch_height),
+    "VoltageSource":         (_M.vsource_pix_w,       _M.vsource_pix_h),
+    "Ground":                (_M.ground_pix_w,        _M.ground_pix_h),
 }
 
 # Direção de saída padrão de cada anchor
@@ -68,6 +73,12 @@ EXIT_DIR_MAP: dict[tuple[str, str], str] = {
     ("OrValve",              "X"):  "LEFT",
     ("OrValve",              "Y"):  "RIGHT",
     ("OrValve",              "A"):  "UP",
+    ("RelaySwitch",          "T"):  "UP",
+    ("RelaySwitch",          "B"):  "DOWN",
+    ("SolenoidCoil",         "T"):  "UP",
+    ("SolenoidCoil",         "B"):  "DOWN",
+    ("ButtonSwitch",         "T"):  "UP",
+    ("ButtonSwitch",         "B"):  "DOWN",
 }
 
 DIR_VEC = {"UP": (0,-1), "DOWN": (0,1), "LEFT": (-1,0), "RIGHT": (1,0)}
@@ -78,6 +89,10 @@ def get_exit_dir(node_type: str, anchor: str) -> str:
     if key in EXIT_DIR_MAP:
         return EXIT_DIR_MAP[key]
     if node_type == "PressureLine" and anchor.startswith("X"):
+        return "UP"
+    if node_type == "VoltageSource" and anchor.startswith("X"):
+        return "DOWN"
+    if node_type == "Ground" and anchor.startswith("X"):
         return "UP"
     return "UP"
 

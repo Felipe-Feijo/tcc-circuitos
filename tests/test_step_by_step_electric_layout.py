@@ -175,6 +175,53 @@ class TestLayoutMapRegistration:
         assert LAYOUT_MAP[("step_by_step", "electric")] is layout.apply
 
 
+class TestVoltageSourceGroundBarDimensioned:
+    """A dimensão das barras VoltageSource/Ground (properties.anchors) é
+    calculada em step_by_step_electric_layout.apply() a partir do alcance
+    real do Grid (grid.occupied_x_range()), DEPOIS que toda a região de
+    pistões/válvulas/Zona 1/2/3 já foi posicionada -- ver o bloco logo
+    após a Zona 3, que usa _M.pl_spacing e math.ceil. Esse crescimento
+    tem que ser append-only: conexões já roteadas referenciam anchors por
+    nome (ex: "X3"), então renumerar ou remover um anchor existente
+    quebraria essas conexões -- só é seguro apendar novos ao final."""
+
+    def test_bars_span_at_least_the_full_x_range_of_nodes(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        node_xs = [n["position"]["x"] for n in data["nodes"]]
+        min_x, max_x = min(node_xs), max(node_xs)
+
+        for bus_id in ("gen-vsource", "gen-ground"):
+            n = _node(data, bus_id)
+            anchors = n["properties"]["anchors"]
+            assert len(anchors) >= 2
+            # A própria barra nasce na borda esquerda do circuito -- só o
+            # lado direito depende do array de anchors ter crescido o
+            # suficiente pra alcançar o nó mais à direita (Zona 3).
+            assert n["position"]["x"] <= min_x + 1
+            last_x, _ = _scene_xy(node_by_id, node_type_map, bus_id, anchors[-1])
+            assert last_x >= max_x - 1
+
+    def test_bars_grow_only_never_shrink_existing_anchors(self):
+        # original_anchors vem do MESMO dict que layout.apply() recebe --
+        # generate() usa uuid4 pros ids, então duas chamadas separadas
+        # produziriam ids diferentes e original_anchors não corresponderia
+        # aos nós já posicionados por um segundo generate().
+        raw = sbe.generate(parse("A+B+A-B-"))
+        originals = {
+            bus_id: list(next(n for n in raw["nodes"] if n["id"] == bus_id)["properties"]["anchors"])
+            for bus_id in ("gen-vsource", "gen-ground")
+        }
+
+        data = layout.apply(raw)
+
+        for bus_id, original in originals.items():
+            grown = _node(data, bus_id)["properties"]["anchors"]
+            assert grown[: len(original)] == original
+            assert len(grown) >= len(original)
+
+
 class TestAllConnectionsOrthogonal:
     def test_no_diagonal_connections(self):
         for seq in ("A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"):

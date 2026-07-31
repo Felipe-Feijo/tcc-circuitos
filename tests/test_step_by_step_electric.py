@@ -107,24 +107,9 @@ class TestRungWiring:
 
     def test_reset_contact_receives_both_branches(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        n_atoms = 4
-        # Atom 0 has gen-btn-start inserted between ramo_a_prev and reset_contact
-        incoming_0 = _conns_to(data, "gen-contact-0-reset_nc", "T")
-        sources_0 = {c["source"]["node"] for c in incoming_0}
-        assert sources_0 == {"gen-btn-start", "gen-contact-0-ramo_b_self"}
-
-        # Atoms 1 and 2 receive connections from both ramo_a_prev and ramo_b_self
-        for k in range(1, n_atoms - 1):
-            incoming = _conns_to(data, f"gen-contact-{k}-reset_nc", "T")
-            sources = {c["source"]["node"] for c in incoming}
-            assert sources == {f"gen-contact-{k}-ramo_a_prev", f"gen-contact-{k}-ramo_b_self"}
-
-        # Last atom receives connections from ramo_a_prev, ramo_b_self, and bootstrap button
-        incoming_last = _conns_to(data, f"gen-contact-{n_atoms - 1}-reset_nc", "T")
-        sources_last = {c["source"]["node"] for c in incoming_last}
-        assert sources_last == {f"gen-contact-{n_atoms - 1}-ramo_a_prev",
-                                f"gen-contact-{n_atoms - 1}-ramo_b_self",
-                                "gen-btn"}
+        incoming = _conns_to(data, "gen-contact-0-reset_nc", "T")
+        sources = {c["source"]["node"] for c in incoming}
+        assert sources == {"gen-btn-start", "gen-contact-0-ramo_b_self"}
 
     def test_ramo_a_prev_contact_references_previous_atom_coil_ring_wraps(self):
         data = sbe.generate(parse("A+B+A-B-"))

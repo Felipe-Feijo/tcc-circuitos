@@ -7,6 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pytest
+
 from circuit_generator.sequence_parser import parse
 from circuit_generator.methods import step_by_step_electric as sbe
 from circuit_generator.methods.step_by_step_electric import _atomize
@@ -279,6 +281,12 @@ class TestPilotWiringMultiCycle:
         data = sbe.generate(parse("A+B+A-A+B-A-"))
         assert len(data["nodes"]) == 55
         assert len(data["connections"]) == 66
+
+
+class TestMinimumAtomCount:
+    def test_two_atom_sequence_raises_value_error(self):
+        with pytest.raises(ValueError):
+            sbe.generate(parse("A+A-"))
 
 
 class TestPilotWiringParallelBlock:

@@ -167,9 +167,11 @@ class CoilItem(NodeItem):
                     if label_name and self.sensor_registry.exists(label_name):
                         self.sensor_registry.unregister(label_name)
 
-        # limpa label e o dict
-        if sensor:
-            sensor["name"] = ""
+        # limpa o label (o dict NÃO é zerado aqui: apply_properties() chama
+        # _unregister_sensor() logo após rebindar self.sensors aos properties
+        # recém-carregados, e o nome ali já é o valor desejado a registrar em
+        # seguida por _register_sensor() -- zerar apagaria esse valor antes
+        # que fosse lido).
         label = self.special_labels.get("sensor_name")
         if label:
             label.set_text("")
@@ -196,9 +198,10 @@ class CoilItem(NodeItem):
             label.set_text(new_name)
 
     def apply_properties(self):
+        self.sensors = self.properties["sensor"]
         self._unregister_sensor()
         label = self.special_labels.get("sensor_name")
         if label:
-            label.set_text(self.properties["sensor"].get("name", ""))
+            label.set_text(self.properties["sensor"]["coil"].get("name", ""))
         self._register_sensor()
         self.update()

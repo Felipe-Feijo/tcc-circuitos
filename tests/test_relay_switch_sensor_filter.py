@@ -36,12 +36,22 @@ def test_dialog_lists_cylinder_end_sensors():
 
 def test_dialog_excludes_unrelated_sensor_types():
     registry = SensorRegistry()
+    registry.register("R1", "reed", node=object())
+
+    node = RelaySwitch(domain="electric", sensor_registry=registry)
+    dialog = node.build_properties_dialog()
+
+    assert "R1" not in _combo_items(dialog._combo_relay)
+
+
+def test_dialog_lists_solenoid_coil_sensors():
+    registry = SensorRegistry()
     registry.register("Y1", "solenoid_coil", node=object())
 
     node = RelaySwitch(domain="electric", sensor_registry=registry)
     dialog = node.build_properties_dialog()
 
-    assert "Y1" not in _combo_items(dialog._combo_relay)
+    assert "Y1" in _combo_items(dialog._combo_relay)
 
 
 def test_dialog_lists_both_types_together_sorted():

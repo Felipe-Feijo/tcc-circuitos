@@ -64,6 +64,15 @@ def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
 def generate(events: list[tuple[str, str]]) -> dict:
     cylinders = extract_cylinders(events)
 
+    atoms   = _atomize(events)
+    n_atoms = len(atoms)
+
+    if n_atoms < 3:
+        raise ValueError(
+            f"step_by_step_electric requer pelo menos 3 átomos no anel de relés "
+            f"(sequência gerou {n_atoms})."
+        )
+
     nodes       = []
     connections = []
 
@@ -165,9 +174,6 @@ def generate(events: list[tuple[str, str]]) -> dict:
     #       convergem.
     #   O átomo M-1 (último do ciclo) ganha um terceiro ramo em paralelo,
     #   só com o ButtonSwitch de bootstrap.
-
-    atoms   = _atomize(events)
-    n_atoms = len(atoms)
 
     y_ids = [f"gen-coil-{k}" for k in range(n_atoms)]
     for k in range(n_atoms):

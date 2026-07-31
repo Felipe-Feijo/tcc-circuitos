@@ -87,6 +87,15 @@ class RelaySwitch(SwitchItem):
     # Menu específico para relay
     # --------------------------
 
+    def _available_relay_signals(self) -> list[str]:
+        if not self.sensor_registry:
+            return []
+        return (
+            self.sensor_registry.list_names(sensor_type="relay_coil")
+            + self.sensor_registry.list_names(sensor_type="solenoid_coil")
+            + self.sensor_registry.list_names(sensor_type="cylinder_end")
+        )
+
     def build_properties_dialog(self):
         from graphics.utils.properties_dialog import PropertiesDialog
         dialog = PropertiesDialog(title="Relay Switch — Properties")
@@ -96,12 +105,7 @@ class RelaySwitch(SwitchItem):
             "Tipo de contato", ["NO", "NC"], current=current_type
         )
 
-        relay_signals = []
-        if self.sensor_registry:
-            relay_signals = (
-                self.sensor_registry.list_names(sensor_type="relay_coil")
-                + self.sensor_registry.list_names(sensor_type="cylinder_end")
-            )
+        relay_signals = self._available_relay_signals()
 
         current_sensor = self.properties.get("relay_sensor") or ""
         options = ["(nenhum)"] + relay_signals
@@ -120,25 +124,21 @@ class RelaySwitch(SwitchItem):
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
 
-        if self.sensor_registry:
-            relay_signals = (
-                self.sensor_registry.list_names(sensor_type="relay_coil")
-                + self.sensor_registry.list_names(sensor_type="cylinder_end")
-            )
-            if relay_signals:
-                menu.addSeparator()
-                for sensor_name in relay_signals:
-                    action = QAction(sensor_name, menu, checkable=True)
+        relay_signals = self._available_relay_signals()
+        if relay_signals:
+            menu.addSeparator()
+            for sensor_name in relay_signals:
+                action = QAction(sensor_name, menu, checkable=True)
 
-                    is_checked = (
-                        getattr(self, "current_relay", None) == sensor_name
-                    )
-                    action.setChecked(is_checked)
+                is_checked = (
+                    getattr(self, "current_relay", None) == sensor_name
+                )
+                action.setChecked(is_checked)
 
-                    action.triggered.connect(
-                        lambda _, n=sensor_name: self.set_relay_sensor(n)
-                    )
-                    menu.addAction(action)
+                action.triggered.connect(
+                    lambda _, n=sensor_name: self.set_relay_sensor(n)
+                )
+                menu.addAction(action)
 
     def set_relay_sensor(self, sensor_name: str | None):
         old_sensor = self.properties.get("relay_sensor")

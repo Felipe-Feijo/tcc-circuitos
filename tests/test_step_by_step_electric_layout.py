@@ -77,6 +77,29 @@ class TestNoCollisionOrDuplicatePositions:
         sensor_y = _node(data, "gen-contact-2-ramo_a_sensor0")["position"]["y"]
         assert vsource_y != sensor_y
 
+    def test_voltage_source_does_not_overlap_a_3_deep_sensor_stack(self):
+        # Achado de revisão: uma checagem de mera desigualdade de valor
+        # (vsource_y != sensor_y) passa mesmo quando as CAIXAS DELIMITADORAS
+        # dos dois sprites se sobrepõem -- e é exatamente isso que
+        # acontecia com o stack de profundidade 3 sob as constantes
+        # anteriores (vsource ocupava y em [700,800], stack de profundidade
+        # 3 ocupava y em [750,825] -- 50px de sobreposição real). Este
+        # teste verifica sobreposição de caixa delimitadora de verdade,
+        # contra um átomo com 3 eventos simultâneos (bloco paralelo com 3
+        # ramos).
+        data = layout.apply(sbe.generate(parse("(A+B+C+)A-B-C-")))
+        vsource = _node(data, "gen-vsource")
+        vs_top = vsource["position"]["y"]
+        vs_bottom = vs_top + _M.vsource_pix_h
+        for role in ("ramo_a_sensor0", "ramo_a_sensor1", "ramo_a_sensor2"):
+            sensor = _node(data, f"gen-contact-1-{role}")
+            s_top = sensor["position"]["y"]
+            s_bottom = s_top + _M.relay_switch_height
+            overlap = s_top < vs_bottom and vs_top < s_bottom
+            assert not overlap, (
+                f"{role}: vsource=[{vs_top},{vs_bottom}] sensor=[{s_top},{s_bottom}]"
+            )
+
 
 class TestCoherentAtomBlock:
     """Reset (NC) e bobina K ficam na MESMA coluna do ramo B, logo abaixo
@@ -241,6 +264,99 @@ class TestBusAnchorProximityReassignment:
         rows.sort()
         source_xs = [r[1] for r in rows]
         assert source_xs == sorted(source_xs)
+
+
+class TestBusAnchorReassignmentActuallyDoesSomething:
+    """Achado de revisão: os dois testes acima só verificam que o resultado
+    final é monotônico -- mas para TODA sequência real testável neste
+    arquivo, a ordem de criação das conexões pelo gerador já é monotônica
+    em X final (átomos e grupos de potência são sempre enumerados na mesma
+    ordem esquerda->direita em que o layout os posiciona), então a
+    reatribuição nunca muda nada observável por aqueles testes -- ela pode
+    passar de forma idêntica com ou sem a reatribuição rodar. Este teste
+    fabrica um cenário sintético (troca os `target` de duas conexões da
+    VoltageSource antes de rodar layout.apply, criando deliberadamente uma
+    ordem padrão NÃO monotônica) e confirma que layout.apply corrige isso
+    -- prova de que o código de reatribuição realmente faz algo em vez de
+    apenas preservar uma propriedade que já valia."""
+
+    def test_reassignment_fixes_a_deliberately_scrambled_default_order(self):
+        seq = "A+B+A-B-"
+        raw = sbe.generate(parse(seq))
+        vsource_conns = [c for c in raw["connections"] if c["source"]["node"] == "gen-vsource"]
+        assert len(vsource_conns) >= 2, "sequência de teste não gerou conexões suficientes"
+        first, last = vsource_conns[0], vsource_conns[-1]
+        first["target"], last["target"] = last["target"], first["target"]
+        # Snapshot do anchor ORIGINAL (pré-reatribuição, atribuído
+        # sequencialmente pelo gerador) casado com o target já trocado --
+        # isso é exatamente o mapeamento "ingênuo" que existiria se
+        # layout.apply não reatribuísse nada.
+        naive_anchor_snapshot = [(c["source"]["anchor"], c["target"]["node"]) for c in vsource_conns]
+
+        data = layout.apply(raw)
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        vsource = _node(data, "gen-vsource")
+        anchors = vsource["properties"]["anchors"]
+
+        def anchor_x(name):
+            idx = anchors.index(name)
+            return vsource["position"]["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
+
+        # Pré-condição: confirma que o cenário sintético realmente scrambled
+        # a ordem padrão -- senão este teste não provaria nada.
+        naive_rows = sorted(
+            (anchor_x(a), node_by_id[target_id]["position"]["x"])
+            for a, target_id in naive_anchor_snapshot
+        )
+        naive_target_xs = [r[1] for r in naive_rows]
+        assert naive_target_xs != sorted(naive_target_xs), (
+            "cenário sintético não ficou scrambled -- ajustar a troca de targets"
+        )
+
+        # Pós-condição: layout.apply corrigiu a ordem.
+        rows = []
+        for c in data["connections"]:
+            if c["source"]["node"] == "gen-vsource":
+                target_x = node_by_id[c["target"]["node"]]["position"]["x"]
+                rows.append((anchor_x(c["source"]["anchor"]), target_x))
+        rows.sort()
+        target_xs = [r[1] for r in rows]
+        assert target_xs == sorted(target_xs), (
+            "reatribuição não corrigiu a ordem sintética scrambled"
+        )
+
+
+class TestBusAnchorsSpreadAcrossFullRange:
+    """Achado de revisão: zip(conns_sorted, anchors_sorted) truncava para o
+    prefixo dos m anchors mais à esquerda quando havia menos conexões (n)
+    que anchors disponíveis (m) -- a barra é dimensionada para cobrir toda
+    a largura do circuito, mas ficava com a maior parte do comprimento sem
+    uso, e componentes distantes (ex. x=3400) acabavam ligados a um anchor
+    bem à esquerda (ex. x=790), um fio ~2600px maior que o necessário."""
+
+    def test_vsource_anchor_indices_spread_beyond_leftmost_prefix(self):
+        # Sequência com bloco paralelo -> barra fica bem mais larga (mais
+        # anchors, m) do que o número de conexões da VoltageSource (n),
+        # expondo o truncamento se ele ainda existisse.
+        data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))
+        vsource = _node(data, "gen-vsource")
+        anchors = vsource["properties"]["anchors"]
+        m = len(anchors)
+        used_indices = sorted(
+            anchors.index(c["source"]["anchor"])
+            for c in data["connections"]
+            if c["source"]["node"] == "gen-vsource"
+        )
+        n = len(used_indices)
+        assert n < m, "cenário de teste não tem folga entre n e m -- ajustar sequência"
+        # Com o truncamento antigo, max(used_indices) == n - 1 sempre
+        # (sempre os n anchors mais à esquerda). O comportamento corrigido
+        # deve alcançar bem além disso -- usa pelo menos a metade superior
+        # do range disponível.
+        assert max(used_indices) > (m - 1) // 2, (
+            f"anchors usados ({used_indices}) não se espalham além do "
+            f"prefixo mais à esquerda de {m} anchors disponíveis"
+        )
 
 
 class TestAllConnectionsOrthogonal:

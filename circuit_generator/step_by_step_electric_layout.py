@@ -121,19 +121,39 @@ def apply(data: dict) -> dict:
     #   depois de ver o v0 renderizado ("espaço entre os pistões, uns
     #   1000px").
     #
-    #   vsource_row_y/ramo_row_y/ramo_stack_gap: a v0 tinha uma colisão
-    #   real aqui -- vsource_row_y (700) coincidia EXATAMENTE com a
-    #   primeira linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap
-    #   = 850-150 = 700), fazendo a barra da fonte se sobrepor ao primeiro
-    #   contato de sensor de cada bloco. Margem generosa aqui (500 de vão
-    #   entre vsource e o pior caso de stack) evita a mesma classe de erro
-    #   reaparecer com blocos paralelos maiores.
+    #   vsource_row_y/ramo_row_y/ramo_stack_gap: a v0 tinha uma colisão real
+    #   aqui -- vsource_row_y (700) coincidia EXATAMENTE com a primeira
+    #   linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap =
+    #   850-150 = 700), fazendo a barra da fonte se sobrepor ao primeiro
+    #   contato de sensor de cada bloco. A v1 original "corrigiu" isso só
+    #   para depth 1 (a distância de vsource até ramo_row -- 500px -- não é
+    #   a distância até uma linha EMPILHADA, que fica cada vez mais perto
+    #   de vsource conforme a profundidade do stack aumenta); com 3 eventos
+    #   simultâneos num mesmo átomo (bloco paralelo com 3 ramos, ex.
+    #   "(A+B+C+)A-B-C-"), a linha de profundidade 3 ainda colidia com a
+    #   VoltageSource. ramo_row_y foi elevada para 1700 para que MESMO a
+    #   profundidade 5 (bem além de qualquer caso realista) mantenha uma
+    #   folga positiva em relação à base da VoltageSource:
+    #     vsource ocupa y em [700, 700+vsource_pix_h] = [700, 800].
+    #     linha de profundidade d ocupa y em
+    #       [1700 - d*150, 1700 - d*150 + relay_switch_height] =
+    #       [1700 - d*150, 1700 - d*150 + 75].
+    #     d=1 -> [1550, 1625]  (folga de 750px até a base da vsource)
+    #     d=2 -> [1400, 1475]  (folga de 600px)
+    #     d=3 -> [1250, 1325]  (folga de 450px -- caso testado em
+    #                           TestNoCollisionOrDuplicatePositions)
+    #     d=4 -> [1100, 1175]  (folga de 300px)
+    #     d=5 -> [ 950, 1025]  (folga de 150px)
+    #     d=6 -> [ 800,  875]  (toca a base da vsource -- fora do range
+    #                           defensivo que este layout garante; um
+    #                           bloco paralelo com 6+ ramos simultâneos
+    #                           não é um caso realista para este método).
     cyl_cell_w = 1000
     cyl_first_x = 0.0
     cyl_row_y = 0.0
     v42_row_y = 400.0
     vsource_row_y = 700.0
-    ramo_row_y = 1200.0
+    ramo_row_y = 1700.0
     ramo_stack_gap = 150.0
     reset_gap = 150.0
     coil_gap = 150.0
@@ -328,6 +348,37 @@ def apply(data: dict) -> dict:
         local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
         return pos["x"] + (local[0] if local else 0.0)
 
+    def _select_spread_anchors(anchors_sorted: list[str], n: int) -> list[str]:
+        """Escolhe n anchors dentre os m disponíveis (já ordenados por X
+        real), espalhados proporcionalmente por TODO o alcance do array --
+        não apenas o prefixo mais à esquerda.
+
+        Achado de revisão: um zip(conns_sorted, anchors_sorted) ingênuo usa
+        sempre os m anchors MAIS À ESQUERDA quando n < m (a barra é
+        dimensionada para cobrir toda a largura do circuito -- ex. 58
+        anchors -- mas só usa os primeiros n, ex. 13, deixando o resto do
+        comprimento da barra sem uso e produzindo fios enormes até
+        componentes distantes). Espalhar por índice proporcional
+        (idx_i = round(i * (m-1) / (n-1))) resolve isso mantendo o mesmo
+        mapeamento monotônico (i crescente -> idx crescente) -- quando
+        n == m reduz exatamente ao mapeamento 1:1 anterior (idx_i == i).
+        """
+        m = len(anchors_sorted)
+        if n <= 0:
+            return []
+        if n == 1:
+            return [anchors_sorted[(m - 1) // 2]]
+        indices: list[int] = []
+        prev = -1
+        for i in range(n):
+            idx = round(i * (m - 1) / (n - 1))
+            if idx <= prev:  # guarda contra colisão de arredondamento
+                idx = prev + 1
+            idx = min(idx, m - 1)
+            indices.append(idx)
+            prev = idx
+        return [anchors_sorted[idx] for idx in indices]
+
     vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
     ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
 
@@ -339,7 +390,8 @@ def apply(data: dict) -> dict:
         vsource_conns,
         key=lambda c: _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]),
     )
-    for conn, anchor_name in zip(vsource_conns_sorted, vsource_anchors_sorted):
+    vsource_anchor_selection = _select_spread_anchors(vsource_anchors_sorted, len(vsource_conns_sorted))
+    for conn, anchor_name in zip(vsource_conns_sorted, vsource_anchor_selection):
         conn["source"]["anchor"] = anchor_name
 
     ground_anchors_sorted = sorted(
@@ -350,7 +402,8 @@ def apply(data: dict) -> dict:
         ground_conns,
         key=lambda c: _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]),
     )
-    for conn, anchor_name in zip(ground_conns_sorted, ground_anchors_sorted):
+    ground_anchor_selection = _select_spread_anchors(ground_anchors_sorted, len(ground_conns_sorted))
+    for conn, anchor_name in zip(ground_conns_sorted, ground_anchor_selection):
         conn["target"]["anchor"] = anchor_name
 
     # ── Limpeza final: remove _role de todos os nós ──────────────────────

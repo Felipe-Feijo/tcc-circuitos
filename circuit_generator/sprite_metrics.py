@@ -110,6 +110,25 @@ class SpriteMetrics:
     or_width:   int
     or_height:  int
 
+    # RelaySwitch
+    relay_switch_width:  int
+    relay_switch_height: int
+
+    # SolenoidCoil
+    solenoid_coil_width:  int
+    solenoid_coil_height: int
+
+    # ButtonSwitch
+    button_switch_width:  int
+    button_switch_height: int
+
+    # VoltageSource / Ground (barras expansíveis -- NÃO entram em anchor_local,
+    # mesmo tratamento que PressureLine)
+    vsource_pix_w: int
+    vsource_pix_h: int
+    ground_pix_w:  int
+    ground_pix_h:  int
+
     # Anchors locais calculados a partir das dimensões reais dos sprites.
     # Cada entrada: tipo → { porta → (local_x, local_y) }
     anchor_local: dict = field(default_factory=dict)
@@ -251,6 +270,8 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
     exh = _parse_anchor_ratios("graphics/items/base/nodes/exhaust.py")
     ps  = _parse_anchor_ratios("graphics/items/base/nodes/pressure_source.py")
     or_ = _parse_anchor_ratios("graphics/items/base/nodes/logic_valve/or_valve.py")
+    relay_switch = _parse_anchor_ratios("graphics/items/base/nodes/switch/relay_switch.py")
+    button_switch = _parse_anchor_ratios("graphics/items/base/nodes/switch/button_switch.py")
 
     return {
         "DoubleActingCylinder": _resolve(cyl, m.cyl_width,  m.cyl_height),
@@ -269,6 +290,12 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "PR": (m.v52_width + pilot_w, m.v52_height * pilot_y),
         }),
         "OrValve":              _resolve(or_, m.or_width,   m.or_height),
+        "RelaySwitch":          _resolve(relay_switch, m.relay_switch_width, m.relay_switch_height),
+        "ButtonSwitch":         _resolve(button_switch, m.button_switch_width, m.button_switch_height),
+        "SolenoidCoil": {
+            "T": (m.solenoid_coil_width / 2, 0.0),
+            "B": (m.solenoid_coil_width / 2, float(m.solenoid_coil_height)),
+        },
     }
 
 
@@ -281,6 +308,11 @@ def _load() -> SpriteMetrics:
     exh_w, exh_h = _sprite_size("resources/nodes/exhaust/exhaust.png")
     ps_w,  ps_h  = _sprite_size("resources/nodes/pressure_source/pressure_source.png")
     or_w,  or_h  = _sprite_size("resources/nodes/or_valve/or_valve_x_side.png")
+    relay_switch_w, relay_switch_h = _sprite_size("resources/nodes/relay_switch/relay_switch_no_open.png")
+    solenoid_coil_w, solenoid_coil_h = _sprite_size("resources/nodes/solenoid_coil/solenoid_coil.png")
+    button_switch_w, button_switch_h = _sprite_size("resources/nodes/button_switch/button_switch_no_open.png")
+    vsource_w, vsource_h = _sprite_size("resources/nodes/voltage_source/voltage_source_terminal.png")
+    ground_w,  ground_h  = _sprite_size("resources/nodes/ground/ground_terminal.png")
     spacing      = _read_expandable_spacing()
 
     pilot_w, _    = _sprite_size("resources/actuators/pilot/pilot.png")
@@ -305,6 +337,11 @@ def _load() -> SpriteMetrics:
         exh_width=exh_w, exh_height=exh_h,
         ps_width=ps_w,   ps_height=ps_h,
         or_width=or_w,   or_height=or_h,
+        relay_switch_width=relay_switch_w, relay_switch_height=relay_switch_h,
+        solenoid_coil_width=solenoid_coil_w, solenoid_coil_height=solenoid_coil_h,
+        button_switch_width=button_switch_w, button_switch_height=button_switch_h,
+        vsource_pix_w=vsource_w, vsource_pix_h=vsource_h,
+        ground_pix_w=ground_w, ground_pix_h=ground_h,
         pilot_w=pilot_w,
         limit_switch_w=limit_switch_w,
         spring_w=spring_w,

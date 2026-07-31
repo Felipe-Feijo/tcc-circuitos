@@ -55,6 +55,7 @@ def _build_role_maps(data: dict) -> dict:
     vsource_id: str | None = None
     ground_id: str | None = None
     btn_id: str | None = None
+    btn_start_id: str | None = None
 
     for nid, role in role_map.items():
         if role.startswith("cylinder:"):
@@ -75,6 +76,8 @@ def _build_role_maps(data: dict) -> dict:
             ground_id = nid
         elif role == "button":
             btn_id = nid
+        elif role == "button_start":
+            btn_start_id = nid
 
     power_contacts_by_group: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for role_key, nid in contact_by_role.items():
@@ -93,6 +96,7 @@ def _build_role_maps(data: dict) -> dict:
         "vsource_id":              vsource_id,
         "ground_id":               ground_id,
         "btn_id":                  btn_id,
+        "btn_start_id":            btn_start_id,
         "n_atoms":                 len(coil_by_idx),
     }
 
@@ -190,6 +194,13 @@ def apply(data: dict) -> dict:
     #    (logo abaixo, mesma coluna do ramo B) ─────────────────────────────
     grid.add_row("ramo_row", ramo_cell_w, _M.relay_switch_height, ramo_row_y,
                  x_origin=cyl_first_x)
+    # Botão de início do ciclo: em série no fim do ramo A do PRIMEIRO átomo
+    # -- mesma coluna do ramo A (0), numa linha própria entre ramo_row e
+    # reset_row (onde ele fica eletricamente: depois do contato do K
+    # anterior, antes de convergir com o ramo B).
+    start_btn_row_y = ramo_row_y + reset_gap / 2
+    grid.add_row("start_btn_row", ramo_cell_w, _M.button_switch_height, start_btn_row_y,
+                 x_origin=cyl_first_x)
     grid.add_row("reset_row", ramo_cell_w, _M.relay_switch_height, reset_row_y,
                  x_origin=cyl_first_x)
     grid.add_row("coil_row", ramo_cell_w, _M.relay_coil_height, coil_row_y,
@@ -219,6 +230,12 @@ def apply(data: dict) -> dict:
                 stack_rows_added.add(stack_row_id)
             x, y = _place_aligned(stack_row_id, 3 * k, sensor_id)
             node_by_id[sensor_id]["position"] = {"x": x, "y": y}
+
+        # Botão de início do ciclo: só o primeiro átomo.
+        if k == 0:
+            btn_start_id = roles["btn_start_id"]
+            x, y = _place_aligned("start_btn_row", 0, btn_start_id)
+            node_by_id[btn_start_id]["position"] = {"x": x, "y": y}
 
         # Ramo B: self-hold do próprio K_k.
         self_id = _contact(f"{k}-ramo_b_self")
@@ -348,36 +365,34 @@ def apply(data: dict) -> dict:
         local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
         return pos["x"] + (local[0] if local else 0.0)
 
-    def _select_spread_anchors(anchors_sorted: list[str], n: int) -> list[str]:
-        """Escolhe n anchors dentre os m disponíveis (já ordenados por X
-        real), espalhados proporcionalmente por TODO o alcance do array --
-        não apenas o prefixo mais à esquerda.
+    def _select_nearest_anchors(anchors_sorted: list[str], anchor_xs: list[float],
+                                 target_xs: list[float]) -> list[str]:
+        """Pra cada target_x (já ordenado ascendente), escolhe a anchor
+        GENUINAMENTE mais próxima em X real dentre as já ordenadas por X --
+        não por ranking/proporção (achado de revisão: espalhar por índice
+        proporcional ignora a posição real quando a distribuição dos
+        targets não é uniforme -- ex. um bloco denso de conexões seguido
+        de um vão grande até a zona de potência -- produzindo anchors
+        escolhidas bem deslocadas pras laterais, com erro medido de até
+        1500px numa sequência de 12 átomos).
 
-        Achado de revisão: um zip(conns_sorted, anchors_sorted) ingênuo usa
-        sempre os m anchors MAIS À ESQUERDA quando n < m (a barra é
-        dimensionada para cobrir toda a largura do circuito -- ex. 58
-        anchors -- mas só usa os primeiros n, ex. 13, deixando o resto do
-        comprimento da barra sem uso e produzindo fios enormes até
-        componentes distantes). Espalhar por índice proporcional
-        (idx_i = round(i * (m-1) / (n-1))) resolve isso mantendo o mesmo
-        mapeamento monotônico (i crescente -> idx crescente) -- quando
-        n == m reduz exatamente ao mapeamento 1:1 anterior (idx_i == i).
+        Correto e monotônico por construção: como AMBAS as listas
+        (anchors e targets) já vêm ordenadas por X, o índice do vizinho
+        mais próximo nunca decresce conforme o target cresce -- resultado
+        padrão de vizinho-mais-próximo em 1D sobre arrays ordenados.
+        Varredura de dois ponteiros, nunca precisa voltar: avança j
+        enquanto o PRÓXIMO anchor for tão bom ou melhor que o atual.
         """
         m = len(anchors_sorted)
-        if n <= 0:
+        if m == 0:
             return []
-        if n == 1:
-            return [anchors_sorted[(m - 1) // 2]]
-        indices: list[int] = []
-        prev = -1
-        for i in range(n):
-            idx = round(i * (m - 1) / (n - 1))
-            if idx <= prev:  # guarda contra colisão de arredondamento
-                idx = prev + 1
-            idx = min(idx, m - 1)
-            indices.append(idx)
-            prev = idx
-        return [anchors_sorted[idx] for idx in indices]
+        result: list[str] = []
+        j = 0
+        for tx in target_xs:
+            while j + 1 < m and abs(anchor_xs[j + 1] - tx) <= abs(anchor_xs[j] - tx):
+                j += 1
+            result.append(anchors_sorted[j])
+        return result
 
     vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
     ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
@@ -386,11 +401,16 @@ def apply(data: dict) -> dict:
         node_by_id[vsource_id]["properties"]["anchors"],
         key=lambda a: _bus_anchor_x(vsource_id, a),
     )
+    vsource_anchor_xs = [_bus_anchor_x(vsource_id, a) for a in vsource_anchors_sorted]
     vsource_conns_sorted = sorted(
         vsource_conns,
         key=lambda c: _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]),
     )
-    vsource_anchor_selection = _select_spread_anchors(vsource_anchors_sorted, len(vsource_conns_sorted))
+    vsource_target_xs = [
+        _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]) for c in vsource_conns_sorted
+    ]
+    vsource_anchor_selection = _select_nearest_anchors(
+        vsource_anchors_sorted, vsource_anchor_xs, vsource_target_xs)
     for conn, anchor_name in zip(vsource_conns_sorted, vsource_anchor_selection):
         conn["source"]["anchor"] = anchor_name
 
@@ -398,11 +418,16 @@ def apply(data: dict) -> dict:
         node_by_id[ground_id]["properties"]["anchors"],
         key=lambda a: _bus_anchor_x(ground_id, a),
     )
+    ground_anchor_xs = [_bus_anchor_x(ground_id, a) for a in ground_anchors_sorted]
     ground_conns_sorted = sorted(
         ground_conns,
         key=lambda c: _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]),
     )
-    ground_anchor_selection = _select_spread_anchors(ground_anchors_sorted, len(ground_conns_sorted))
+    ground_target_xs = [
+        _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]) for c in ground_conns_sorted
+    ]
+    ground_anchor_selection = _select_nearest_anchors(
+        ground_anchors_sorted, ground_anchor_xs, ground_target_xs)
     for conn, anchor_name in zip(ground_conns_sorted, ground_anchor_selection):
         conn["target"]["anchor"] = anchor_name
 

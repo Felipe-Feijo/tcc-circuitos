@@ -70,12 +70,23 @@ class TestNoCollisionOrDuplicatePositions:
             assert len(positions) == len(set(positions)), seq
 
     def test_voltage_source_does_not_collide_with_ramo_a_stack(self):
-        data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))
+        # Bug real do v0: vsource_row_y coincidia exatamente com a primeira
+        # linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap).
+        data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))  # tem bloco paralelo -> stack
         vsource_y = _node(data, "gen-vsource")["position"]["y"]
         sensor_y = _node(data, "gen-contact-2-ramo_a_sensor0")["position"]["y"]
         assert vsource_y != sensor_y
 
     def test_voltage_source_does_not_overlap_a_3_deep_sensor_stack(self):
+        # Achado de revisão: uma checagem de mera desigualdade de valor
+        # (vsource_y != sensor_y) passa mesmo quando as CAIXAS DELIMITADORAS
+        # dos dois sprites se sobrepõem -- e é exatamente isso que
+        # acontecia com o stack de profundidade 3 sob as constantes
+        # anteriores (vsource ocupava y em [700,800], stack de profundidade
+        # 3 ocupava y em [750,825] -- 50px de sobreposição real). Este
+        # teste verifica sobreposição de caixa delimitadora de verdade,
+        # contra um átomo com 3 eventos simultâneos (bloco paralelo com 3
+        # ramos).
         data = layout.apply(sbe.generate(parse("(A+B+C+)A-B-C-")))
         vsource = _node(data, "gen-vsource")
         vs_top = vsource["position"]["y"]
@@ -91,6 +102,9 @@ class TestNoCollisionOrDuplicatePositions:
 
 
 class TestCoherentAtomBlock:
+    """Reset (NC) e bobina K ficam na MESMA coluna do ramo B, logo abaixo
+    -- bloco coeso por átomo, não mais uma zona distante."""
+
     def test_reset_and_coil_same_x_as_ramo_b(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         for k in range(4):
@@ -227,6 +241,10 @@ class TestVoltageSourceGroundBarDimensioned:
 
 
 class TestBusAnchorProximityReassignment:
+    """Só existe UMA VoltageSource/Ground -- a reatribuição é um mapeamento
+    monotônico: conexões ordenadas por X real do outro lado casam 1:1 com
+    anchors ordenados por X real -- garante zero cruzamento por construção."""
+
     def test_voltage_source_anchor_assignment_is_monotonic_in_target_x(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         node_by_id = {n["id"]: n for n in data["nodes"]}
@@ -267,6 +285,19 @@ class TestBusAnchorProximityReassignment:
 
 
 class TestBusAnchorReassignmentActuallyDoesSomething:
+    """Achado de revisão: os dois testes acima só verificam que o resultado
+    final é monotônico -- mas para TODA sequência real testável neste
+    arquivo, a ordem de criação das conexões pelo gerador já é monotônica
+    em X final (átomos e grupos de potência são sempre enumerados na mesma
+    ordem esquerda->direita em que o layout os posiciona), então a
+    reatribuição nunca muda nada observável por aqueles testes -- ela pode
+    passar de forma idêntica com ou sem a reatribuição rodar. Este teste
+    fabrica um cenário sintético (troca os `target` de duas conexões da
+    VoltageSource antes de rodar layout.apply, criando deliberadamente uma
+    ordem padrão NÃO monotônica) e confirma que layout.apply corrige isso
+    -- prova de que o código de reatribuição realmente faz algo em vez de
+    apenas preservar uma propriedade que já valia."""
+
     def test_reassignment_fixes_a_deliberately_scrambled_default_order(self):
         seq = "A+B+A-B-"
         raw = sbe.generate(parse(seq))
@@ -307,7 +338,17 @@ class TestBusAnchorReassignmentActuallyDoesSomething:
 
 
 class TestBusAnchorsSpreadAcrossFullRange:
+    """Achado de revisão: zip(conns_sorted, anchors_sorted) truncava para o
+    prefixo dos m anchors mais à esquerda quando havia menos conexões (n)
+    que anchors disponíveis (m) -- a barra é dimensionada para cobrir toda
+    a largura do circuito, mas ficava com a maior parte do comprimento sem
+    uso, e componentes distantes (ex. x=3400) acabavam ligados a um anchor
+    bem à esquerda (ex. x=790), um fio ~2600px maior que o necessário."""
+
     def test_vsource_anchor_indices_spread_beyond_leftmost_prefix(self):
+        # Sequência com bloco paralelo -> barra fica bem mais larga (mais
+        # anchors, m) do que o número de conexões da VoltageSource (n),
+        # expondo o truncamento se ele ainda existisse.
         data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))
         vsource = _node(data, "gen-vsource")
         anchors = vsource["properties"]["anchors"]
@@ -350,6 +391,65 @@ class TestBusAnchorsGenuinelyNearest:
                 tx = node_by_id[c["target"]["node"]]["position"]["x"]
                 max_delta = max(max_delta, abs(ax - tx))
         assert max_delta < 200, f"max delta {max_delta} -- esperado bem abaixo de 200px"
+
+    def test_max_anchor_target_delta_stays_small_ground(self):
+        # Achado de revisão: o teste acima só cobre a barra VoltageSource,
+        # mesmo com os dois call sites (VoltageSource e Ground) tendo
+        # mudado para _select_nearest_anchors. Espelha o mesmo teste pro
+        # lado Ground -- fecha a lacuna de cobertura (Ground não tinha bug
+        # conhecido, isso só confirma que o comportamento também é correto
+        # lá).
+        data = layout.apply(sbe.generate(parse("A+B+C+A-B-C-A+B+C+A-B-C-")))
+        ground = _node(data, "gen-ground")
+        anchors = ground["properties"]["anchors"]
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+
+        def anchor_x(name):
+            idx = anchors.index(name)
+            return ground["position"]["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
+
+        max_delta = 0.0
+        for c in data["connections"]:
+            if c["target"]["node"] == "gen-ground":
+                ax = anchor_x(c["target"]["anchor"])
+                sx = node_by_id[c["source"]["node"]]["position"]["x"]
+                max_delta = max(max_delta, abs(ax - sx))
+        assert max_delta < 200, f"max delta {max_delta} -- esperado bem abaixo de 200px"
+
+
+class TestBusAnchorsDistinctPerConnection:
+    """Achado de revisão final: a busca de vizinho-mais-próximo pura (sem
+    guarda contra colisão de índice) podia atribuir a MESMA anchor a duas
+    conexões diferentes da mesma barra quando dois targets caem no mesmo X
+    real -- caso real dos contatos de potência empilhados em múltiplos
+    ciclos (mesma coluna X, Y diferente -- ver TestMultiCyclePowerStacking).
+    O resultado visível era dois fios roteados exatamente sobrepostos.
+    Este teste garante que toda conexão de uma barra (VoltageSource ou
+    Ground) recebe uma anchor própria, para as sequências de referência
+    que expõem o bug (incluindo as com contatos de potência empilhados)."""
+
+    @pytest.mark.parametrize("seq", [
+        "A+B+A-B-",
+        "C+(A+B+)C-A-B-",
+        "A+B+A-A+B-A-",
+        "A+B+C+A-B-C-A+B+C+A-B-C-",
+    ])
+    def test_no_duplicate_anchor_within_a_bus(self, seq):
+        data = layout.apply(sbe.generate(parse(seq)))
+        vsource_anchors = [
+            c["source"]["anchor"] for c in data["connections"]
+            if c["source"]["node"] == "gen-vsource"
+        ]
+        ground_anchors = [
+            c["target"]["anchor"] for c in data["connections"]
+            if c["target"]["node"] == "gen-ground"
+        ]
+        assert len(vsource_anchors) == len(set(vsource_anchors)), (
+            f"anchors duplicadas na VoltageSource para {seq!r}: {vsource_anchors}"
+        )
+        assert len(ground_anchors) == len(set(ground_anchors)), (
+            f"anchors duplicadas na Ground para {seq!r}: {ground_anchors}"
+        )
 
 
 class TestAllConnectionsOrthogonal:

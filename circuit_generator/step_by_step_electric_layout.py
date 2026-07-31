@@ -382,16 +382,32 @@ def apply(data: dict) -> dict:
         padrão de vizinho-mais-próximo em 1D sobre arrays ordenados.
         Varredura de dois ponteiros, nunca precisa voltar: avança j
         enquanto o PRÓXIMO anchor for tão bom ou melhor que o atual.
+
+        Achado de revisão final: contatos de potência empilhados (mesma
+        posição X, Y diferente -- ver TestMultiCyclePowerStacking) geram
+        dois (ou mais) targets com o MESMO x real. O vizinho-mais-próximo
+        puro escolhe o mesmo anchor pra ambos, sobrepondo o fio roteado.
+        Cada target precisa de um anchor PRÓPRIO (invariante que o antigo
+        _select_spread_anchors garantia via "idx = prev + 1" em colisão).
+        Aqui: depois de avançar j pelo critério de proximidade, força
+        j >= i (nunca atrás da posição do índice atual -- garante coluna
+        livre) e j <= m - (n - i) (garante anchors suficientes pros
+        targets restantes); em seguida avança j pra além do anchor recém
+        usado, pra que o próximo target nunca reveja o mesmo índice.
         """
         m = len(anchors_sorted)
+        n = len(target_xs)
         if m == 0:
             return []
         result: list[str] = []
         j = 0
-        for tx in target_xs:
+        for i, tx in enumerate(target_xs):
             while j + 1 < m and abs(anchor_xs[j + 1] - tx) <= abs(anchor_xs[j] - tx):
                 j += 1
+            j = max(j, i)
+            j = min(j, m - (n - i))
             result.append(anchors_sorted[j])
+            j += 1
         return result
 
     vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]

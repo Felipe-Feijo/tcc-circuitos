@@ -161,6 +161,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
              properties={"anchors": []})
     add_node("gen-btn", "ButtonSwitch", "button", domain="electric",
              properties={"contact_type": "NO"})
+    add_node("gen-btn-start", "ButtonSwitch", "button_start", domain="electric",
+             properties={"contact_type": "NO"})
 
     _bus_counter: dict[str, int] = {"gen-vsource": 0, "gen-ground": 0}
 
@@ -241,8 +243,6 @@ def generate(events: list[tuple[str, str]]) -> dict:
         # ciclo começa (em vez de K0 disparar sozinho assim que sensor+K
         # ficarem satisfeitos automaticamente).
         if k == 0:
-            add_node("gen-btn-start", "ButtonSwitch", "button_start", domain="electric",
-                     properties={"contact_type": "NO"})
             connect(ramo_a_prev_contact, "B", "gen-btn-start", "T")
             connect("gen-btn-start", "B", reset_contact, "T")
         else:

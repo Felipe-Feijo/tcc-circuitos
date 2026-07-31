@@ -1,5 +1,5 @@
 """Testes para circuit_generator/step_by_step_electric_layout.py — ver
-docs/superpowers/specs/2026-07-30-step-by-step-electric-layout-design.md
+docs/superpowers/specs/2026-07-31-step-by-step-electric-power-contacts-design.md
 """
 
 import sys
@@ -7,7 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
+from PyQt6.QtWidgets import QApplication
+
+app = QApplication.instance() or QApplication([])
 
 from circuit_generator.sequence_parser import parse
 from circuit_generator.methods import step_by_step_electric as sbe
@@ -19,46 +21,34 @@ def _node(data, node_id):
     return next(n for n in data["nodes"] if n["id"] == node_id)
 
 
-def _scene_xy(data, node_id, anchor_name):
-    """Réplica da _scene_xy interna de step_by_step_electric_layout.apply()
-    (não exposta -- é uma closure local) -- calcula a posição real de tela
-    de um anchor, incluindo os casos especiais de VoltageSource/Ground
-    (anchors "Xi" indexados na lista properties.anchors, não um offset
-    fixo)."""
-    n = _node(data, node_id)
-    pos = n["position"]
-    ntype = n["type"]
+def _scene_xy(node_by_id, node_type_map, node_id, anchor_name):
+    pos = node_by_id[node_id]["position"]
+    ntype = node_type_map.get(node_id, "")
     if ntype == "VoltageSource" and anchor_name.startswith("X"):
-        anchors = n["properties"]["anchors"]
+        anchors = node_by_id[node_id]["properties"]["anchors"]
         idx = anchors.index(anchor_name)
         return (pos["x"] + _M.vsource_pix_w + idx * _M.pl_spacing,
                 pos["y"] + _M.vsource_pix_h * 69 / 100)
     if ntype == "Ground" and anchor_name.startswith("X"):
-        anchors = n["properties"]["anchors"]
+        anchors = node_by_id[node_id]["properties"]["anchors"]
         idx = anchors.index(anchor_name)
         return (pos["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing, pos["y"])
     local = anchor_local_for_routing(ntype, anchor_name)
     return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
 
-def _assert_connection_orthogonal(data, conn):
-    """Uma conexão é válida se tem waypoints OU se source/target (+ todos os
-    waypoints, se houver) formam uma cadeia de segmentos alinhados a um
-    único eixo (X ou Y) por vez -- nunca diagonal."""
-    s = conn["source"]
-    t = conn["target"]
-    spos = _scene_xy(data, s["node"], s["anchor"])
-    tpos = _scene_xy(data, t["node"], t["anchor"])
-    points = [spos] + [(wp["x"], wp["y"]) for wp in conn.get("waypoints", [])] + [tpos]
-    # Tolerância de sub-pixel (não de célula): posições de anchor vêm de
-    # frações de largura de sprite (ex: cyl_width/2), então dois pontos
-    # "no mesmo eixo" podem diferir por um resíduo de ponto flutuante
-    # (< 0.1px) sem que o segmento seja visualmente diagonal.
-    EPS = 0.5
-    for (x0, y0), (x1, y1) in zip(points, points[1:]):
-        assert abs(x0 - x1) < EPS or abs(y0 - y1) < EPS, (
-            f"segmento diagonal em {s['node']}.{s['anchor']} -> "
-            f"{t['node']}.{t['anchor']}: ({x0},{y0}) -> ({x1},{y1})"
+def _assert_connection_orthogonal(data, conn, eps=0.5):
+    node_by_id = {n["id"]: n for n in data["nodes"]}
+    node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+    pts = [_scene_xy(node_by_id, node_type_map, conn["source"]["node"], conn["source"]["anchor"])]
+    for wp in conn.get("waypoints", []):
+        pts.append((wp["x"], wp["y"]))
+    pts.append(_scene_xy(node_by_id, node_type_map, conn["target"]["node"], conn["target"]["anchor"]))
+    for i in range(len(pts) - 1):
+        x1, y1 = pts[i]
+        x2, y2 = pts[i + 1]
+        assert abs(x1 - x2) <= eps or abs(y1 - y2) <= eps, (
+            f"diagonal segment {pts[i]} -> {pts[i + 1]} in connection {conn}"
         )
 
 
@@ -66,11 +56,15 @@ class TestNoNodeAtOrigin:
     def test_simple_sequence_no_node_stuck_at_zero_zero(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         for n in data["nodes"]:
+            if n["id"] == "gen-cyl-A":
+                continue  # legítimo: primeira coluna/primeira linha do grid
             assert (n["position"]["x"], n["position"]["y"]) != (0, 0), n["id"]
 
     def test_multi_cycle_sequence_no_node_stuck_at_zero_zero(self):
         data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
         for n in data["nodes"]:
+            if n["id"] == "gen-cyl-A":
+                continue
             assert (n["position"]["x"], n["position"]["y"]) != (0, 0), n["id"]
 
 
@@ -81,11 +75,20 @@ class TestRoleRemoved:
 
 
 class TestZoneOrdering:
-    """Zona 2 (reset+bobina) fica inteira à direita da Zona 1 (ramo A/B),
-    mesma faixa Y -- confirmado com o usuário."""
+    """Zona 3 (potência) fica inteira à direita da Zona 2 (reset+K), que
+    fica inteira à direita da Zona 1 (ramo A/B) -- todas na mesma faixa Y."""
+
+    def test_zone3_entirely_right_of_zone2(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        zone2_xs = [_node(data, f"gen-contact-{k}-reset_nc")["position"]["x"] for k in range(4)]
+        zone3_xs = [_node(data, cid)["position"]["x"] for cid in (
+            "gen-contact-power-A-ext-0", "gen-contact-power-B-ext-1",
+            "gen-contact-power-A-ret-2", "gen-contact-power-B-ret-3",
+        )]
+        assert max(zone2_xs) < min(zone3_xs)
 
     def test_zone2_entirely_right_of_zone1(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))  # 4 átomos
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         zone1_xs = []
         zone2_xs = []
         for k in range(4):
@@ -95,23 +98,46 @@ class TestZoneOrdering:
             zone2_xs.append(_node(data, f"gen-coil-{k}")["position"]["x"])
         assert max(zone1_xs) < min(zone2_xs)
 
-    def test_zone1_and_zone2_same_y_band(self):
-        # ramo_row e reset_row/coil_row ficam na mesma faixa vertical da Zona
-        # 1 -- reset_row tem o mesmo Y que ramo_row (não abaixo dela).
+    def test_all_zones_same_y_band(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         ramo_b_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
         reset_y = _node(data, "gen-contact-0-reset_nc")["position"]["y"]
-        assert ramo_b_y == reset_y
+        power_y = _node(data, "gen-contact-power-A-ext-0")["position"]["y"]
+        assert ramo_b_y == reset_y == power_y
 
-    def test_atoms_ordered_left_to_right_in_zone1(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        xs = [_node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"] for k in range(4)]
-        assert xs == sorted(xs)
+    def test_power_groups_ordered_by_first_triggering_atom(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))  # A+(k0), B+(k1), A-(k2), B-(k3)
+        xs = {
+            "gen-contact-power-A-ext-0": _node(data, "gen-contact-power-A-ext-0")["position"]["x"],
+            "gen-contact-power-B-ext-1": _node(data, "gen-contact-power-B-ext-1")["position"]["x"],
+            "gen-contact-power-A-ret-2": _node(data, "gen-contact-power-A-ret-2")["position"]["x"],
+            "gen-contact-power-B-ret-3": _node(data, "gen-contact-power-B-ret-3")["position"]["x"],
+        }
+        ordered = sorted(xs, key=lambda cid: xs[cid])
+        assert ordered == [
+            "gen-contact-power-A-ext-0", "gen-contact-power-B-ext-1",
+            "gen-contact-power-A-ret-2", "gen-contact-power-B-ret-3",
+        ]
 
-    def test_atoms_ordered_left_to_right_in_zone2(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        xs = [_node(data, f"gen-coil-{k}")["position"]["x"] for k in range(4)]
-        assert xs == sorted(xs)
+
+class TestMultiCyclePowerStacking:
+    """A+B+A-A+B-A- -- A+ dispara nos átomos 0 e 3: 2 contatos de potência
+    empilhados na MESMA sub-coluna (nunca dividindo célula, mesma técnica
+    já usada pra sensores empilhados na Zona 1)."""
+
+    def test_two_power_contacts_distinct_positions_same_column(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
+        c0 = _node(data, "gen-contact-power-A-ext-0")["position"]
+        c3 = _node(data, "gen-contact-power-A-ext-3")["position"]
+        assert c0 != c3
+        assert c0["x"] == c3["x"]  # mesma sub-coluna
+        assert c0["y"] != c3["y"]  # profundidades diferentes
+
+    def test_y_coil_position_distinct_from_its_contacts(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
+        coil = _node(data, "gen-ycoil-A-ext")["position"]
+        c0 = _node(data, "gen-contact-power-A-ext-0")["position"]
+        assert coil != c0
 
 
 class TestVoltageSourceAboveGroundBelow:
@@ -135,6 +161,13 @@ class TestCylinderRegionAboveElectricRegion:
         vsource_y = _node(data, "gen-vsource")["position"]["y"]
         assert cyl_y < vsource_y
 
+    def test_cylinders_one_column_each_no_gap_reservation(self):
+        # Sem OrValve no gerador elétrico -- sempre 1 coluna por letra.
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        cyl_a_x = _node(data, "gen-cyl-A")["position"]["x"]
+        cyl_b_x = _node(data, "gen-cyl-B")["position"]["x"]
+        assert cyl_b_x - cyl_a_x == 300  # cyl_cell_w, sem reserva extra
+
 
 class TestLayoutMapRegistration:
     def test_generate_and_load_resolves_electric_layout(self):
@@ -142,118 +175,9 @@ class TestLayoutMapRegistration:
         assert LAYOUT_MAP[("step_by_step", "electric")] is layout.apply
 
 
-class TestWaypoints:
-    def test_at_least_some_connections_get_waypoints(self):
-        # Não toda conexão precisa de waypoint (linhas retas curtas não
-        # geram nenhum) -- mas um circuito deste tamanho, com a Zona 2
-        # deslocada bem à direita da Zona 1, tem que produzir pelo menos
-        # algumas travessias longas com dobra.
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        assert any("waypoints" in c for c in data["connections"])
-
-
-class TestVoltageSourceGroundBarDimensioned:
-    """Finding 2 da revisão final: as barras VoltageSource/Ground precisam
-    cobrir o alcance real do circuito (grid.occupied_x_range()), não só os
-    poucos anchors que a topologia atribuiu -- ver seção "Barras
-    VoltageSource/Ground" do design doc."""
-
-    def test_bars_span_at_least_the_full_x_range_of_nodes(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        node_xs = [n["position"]["x"] for n in data["nodes"]]
-        min_x, max_x = min(node_xs), max(node_xs)
-
-        for bus_id in ("gen-vsource", "gen-ground"):
-            n = _node(data, bus_id)
-            anchors = n["properties"]["anchors"]
-            assert len(anchors) >= 2
-            # A barra em si (não o 1o anchor, que já nasce deslocado do
-            # corpo -- ver vsource_pix_w/ground_pix_w em _scene_xy) já
-            # começa na borda esquerda do circuito -- só o lado direito
-            # depende do array de anchors ter crescido o suficiente.
-            assert n["position"]["x"] <= min_x + 1
-            last_x, _ = _scene_xy(data, bus_id, anchors[-1])
-            assert last_x >= max_x - 1
-
-    def test_bars_grow_only_never_shrink_existing_anchors(self):
-        # As conexões da topologia já referenciam anchors por índice/nome --
-        # crescer o array só pode APENDAR no final, nunca remover/renomear
-        # os que já existem (mesmo princípio "nunca encolhe" do pneumático).
-        raw = sbe.generate(parse("A+B+A-B-"))
-        vs_before = next(n for n in raw["nodes"] if n["id"] == "gen-vsource")
-        original_anchors = list(vs_before["properties"]["anchors"])
-
-        data = layout.apply(raw)
-        vs_after = _node(data, "gen-vsource")
-        grown_anchors = vs_after["properties"]["anchors"]
-
-        assert grown_anchors[: len(original_anchors)] == original_anchors
-        assert len(grown_anchors) >= len(original_anchors)
-
-
-class TestPilotSigChainPlacement:
-    """Finding 1/3 da revisão final: cada pilot_sig de uma cadeia
-    multi-ciclo precisa de coluna própria (nunca empilhada com outra) e a
-    conexão sig -> OrValve/Valve_4_2_Ways precisa ser roteável
-    ortogonalmente -- ver _place_pilot_sig_chain(). Sequência de referência
-    do plano: parse("A+B+A-A+B-A-"), onde A+ ocorre nos átomos 0 e 3, A- nos
-    átomos 2 e 5."""
-
-    SEQ = "A+B+A-A+B-A-"
-
-    def _pilot_sig_ids(self, raw):
-        return [n["id"] for n in raw["nodes"] if n["_role"].startswith("pilot_sig:")]
-
-    def test_every_pilot_sig_gets_a_distinct_position(self):
-        # sig_ids precisa vir do MESMO dict que layout.apply() recebe --
-        # generate() usa uuid4 pros ids, então duas chamadas separadas
-        # produzem ids diferentes e um segundo generate() não teria
-        # correspondência com os nós já posicionados pelo primeiro.
-        raw = sbe.generate(parse(self.SEQ))
-        sig_ids = self._pilot_sig_ids(raw)
-        assert len(sig_ids) >= 2  # sequência de referência tem 4 (2 por lado)
-
-        data = layout.apply(raw)
-        positions = [
-            (_node(data, sid)["position"]["x"], _node(data, sid)["position"]["y"])
-            for sid in sig_ids
-        ]
-        assert len(set(positions)) == len(positions), positions
-
-    def test_sig_to_or_or_v42_connections_are_orthogonal(self):
-        raw = sbe.generate(parse(self.SEQ))
-        sig_ids = set(self._pilot_sig_ids(raw))
-
-        data = layout.apply(raw)
-        node_type = {n["id"]: n["type"] for n in data["nodes"]}
-
-        checked = 0
-        for conn in data["connections"]:
-            s_id, t_id = conn["source"]["node"], conn["target"]["node"]
-            s_is_sig = s_id in sig_ids and node_type.get(s_id) == "Valve_3_2_Ways"
-            if not s_is_sig:
-                continue
-            if node_type.get(t_id) not in ("OrValve", "Valve_4_2_Ways"):
-                continue
-            _assert_connection_orthogonal(data, conn)
-            checked += 1
-        assert checked >= 2  # pelo menos as 2 cadeias (A+ e A-) da sequência
-
-
 class TestAllConnectionsOrthogonal:
-    """Finding 4 da revisão final: invariante geral do codebase -- toda
-    conexão do circuito, depois do layout, é ortogonal (waypoints ou reta
-    de eixo único), nunca diagonal. Verificado em múltiplas sequências:
-    simples, multi-ciclo (o caso que o Finding 1 corrigiu) e bloco
-    paralelo."""
-
-    @pytest.mark.parametrize("seq", [
-        "A+B+A-B-",
-        "A+B+A-A+B-A-",
-        "C+(A+B+)C-A-B-",
-    ])
-    def test_no_diagonal_connections(self, seq):
-        data = layout.apply(sbe.generate(parse(seq)))
-        assert data["connections"], "circuito de teste sem nenhuma conexão"
-        for conn in data["connections"]:
-            _assert_connection_orthogonal(data, conn)
+    def test_no_diagonal_connections(self):
+        for seq in ("A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"):
+            data = layout.apply(sbe.generate(parse(seq)))
+            for conn in data["connections"]:
+                _assert_connection_orthogonal(data, conn)

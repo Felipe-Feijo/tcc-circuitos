@@ -137,6 +137,33 @@ class TestRungWiring:
         assert len(out_of_coil) == 1
         assert out_of_coil[0]["target"]["node"] == "gen-ground"
 
+    def test_ramo_a_single_event_atom_uses_one_sensor_contact(self):
+        # átomo anterior ao 1 é o átomo 0 (A+), 1 evento só -> 1 contato de sensor.
+        data = sbe.generate(parse("A+B+A-B-"))
+        sensor_contact = _node(data, "gen-contact-1-ramo_a_sensor0")
+        assert sensor_contact["properties"]["contact_type"] == "NO"
+        assert sensor_contact["properties"]["relay_sensor"] == "a1"  # confirm_sensor("A","+")
+        out = _conns_from(data, "gen-contact-1-ramo_a_sensor0", "B")
+        assert out[0]["target"]["node"] == "gen-contact-1-ramo_a_prev"
+
+    def test_ramo_a_parallel_atom_chains_sensor_contacts_in_series(self):
+        data = sbe.generate(parse("C+(A+B+)C-A-B-"))  # átomo 2 (C-) segue o átomo 1 ((A+B+))
+        s0 = _node(data, "gen-contact-2-ramo_a_sensor0")
+        s1 = _node(data, "gen-contact-2-ramo_a_sensor1")
+        assert {s0["properties"]["relay_sensor"], s1["properties"]["relay_sensor"]} == {"a1", "b1"}
+        chain = _conns_from(data, "gen-contact-2-ramo_a_sensor0", "B")
+        assert chain[0]["target"]["node"] == "gen-contact-2-ramo_a_sensor1"
+        assert chain[0]["target"]["anchor"] == "T"
+        tail = _conns_from(data, "gen-contact-2-ramo_a_sensor1", "B")
+        assert tail[0]["target"]["node"] == "gen-contact-2-ramo_a_prev"
+
+    def test_voltage_source_taps_feed_both_branch_starts(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        targets = {c["target"]["node"] for c in _conns_from(data, "gen-vsource")}
+        # átomo 1: sensor contact inicial da cadeia + self-hold
+        assert "gen-contact-1-ramo_a_sensor0" in targets
+        assert "gen-contact-1-ramo_b_self" in targets
+
 
 class TestBootstrap:
     def test_only_last_atom_gets_button_branch(self):
@@ -155,6 +182,12 @@ class TestBootstrap:
         incoming = _conns_to(data, "gen-contact-3-reset_nc", "T")
         sources = {c["source"]["node"] for c in incoming}
         assert sources == {"gen-contact-3-ramo_a_prev", "gen-contact-3-ramo_b_self", "gen-btn"}
+
+    def test_button_fed_from_voltage_source(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        into_btn = _conns_to(data, "gen-btn", "T")
+        assert len(into_btn) == 1
+        assert into_btn[0]["source"]["node"] == "gen-vsource"
 
 
 class TestPowerZoneSingleOccurrence:

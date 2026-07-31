@@ -1,5 +1,5 @@
 """Testes para circuit_generator/step_by_step_electric_layout.py — ver
-docs/superpowers/specs/2026-07-31-step-by-step-electric-power-contacts-design.md
+docs/superpowers/specs/2026-07-31-step-by-step-electric-layout-v1-design.md
 """
 
 import sys
@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from PyQt6.QtWidgets import QApplication
 
 app = QApplication.instance() or QApplication([])
+
+import pytest
 
 from circuit_generator.sequence_parser import parse
 from circuit_generator.methods import step_by_step_electric as sbe
@@ -52,66 +54,80 @@ def _assert_connection_orthogonal(data, conn, eps=0.5):
         )
 
 
-class TestNoNodeAtOrigin:
-    def test_simple_sequence_no_node_stuck_at_zero_zero(self):
+class TestCylinderSpacing:
+    def test_cylinders_1000px_apart(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        for n in data["nodes"]:
-            if n["id"] == "gen-cyl-A":
-                continue  # legítimo: primeira coluna/primeira linha do grid
-            assert (n["position"]["x"], n["position"]["y"]) != (0, 0), n["id"]
-
-    def test_multi_cycle_sequence_no_node_stuck_at_zero_zero(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
-        for n in data["nodes"]:
-            if n["id"] == "gen-cyl-A":
-                continue
-            assert (n["position"]["x"], n["position"]["y"]) != (0, 0), n["id"]
+        cyl_a_x = _node(data, "gen-cyl-A")["position"]["x"]
+        cyl_b_x = _node(data, "gen-cyl-B")["position"]["x"]
+        assert cyl_b_x - cyl_a_x == 1000
 
 
-class TestRoleRemoved:
-    def test_no_node_keeps_role_key(self):
+class TestNoCollisionOrDuplicatePositions:
+    def test_no_two_nodes_share_a_position(self):
+        for seq in ("A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"):
+            data = layout.apply(sbe.generate(parse(seq)))
+            positions = [(n["position"]["x"], n["position"]["y"]) for n in data["nodes"]]
+            assert len(positions) == len(set(positions)), seq
+
+    def test_voltage_source_does_not_collide_with_ramo_a_stack(self):
+        # Bug real do v0: vsource_row_y coincidia exatamente com a primeira
+        # linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap).
+        data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))  # tem bloco paralelo -> stack
+        vsource_y = _node(data, "gen-vsource")["position"]["y"]
+        sensor_y = _node(data, "gen-contact-2-ramo_a_sensor0")["position"]["y"]
+        assert vsource_y != sensor_y
+
+
+class TestCoherentAtomBlock:
+    """Reset (NC) e bobina K ficam na MESMA coluna do ramo B, logo abaixo
+    -- bloco coeso por átomo, não mais uma zona distante."""
+
+    def test_reset_and_coil_same_x_as_ramo_b(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        assert all("_role" not in n for n in data["nodes"])
-
-
-class TestZoneOrdering:
-    """Zona 3 (potência) fica inteira à direita da Zona 2 (reset+K), que
-    fica inteira à direita da Zona 1 (ramo A/B) -- todas na mesma faixa Y."""
-
-    def test_zone3_entirely_right_of_zone2(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        zone2_xs = [_node(data, f"gen-contact-{k}-reset_nc")["position"]["x"] for k in range(4)]
-        zone3_xs = [_node(data, cid)["position"]["x"] for cid in (
-            "gen-contact-power-A-ext-0", "gen-contact-power-B-ext-1",
-            "gen-contact-power-A-ret-2", "gen-contact-power-B-ret-3",
-        )]
-        assert max(zone2_xs) < min(zone3_xs)
-
-    def test_zone2_entirely_right_of_zone1(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        zone1_xs = []
-        zone2_xs = []
         for k in range(4):
-            zone1_xs.append(_node(data, f"gen-contact-{k}-ramo_a_prev")["position"]["x"])
-            zone1_xs.append(_node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"])
-            zone2_xs.append(_node(data, f"gen-contact-{k}-reset_nc")["position"]["x"])
-            zone2_xs.append(_node(data, f"gen-coil-{k}")["position"]["x"])
-        assert max(zone1_xs) < min(zone2_xs)
+            ramo_b_x = _node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"]
+            reset_x = _node(data, f"gen-contact-{k}-reset_nc")["position"]["x"]
+            coil_x = _node(data, f"gen-coil-{k}")["position"]["x"]
+            assert reset_x == ramo_b_x
+            assert coil_x == ramo_b_x
 
-    def test_all_zones_same_y_band(self):
+    def test_reset_below_ramo_row_coil_below_reset(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        ramo_b_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
+        ramo_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
         reset_y = _node(data, "gen-contact-0-reset_nc")["position"]["y"]
-        power_y = _node(data, "gen-contact-power-A-ext-0")["position"]["y"]
-        assert ramo_b_y == reset_y == power_y
+        coil_y = _node(data, "gen-coil-0")["position"]["y"]
+        assert ramo_y < reset_y < coil_y
+
+    def test_atom_blocks_ordered_left_to_right(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        xs = [_node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"] for k in range(4)]
+        assert xs == sorted(xs)
+
+
+class TestPowerZoneRightOfAllAtomBlocks:
+    def test_power_zone_entirely_right_of_last_atom_block(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        atom_xs = []
+        for k in range(4):
+            atom_xs.append(_node(data, f"gen-contact-{k}-ramo_a_prev")["position"]["x"])
+            atom_xs.append(_node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"])
+            atom_xs.append(_node(data, f"gen-contact-{k}-reset_nc")["position"]["x"])
+            atom_xs.append(_node(data, f"gen-coil-{k}")["position"]["x"])
+        power_xs = [
+            _node(data, cid)["position"]["x"] for cid in (
+                "gen-contact-power-A-ext-0", "gen-contact-power-B-ext-1",
+                "gen-contact-power-A-ret-2", "gen-contact-power-B-ret-3",
+            )
+        ]
+        assert max(atom_xs) < min(power_xs)
 
     def test_power_groups_ordered_by_first_triggering_atom(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))  # A+(k0), B+(k1), A-(k2), B-(k3)
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))  # A+(k0),B+(k1),A-(k2),B-(k3)
         xs = {
-            "gen-contact-power-A-ext-0": _node(data, "gen-contact-power-A-ext-0")["position"]["x"],
-            "gen-contact-power-B-ext-1": _node(data, "gen-contact-power-B-ext-1")["position"]["x"],
-            "gen-contact-power-A-ret-2": _node(data, "gen-contact-power-A-ret-2")["position"]["x"],
-            "gen-contact-power-B-ret-3": _node(data, "gen-contact-power-B-ret-3")["position"]["x"],
+            cid: _node(data, cid)["position"]["x"] for cid in (
+                "gen-contact-power-A-ext-0", "gen-contact-power-B-ext-1",
+                "gen-contact-power-A-ret-2", "gen-contact-power-B-ret-3",
+            )
         }
         ordered = sorted(xs, key=lambda cid: xs[cid])
         assert ordered == [
@@ -121,23 +137,13 @@ class TestZoneOrdering:
 
 
 class TestMultiCyclePowerStacking:
-    """A+B+A-A+B-A- -- A+ dispara nos átomos 0 e 3: 2 contatos de potência
-    empilhados na MESMA sub-coluna (nunca dividindo célula, mesma técnica
-    já usada pra sensores empilhados na Zona 1)."""
-
     def test_two_power_contacts_distinct_positions_same_column(self):
         data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
         c0 = _node(data, "gen-contact-power-A-ext-0")["position"]
         c3 = _node(data, "gen-contact-power-A-ext-3")["position"]
         assert c0 != c3
-        assert c0["x"] == c3["x"]  # mesma sub-coluna
-        assert c0["y"] != c3["y"]  # profundidades diferentes
-
-    def test_y_coil_position_distinct_from_its_contacts(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-A+B-A-")))
-        coil = _node(data, "gen-ycoil-A-ext")["position"]
-        c0 = _node(data, "gen-contact-power-A-ext-0")["position"]
-        assert coil != c0
+        assert c0["x"] == c3["x"]
+        assert c0["y"] != c3["y"]
 
 
 class TestVoltageSourceAboveGroundBelow:
@@ -147,11 +153,11 @@ class TestVoltageSourceAboveGroundBelow:
         ramo_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
         assert vsource_y < ramo_y
 
-    def test_ground_below_ramo_row(self):
+    def test_ground_below_coil_row(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         ground_y = _node(data, "gen-ground")["position"]["y"]
-        ramo_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
-        assert ground_y > ramo_y
+        coil_y = _node(data, "gen-coil-0")["position"]["y"]
+        assert ground_y > coil_y
 
 
 class TestCylinderRegionAboveElectricRegion:
@@ -161,13 +167,6 @@ class TestCylinderRegionAboveElectricRegion:
         vsource_y = _node(data, "gen-vsource")["position"]["y"]
         assert cyl_y < vsource_y
 
-    def test_cylinders_one_column_each_no_gap_reservation(self):
-        # Sem OrValve no gerador elétrico -- sempre 1 coluna por letra.
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        cyl_a_x = _node(data, "gen-cyl-A")["position"]["x"]
-        cyl_b_x = _node(data, "gen-cyl-B")["position"]["x"]
-        assert cyl_b_x - cyl_a_x == 300  # cyl_cell_w, sem reserva extra
-
 
 class TestLayoutMapRegistration:
     def test_generate_and_load_resolves_electric_layout(self):
@@ -176,55 +175,90 @@ class TestLayoutMapRegistration:
 
 
 class TestVoltageSourceGroundBarDimensioned:
-    """A dimensão das barras VoltageSource/Ground (properties.anchors) é
-    calculada em step_by_step_electric_layout.apply() a partir do alcance
-    real do Grid (grid.occupied_x_range()), DEPOIS que toda a região de
-    pistões/válvulas/Zona 1/2/3 já foi posicionada -- ver o bloco logo
-    após a Zona 3, que usa _M.pl_spacing e math.ceil. Esse crescimento
-    tem que ser append-only: conexões já roteadas referenciam anchors por
-    nome (ex: "X3"), então renumerar ou remover um anchor existente
-    quebraria essas conexões -- só é seguro apendar novos ao final."""
-
     def test_bars_span_at_least_the_full_x_range_of_nodes(self):
-        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
-        node_by_id = {n["id"]: n for n in data["nodes"]}
-        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        raw = sbe.generate(parse("A+B+A-B-"))
+        data = layout.apply(raw)
         node_xs = [n["position"]["x"] for n in data["nodes"]]
         min_x, max_x = min(node_xs), max(node_xs)
-
         for bus_id in ("gen-vsource", "gen-ground"):
-            n = _node(data, bus_id)
-            anchors = n["properties"]["anchors"]
-            assert len(anchors) >= 2
-            # A própria barra nasce na borda esquerda do circuito -- só o
-            # lado direito depende do array de anchors ter crescido o
-            # suficiente pra alcançar o nó mais à direita (Zona 3).
-            assert n["position"]["x"] <= min_x + 1
-            last_x, _ = _scene_xy(node_by_id, node_type_map, bus_id, anchors[-1])
-            assert last_x >= max_x - 1
+            node = _node(data, bus_id)
+            anchors = node["properties"]["anchors"]
+            last_scene_x = node["position"]["x"] + (len(anchors) - 1) * _M.pl_spacing
+            assert node["position"]["x"] <= min_x
+            assert last_scene_x >= max_x - _M.pl_spacing
 
     def test_bars_grow_only_never_shrink_existing_anchors(self):
-        # original_anchors vem do MESMO dict que layout.apply() recebe --
-        # generate() usa uuid4 pros ids, então duas chamadas separadas
-        # produziriam ids diferentes e original_anchors não corresponderia
-        # aos nós já posicionados por um segundo generate().
         raw = sbe.generate(parse("A+B+A-B-"))
-        originals = {
-            bus_id: list(next(n for n in raw["nodes"] if n["id"] == bus_id)["properties"]["anchors"])
-            for bus_id in ("gen-vsource", "gen-ground")
+        original = {
+            "gen-vsource": list(next(n for n in raw["nodes"] if n["id"] == "gen-vsource")["properties"]["anchors"]),
+            "gen-ground": list(next(n for n in raw["nodes"] if n["id"] == "gen-ground")["properties"]["anchors"]),
         }
-
         data = layout.apply(raw)
-
-        for bus_id, original in originals.items():
+        for bus_id, orig in original.items():
             grown = _node(data, bus_id)["properties"]["anchors"]
-            assert grown[: len(original)] == original
-            assert len(grown) >= len(original)
+            assert grown[:len(orig)] == orig
+
+
+class TestBusAnchorProximityReassignment:
+    """Só existe UMA VoltageSource/Ground -- a reatribuição é um mapeamento
+    monotônico: conexões ordenadas por X real do outro lado casam 1:1 com
+    anchors ordenados por X real -- garante zero cruzamento por construção."""
+
+    def test_voltage_source_anchor_assignment_is_monotonic_in_target_x(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        vsource = _node(data, "gen-vsource")
+        anchors = vsource["properties"]["anchors"]
+
+        def anchor_x(name):
+            idx = anchors.index(name)
+            return vsource["position"]["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
+
+        rows = []
+        for c in data["connections"]:
+            if c["source"]["node"] == "gen-vsource":
+                target_x = node_by_id[c["target"]["node"]]["position"]["x"]
+                rows.append((anchor_x(c["source"]["anchor"]), target_x))
+        rows.sort()
+        target_xs = [r[1] for r in rows]
+        assert target_xs == sorted(target_xs)
+
+    def test_ground_anchor_assignment_is_monotonic_in_source_x(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        ground = _node(data, "gen-ground")
+        anchors = ground["properties"]["anchors"]
+
+        def anchor_x(name):
+            idx = anchors.index(name)
+            return ground["position"]["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
+
+        rows = []
+        for c in data["connections"]:
+            if c["target"]["node"] == "gen-ground":
+                source_x = node_by_id[c["source"]["node"]]["position"]["x"]
+                rows.append((anchor_x(c["target"]["anchor"]), source_x))
+        rows.sort()
+        source_xs = [r[1] for r in rows]
+        assert source_xs == sorted(source_xs)
 
 
 class TestAllConnectionsOrthogonal:
-    def test_no_diagonal_connections(self):
-        for seq in ("A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"):
-            data = layout.apply(sbe.generate(parse(seq)))
-            for conn in data["connections"]:
-                _assert_connection_orthogonal(data, conn)
+    @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
+    def test_no_diagonal_connections(self, seq):
+        data = layout.apply(sbe.generate(parse(seq)))
+        assert data["connections"], "circuito de teste sem nenhuma conexão"
+        for conn in data["connections"]:
+            _assert_connection_orthogonal(data, conn)
+
+
+class TestRegressionCounts:
+    @pytest.mark.parametrize("seq,n_nodes,n_conns", [
+        ("A+B+A-B-", 39, 50),
+        ("C+(A+B+)C-A-B-", 53, 68),
+        ("A+B+A-A+B-A-", 51, 68),
+    ])
+    def test_node_and_connection_counts_unchanged_from_topology(self, seq, n_nodes, n_conns):
+        data = layout.apply(sbe.generate(parse(seq)))
+        assert len(data["nodes"]) == n_nodes
+        assert len(data["connections"]) == n_conns

@@ -5,33 +5,37 @@ Recebe o dicionário de dados do circuito (com _role em cada nó, gerado por
 circuit_generator.methods.step_by_step_electric) e preenche as posições x/y
 de cada componente usando circuit_generator.grid_layout.Grid.
 
-v0 -- ver docs/superpowers/specs/2026-07-30-step-by-step-electric-layout-design.md
-e docs/superpowers/specs/2026-07-31-step-by-step-electric-power-contacts-design.md.
-Reaproveita o ALGORITMO (não o código) da região de pistões/válvulas de
-step_by_step_layout.py (pneumático) -- mesmo _role scheme
-(cylinder:{letra}, main_valve:{letra}).
+v1 -- ver docs/superpowers/specs/2026-07-30-step-by-step-electric-layout-design.md,
+docs/superpowers/specs/2026-07-31-step-by-step-electric-power-contacts-design.md
+e docs/superpowers/specs/2026-07-31-step-by-step-electric-layout-v1-design.md.
 
-Diferente de uma versão anterior deste arquivo: o gerador elétrico não usa
-mais OrValve/pilot_sig pra multi-ciclo (substituído por contatos de
-potência em paralelo, ver o gerador) -- a região de pistões/válvulas volta
-a reservar sempre 1 coluna por cilindro, sem lógica de cadeia.
+Diferente da v0: cada átomo agora é um BLOCO COESO (ramo A | ramo B no topo,
+convergindo em reset+bobina K logo abaixo, tudo na mesma faixa de colunas)
+-- não mais duas zonas distantes (ramo A/B numa ponta, reset+K na outra). A
+zona de potência (Y), essa sim, continua agrupada à parte, à direita de
+todos os blocos de átomo -- é ela que corresponde ao "reset+bobina fica
+tudo junto no final" pedido no brainstorm original (mal-entendido
+inicialmente como sendo sobre o bloco K, corrigido depois de ver o v0
+renderizado).
 
 Faixas verticais (topo -> base):
   1. Pistões/válvulas (cilindro + 4/2), uma coluna por letra.
   2. VoltageSource (barra horizontal).
-  3. Zona 1 (esquerda): bloco por átomo -- ramo A | ramo B | botão (só no
-     último átomo).
-     Zona 2 (à DIREITA de toda a Zona 1, mesma faixa Y): reset (NC)
-     empilhado sobre a bobina K_k, um bloco denso por átomo.
-     Zona 3 (à DIREITA de toda a Zona 2, mesma faixa Y): 1 sub-coluna por
-     (cilindro, direção) presente na sequência -- contato(s) de potência
-     empilhados (1 por átomo que dispara aquele movimento, mais linhas se
-     multi-ciclo) sobre a bobina Y correspondente.
+  3. Bloco coeso por átomo: ramo A (col 3k) | ramo B (col 3k+1) | botão (col
+     3k+2, só no último átomo) -- reset (NC) e bobina K empilhados logo
+     abaixo, na MESMA coluna do ramo B (3k+1).
+     Zona de potência (à DIREITA de todos os blocos de átomo, mesma faixa
+     Y): 1 sub-coluna por (cilindro, direção) -- contato(s) de potência
+     empilhados sobre a bobina Y correspondente.
   4. Ground (barra horizontal).
 
-Fora de escopo (v0, confirmado com o usuário): reatribuição de anchor da
-VoltageSource/Ground por proximidade real de tela -- os anchors renderizam
-na ordem sequencial que a topologia já atribuiu (next_bus_anchor()).
+Reatribuição de anchor por proximidade (NOVO na v1, v0 deixava isso fora de
+escopo): como só existe UMA VoltageSource e UMA Ground (não uma por átomo,
+como a PressureLine do pneumático), a atribuição é mais simples que a
+"Fase 3" de step_by_step_layout.py -- ordena as conexões de cada barra pela
+posição X real do componente do outro lado e casa 1:1 com os anchors
+ordenados por X, garantindo zero cruzamento por construção (mapeamento
+monotônico), sem precisar de resolução de conflito por empurrão.
 """
 
 import math
@@ -72,9 +76,6 @@ def _build_role_maps(data: dict) -> dict:
         elif role == "button":
             btn_id = nid
 
-    # Contatos de potência (role "contact:power-{letra}-{dir_tag}-{k}") --
-    # agrupados por (letra, dir_tag), cada grupo é a lista de (k, node_id)
-    # que alimenta em paralelo a mesma bobina Y daquele grupo.
     power_contacts_by_group: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for role_key, nid in contact_by_role.items():
         if role_key.startswith("power-"):
@@ -114,27 +115,39 @@ def apply(data: dict) -> dict:
         reserved.add(virtual_col)
         return grid.place(row_id, virtual_col, node_id)
 
-    # ── Config (v0: hardcoded, sem arquivo json externo -- só uma etapa,
-    #    diferente do pneumático que já tinha um config compartilhado por
-    #    várias etapas históricas) ──────────────────────────────────────
-    cyl_cell_w = 300
+    # ── Config (v1: hardcoded, sem arquivo json externo) ─────────────────
+    #
+    #   cyl_cell_w subiu pra 1000 (era 300) -- pedido explícito do usuário
+    #   depois de ver o v0 renderizado ("espaço entre os pistões, uns
+    #   1000px").
+    #
+    #   vsource_row_y/ramo_row_y/ramo_stack_gap: a v0 tinha uma colisão
+    #   real aqui -- vsource_row_y (700) coincidia EXATAMENTE com a
+    #   primeira linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap
+    #   = 850-150 = 700), fazendo a barra da fonte se sobrepor ao primeiro
+    #   contato de sensor de cada bloco. Margem generosa aqui (500 de vão
+    #   entre vsource e o pior caso de stack) evita a mesma classe de erro
+    #   reaparecer com blocos paralelos maiores.
+    cyl_cell_w = 1000
     cyl_first_x = 0.0
     cyl_row_y = 0.0
     v42_row_y = 400.0
     vsource_row_y = 700.0
-    ramo_row_y = 850.0
+    ramo_row_y = 1200.0
     ramo_stack_gap = 150.0
+    reset_gap = 150.0
+    coil_gap = 150.0
+    ground_gap = 300.0
     zone_gap = 400.0
-    reset_row_y = ramo_row_y
-    coil_row_y = ramo_row_y + 150.0
-    ground_row_y = coil_row_y + 300.0
     ramo_cell_w = 200.0
-    zone2_cell_w = 200.0
     zone3_cell_w = 200.0
 
+    reset_row_y = ramo_row_y + reset_gap
+    coil_row_y = reset_row_y + coil_gap
+    ground_row_y = coil_row_y + ground_gap
+
     # ── Região de pistões/válvulas -- sem OrValve/pilot_sig no gerador
-    #    elétrico (multi-ciclo agora é resolvido por contatos de potência
-    #    em paralelo, seção de Zona 3), então sempre 1 coluna por letra ──
+    #    elétrico, então sempre 1 coluna por letra ────────────────────────
     letters = sorted(roles["cyl_by_letter"])
     cyl_col: dict[str, int] = {letter: i for i, letter in enumerate(letters)}
 
@@ -153,8 +166,13 @@ def apply(data: dict) -> dict:
     vsource_id = roles["vsource_id"]
     node_by_id[vsource_id]["position"] = {"x": cyl_first_x, "y": vsource_row_y}
 
-    # ── Zona 1: bloco por átomo (ramo A | ramo B | botão) ────────────────
+    # ── Bloco coeso por átomo: ramo A | ramo B (topo) + reset/bobina K
+    #    (logo abaixo, mesma coluna do ramo B) ─────────────────────────────
     grid.add_row("ramo_row", ramo_cell_w, _M.relay_switch_height, ramo_row_y,
+                 x_origin=cyl_first_x)
+    grid.add_row("reset_row", ramo_cell_w, _M.relay_switch_height, reset_row_y,
+                 x_origin=cyl_first_x)
+    grid.add_row("coil_row", ramo_cell_w, _M.relay_coil_height, coil_row_y,
                  x_origin=cyl_first_x)
 
     contact_by_role = roles["contact_by_role"]
@@ -165,9 +183,6 @@ def apply(data: dict) -> dict:
     stack_rows_added: set[str] = set()
     for k in range(n_atoms):
         # Ramo A: cadeia de contatos de sensor (i=0,1,...) + contato do K anterior.
-        # A ordem da cadeia é a ORDEM DE CRIAÇÃO em step_by_step_electric.py
-        # (0-indexada, i crescente) -- empilha pra CIMA (y decrescente),
-        # ficando o contato do K anterior sempre na linha-base (ramo_row).
         sensor_roles = sorted(
             k2 for k2 in contact_by_role if k2.startswith(f"{k}-ramo_a_sensor")
         )
@@ -196,29 +211,20 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned("ramo_row", 3 * k + 2, btn_id)
             node_by_id[btn_id]["position"] = {"x": x, "y": y}
 
-    # ── Zona 2: reset + bobina do anel, agrupados à DIREITA de toda a
-    #    Zona 1 ────────────────────────────────────────────────────────
-    zone1_cols = 3 * (n_atoms - 1) + 3  # última coluna usada + 1 (0-indexada)
-    zone2_x0 = cyl_first_x + zone1_cols * ramo_cell_w + zone_gap
-
-    grid.add_row("reset_row", zone2_cell_w, _M.relay_switch_height, reset_row_y,
-                 x_origin=zone2_x0)
-    grid.add_row("coil_row", zone2_cell_w, _M.relay_coil_height, coil_row_y,
-                 x_origin=zone2_x0)
-
-    for k in range(n_atoms):
+        # Reset (NC) + bobina K: mesma coluna do ramo B (3k+1), logo abaixo
+        # -- bloco coeso por átomo, não mais uma zona distante.
         reset_id = _contact(f"{k}-reset_nc")
-        x, y = grid.place("reset_row", k, reset_id)
+        x, y = _place_aligned("reset_row", 3 * k + 1, reset_id)
         node_by_id[reset_id]["position"] = {"x": x, "y": y}
 
         coil_id = roles["coil_by_idx"][k]
-        x, y = grid.place("coil_row", k, coil_id)
+        x, y = _place_aligned("coil_row", 3 * k + 1, coil_id)
         node_by_id[coil_id]["position"] = {"x": x, "y": y}
 
-    # ── Zona 3: contatos de potência + bobina Y, agrupados à DIREITA de
-    #    toda a Zona 2 -- 1 sub-coluna por (cilindro, direção) presente na
-    #    sequência, ordenada pelo primeiro átomo que dispara aquele
-    #    movimento (determinístico, não depende de ordem de dict) ───────
+    # ── Zona de potência: contatos + bobina Y, agrupados à DIREITA de
+    #    todos os blocos de átomo -- 1 sub-coluna por (cilindro, direção)
+    #    presente na sequência, ordenada pelo primeiro átomo que dispara
+    #    aquele movimento ─────────────────────────────────────────────────
     power_contacts_by_group = roles["power_contacts_by_group"]
     power_coil_by_group = roles["power_coil_by_group"]
 
@@ -227,7 +233,8 @@ def apply(data: dict) -> dict:
         key=lambda gk: min(k for k, _ in power_contacts_by_group[gk]),
     )
 
-    zone3_x0 = zone2_x0 + n_atoms * zone2_cell_w + zone_gap
+    zone_cols = 3 * (n_atoms - 1) + 3  # última coluna usada + 1 (0-indexada)
+    zone3_x0 = cyl_first_x + zone_cols * ramo_cell_w + zone_gap
 
     power_stack_rows_added: set[str] = set()
     for g, group_key in enumerate(group_keys):
@@ -236,7 +243,7 @@ def apply(data: dict) -> dict:
             row_id = f"power_row_{depth}"
             if row_id not in power_stack_rows_added:
                 grid.add_row(row_id, zone3_cell_w, _M.relay_switch_height,
-                             reset_row_y - (depth - 1) * ramo_stack_gap, x_origin=zone3_x0)
+                             reset_row_y - depth * ramo_stack_gap, x_origin=zone3_x0)
                 power_stack_rows_added.add(row_id)
             if depth == 1:
                 x, y = grid.place(row_id, g, contact_id)
@@ -257,20 +264,7 @@ def apply(data: dict) -> dict:
     node_by_id[ground_id]["position"] = {"x": cyl_first_x, "y": ground_row_y}
 
     # ── Dimensiona as barras VoltageSource/Ground pelo alcance real do
-    #    grid ──────────────────────────────────────────────────────────
-    #
-    #   step_by_step_electric.py não tem nenhuma posição de tela real pra
-    #   decidir quantos anchors a barra precisa -- só quem sabe é esta
-    #   etapa, via Grid (que já posicionou toda a região de pistões/
-    #   válvulas/lógica/potência acima). Cresce (nunca encolhe) o array de
-    #   anchors pra cobrir o alcance físico real do circuito -- mesma
-    #   ideia do dimensionamento de PressureLine em step_by_step_layout.py
-    #   ("Dimensiona as PressureLines pelo alcance real do grid"), mas mais
-    #   simples: há só UMA VoltageSource e UMA Ground no total, e ambas já
-    #   nascem na borda esquerda do circuito (cyl_first_x) -- só é preciso
-    #   crescer pra DIREITA, apendando novos anchors ao final da lista
-    #   (nunca renumerando os existentes, já referenciados por índice em
-    #   conexões antigas).
+    #    grid (cresce, nunca encolhe -- ver step_by_step_layout.py) ──────
     x_range = grid.occupied_x_range()
     if x_range is not None:
         min_x, max_x = x_range
@@ -295,10 +289,6 @@ def apply(data: dict) -> dict:
     gap = 32
     for child_id, (parent_id, parent_anchor) in child_parent.items():
         parent_pos = node_by_id[parent_id]["position"]
-        # anchor_local_for_routing (não METRICS.anchor_local puro) -- é essa
-        # função que o A* usa mais abaixo (_scene_xy) pra calcular o ponto
-        # real de roteamento do anchor "P" de Valve_3_2_Ways/Valve_4_2_Ways
-        # (soma pilot_side_offset_x, ver sprite_metrics.anchor_local_for_routing).
         parent_local = anchor_local_for_routing(node_type_map[parent_id], parent_anchor)
         if parent_local is None:
             node_by_id[child_id]["position"] = {"x": parent_pos["x"], "y": parent_pos["y"] + 100}
@@ -310,6 +300,58 @@ def apply(data: dict) -> dict:
         cx = anc_x - (child_local[0] if child_local else 0.0)
         cy = anc_y + gap
         node_by_id[child_id]["position"] = {"x": cx, "y": cy}
+
+    # ── Reatribuição de anchor por proximidade (VoltageSource/Ground) ────
+    #
+    #   O gerador atribui X1, X2, ... sequencialmente, sem noção de
+    #   posição de tela -- isso produzia fios cruzados sem necessidade
+    #   (Zona de potência, bem à direita, presa a um anchor cedo demais no
+    #   array). Só existe UMA VoltageSource e UMA Ground (não uma por
+    #   átomo, como a PressureLine do pneumático), então a atribuição é um
+    #   mapeamento monotônico simples: ordena as conexões de cada barra
+    #   pela posição X real do componente do outro lado, ordena os anchors
+    #   por posição X, casa 1:1 -- garante ZERO cruzamento entre as
+    #   próprias conexões da barra por construção (duas conexões nunca
+    #   trocam de ordem relativa), sem precisar da lógica de conflito por
+    #   empurrão que a PressureLine precisa (lá existem N linhas
+    #   competindo pelo mesmo espaço X; aqui é uma barra só).
+    def _bus_anchor_x(bus_id: str, anchor_name: str) -> float:
+        pos = node_by_id[bus_id]["position"]
+        anchors = node_by_id[bus_id]["properties"]["anchors"]
+        idx = anchors.index(anchor_name)
+        if node_type_map[bus_id] == "VoltageSource":
+            return pos["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
+        return pos["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
+
+    def _other_endpoint_x(node_id: str, anchor_name: str) -> float:
+        pos = node_by_id[node_id]["position"]
+        local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
+        return pos["x"] + (local[0] if local else 0.0)
+
+    vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
+    ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
+
+    vsource_anchors_sorted = sorted(
+        node_by_id[vsource_id]["properties"]["anchors"],
+        key=lambda a: _bus_anchor_x(vsource_id, a),
+    )
+    vsource_conns_sorted = sorted(
+        vsource_conns,
+        key=lambda c: _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]),
+    )
+    for conn, anchor_name in zip(vsource_conns_sorted, vsource_anchors_sorted):
+        conn["source"]["anchor"] = anchor_name
+
+    ground_anchors_sorted = sorted(
+        node_by_id[ground_id]["properties"]["anchors"],
+        key=lambda a: _bus_anchor_x(ground_id, a),
+    )
+    ground_conns_sorted = sorted(
+        ground_conns,
+        key=lambda c: _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]),
+    )
+    for conn, anchor_name in zip(ground_conns_sorted, ground_anchors_sorted):
+        conn["target"]["anchor"] = anchor_name
 
     # ── Limpeza final: remove _role de todos os nós ──────────────────────
     for node in data["nodes"]:

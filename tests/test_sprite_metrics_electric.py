@@ -43,3 +43,14 @@ def test_solenoid_coil_anchor_local_is_hardcoded_center():
     anchors = METRICS.anchor_local["SolenoidCoil"]
     assert anchors["T"] == (25.0, 0.0)   # width/2, top
     assert anchors["B"] == (25.0, 50.0)  # width/2, bottom
+
+
+def test_relay_coil_dimensions():
+    assert METRICS.relay_coil_width == 50
+    assert METRICS.relay_coil_height == 50
+
+
+def test_relay_coil_anchor_local_is_hardcoded_center():
+    anchors = METRICS.anchor_local["RelayCoil"]
+    assert anchors["T"] == (25.0, 0.0)   # width/2, top
+    assert anchors["B"] == (25.0, 50.0)  # width/2, bottom

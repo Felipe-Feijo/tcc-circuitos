@@ -42,3 +42,12 @@ def test_ground_dynamic_anchor_exits_up():
     # cima (das bobinas), então a saída aponta pra CIMA.
     assert get_exit_dir("Ground", "X1") == "UP"
     assert get_exit_dir("Ground", "X9") == "UP"
+
+
+def test_relay_coil_sprite_size_registered():
+    assert SPRITE_SIZES["RelayCoil"] == (METRICS.relay_coil_width, METRICS.relay_coil_height)
+
+
+def test_relay_coil_exit_directions():
+    assert get_exit_dir("RelayCoil", "T") == "UP"
+    assert get_exit_dir("RelayCoil", "B") == "DOWN"

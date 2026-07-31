@@ -118,6 +118,10 @@ class SpriteMetrics:
     solenoid_coil_width:  int
     solenoid_coil_height: int
 
+    # RelayCoil
+    relay_coil_width:  int
+    relay_coil_height: int
+
     # ButtonSwitch
     button_switch_width:  int
     button_switch_height: int
@@ -296,6 +300,10 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "T": (m.solenoid_coil_width / 2, 0.0),
             "B": (m.solenoid_coil_width / 2, float(m.solenoid_coil_height)),
         },
+        "RelayCoil": {
+            "T": (m.relay_coil_width / 2, 0.0),
+            "B": (m.relay_coil_width / 2, float(m.relay_coil_height)),
+        },
     }
 
 
@@ -310,6 +318,7 @@ def _load() -> SpriteMetrics:
     or_w,  or_h  = _sprite_size("resources/nodes/or_valve/or_valve_x_side.png")
     relay_switch_w, relay_switch_h = _sprite_size("resources/nodes/relay_switch/relay_switch_no_open.png")
     solenoid_coil_w, solenoid_coil_h = _sprite_size("resources/nodes/solenoid_coil/solenoid_coil.png")
+    relay_coil_w, relay_coil_h = _sprite_size("resources/nodes/relay_coil/relay_coil.png")
     button_switch_w, button_switch_h = _sprite_size("resources/nodes/button_switch/button_switch_no_open.png")
     vsource_w, vsource_h = _sprite_size("resources/nodes/voltage_source/voltage_source_terminal.png")
     ground_w,  ground_h  = _sprite_size("resources/nodes/ground/ground_terminal.png")
@@ -339,6 +348,7 @@ def _load() -> SpriteMetrics:
         or_width=or_w,   or_height=or_h,
         relay_switch_width=relay_switch_w, relay_switch_height=relay_switch_h,
         solenoid_coil_width=solenoid_coil_w, solenoid_coil_height=solenoid_coil_h,
+        relay_coil_width=relay_coil_w, relay_coil_height=relay_coil_h,
         button_switch_width=button_switch_w, button_switch_height=button_switch_h,
         vsource_pix_w=vsource_w, vsource_pix_h=vsource_h,
         ground_pix_w=ground_w, ground_pix_h=ground_h,

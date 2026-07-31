@@ -9,20 +9,30 @@ sozinho, ou um bloco "(...)" inteiro de movimentos simultâneos):
   - 1 ButtonSwitch de bootstrap do ciclo
   - Por cilindro: 1 DoubleActingCylinder + 1 Valve_4_2_Ways (P/R com
     PressureSource/Exhaust dedicados, igual ao pneumático)
-  - Por átomo: 1 SolenoidCoil Y_k + 3 RelaySwitch de degrau (ramo A: sensor(es)
-    de fim de curso do átomo anterior em série + contato do Y do átomo
-    anterior; ramo B: self-hold do próprio Y_k; reset: NC do Y do próximo
-    átomo) -- ver docs/superpowers/specs/2026-07-30-step-by-step-electric-design.md
-  - Pilotagem da 4/2: atuador "solenoid" direto (ocorrência única) ou sig +
-    OrValve (multi-ciclo) -- ver Task 3 / seção "pilotagem" abaixo.
+  - Por átomo: 1 RelayCoil K_k + 3 RelaySwitch de degrau (ramo A: sensor(es)
+    de fim de curso do átomo anterior em série + contato do K do átomo
+    anterior; ramo B: self-hold do próprio K_k; reset: NC do K do próximo
+    átomo) -- anel de lógica, ver docs/superpowers/specs/
+    2026-07-31-step-by-step-electric-power-contacts-design.md
+  - Por (cilindro, direção) presente na sequência: 1 SolenoidCoil Y
+    (sensor "Y{letra}{1|0}") + 1 contato de potência NO dedicado por átomo
+    que dispara aquele movimento (relay_sensor = K do átomo), todos em
+    paralelo alimentando a mesma bobina Y -- multi-ciclo vira só mais um
+    contato em paralelo, sem sig nem OrValve.
+  - Pilotagem da 4/2: atuador "solenoid" sempre, lendo direto o Y do
+    (cilindro, direção) correspondente.
 
-Anel elétrico (auto-mantido, self-holding):
-  VoltageSource --> [sensor(s) fim de curso átomo k-1] --> [Y_{k-1} NO] --\
-  VoltageSource --> [Y_k NO self-hold] -------------------------------------+--> [Y_{k+1} NC] --> Y_k --> Ground
+Anel de lógica (auto-mantido, self-holding):
+  VoltageSource --> [sensor(s) fim de curso átomo k-1] --> [K_{k-1} NO] --\
+  VoltageSource --> [K_k NO self-hold] -------------------------------------+--> [K_{k+1} NC] --> K_k --> Ground
   (só o átomo M-1) VoltageSource --> [botão NO] -----------------------/
 
+Zona de potência (independente por (cilindro, direção)):
+  VoltageSource --> [K_k1 NO] --\
+  VoltageSource --> [K_k2 NO] ----+--> Y_{letra}{dir} --> Ground   (k1, k2, ... = átomos que disparam esse movimento)
+
 Diferente do pneumático: não há PressureLine nem memória 3/2 -- o "passo
-ativo" é lembrado pelo próprio estado energizado/desenergizado dos Y_k.
+ativo" é lembrado pelo próprio estado energizado/desenergizado dos K_k.
 """
 
 import uuid
@@ -104,6 +114,9 @@ def generate(events: list[tuple[str, str]]) -> dict:
     def confirm_sensor(letter, direction):
         return f"{letter.lower()}{'1' if direction == '+' else '0'}"
 
+    def power_sensor(letter, direction):
+        return f"Y{letter}{'1' if direction == '+' else '0'}"
+
     # Estado inicial: se o primeiro movimento for "-", o cilindro começa estendido.
     first_event     = {letter: direction for letter, direction, *_ in reversed(events)}
     starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
@@ -121,7 +134,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
                  })
 
     # ── 2. Válvulas 4/2 com PS e Exhaust dedicados (atuadores ficam vazios
-    #      aqui -- preenchidos na seção de pilotagem, Task 3) ─────────────
+    #      aqui -- preenchidos na seção 6, "zona de potência") ────────────
 
     v42_node_by_letter: dict[str, dict] = {}
     for letter in cylinders:
@@ -158,27 +171,31 @@ def generate(events: list[tuple[str, str]]) -> dict:
         bus_node["properties"]["anchors"].append(name)
         return name
 
-    # ── 4. Anel de bobinas Y_k (uma por átomo) e degraus self-holding ────
+    # ── 4. Anel de bobinas K_k (uma por átomo) e degraus self-holding ────
     #
-    #   Cada átomo ganha exatamente 1 SolenoidCoil (Y_k, sensor "Y{k+1}",
+    #   Cada átomo ganha exatamente 1 RelayCoil (K_k, sensor "K{k+1}",
     #   1-indexado) e um degrau de 3 grupos de contatos RelaySwitch:
     #     - ramo A (partida): cadeia serial de contatos NO lendo os
     #       sensores de fim de curso do átomo ANTERIOR (1 contato por
     #       evento do átomo, em série -- mesma técnica de confirmação
-    #       serial já usada no pneumático), seguida de 1 contato NO do Y do
+    #       serial já usada no pneumático), seguida de 1 contato NO do K do
     #       átomo anterior.
-    #     - ramo B (self-hold): 1 contato NO do próprio Y_k, em paralelo
+    #     - ramo B (self-hold): 1 contato NO do próprio K_k, em paralelo
     #       com o ramo A.
-    #     - reset: 1 contato NC do Y do PRÓXIMO átomo (módulo M -- fecha o
+    #     - reset: 1 contato NC do K do PRÓXIMO átomo (módulo M -- fecha o
     #       anel sem caso especial), depois do ponto onde ramo A e ramo B
     #       convergem.
     #   O átomo M-1 (último do ciclo) ganha um terceiro ramo em paralelo,
     #   só com o ButtonSwitch de bootstrap.
+    #
+    #   K_k é um relé de LÓGICA só -- não aciona nada pneumático
+    #   diretamente. A bobina de potência (Y, seção 6) é um componente
+    #   físico separado, acionado por um contato NO dedicado de K_k.
 
-    y_ids = [f"gen-coil-{k}" for k in range(n_atoms)]
+    k_ids = [f"gen-coil-{k}" for k in range(n_atoms)]
     for k in range(n_atoms):
-        add_node(y_ids[k], "SolenoidCoil", f"coil:{k}", domain="electric",
-                 properties={"sensor": {"coil": {"name": f"Y{k + 1}"}}})
+        add_node(k_ids[k], "RelayCoil", f"coil:{k}", domain="electric",
+                 properties={"sensor": {"coil": {"name": f"K{k + 1}"}}})
 
     def contact(role_suffix: str, contact_type: str, relay_sensor: str) -> str:
         cid = f"gen-contact-{role_suffix}"
@@ -191,7 +208,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         next_k    = (k + 1) % n_atoms
         prev_atom = atoms[prev_k]
 
-        # Ramo A: cadeia serial de contatos de sensor + contato do Y anterior.
+        # Ramo A: cadeia serial de contatos de sensor + contato do K anterior.
         chain_prev_output: tuple[str, str] | None = None
         first_sensor_contact: str | None = None
         for i, (e_idx, letter, direction) in enumerate(prev_atom):
@@ -203,18 +220,18 @@ def generate(events: list[tuple[str, str]]) -> dict:
                 connect(chain_prev_output[0], chain_prev_output[1], cid, "T")
             chain_prev_output = (cid, "B")
 
-        ramo_a_prev_contact = contact(f"{k}-ramo_a_prev", "NO", f"Y{prev_k + 1}")
+        ramo_a_prev_contact = contact(f"{k}-ramo_a_prev", "NO", f"K{prev_k + 1}")
         connect(chain_prev_output[0], chain_prev_output[1], ramo_a_prev_contact, "T")
 
-        # Ramo B: self-hold do próprio Y_k.
-        ramo_b_contact = contact(f"{k}-ramo_b_self", "NO", f"Y{k + 1}")
+        # Ramo B: self-hold do próprio K_k.
+        ramo_b_contact = contact(f"{k}-ramo_b_self", "NO", f"K{k + 1}")
 
         # A fonte alimenta o início de cada ramo (2 taps em paralelo).
         connect("gen-vsource", next_bus_anchor("gen-vsource"), first_sensor_contact, "T")
         connect("gen-vsource", next_bus_anchor("gen-vsource"), ramo_b_contact, "T")
 
-        # Os dois ramos convergem no contato de reset (NC do próximo Y).
-        reset_contact = contact(f"{k}-reset_nc", "NC", f"Y{next_k + 1}")
+        # Os dois ramos convergem no contato de reset (NC do próximo K).
+        reset_contact = contact(f"{k}-reset_nc", "NC", f"K{next_k + 1}")
         connect(ramo_a_prev_contact, "B", reset_contact, "T")
         connect(ramo_b_contact, "B", reset_contact, "T")
 
@@ -223,70 +240,51 @@ def generate(events: list[tuple[str, str]]) -> dict:
             connect("gen-vsource", next_bus_anchor("gen-vsource"), "gen-btn", "T")
             connect("gen-btn", "B", reset_contact, "T")
 
-        connect(reset_contact, "B", y_ids[k], "T")
-        connect(y_ids[k], "B", "gen-ground", next_bus_anchor("gen-ground"))
+        connect(reset_contact, "B", k_ids[k], "T")
+        connect(k_ids[k], "B", "gen-ground", next_bus_anchor("gen-ground"))
 
-    # ── 5. Pilotagem das 4/2: solenoid direto (ocorrência única) ou sig +
-    #      OrValve encadeada (multi-ciclo) ─────────────────────────────
-    #
-    #   Reaproveita o algoritmo de duas passadas já usado pelo pneumático
-    #   pra multi-ciclo (ver docs/superpowers/specs/
-    #   2026-07-12-step-by-step-multi-cycle-or-valve-design.md), com duas
-    #   diferenças: a "fonte" de cada sig é um PressureSource dedicado (não
-    #   um tap de PressureLine, que não existe mais aqui) e o atuador da
-    #   sig é "solenoid" (lê o Y_k do átomo daquela ocorrência) em vez de
-    #   "limit_switch".
+    # ── 5. Agrupamento por (cilindro, direção): quais átomos disparam
+    #      cada movimento -- mesmo mapa usado pelo pneumático/cascata pra
+    #      multi-ciclo, aqui vira a lista de contatos de potência em
+    #      paralelo de cada bobina Y ──────────────────────────────────────
 
     triggers_for_pilot: dict[tuple[str, str], list[int]] = {}
     for k, atom in enumerate(atoms):
         for e_idx, letter, direction in atom:
             triggers_for_pilot.setdefault((letter, direction), []).append(k)
 
+    # ── 6. Zona de potência: 1 bobina Y por (cilindro, direção) + 1
+    #      contato de potência NO dedicado por átomo que dispara aquele
+    #      movimento, todos em paralelo alimentando a mesma bobina ───────
+    #
+    #   Multi-ciclo (2+ átomos disparando o mesmo (letra, direção)) vira
+    #   só mais um contato em paralelo, sem nenhum componente de
+    #   convergência dedicado -- o barramento elétrico já suporta múltiplas
+    #   conexões no mesmo anchor (AnchorItem.connections é uma lista, não
+    #   um slot único). A 4/2 sempre pilota via atuador "solenoid" lendo o
+    #   Y correspondente -- nenhuma ramificação de caso único vs multi-ciclo.
+
     for (letter, direction), atom_indexes in triggers_for_pilot.items():
         pilot_anchor = "PL" if direction == "+" else "PR"
         side = "left" if pilot_anchor == "PL" else "right"
         v42 = v42_node_by_letter[letter]
+        dir_tag = "ext" if direction == "+" else "ret"
 
-        if len(atom_indexes) == 1:
-            k = atom_indexes[0]
-            v42["properties"]["actuators"][side] = {
-                "type": "solenoid", "sensor_name": f"Y{k + 1}",
-            }
-            continue
+        y_sensor_name = power_sensor(letter, direction)
+        y_id = f"gen-ycoil-{letter}-{dir_tag}"
+        add_node(y_id, "SolenoidCoil", f"power_coil:{letter}:{direction}", domain="electric",
+                 properties={"sensor": {"coil": {"name": y_sensor_name}}})
 
-        v42["properties"]["actuators"][side] = {"type": "pneumatic_pilot"}
-
-        sig_outputs: list[tuple[str, str]] = []
         for k in atom_indexes:
-            dir_tag = "ext" if direction == "+" else "ret"
-            sig_id = f"gen-pilot-sig-{letter}-{dir_tag}-{k}"
-            add_node(sig_id, "Valve_3_2_Ways", f"pilot_sig:{letter}:{direction}:{k}",
-                     properties={
-                         "actuators": {
-                             "left":  {"type": "solenoid", "sensor_name": f"Y{k + 1}"},
-                             "right": {"type": "spring"},
-                         },
-                         "default_side": "right",
-                     })
-            ps  = add_simple("PressureSource", f"pressure_source:pilot-sig-{letter}-{direction}-{k}")
-            exh = add_simple("Exhaust", f"exhaust:pilot-sig-{letter}-{direction}-{k}")
-            connect(ps, "P", sig_id, "P")
-            connect(sig_id, "R", exh, "R")
-            sig_outputs.append((sig_id, "A"))
+            power_contact = contact(f"power-{letter}-{dir_tag}-{k}", "NO", f"K{k + 1}")
+            connect("gen-vsource", next_bus_anchor("gen-vsource"), power_contact, "T")
+            connect(power_contact, "B", y_id, "T")
 
-        # Mesma convenção de lateralidade X/Y da OrValve usada no
-        # pneumático: no lado PL a cadeia cresce pra esquerda do cilindro
-        # (prev entra em X), no lado PR cresce pra direita (prev entra em Y).
-        prev_anchor_name, new_anchor_name = ("X", "Y") if pilot_anchor == "PL" else ("Y", "X")
+        connect(y_id, "B", "gen-ground", next_bus_anchor("gen-ground"))
 
-        prev_id, prev_anchor = sig_outputs[0]
-        for i in range(1, len(sig_outputs)):
-            or_id = add_simple("OrValve", f"or_valve:{letter}:{pilot_anchor}:{i - 1}")
-            connect(prev_id, prev_anchor, or_id, prev_anchor_name)
-            src_id, src_anchor = sig_outputs[i]
-            connect(src_id, src_anchor, or_id, new_anchor_name)
-            prev_id, prev_anchor = or_id, "A"
-        connect(prev_id, prev_anchor, v42["id"], pilot_anchor)
+        v42["properties"]["actuators"][side] = {
+            "type": "solenoid", "sensor_name": y_sensor_name,
+        }
 
     return {
         "version":     1,

@@ -1,13 +1,11 @@
 """Testes para circuit_generator/methods/step_by_step_electric.py — ver
-docs/superpowers/specs/2026-07-30-step-by-step-electric-design.md
+docs/superpowers/specs/2026-07-31-step-by-step-electric-power-contacts-design.md
 """
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import pytest
 
 from circuit_generator.sequence_parser import parse
 from circuit_generator.methods import step_by_step_electric as sbe
@@ -45,6 +43,13 @@ class TestAtomize:
         ]
 
 
+class TestMinimumAtomCount:
+    def test_two_atom_sequence_raises_value_error(self):
+        import pytest
+        with pytest.raises(ValueError):
+            sbe.generate(parse("A+A-"))
+
+
 class TestBoilerplate:
     def test_cylinders_and_v42_created_for_each_letter(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -71,24 +76,25 @@ class TestBoilerplate:
         assert btn["properties"]["contact_type"] == "NO"
 
 
-class TestCoilRing:
-    def test_one_solenoid_coil_per_atom_with_sequential_sensor_names(self):
+class TestLogicRing:
+    def test_one_relay_coil_per_atom_with_sequential_sensor_names(self):
         data = sbe.generate(parse("A+B+A-B-"))  # 4 átomos de 1 evento
-        coil_ids = {n["id"] for n in data["nodes"] if n["type"] == "SolenoidCoil"}
+        coil_ids = {n["id"] for n in data["nodes"] if n["type"] == "RelayCoil"}
         assert coil_ids == {"gen-coil-0", "gen-coil-1", "gen-coil-2", "gen-coil-3"}
         for k in range(4):
             coil = _node(data, f"gen-coil-{k}")
             assert coil["domain"] == "electric"
-            assert coil["properties"]["sensor"]["coil"]["name"] == f"Y{k + 1}"
+            assert coil["properties"]["sensor"]["coil"]["name"] == f"K{k + 1}"
 
     def test_parallel_block_is_a_single_atom_with_one_coil(self):
         data = sbe.generate(parse("C+(A+B+)C-A-B-"))  # 5 átomos
-        coil_ids = {n["id"] for n in data["nodes"] if n["type"] == "SolenoidCoil"}
+        coil_ids = {n["id"] for n in data["nodes"] if n["type"] == "RelayCoil"}
         assert coil_ids == {f"gen-coil-{k}" for k in range(5)}
 
 
 class TestRungWiring:
-    """A+B+A-B- -- 4 átomos, cada um 1 evento só."""
+    """A+B+A-B- -- 4 átomos, cada um 1 evento só. Mesma topologia de degrau
+    de antes, só os relay_sensor agora referenciam K em vez de Y."""
 
     def test_reset_contact_is_nc_and_wired_to_next_coil(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -97,7 +103,7 @@ class TestRungWiring:
             reset = _node(data, f"gen-contact-{k}-reset_nc")
             assert reset["type"] == "RelaySwitch"
             assert reset["properties"]["contact_type"] == "NC"
-            assert reset["properties"]["relay_sensor"] == f"Y{next_k + 1}"
+            assert reset["properties"]["relay_sensor"] == f"K{next_k + 1}"
 
     def test_reset_contact_receives_both_branches(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -107,38 +113,18 @@ class TestRungWiring:
 
     def test_ramo_a_prev_contact_references_previous_atom_coil_ring_wraps(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        expected = {0: "Y4", 1: "Y1", 2: "Y2", 3: "Y3"}  # ring: atom 0 volta pro último
-        for k, y in expected.items():
+        expected = {0: "K4", 1: "K1", 2: "K2", 3: "K3"}  # ring: atom 0 volta pro último
+        for k, kname in expected.items():
             n = _node(data, f"gen-contact-{k}-ramo_a_prev")
-            assert n["properties"]["relay_sensor"] == y
+            assert n["properties"]["relay_sensor"] == kname
             assert n["properties"]["contact_type"] == "NO"
 
     def test_ramo_b_self_hold_references_own_coil(self):
         data = sbe.generate(parse("A+B+A-B-"))
         for k in range(4):
             n = _node(data, f"gen-contact-{k}-ramo_b_self")
-            assert n["properties"]["relay_sensor"] == f"Y{k + 1}"
+            assert n["properties"]["relay_sensor"] == f"K{k + 1}"
             assert n["properties"]["contact_type"] == "NO"
-
-    def test_ramo_a_single_event_atom_uses_one_sensor_contact(self):
-        # átomo anterior ao 1 é o átomo 0 (A+), 1 evento só -> 1 contato de sensor.
-        data = sbe.generate(parse("A+B+A-B-"))
-        sensor_contact = _node(data, "gen-contact-1-ramo_a_sensor0")
-        assert sensor_contact["properties"]["contact_type"] == "NO"
-        assert sensor_contact["properties"]["relay_sensor"] == "a1"  # confirm_sensor("A","+")
-        out = _conns_from(data, "gen-contact-1-ramo_a_sensor0", "B")
-        assert out[0]["target"]["node"] == "gen-contact-1-ramo_a_prev"
-
-    def test_ramo_a_parallel_atom_chains_sensor_contacts_in_series(self):
-        data = sbe.generate(parse("C+(A+B+)C-A-B-"))  # átomo 2 (C-) segue o átomo 1 ((A+B+))
-        s0 = _node(data, "gen-contact-2-ramo_a_sensor0")
-        s1 = _node(data, "gen-contact-2-ramo_a_sensor1")
-        assert {s0["properties"]["relay_sensor"], s1["properties"]["relay_sensor"]} == {"a1", "b1"}
-        chain = _conns_from(data, "gen-contact-2-ramo_a_sensor0", "B")
-        assert chain[0]["target"]["node"] == "gen-contact-2-ramo_a_sensor1"
-        assert chain[0]["target"]["anchor"] == "T"
-        tail = _conns_from(data, "gen-contact-2-ramo_a_sensor1", "B")
-        assert tail[0]["target"]["node"] == "gen-contact-2-ramo_a_prev"
 
     def test_coil_fed_from_reset_contact_and_drains_to_ground(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -150,13 +136,6 @@ class TestRungWiring:
         out_of_coil = _conns_from(data, "gen-coil-0", "B")
         assert len(out_of_coil) == 1
         assert out_of_coil[0]["target"]["node"] == "gen-ground"
-
-    def test_voltage_source_taps_feed_both_branch_starts(self):
-        data = sbe.generate(parse("A+B+A-B-"))
-        targets = {c["target"]["node"] for c in _conns_from(data, "gen-vsource")}
-        # átomo 1: sensor contact inicial da cadeia + self-hold
-        assert "gen-contact-1-ramo_a_sensor0" in targets
-        assert "gen-contact-1-ramo_b_self" in targets
 
 
 class TestBootstrap:
@@ -177,11 +156,118 @@ class TestBootstrap:
         sources = {c["source"]["node"] for c in incoming}
         assert sources == {"gen-contact-3-ramo_a_prev", "gen-contact-3-ramo_b_self", "gen-btn"}
 
-    def test_button_fed_from_voltage_source(self):
+
+class TestPowerZoneSingleOccurrence:
+    """A+B+A-B- -- nenhum cilindro repete direção: 1 bobina Y por
+    (cilindro, direção), 1 contato de potência cada."""
+
+    def test_one_y_coil_per_cylinder_direction(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        into_btn = _conns_to(data, "gen-btn", "T")
-        assert len(into_btn) == 1
-        assert into_btn[0]["source"]["node"] == "gen-vsource"
+        y_coils = {n["id"]: n for n in data["nodes"] if n["type"] == "SolenoidCoil"}
+        assert set(y_coils) == {"gen-ycoil-A-ext", "gen-ycoil-A-ret", "gen-ycoil-B-ext", "gen-ycoil-B-ret"}
+        assert y_coils["gen-ycoil-A-ext"]["properties"]["sensor"]["coil"]["name"] == "YA1"
+        assert y_coils["gen-ycoil-A-ret"]["properties"]["sensor"]["coil"]["name"] == "YA0"
+        assert y_coils["gen-ycoil-B-ext"]["properties"]["sensor"]["coil"]["name"] == "YB1"
+        assert y_coils["gen-ycoil-B-ret"]["properties"]["sensor"]["coil"]["name"] == "YB0"
+        for coil in y_coils.values():
+            assert coil["domain"] == "electric"
+
+    def test_one_power_contact_per_movement_referencing_correct_k(self):
+        data = sbe.generate(parse("A+B+A-B-"))  # A+ =atom0(K1), B+=atom1(K2), A-=atom2(K3), B-=atom3(K4)
+        expected = {
+            "gen-contact-power-A-ext-0": "K1",
+            "gen-contact-power-B-ext-1": "K2",
+            "gen-contact-power-A-ret-2": "K3",
+            "gen-contact-power-B-ret-3": "K4",
+        }
+        for cid, kname in expected.items():
+            n = _node(data, cid)
+            assert n["type"] == "RelaySwitch"
+            assert n["properties"]["contact_type"] == "NO"
+            assert n["properties"]["relay_sensor"] == kname
+
+    def test_power_contact_wired_from_own_vsource_tap_to_y_coil(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        into_contact = _conns_to(data, "gen-contact-power-A-ext-0", "T")
+        assert len(into_contact) == 1
+        assert into_contact[0]["source"]["node"] == "gen-vsource"
+
+        out_of_contact = _conns_from(data, "gen-contact-power-A-ext-0", "B")
+        assert len(out_of_contact) == 1
+        assert out_of_contact[0]["target"]["node"] == "gen-ycoil-A-ext"
+        assert out_of_contact[0]["target"]["anchor"] == "T"
+
+        out_of_coil = _conns_from(data, "gen-ycoil-A-ext", "B")
+        assert len(out_of_coil) == 1
+        assert out_of_coil[0]["target"]["node"] == "gen-ground"
+
+    def test_v42_actuators_always_solenoid_reading_y_coil(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        v42_a = _node(data, "gen-v42-A")
+        v42_b = _node(data, "gen-v42-B")
+        assert v42_a["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "YA1"}
+        assert v42_a["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "YA0"}
+        assert v42_b["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "YB1"}
+        assert v42_b["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "YB0"}
+
+    def test_no_pilot_sig_or_or_valve_created(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        assert [n for n in data["nodes"] if n["type"] == "Valve_3_2_Ways"] == []
+        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []
+
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("A+B+A-B-"))
+        assert len(data["nodes"]) == 39
+        assert len(data["connections"]) == 50
+
+
+class TestPowerZoneMultiCycle:
+    """A+B+A-A+B-A- -- A+ ocorre nos átomos 0 e 3 (K1, K4); A- ocorre nos
+    átomos 2 e 5 (K3, K6). Multi-ciclo vira só mais um contato em paralelo
+    -- sem sig, sem OrValve."""
+
+    def test_two_power_contacts_in_parallel_for_repeated_direction(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        c0 = _node(data, "gen-contact-power-A-ext-0")
+        c3 = _node(data, "gen-contact-power-A-ext-3")
+        assert c0["properties"]["relay_sensor"] == "K1"
+        assert c3["properties"]["relay_sensor"] == "K4"
+
+        for cid in ("gen-contact-power-A-ext-0", "gen-contact-power-A-ext-3"):
+            into_contact = _conns_to(data, cid, "T")
+            assert len(into_contact) == 1 and into_contact[0]["source"]["node"] == "gen-vsource"
+            out_of_contact = _conns_from(data, cid, "B")
+            assert len(out_of_contact) == 1
+            assert out_of_contact[0]["target"]["node"] == "gen-ycoil-A-ext"
+            assert out_of_contact[0]["target"]["anchor"] == "T"
+
+    def test_still_only_one_y_coil_for_the_repeated_movement(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        y_ext_a = [n for n in data["nodes"] if n["id"] == "gen-ycoil-A-ext"]
+        assert len(y_ext_a) == 1
+
+    def test_v42_actuator_still_solenoid_no_pneumatic_pilot(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        v42_a = _node(data, "gen-v42-A")
+        assert v42_a["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "YA1"}
+        assert v42_a["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "YA0"}
+
+    def test_no_pilot_sig_or_or_valve_created(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        assert [n for n in data["nodes"] if n["type"] == "Valve_3_2_Ways"] == []
+        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []
+
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("A+B+A-A+B-A-"))
+        assert len(data["nodes"]) == 51
+        assert len(data["connections"]) == 68
+
+
+class TestPowerZoneParallelBlock:
+    def test_full_node_and_connection_counts(self):
+        data = sbe.generate(parse("C+(A+B+)C-A-B-"))
+        assert len(data["nodes"]) == 53
+        assert len(data["connections"]) == 68
 
 
 class TestBusAnchors:
@@ -200,101 +286,3 @@ class TestBusAnchors:
             if n["type"] in ("VoltageSource", "Ground"):
                 anchors = n["properties"]["anchors"]
                 assert len(anchors) == len(set(anchors))
-
-
-class TestPilotWiringSingleOccurrence:
-    """A+B+A-B- -- nenhum cilindro repete direção, então nenhuma sig/OrValve
-    deve ser criada; o atuador da 4/2 lê o Y do átomo direto."""
-
-    def test_v42_actuators_are_solenoid_direct(self):
-        data = sbe.generate(parse("A+B+A-B-"))
-        v42_a = _node(data, "gen-v42-A")
-        v42_b = _node(data, "gen-v42-B")
-        # A+ é o átomo 0 (Y1), A- é o átomo 2 (Y3)
-        assert v42_a["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y1"}
-        assert v42_a["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y3"}
-        # B+ é o átomo 1 (Y2), B- é o átomo 3 (Y4)
-        assert v42_b["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y2"}
-        assert v42_b["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y4"}
-
-    def test_no_pilot_sig_or_or_valve_created(self):
-        data = sbe.generate(parse("A+B+A-B-"))
-        assert [n for n in data["nodes"] if n["_role"].startswith("pilot_sig")] == []
-        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []
-
-    def test_full_node_and_connection_counts(self):
-        data = sbe.generate(parse("A+B+A-B-"))
-        assert len(data["nodes"]) == 31
-        assert len(data["connections"]) == 38
-
-
-class TestPilotWiringMultiCycle:
-    """A+B+A-A+B-A- -- A+ ocorre nos átomos 0 e 3; A- ocorre nos átomos 2 e 5."""
-
-    def test_v42_a_actuators_become_pneumatic_pilot(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        v42_a = _node(data, "gen-v42-A")
-        assert v42_a["properties"]["actuators"]["left"] == {"type": "pneumatic_pilot"}
-        assert v42_a["properties"]["actuators"]["right"] == {"type": "pneumatic_pilot"}
-
-    def test_v42_b_actuators_stay_solenoid_direct(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        v42_b = _node(data, "gen-v42-B")
-        assert v42_b["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y2"}
-        assert v42_b["properties"]["actuators"]["right"] == {"type": "solenoid", "sensor_name": "Y5"}
-
-    def test_two_pilot_sigs_per_repeated_direction_each_reading_own_coil(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        s0 = _node(data, "gen-pilot-sig-A-ext-0")
-        s3 = _node(data, "gen-pilot-sig-A-ext-3")
-        assert s0["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y1"}
-        assert s3["properties"]["actuators"]["left"] == {"type": "solenoid", "sensor_name": "Y4"}
-        assert s0["properties"]["actuators"]["right"] == {"type": "spring"}
-
-    def test_pilot_sig_has_dedicated_pressure_source_and_exhaust(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        p_in = _conns_to(data, "gen-pilot-sig-A-ext-0", "P")
-        r_out = _conns_from(data, "gen-pilot-sig-A-ext-0", "R")
-        assert len(p_in) == 1 and _node(data, p_in[0]["source"]["node"])["type"] == "PressureSource"
-        assert len(r_out) == 1 and _node(data, r_out[0]["target"]["node"])["type"] == "Exhaust"
-
-    def test_or_valve_merges_the_two_pilot_sigs_and_feeds_v42_pilot(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        or_nodes = [n for n in data["nodes"] if n["type"] == "OrValve"]
-        assert len(or_nodes) == 2  # 1 pra PL de A, 1 pra PR de A
-
-        pl_or = next(n for n in or_nodes if n["_role"] == "or_valve:A:PL:0")
-        x_conn = next(c for c in data["connections"]
-                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "X")
-        y_conn = next(c for c in data["connections"]
-                      if c["target"]["node"] == pl_or["id"] and c["target"]["anchor"] == "Y")
-        assert {x_conn["source"]["node"], y_conn["source"]["node"]} == {
-            "gen-pilot-sig-A-ext-0", "gen-pilot-sig-A-ext-3",
-        }
-        out_conn = next(c for c in data["connections"] if c["source"]["node"] == pl_or["id"])
-        assert out_conn == {
-            "source": {"node": pl_or["id"], "anchor": "A"},
-            "target": {"node": "gen-v42-A", "anchor": "PL"},
-        }
-
-    def test_full_node_and_connection_counts(self):
-        data = sbe.generate(parse("A+B+A-A+B-A-"))
-        assert len(data["nodes"]) == 55
-        assert len(data["connections"]) == 66
-
-
-class TestMinimumAtomCount:
-    def test_two_atom_sequence_raises_value_error(self):
-        with pytest.raises(ValueError):
-            sbe.generate(parse("A+A-"))
-
-
-class TestPilotWiringParallelBlock:
-    def test_full_node_and_connection_counts(self):
-        data = sbe.generate(parse("C+(A+B+)C-A-B-"))
-        assert len(data["nodes"]) == 41
-        assert len(data["connections"]) == 50
-
-    def test_no_or_valve_no_repeats(self):
-        data = sbe.generate(parse("C+(A+B+)C-A-B-"))
-        assert [n for n in data["nodes"] if n["type"] == "OrValve"] == []

@@ -28,6 +28,8 @@ VoltageSource/Ground por proximidade real de tela -- os anchors renderizam
 na ordem sequencial que a topologia já atribuiu (next_bus_anchor()).
 """
 
+import math
+
 from circuit_generator.grid_layout import Grid
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
@@ -73,8 +75,7 @@ def _build_role_maps(data: dict) -> dict:
 
 
 def _place_pilot_sig_chain(data: dict, grid: Grid, node_by_id: dict,
-                            or_nodes: list, or_virtual_col: dict,
-                            or_row_y: float, cyl_cell_w: float,
+                            cyl_col: dict, or_row_y: float, cyl_cell_w: float,
                             cyl_first_x: float, _place_aligned) -> None:
     """Posiciona os nós Valve_3_2_Ways (role pilot_sig:{letra}:{direção}:{k})
     que alimentam a cadeia de OrValve de multi-ciclo.
@@ -89,19 +90,24 @@ def _place_pilot_sig_chain(data: dict, grid: Grid, node_by_id: dict,
     k (índice do átomo) -- essa é exatamente a ordem "sig_outputs" usada
     lá para montar a cadeia de OrValve (sig[0] e sig[1] alimentam a
     primeira OrValve da cadeia; sig[i], i>=2, alimenta a OrValve[i-1]).
-    Reaproveita as MESMAS colunas virtuais já atribuídas às OrValve
-    (nenhum orçamento extra de coluna é necessário) -- sig[0]/sig[1]
-    empilham na coluna da primeira OrValve (profundidades 1/2); os
-    demais ficam 1 nível acima da OrValve que alimentam.
+
+    Cada sig recebe sua PRÓPRIA coluna virtual (nunca duas sigs dividem
+    coluna) e uma única profundidade (depth=1, uma única linha acima de
+    or_row) -- ver Finding 1 da revisão final: empilhar sig[0]/sig[1] na
+    mesma coluna (versão anterior) sela o corredor abaixo do nó de
+    profundidade 2 (corpo do próprio nó + PressureSource/Exhaust + sig de
+    profundidade 1 + os filhos dele + a OrValve), e o A* não acha rota,
+    produzindo fio diagonal. A fórmula de coluna espelha a convenção já
+    usada pra OrValve (or_virtual_col, mais abaixo): offset decrescente
+    conforme o índice na cadeia cresce, então sig[i], i>=2, cai
+    exatamente na mesma coluna da OrValve que alimenta (or_i = i-1); só
+    sig[0] e sig[1] (que alimentam a MESMA OrValve, or_i=0) não podem
+    coincidir entre si -- sig[1] fica na coluna da OrValve[0], sig[0]
+    fica uma coluna mais afastada do cilindro.
     """
     pilot_sig_nodes = [n for n in data["nodes"] if n["_role"].startswith("pilot_sig:")]
     if not pilot_sig_nodes:
         return
-
-    or_vcol_by_key: dict[tuple[str, str, int], int] = {}
-    for n in or_nodes:
-        _, or_letter, or_side, or_i = n["_role"].split(":")
-        or_vcol_by_key[(or_letter, or_side, int(or_i))] = or_virtual_col[n["id"]]
 
     sig_by_group: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for n in pilot_sig_nodes:
@@ -110,25 +116,35 @@ def _place_pilot_sig_chain(data: dict, grid: Grid, node_by_id: dict,
         sig_by_group.setdefault((letter, side), []).append((int(k), n["id"]))
 
     sig_vcol: dict[str, int] = {}
-    sig_depth: dict[str, int] = {}
     for (letter, side), items in sig_by_group.items():
         items.sort()
+        chain_len = len(items)
+        sign = -1 if side == "PL" else 1
         for i, (_k, sig_id) in enumerate(items):
-            or_i = 0 if i <= 1 else i - 1
-            sig_vcol[sig_id] = or_vcol_by_key[(letter, side, or_i)]
-            sig_depth[sig_id] = 2 if i == 1 else 1
+            offset = chain_len - i
+            sig_vcol[sig_id] = cyl_col[letter] + sign * offset
 
     min_vcol = min(sig_vcol.values())
-    for depth in (1, 2):
-        row_id = f"pilot_sig_row_{depth}"
-        # Deslocamento (250, não 200) escolhido pra nunca coincidir
-        # exatamente com or_row_y (200) -- evita um nó cair em y=0 quando
-        # x também dá 0 (grupo mais à esquerda, min_vcol da própria coluna).
-        grid.add_row(row_id, cyl_cell_w, _M.v32_height, or_row_y - depth * 250.0,
-                     x_origin=cyl_first_x + min_vcol * cyl_cell_w)
+    row_id = "pilot_sig_row"
+    # Deslocamento vertical: precisa deixar uma folga LIVRE real entre o
+    # fundo do próprio sig (corpo + PressureSource/Exhaust, que ficam
+    # centrados na MESMA coluna x do anchor A -- ver seção "Filhos" mais
+    # abaixo) e o topo do bloco de obstáculo da OrValve (or_row_y - MV_OR,
+    # MV_OR=20 em astar_router.py) -- sem essa folga, um sig que caia na
+    # MESMA coluna virtual da OrValve que alimenta (esperado pela
+    # convenção "diretamente acima", ver docstring da função) fica com a
+    # coluna de saída (exit search vertical de astar_router._find_free_exit,
+    # 15 células = 300px, sem busca lateral) inteiramente selada do próprio
+    # topo até o corpo da OrValve, e a rota falha (Finding 1 -- mesmo
+    # mecanismo do bug original, só que agora reprovável em QUALQUER sig
+    # alinhado, não só no antigo caso "depth=2"). 180 (v32_height) + 32
+    # (gap filho) + 37 (max ps/exh height) = 249px até o fundo dos filhos
+    # do sig -- 400 (em vez de 250) garante essa folga com margem mesmo
+    # pro or_height/MV_OR atuais, sem depender de coincidência de pixel.
+    grid.add_row(row_id, cyl_cell_w, _M.v32_height, or_row_y - 400.0,
+                 x_origin=cyl_first_x + min_vcol * cyl_cell_w)
 
     for sig_id, vcol in sorted(sig_vcol.items(), key=lambda kv: kv[1]):
-        row_id = f"pilot_sig_row_{sig_depth[sig_id]}"
         x, y = _place_aligned(row_id, vcol - min_vcol, sig_id)
         node_by_id[sig_id]["position"] = {"x": x, "y": y}
 
@@ -157,10 +173,23 @@ def apply(data: dict) -> dict:
     cyl_cell_w = 300
     cyl_first_x = 0.0
     cyl_row_y = 0.0
-    v42_row_y = 400.0
-    or_row_y = 200.0
-    vsource_row_y = 700.0
-    ramo_row_y = 900.0
+    # or_row_y/v42_row_y (200/400 numa versão anterior) precisam de folga
+    # vertical REAL entre si e entre cada um e a linha vizinha (cilindro
+    # acima, VoltageSource abaixo) -- não só visual, mas pro roteamento A*
+    # (astar_router.build_grid): quando um cilindro tem cadeia multi-ciclo
+    # nos DOIS lados (PL e PR), as duas OrValve ficam uma de cada lado do
+    # cilindro, e a folga vertical insuficiente entre or_row/cylinder e
+    # or_row/main_valve sela topo e base da faixa inteira entre as duas
+    # OrValve -- forma uma "sala" sem saída (nem por cima nem por baixo,
+    # e os dois lados já são as próprias OrValve) onde cai o anchor Y/X
+    # "interno" (voltado pro cilindro) de qualquer sig alimentando aquela
+    # OrValve pelo lado de dentro -- A* não acha rota, fio reto/diagonal.
+    # 80/165 (or_height) de margem cobre cyl_height=193 e or_height=165
+    # (+ MV_OR=20 dos dois lados em astar_router.py) com folga real.
+    v42_row_y = 550.0
+    or_row_y = 300.0
+    vsource_row_y = 800.0
+    ramo_row_y = 950.0
     ramo_stack_gap = 150.0
     zone_gap = 400.0
     reset_row_y = ramo_row_y
@@ -178,8 +207,23 @@ def apply(data: dict) -> dict:
         key = (or_letter, or_side)
         or_chain_len[key] = or_chain_len.get(key, 0) + 1
 
+    # Contagem de pilot_sig por (letra, lado), derivada diretamente dos nós
+    # (não aritmeticamente de or_chain_len) -- mantém as duas contagens
+    # independentes e autoverificáveis. Uma cadeia de n sigs tem n-1
+    # OrValves, mas agora (Finding 1) cada sig ganha sua PRÓPRIA coluna, então
+    # o orçamento de colunas por (letra, lado) precisa ser dimensionado pela
+    # contagem de sigs (sempre >= contagem de OrValve), não pela de OrValve.
+    sig_chain_len: dict[tuple[str, str], int] = {}
+    for n in data["nodes"]:
+        role = n.get("_role", "")
+        if role.startswith("pilot_sig:"):
+            _, sig_letter, sig_direction, _k = role.split(":")
+            sig_side = "PL" if sig_direction == "+" else "PR"
+            key = (sig_letter, sig_side)
+            sig_chain_len[key] = sig_chain_len.get(key, 0) + 1
+
     def _pilot_reserve(letter: str, side: str) -> int:
-        return max(1, or_chain_len.get((letter, side), 0))
+        return max(1, sig_chain_len.get((letter, side), 0))
 
     letters = sorted(roles["cyl_by_letter"])
     cyl_col: dict[str, int] = {}
@@ -216,7 +260,7 @@ def apply(data: dict) -> dict:
             x, y = _place_aligned("or_row", vcol - min_vcol, n["id"])
             node_by_id[n["id"]]["position"] = {"x": x, "y": y}
 
-        _place_pilot_sig_chain(data, grid, node_by_id, or_nodes, or_virtual_col,
+        _place_pilot_sig_chain(data, grid, node_by_id, cyl_col,
                                 or_row_y, cyl_cell_w, cyl_first_x, _place_aligned)
 
     # ── VoltageSource (barra horizontal, topo da faixa elétrica) ─────────
@@ -288,6 +332,33 @@ def apply(data: dict) -> dict:
     ground_id = roles["ground_id"]
     node_by_id[ground_id]["position"] = {"x": cyl_first_x, "y": ground_row_y}
 
+    # ── Dimensiona as barras VoltageSource/Ground pelo alcance real do
+    #    grid (Finding 2 da revisão final) ────────────────────────────────
+    #
+    #   step_by_step_electric.py não tem nenhuma posição de tela real pra
+    #   decidir quantos anchors a barra precisa -- só quem sabe é esta
+    #   etapa, via Grid (que já posicionou toda a região de pistões/
+    #   válvulas/lógica acima). Cresce (nunca encolhe) o array de anchors
+    #   pra cobrir o alcance físico real do circuito -- mesma ideia do
+    #   dimensionamento de PressureLine em step_by_step_layout.py
+    #   ("Dimensiona as PressureLines pelo alcance real do grid"), mas mais
+    #   simples: diferente de PressureLine (uma por átomo, pode precisar de
+    #   anchors reservados à ESQUERDA de X1), há só UMA VoltageSource e UMA
+    #   Ground no total, e ambas já nascem na borda esquerda do circuito
+    #   (cyl_first_x) -- só é preciso crescer pra DIREITA, apendando novos
+    #   anchors ao final da lista (nunca renumerando os existentes, já
+    #   referenciados por índice em conexões antigas).
+    x_range = grid.occupied_x_range()
+    if x_range is not None:
+        min_x, max_x = x_range
+        needed_count = max(1, math.ceil((max_x - min_x) / _M.pl_spacing) + 1)
+        for bus_id in (vsource_id, ground_id):
+            anchors = node_by_id[bus_id]["properties"]["anchors"]
+            next_idx = max((int(a[1:]) for a in anchors), default=0) + 1
+            while len(anchors) < needed_count:
+                anchors.append(f"X{next_idx}")
+                next_idx += 1
+
     # ── Filhos (Exhaust / PressureSource) posicionados relativo ao pai ───
     _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
     child_parent: dict[str, tuple[str, str]] = {}
@@ -301,7 +372,16 @@ def apply(data: dict) -> dict:
     gap = 32
     for child_id, (parent_id, parent_anchor) in child_parent.items():
         parent_pos = node_by_id[parent_id]["position"]
-        parent_local = _M.anchor_local.get(node_type_map[parent_id], {}).get(parent_anchor)
+        # anchor_local_for_routing (não METRICS.anchor_local puro) -- é essa
+        # função que o A* usa mais abaixo (_scene_xy) pra calcular o ponto
+        # real de roteamento do anchor "P" de Valve_3_2_Ways (soma
+        # pilot_side_offset_x, ver sprite_metrics.anchor_local_for_routing).
+        # Usar a tabela sem esse ajuste aqui desalinha o filho (PressureSource)
+        # do ponto que o roteamento realmente mira, produzindo um fio
+        # diagonal Exhaust/PressureSource -> sig (mesma classe de bug do
+        # Finding 1, seção "Barramento" -- só aparece com sig, o único tipo
+        # cujo anchor "P" recebe esse ajuste).
+        parent_local = anchor_local_for_routing(node_type_map[parent_id], parent_anchor)
         if parent_local is None:
             node_by_id[child_id]["position"] = {"x": parent_pos["x"], "y": parent_pos["y"] + 100}
             continue

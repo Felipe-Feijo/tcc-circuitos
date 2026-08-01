@@ -6,10 +6,10 @@ em layout_config.json e nas métricas de sprites em sprite_metrics.py.
 """
 
 import json
-from pathlib import Path
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+from paths import get_base_dir
 
-_CONFIG_PATH = Path(__file__).parent / "layout_config.json"
+_CONFIG_PATH = get_base_dir() / "circuit_generator" / "layout_config.json"
 
 _ANCHOR_LOCAL: dict[str, dict[str, tuple[float, float]]] = _M.anchor_local
 

@@ -26,12 +26,12 @@ layout_engine.py, cascata).
 
 import json
 import math
-from pathlib import Path
 
 from circuit_generator.grid_layout import Grid
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+from paths import get_base_dir
 
-_CONFIG_PATH = Path(__file__).parent / "step_by_step_layout_config.json"
+_CONFIG_PATH = get_base_dir() / "circuit_generator" / "step_by_step_layout_config.json"
 
 # Precisa bater com o _OFFSET de astar_router.route_connection (offset de
 # entrada aplicado na direção do anchor de destino) -- um anchor de PL

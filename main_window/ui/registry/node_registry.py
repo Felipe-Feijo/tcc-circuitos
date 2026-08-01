@@ -18,10 +18,10 @@ import importlib
 import inspect
 from pathlib import Path
 
-import graphics.items.base.nodes as _nodes_pkg
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor, PaletteMeta
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
+from paths import get_base_dir
 
 
 # ---------------------------------------------------------------------------
@@ -41,12 +41,12 @@ def _discover_palette_nodes() -> list[type]:
     """
     import os
 
-    pkg_dir = Path(_nodes_pkg.__file__).parent
-    pkg_root = pkg_dir.parent  # graphics/items/base/
-    # raiz do projeto (para montar o module_name correto)
-    project_root = pkg_root
-    for _ in range(3):          # sobe graphics/ → items/ → base/ → project root
-        project_root = project_root.parent
+    # `graphics.items.base.nodes.__file__` não aponta para um caminho real
+    # em builds congelados (PyInstaller) -- usa o mesmo diretório base
+    # resolvido para todo o resto (dev: raiz do projeto; congelado: onde
+    # os dados de --add-data foram extraídos).
+    project_root = get_base_dir()
+    pkg_dir = project_root / "graphics" / "items" / "base" / "nodes"
 
     seen: set[type] = set()
     result: list[type] = []

@@ -24,8 +24,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from paths import get_base_dir
 
-_ROOT = Path(__file__).parent.parent  # raiz do projeto
+_ROOT = get_base_dir()  # raiz do projeto
 
 
 # ── Leitura de sprite ─────────────────────────────────────────────────────────

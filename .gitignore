@@ -2,3 +2,6 @@ venv/
 __pycache__/
 *.pyc
 .worktrees/
+# PyInstaller
+build/
+dist/

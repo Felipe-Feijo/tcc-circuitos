@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMenu
 
 from graphics.items.base.nodes.node_item import NodeItem, THREE_POSITION_SIDE_MAP
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectDialog
 from .....anchors.anchor import AnchorItem
 from graphics.labels.label import LabelItem
 
@@ -786,3 +787,41 @@ class DirectionalValveItem(NodeItem):
             self.update_body_visuals()
             self.update_connections()
             self.update()
+
+    # ── Simular defeito (compartilhado por todas as válvulas direcionais) ──
+    # Promovido pra cá (em vez de duplicado por subtipo) porque as 5
+    # válvulas direcionais hidráulicas (2/2, 3/2, 4/2, 4/3, 5/2) usam
+    # exatamente o mesmo protocolo -- só o k (condutância) e a flag
+    # "travada" mudam de sentido físico entre elas, nunca a mecânica do
+    # diálogo/comando. Cada subtipo já expõe seu nome via palette_meta(),
+    # reaproveitado aqui como título.
+
+    def build_defect_dialog(self):
+        if self.domain != "hydraulic":
+            return None
+
+        domain_node = self._domain_node
+        current_k = domain_node.k if domain_node is not None else self.properties.get("k")
+        current_stuck = bool(getattr(domain_node, "_stuck_defect", False)) if domain_node is not None else False
+
+        dialog = DefectDialog(title=f"Simular defeito — {type(self).palette_meta().name}")
+        dialog._field_k = dialog.add_number_field(
+            "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
+            value=current_k, required=True, min_value=0,
+        )
+        dialog._field_stuck = dialog.add_bool_field(
+            "Válvula travada (não comuta)", value=current_stuck,
+        )
+        return dialog
+
+    def apply_defect_from_dialog(self, dialog):
+        if dialog.restore_requested:
+            self.command.emit(self.id, {"action": "clear_defect"})
+            return
+
+        k_text = dialog._field_k.text().strip()
+        self.command.emit(self.id, {
+            "action": "set_defect",
+            "k": float(k_text),
+            "stuck": dialog._field_stuck.isChecked(),
+        })

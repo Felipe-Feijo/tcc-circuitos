@@ -42,8 +42,9 @@ class DirectionalValve(Node):
         defect_active/_clear_defect (definidos abaixo, nesta classe base)
         para restaurar/detectar um k desviado por "Simular defeito...".
         Sem essa captura, defect_active e _clear_defect silenciosamente
-        não funcionam para a subclasse (já aconteceu duas vezes com
-        subclasses que setavam self.k direto, sem chamar isto).
+        não funcionam para a subclasse (já aconteceu com três das cinco
+        válvulas -- 2/2, 4/3 e 5/2 -- antes desta extração, por setarem
+        self.k direto sem chamar isto).
         """
         if k is None:
             raise ValueError(

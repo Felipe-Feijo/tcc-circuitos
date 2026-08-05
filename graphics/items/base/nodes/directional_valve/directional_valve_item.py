@@ -804,7 +804,13 @@ class DirectionalValveItem(NodeItem):
         current_k = domain_node.k if domain_node is not None else self.properties.get("k")
         current_stuck = bool(getattr(domain_node, "_stuck_defect", False)) if domain_node is not None else False
 
-        dialog = DefectDialog(title=f"Simular defeito — {type(self).palette_meta().name}")
+        meta = type(self).palette_meta()
+        # meta pode ser None (default de NodeItem.palette_meta() pra classes
+        # abstratas) e meta.name pode ser None (PaletteMeta documenta "usa
+        # cls.__name__" nesse caso, convenção já seguida por node_registry.py)
+        # -- mesmo fallback aqui, pra nunca quebrar o menu de contexto.
+        label = (meta.name if meta else None) or type(self).__name__
+        dialog = DefectDialog(title=f"Simular defeito — {label}")
         dialog._field_k = dialog.add_number_field(
             "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
             value=current_k, required=True, min_value=0,

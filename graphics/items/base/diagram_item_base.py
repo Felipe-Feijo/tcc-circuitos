@@ -1,7 +1,7 @@
 """Classe base para todos os itens gráficos do diagrama."""
 
 from PyQt6.QtWidgets import QGraphicsItem, QMenu, QGraphicsObject
-from PyQt6.QtGui import QPen
+from PyQt6.QtGui import QPen, QColor
 from PyQt6.QtCore import Qt
 
 from editor.mode import EditorMode
@@ -62,9 +62,15 @@ class DiagramItemBase(QGraphicsObject):
         """
 
     def paint_selection_feedback(self, painter) -> None:
-        """Desenha destaque tracejado azul ao redor do shape quando selecionado."""
+        """Desenha destaque de seleção (azul) e/ou de defeito ativo (vermelho)."""
         if self.draw_selection and self.isSelected():
             pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(self.shape())
+
+        if getattr(self, "_defect_indicator", False):
+            pen = QPen(QColor("#e74c3c"), 3, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(self.shape())

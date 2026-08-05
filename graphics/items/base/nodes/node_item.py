@@ -8,6 +8,7 @@ from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectDialog
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
 # Mapeamento genérico "default_side" -> body_state para nós de 3 posições
@@ -133,6 +134,13 @@ class NodeItem(DiagramItemBase):
         self.draw_selection: bool = True
         self._visual_offset: QPointF = QPointF(0, 0)
 
+        # Referência ao nó de domínio mais recente (atualizada a cada passo
+        # de simulação por update_from_domain) e indicador de defeito ativo,
+        # usados por build_defect_dialog()/apply_defect_from_dialog() e por
+        # paint_selection_feedback() em DiagramItemBase.
+        self._domain_node = None
+        self._defect_indicator: bool = False
+
         # Flags
         self.is_preview: bool = False
         self.setAcceptHoverEvents(True)
@@ -176,9 +184,14 @@ class NodeItem(DiagramItemBase):
     def update_from_domain(self, domain_node) -> None:
         """Update visuals from the domain node state (called each sim step).
 
-        Base handles hydraulic anchor pressure/flow labels.
+        Base handles hydraulic anchor pressure/flow labels, caches the
+        domain node reference (used by build_defect_dialog() to read live
+        values), and refreshes the defect indicator.
         Subclasses call super() then update their own visual state.
         """
+        self._domain_node = domain_node
+        self._defect_indicator = bool(getattr(domain_node, "defect_active", False))
+
         for name, anchor in self.anchors.items():
             domain_anchor = domain_node.anchors.get(name)
             if domain_anchor and domain_anchor.domain == "hydraulic":
@@ -196,6 +209,8 @@ class NodeItem(DiagramItemBase):
         be reset (e.g. a non-default pixmap).  Always call super().
         """
         self.simulation_mode = False
+        self._domain_node = None
+        self._defect_indicator = False
 
         if hasattr(self, "initialize_actuators"):
             self.initialize_actuators()
@@ -246,6 +261,24 @@ class NodeItem(DiagramItemBase):
 
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
         """Read values from dialog and apply them (called on dialog accept)."""
+
+    def build_defect_dialog(self) -> DefectDialog | None:
+        """Return a DefectDialog for this node during simulation, or None.
+
+        Unlike build_properties_dialog(), this is read during simulation
+        (simulation_mode=True) and must reflect LIVE domain state -- use
+        self._domain_node (cached by update_from_domain) to prefill fields,
+        never self.properties. Default: no defect dialog (opt-in per subclass).
+        """
+        return None
+
+    def apply_defect_from_dialog(self, dialog: DefectDialog) -> None:
+        """Read values from an accepted DefectDialog and emit a command.
+
+        Must emit self.command with {"action": "set_defect", ...} or
+        {"action": "clear_defect"} -- never mutate self.properties (defect
+        state is transient, tied to the current simulation session only).
+        """
 
     def to_dict(self) -> dict:
         return {
@@ -595,9 +628,16 @@ class NodeItem(DiagramItemBase):
     # ══════════════════════════════════════════════════════════════════════════
 
     def extend_context_menu(self, menu: QMenu) -> None:
-        props_action = menu.addAction("Propriedades...")
-        props_action.triggered.connect(self._open_properties_dialog)
-        menu.addSeparator()
+        if self.simulation_mode:
+            defect_dialog = self.build_defect_dialog()
+            if defect_dialog is not None:
+                defect_action = menu.addAction("Simular defeito...")
+                defect_action.triggered.connect(lambda: self._open_defect_dialog(defect_dialog))
+                menu.addSeparator()
+        else:
+            props_action = menu.addAction("Propriedades...")
+            props_action.triggered.connect(self._open_properties_dialog)
+            menu.addSeparator()
 
         rotate_action = menu.addAction("Rotate 90°")
         rotate_action.setShortcut("R")
@@ -642,6 +682,10 @@ class NodeItem(DiagramItemBase):
             self.apply_properties_from_dialog(dialog)
             if before is not None:
                 undo_stack.push_snapshot(scene, self.editor, before, "Editar propriedades")
+
+    def _open_defect_dialog(self, dialog: DefectDialog) -> None:
+        if dialog.exec():
+            self.apply_defect_from_dialog(dialog)
 
     def _next_label_key(self) -> str:
         i = 0

@@ -23,13 +23,33 @@ class DirectionalValve(Node):
         # Timer actuator state: steps remaining per side (0 = idle)
         self._timer_steps: dict[str, int] = {"left": 0, "right": 0}
 
+        # Defeito injetado durante a simulação (nunca persistido em
+        # self.properties -- vive só nesta instância de domínio).
+        self._stuck_defect = False
+
     def handle_command(self, command: dict):
         """
         command:
         type: "actuator"
         side: "left" | "right"
         value: 0 | 1
+
+        Ou, para simulação de defeito:
+        action: "set_defect"
+        k: float      (novo coeficiente de vazão; só tem efeito em nós que
+                        definem self.k -- domínio hidráulico)
+        stuck: bool   (True trava o corpo da válvula na posição atual)
+
+        action: "clear_defect"
+        (sem outros campos -- restaura k original e destrava)
         """
+        action = command.get("action")
+        if action == "set_defect":
+            self._apply_defect_command(command)
+            return
+        if action == "clear_defect":
+            self._clear_defect()
+            return
 
         if command.get("type") != "actuator":
             return
@@ -44,6 +64,32 @@ class DirectionalValve(Node):
             return
 
         self.bits[side] = value
+
+    def _apply_defect_command(self, command: dict) -> None:
+        """Aplica um defeito injetado durante a simulação.
+
+        k só tem efeito em nós hidráulicos (que definem self.k no __init__);
+        em domínio pneumático, ou se self.k nunca foi definido, o campo é
+        ignorado silenciosamente.
+        """
+        if hasattr(self, "k"):
+            k = command.get("k")
+            if k is not None:
+                self.k = float(k)
+        self._stuck_defect = bool(command.get("stuck", False))
+
+    def _clear_defect(self) -> None:
+        """Remove qualquer defeito ativo, restaurando o k original."""
+        if hasattr(self, "_k_default"):
+            self.k = self._k_default
+        self._stuck_defect = False
+
+    @property
+    def defect_active(self) -> bool:
+        """True se algum defeito estiver ativo (k desviado do original ou travada)."""
+        k_default = getattr(self, "_k_default", None)
+        k_changed = k_default is not None and getattr(self, "k", k_default) != k_default
+        return bool(self._stuck_defect or k_changed)
 
     def _update_pilots(self):
         for side in ("left", "right"):
@@ -97,6 +143,9 @@ class DirectionalValve(Node):
             self.bits[side] = 1 if payload.get("value") else 0
 
     def _compute_body_state(self):
+        if self._stuck_defect:
+            return  # defeito "válvula travada" -- corpo não reage mais a bits
+
         left = self.bits["left"]
         right = self.bits["right"]
 

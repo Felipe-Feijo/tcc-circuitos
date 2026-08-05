@@ -17,6 +17,7 @@ class Valve_4_2_Ways(DirectionalValve, HydraulicMixin):
                     f"Valve_4_2_Ways '{self.id}': propriedade obrigatória 'k' não preenchida."
                 )
             self.k = float(k)
+            self._k_default = self.k
             self._flow_vars = {
                 port: f"Q_{self.id}_{port}" for port in ("P", "A", "B", "R")
             }

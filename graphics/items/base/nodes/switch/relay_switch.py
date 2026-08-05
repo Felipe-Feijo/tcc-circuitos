@@ -123,6 +123,10 @@ class RelaySwitch(SwitchItem):
 
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
+        if self.simulation_mode:
+            # Simulação rodando: escolha de sinal de relé muta self.properties
+            # -- indisponível enquanto simulation_mode for True.
+            return
 
         relay_signals = self._available_relay_signals()
         if relay_signals:

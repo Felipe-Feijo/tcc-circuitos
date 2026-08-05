@@ -330,6 +330,10 @@ class CylinderItem(NodeItem):
 
     def extend_context_menu(self, menu):
         super().extend_context_menu(menu)
+        if self.simulation_mode:
+            # Simulação rodando: sensores/estado inicial mutam self.properties
+            # -- indisponíveis enquanto simulation_mode for True.
+            return
         menu.addSeparator()
 
         r_menu = menu.addMenu("Sensor retraído")

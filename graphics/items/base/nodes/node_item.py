@@ -629,15 +629,19 @@ class NodeItem(DiagramItemBase):
 
     def extend_context_menu(self, menu: QMenu) -> None:
         if self.simulation_mode:
+            # Simulação rodando: edição de projeto (rotacionar, labels,
+            # propriedades) fica indisponível -- só a entrada de defeito,
+            # explicitamente ciente de simulação, é oferecida.
             defect_dialog = self.build_defect_dialog()
             if defect_dialog is not None:
                 defect_action = menu.addAction("Simular defeito...")
                 defect_action.triggered.connect(lambda: self._open_defect_dialog(defect_dialog))
-                menu.addSeparator()
-        else:
-            props_action = menu.addAction("Propriedades...")
-            props_action.triggered.connect(self._open_properties_dialog)
-            menu.addSeparator()
+            super().extend_context_menu(menu)
+            return
+
+        props_action = menu.addAction("Propriedades...")
+        props_action.triggered.connect(self._open_properties_dialog)
+        menu.addSeparator()
 
         rotate_action = menu.addAction("Rotate 90°")
         rotate_action.setShortcut("R")

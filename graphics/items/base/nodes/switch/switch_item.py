@@ -79,6 +79,11 @@ class SwitchItem(NodeItem):
         self.set_contact_type(dialog._combo_contact.currentText())
 
     def extend_context_menu(self, menu: QMenu):
+        if self.simulation_mode:
+            # Simulação rodando: tipo de contato muta self.properties --
+            # indisponível enquanto simulation_mode for True.
+            super().extend_context_menu(menu)
+            return
         menu.addSeparator()
 
         contact_menu = menu.addMenu("Tipo de contato")

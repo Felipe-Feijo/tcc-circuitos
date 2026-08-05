@@ -13,8 +13,11 @@ class DiagramItemBase(QGraphicsObject):
     Fornece:
     - Seleção Qt habilitada por padrão.
     - Atualização do retângulo da cena ao soltar o mouse.
-    - Menu de contexto no modo SELECT, extensível por subclasses via
-      extend_context_menu().
+    - Menu de contexto nos modos SELECT e SIMULATE, extensível por
+      subclasses via extend_context_menu(). Em SIMULATE, "Deletar" fica de
+      fora (edição de projeto continua desabilitada) -- só entradas que as
+      próprias subclasses decidiram expor durante simulação (checando
+      self.simulation_mode) aparecem; ver NodeItem.extend_context_menu().
     - Renderização de destaque de seleção via paint_selection_feedback().
 
     Attributes:
@@ -35,10 +38,17 @@ class DiagramItemBase(QGraphicsObject):
             self.editor.update_scene_rect()
 
     def contextMenuEvent(self, event):
-        """Exibe menu de contexto no modo SELECT; ignora nos demais modos."""
+        """Exibe menu de contexto nos modos SELECT e SIMULATE; ignora nos demais.
+
+        Em SIMULATE, "Deletar" não é oferecido (deletar um nó/conexão no
+        meio de uma simulação corromperia o grafo de domínio em execução);
+        o restante do conteúdo do menu é decidido por extend_context_menu(),
+        que cada subclasse já restringe a entradas cientes de simulação
+        quando self.simulation_mode é True.
+        """
         if not self.editor:
             return
-        if self.editor.mode != EditorMode.SELECT:
+        if not self._context_menu_allowed():
             event.ignore()
             return
 
@@ -49,11 +59,22 @@ class DiagramItemBase(QGraphicsObject):
 
         menu = QMenu()
         self.editor.active_context_menu = menu
-        menu.addAction(self.editor.actions["delete"])
+        if self.editor.mode == EditorMode.SELECT:
+            menu.addAction(self.editor.actions["delete"])
         self.extend_context_menu(menu)
         menu.exec(event.screenPos())
         self.editor.active_context_menu = None
         event.accept()
+
+    def _context_menu_allowed(self) -> bool:
+        """True se o menu de contexto deve abrir no modo atual do editor.
+
+        SELECT: edição normal de projeto. SIMULATE: simulação rodando --
+        o menu ainda abre, mas com conteúdo restrito (sem "Deletar"; o
+        resto depende de cada subclasse checar self.simulation_mode em
+        extend_context_menu()). ADD/CONNECT: bloqueado, como antes.
+        """
+        return self.editor.mode in (EditorMode.SELECT, EditorMode.SIMULATE)
 
     def extend_context_menu(self, menu: QMenu) -> None:
         """Permite que subclasses adicionem entradas ao menu de contexto.

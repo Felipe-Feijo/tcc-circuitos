@@ -460,6 +460,12 @@ class DirectionalValveItem(NodeItem):
 
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
+        if self.simulation_mode:
+            # Simulação rodando: atuadores/posição padrão mutam
+            # self.properties -- indisponíveis enquanto simulation_mode
+            # for True (a válvula 4/2 hidráulica ganha "Simular defeito..."
+            # via NodeItem.extend_context_menu, chamado acima).
+            return
         menu.addSeparator()
 
         left_menu = menu.addMenu("Atuador esquerdo")

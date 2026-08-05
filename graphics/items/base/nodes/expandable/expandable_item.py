@@ -104,6 +104,10 @@ class ExpandableItem(NodeItem):
         return QRectF(0, 0, width, height)
     
     def extend_context_menu(self, menu: QMenu):
+        if self.simulation_mode:
+            # Simulação rodando: adicionar/remover âncoras muda a topologia
+            # do nó -- indisponível enquanto simulation_mode for True.
+            return
         menu.addSeparator()
 
         add_menu = menu.addMenu("Adicionar")

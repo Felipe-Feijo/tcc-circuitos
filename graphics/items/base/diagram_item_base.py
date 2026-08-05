@@ -62,6 +62,16 @@ class DiagramItemBase(QGraphicsObject):
         if self.editor.mode == EditorMode.SELECT:
             menu.addAction(self.editor.actions["delete"])
         self.extend_context_menu(menu)
+
+        if menu.isEmpty():
+            # Em SIMULATE, a maioria dos itens não tem nenhuma entrada ciente
+            # de simulação (ex.: só Valve_4_2_Ways define build_defect_dialog
+            # por enquanto) -- sem isso, o right-click abriria um popup
+            # cinza vazio em quase todo nó durante a simulação.
+            self.editor.active_context_menu = None
+            event.ignore()
+            return
+
         menu.exec(event.screenPos())
         self.editor.active_context_menu = None
         event.accept()

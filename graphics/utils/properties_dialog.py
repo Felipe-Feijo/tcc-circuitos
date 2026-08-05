@@ -52,6 +52,10 @@ class PropertiesDialog(QDialog):
         btn_layout.addWidget(self._ok_btn)
         self._main_layout.addLayout(btn_layout)
 
+        # Exposto para subclasses (ex.: DefectDialog) que precisam inserir
+        # botões extras entre Cancelar e OK/Aplicar.
+        self._btn_layout = btn_layout
+
     def add_text_field(self, label: str, placeholder: str = "", value: str = "") -> QLineEdit:
         field = QLineEdit()
         field.setPlaceholderText(placeholder)

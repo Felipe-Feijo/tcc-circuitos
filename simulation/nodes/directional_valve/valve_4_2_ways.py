@@ -11,13 +11,7 @@ class Valve_4_2_Ways(DirectionalValve, HydraulicMixin):
         super().__init__(node_id, "valve_4_2_ways", domain=domain, properties=properties)
 
         if self.domain == "hydraulic":
-            k = self.properties.get("k")
-            if k is None:
-                raise ValueError(
-                    f"Valve_4_2_Ways '{self.id}': propriedade obrigatória 'k' não preenchida."
-                )
-            self.k = float(k)
-            self._k_default = self.k
+            self._init_hydraulic_k(self.properties.get("k"))
             self._flow_vars = {
                 port: f"Q_{self.id}_{port}" for port in ("P", "A", "B", "R")
             }

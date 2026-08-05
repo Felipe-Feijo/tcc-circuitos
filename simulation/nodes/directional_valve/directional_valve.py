@@ -27,6 +27,31 @@ class DirectionalValve(Node):
         # self.properties -- vive só nesta instância de domínio).
         self._stuck_defect = False
 
+    def _init_hydraulic_k(self, k) -> None:
+        """Valida e armazena a condutância hidráulica k.
+
+        Chame de dentro do __init__ de cada subclasse hidráulica, dentro do
+        guard `if self.domain == "hydraulic":`, com k = self.properties.get("k"):
+
+            if self.domain == "hydraulic":
+                self._init_hydraulic_k(self.properties.get("k"))
+                self._flow_vars = {...}  # resto específico da subclasse
+
+        Além de validar (obrigatório, deve ser numérico) e setar self.k,
+        captura o valor original em self._k_default -- usado por
+        defect_active/_clear_defect (definidos abaixo, nesta classe base)
+        para restaurar/detectar um k desviado por "Simular defeito...".
+        Sem essa captura, defect_active e _clear_defect silenciosamente
+        não funcionam para a subclasse (já aconteceu duas vezes com
+        subclasses que setavam self.k direto, sem chamar isto).
+        """
+        if k is None:
+            raise ValueError(
+                f"{type(self).__name__} '{self.id}': propriedade obrigatória 'k' não preenchida."
+            )
+        self.k = float(k)
+        self._k_default = self.k
+
     def handle_command(self, command: dict):
         """
         command:

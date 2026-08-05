@@ -48,7 +48,7 @@ class Valve_4_2_Ways(DirectionalValveItem):
         dialog = DefectDialog(title="Simular defeito — Válvula 4/2 Vias")
         dialog._field_k = dialog.add_number_field(
             "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
-            value=current_k, required=True,
+            value=current_k, required=True, min_value=0,
         )
         dialog._field_stuck = dialog.add_bool_field(
             "Válvula travada (não comuta)", value=current_stuck,

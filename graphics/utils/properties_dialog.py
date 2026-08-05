@@ -90,6 +90,7 @@ class PropertiesDialog(QDialog):
         placeholder: str = "",
         value: float | None = None,
         required: bool = False,
+        min_value: float | None = None,
     ) -> QLineEdit:
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
@@ -98,6 +99,7 @@ class PropertiesDialog(QDialog):
 
         field._is_number_field = True
         field._is_required = required
+        field._min_value = min_value
 
         field.textChanged.connect(self._refresh_ok_button)
 
@@ -126,12 +128,18 @@ class PropertiesDialog(QDialog):
             return True
 
         try:
-            float(text)
-            field.setStyleSheet("")
-            return True
+            parsed = float(text)
         except ValueError:
             field.setStyleSheet("border: 1px solid red;")
             return False
+
+        min_value = getattr(field, "_min_value", None)
+        if min_value is not None and parsed <= min_value:
+            field.setStyleSheet("border: 1px solid red;")
+            return False
+
+        field.setStyleSheet("")
+        return True
 
     def _refresh_ok_button(self):
         """Habilita OK só quando todos os campos obrigatórios estão preenchidos e válidos."""

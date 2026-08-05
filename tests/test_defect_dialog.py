@@ -36,3 +36,19 @@ def test_clicking_restore_sets_flag_and_accepts_without_validation():
     dialog._restore_btn.click()
     assert dialog.restore_requested is True
     assert dialog.result() == QDialog.DialogCode.Accepted
+
+
+def test_aplicar_disabled_when_min_value_field_at_min():
+    dialog = DefectDialog(title="Test")
+    field = dialog.add_number_field("K", required=True, min_value=0)
+    field.setText("0")
+    dialog._refresh_ok_button()
+    assert dialog._ok_btn.isEnabled() is False
+
+
+def test_aplicar_enabled_when_min_value_field_above_min():
+    dialog = DefectDialog(title="Test")
+    field = dialog.add_number_field("K", required=True, min_value=0)
+    field.setText("0.001")
+    dialog._refresh_ok_button()
+    assert dialog._ok_btn.isEnabled() is True

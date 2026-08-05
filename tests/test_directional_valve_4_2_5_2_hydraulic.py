@@ -117,6 +117,51 @@ def test_4_2_state0_pairs_are_p_a_and_b_r():
     assert abs(eq_dp_br) < 1e-6
 
 
+def test_4_2_set_defect_command_changes_orifice_residual_and_clear_defect_restores_it():
+    """Prova que handle_command({"action": "set_defect", "k": ...}) realmente
+    altera o k usado por equations() (não só um atributo cosmético), e que
+    clear_defect restaura exatamente o comportamento original."""
+    k_original = 1e-7
+    valve = make_4_2(k=k_original, body_state=0)
+
+    idx = {
+        "Q_v42_P": 0, "P_P": 1,
+        "Q_v42_A": 2, "P_A": 3,
+        "Q_v42_B": 4, "P_B": 5,
+        "Q_v42_R": 6, "P_R": 7,
+    }
+    x = np.zeros(8)
+
+    Q_p = 1e-4
+    dp_pa = math.copysign((Q_p / k_original) ** 2, Q_p)
+    x[idx["Q_v42_P"]] = Q_p
+    x[idx["Q_v42_A"]] = -Q_p
+    x[idx["P_P"]] = dp_pa
+    x[idx["P_A"]] = 0.0
+
+    Q_b = 5e-5
+    dp_br = math.copysign((Q_b / k_original) ** 2, Q_b)
+    x[idx["Q_v42_B"]] = Q_b
+    x[idx["Q_v42_R"]] = -Q_b
+    x[idx["P_B"]] = dp_br
+    x[idx["P_R"]] = 0.0
+
+    eqs_before = valve.equations(x, idx)
+
+    valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": False})
+    eqs_defective = valve.equations(x, idx)
+
+    # A conservação de vazão (índices 0 e 2) não depende de k, só a equação
+    # de orifício (índices 1 e 3) muda.
+    assert eqs_defective[1] != eqs_before[1]
+    assert eqs_defective[3] != eqs_before[3]
+
+    valve.handle_command({"action": "clear_defect"})
+    eqs_restored = valve.equations(x, idx)
+
+    assert eqs_restored == eqs_before
+
+
 def test_4_2_state1_pairs_are_p_b_and_a_r():
     valve = make_4_2(body_state=1)
     assert valve.get_internal_connections() == [("P", "B"), ("A", "R")]

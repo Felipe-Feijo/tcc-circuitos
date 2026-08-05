@@ -15,6 +15,7 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
                     f"Valve_3_2_Ways '{self.id}': propriedade obrigatória 'k' não preenchida."
                 )
             self.k            = float(k)
+            self._k_default   = self.k
             self.flow_var_in  = f"Q_{self.id}_in"
             self.flow_var_out = f"Q_{self.id}_out"
 

@@ -5,3 +5,6 @@ __pycache__/
 # PyInstaller
 build/
 dist/
+
+# Superpowers skill scratch state (not project content)
+.superpowers/

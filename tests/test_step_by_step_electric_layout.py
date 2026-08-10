@@ -145,6 +145,60 @@ class TestStartButtonPosition:
         assert ramo_y < btn_y < reset_y
 
 
+class TestButtonJoinsTheRamoAStackGrid:
+    """O botão de início (gen-btn-start) é só mais um nível empilhado na
+    MESMA coluna/grade do ramo A -- não uma linha própria em fração
+    arbitrária entre ramo_row e reset_row."""
+
+    def test_start_button_one_stack_level_below_ramo_row(self):
+        # átomo anterior ao 0 (que fecha o anel) é um bloco paralelo de 2
+        # eventos -> átomo 0 tem stack de sensores de profundidade 2,
+        # permitindo comparar o passo do botão com o passo real entre
+        # níveis do stack.
+        data = layout.apply(sbe.generate(parse("A+B+(A-B-)")))
+        ramo_y = _node(data, "gen-contact-0-ramo_a_prev")["position"]["y"]
+        # sensor1 (evento mais recente do átomo anterior) fica mais perto de
+        # ramo_row; sensor0 (evento mais antigo) fica mais longe -- a cadeia
+        # é montada em ordem reversa (ver `reversed(sensor_roles)` no layout).
+        sensor_near_y = _node(data, "gen-contact-0-ramo_a_sensor1")["position"]["y"]
+        sensor_far_y = _node(data, "gen-contact-0-ramo_a_sensor0")["position"]["y"]
+        btn_y = _node(data, "gen-btn-start")["position"]["y"]
+
+        level_gap = ramo_y - sensor_near_y
+        assert sensor_near_y - sensor_far_y == level_gap, "níveis do stack acima não usam passo uniforme"
+        assert btn_y - ramo_y == level_gap, "botão não está no mesmo passo do grid do stack"
+
+    def test_reset_row_comes_after_the_button_level(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        btn_y = _node(data, "gen-btn-start")["position"]["y"]
+        reset_y = _node(data, "gen-contact-0-reset_nc")["position"]["y"]
+        assert reset_y > btn_y
+
+
+class TestSourceGroundHeightScalesWithActualMaxDepth:
+    """A distância vsource->ramo_row deve refletir a profundidade real do
+    circuito, não uma constante fixa dimensionada pro pior caso (profundidade
+    até 5-6, ver histórico em step_by_step_electric_layout.py)."""
+
+    def test_shallow_sequence_uses_far_less_height_than_the_old_fixed_worst_case(self):
+        data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        vsource = _node(data, "gen-vsource")
+        ramo_y = _node(data, "gen-contact-0-ramo_b_self")["position"]["y"]
+        gap = ramo_y - (vsource["position"]["y"] + _M.vsource_pix_h)
+        assert gap < 500  # bem menor que os ~900px reservados antes pro pior caso
+
+    def test_deeper_sequence_gets_more_height_than_a_shallow_one(self):
+        def gap(seq, atom_idx):
+            data = layout.apply(sbe.generate(parse(seq)))
+            vsource = _node(data, "gen-vsource")
+            ramo_y = _node(data, f"gen-contact-{atom_idx}-ramo_b_self")["position"]["y"]
+            return ramo_y - (vsource["position"]["y"] + _M.vsource_pix_h)
+
+        shallow_gap = gap("A+B+A-B-", 0)
+        deep_gap = gap("(A+B+C+)A-B-C-", 1)  # átomo 1: stack de profundidade 3
+        assert deep_gap > shallow_gap
+
+
 class TestPowerZoneRightOfAllAtomBlocks:
     def test_power_zone_entirely_right_of_last_atom_block(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
@@ -459,6 +513,53 @@ class TestAllConnectionsOrthogonal:
         assert data["connections"], "circuito de teste sem nenhuma conexão"
         for conn in data["connections"]:
             _assert_connection_orthogonal(data, conn)
+
+
+class TestBusConnectionsRouteDeterministicallyVH:
+    """VoltageSource/Ground usam roteamento VH determinístico (não A*) -- ver
+    docs/superpowers/specs (fix do "degrau" acima da barra +24V, causado por
+    snap de exit-point do A* perto do retângulo de bloqueio do sprite).
+    """
+
+    @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
+    def test_voltage_source_connections_never_go_above_the_source_anchor(self, seq):
+        data = layout.apply(sbe.generate(parse(seq)))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        for conn in data["connections"]:
+            if node_type_map.get(conn["source"]["node"]) != "VoltageSource":
+                continue
+            src_x, src_y = _scene_xy(
+                node_by_id, node_type_map, conn["source"]["node"], conn["source"]["anchor"])
+            for wp in conn.get("waypoints", []):
+                assert wp["y"] >= src_y - 0.5, (
+                    f"waypoint {wp} sobe acima do anchor fonte {(src_x, src_y)} em {conn}"
+                )
+
+    @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
+    def test_ground_connections_never_go_below_the_ground_anchor(self, seq):
+        data = layout.apply(sbe.generate(parse(seq)))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        for conn in data["connections"]:
+            if node_type_map.get(conn["target"]["node"]) != "Ground":
+                continue
+            tgt_x, tgt_y = _scene_xy(
+                node_by_id, node_type_map, conn["target"]["node"], conn["target"]["anchor"])
+            for wp in conn.get("waypoints", []):
+                assert wp["y"] <= tgt_y + 0.5, (
+                    f"waypoint {wp} desce abaixo do anchor terra {(tgt_x, tgt_y)} em {conn}"
+                )
+
+    @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
+    def test_voltage_source_connections_have_at_most_two_waypoints(self, seq):
+        """VH determinístico: no máximo 1 jog horizontal -> no máximo 2 waypoints."""
+        data = layout.apply(sbe.generate(parse(seq)))
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        for conn in data["connections"]:
+            if node_type_map.get(conn["source"]["node"]) != "VoltageSource":
+                continue
+            assert len(conn.get("waypoints", [])) <= 2, conn
 
 
 class TestRegressionCounts:

@@ -178,12 +178,7 @@ class SimulationEngine:
     def _update_electric_domain(self):
         changed = False
 
-        valid_anchors = set()
-        for node in self.nodes.values():
-            for source in node.anchors.values():
-                if source.type == "source":
-                    visited = set()
-                    self._mark_valid_from_source(source, visited, valid_anchors)
+        valid_anchors = self._compute_valid_electric_anchors()
 
         for node in self.nodes.values():
             for a in node.anchors.values():
@@ -196,45 +191,209 @@ class SimulationEngine:
 
         return changed
 
-    def _mark_valid_from_source(self, anchor, visited, valid_anchors):
-        if anchor in visited:
-            return False
+    def _compute_valid_electric_anchors(self):
+        """Determina quais anchors elétricas estão em algum caminho fonte->terra.
 
-        visited.add(anchor)
+        Um anchor está "energizado" se existe algum caminho simples de uma
+        anchor tipo "source" até uma anchor tipo "ground" passando por ele —
+        não basta estar no mesmo componente conexo (um ramo sem saída
+        pendurado no meio do caminho não conduz).
 
-        if anchor.type == "ground":
-            valid_anchors.add(anchor)
-            visited.remove(anchor)
-            return True
+        Calculado em O(V+E) via pontes (Tarjan): colapsa cada componente
+        2-aresta-conexo (ex: dois contatos em paralelo que se reconvergem)
+        num único nó, e resolve "está entre fonte e terra?" com uma única
+        passada de DP na árvore de pontes resultante — sem reexplorar a
+        mesma sub-região do grafo mais de uma vez.
+        """
+        anchors = [
+            a for node in self.nodes.values() for a in node.anchors.values()
+            if a.domain == "electric"
+        ]
+        if not anchors:
+            return set()
 
-        reaches_ground = False
+        adjacency = self._build_electric_adjacency(anchors)
+        bridges = self._find_bridges(anchors, adjacency)
+        comp_of = self._electric_components(anchors, adjacency, bridges)
+        valid_components = self._valid_bridge_tree_components(anchors, adjacency, bridges, comp_of)
 
-        for a_id, b_id in anchor.node.get_internal_connections():
-            a_anchor = anchor.node.get_anchor(a_id)
-            b_anchor = anchor.node.get_anchor(b_id)
+        return {a for a in anchors if comp_of[a] in valid_components}
 
-            other = None
-            if a_anchor == anchor:
-                other = b_anchor
-            elif b_anchor == anchor:
-                other = a_anchor
+    def _build_electric_adjacency(self, anchors):
+        adjacency = defaultdict(list)
+        next_edge_id = [0]
 
-            if other and other.domain == "electric":
-                if self._mark_valid_from_source(other, visited, valid_anchors):
-                    reaches_ground = True
+        def add_edge(a, b):
+            edge_id = next_edge_id[0]
+            next_edge_id[0] += 1
+            adjacency[a].append((b, edge_id))
+            adjacency[b].append((a, edge_id))
 
-        for conn in anchor.connections:
-            other = conn.get_other(anchor)
-            if other and other.domain == "electric":
-                if self._mark_valid_from_source(other, visited, valid_anchors):
-                    reaches_ground = True
+        for node in self.nodes.values():
+            for a_id, b_id in node.get_internal_connections():
+                a_anchor = node.get_anchor(a_id)
+                b_anchor = node.get_anchor(b_id)
+                if a_anchor.domain == "electric" and b_anchor.domain == "electric":
+                    add_edge(a_anchor, b_anchor)
 
-        visited.remove(anchor)
+        seen_conns = set()
+        for a in anchors:
+            for conn in a.connections:
+                if id(conn) in seen_conns:
+                    continue
+                seen_conns.add(id(conn))
+                other = conn.get_other(a)
+                if other.domain == "electric":
+                    add_edge(a, other)
 
-        if reaches_ground:
-            valid_anchors.add(anchor)
+        return adjacency
 
-        return reaches_ground
+    def _find_bridges(self, anchors, adjacency):
+        """Tarjan: arestas cuja remoção desconecta o grafo (low-link)."""
+        disc = {}
+        low = {}
+        bridges = set()
+        timer = [0]
+
+        def dfs(u, parent_edge):
+            disc[u] = low[u] = timer[0]
+            timer[0] += 1
+            for v, edge_id in adjacency[u]:
+                if edge_id == parent_edge:
+                    continue
+                if v not in disc:
+                    dfs(v, edge_id)
+                    low[u] = min(low[u], low[v])
+                    if low[v] > disc[u]:
+                        bridges.add(edge_id)
+                else:
+                    low[u] = min(low[u], disc[v])
+
+        for a in anchors:
+            if a not in disc:
+                dfs(a, None)
+
+        return bridges
+
+    def _electric_components(self, anchors, adjacency, bridges):
+        """Une anchors ligados por arestas que NÃO são pontes (union-find)."""
+        parent = {a: a for a in anchors}
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        seen_edges = set()
+        for u in anchors:
+            for v, edge_id in adjacency[u]:
+                if edge_id in seen_edges:
+                    continue
+                seen_edges.add(edge_id)
+                if edge_id not in bridges:
+                    root_u, root_v = find(u), find(v)
+                    if root_u != root_v:
+                        parent[root_u] = root_v
+
+        return {a: find(a) for a in anchors}
+
+    def _valid_bridge_tree_components(self, anchors, adjacency, bridges, comp_of):
+        """Marca componentes que ficam entre uma fonte e uma terra na árvore de pontes."""
+        local_source = defaultdict(int)
+        local_ground = defaultdict(int)
+        for a in anchors:
+            comp = comp_of[a]
+            if a.type == "source":
+                local_source[comp] += 1
+            elif a.type == "ground":
+                local_ground[comp] += 1
+
+        comp_adj = defaultdict(list)
+        seen_edges = set()
+        for u in anchors:
+            for v, edge_id in adjacency[u]:
+                if edge_id not in bridges or edge_id in seen_edges:
+                    continue
+                seen_edges.add(edge_id)
+                comp_u, comp_v = comp_of[u], comp_of[v]
+                if comp_u != comp_v:
+                    comp_adj[comp_u].append((comp_v, edge_id))
+                    comp_adj[comp_v].append((comp_u, edge_id))
+
+        valid_components = set()
+        visited_components = set()
+        for root in set(comp_of.values()):
+            if root in visited_components:
+                continue
+            self._process_bridge_tree(
+                root, comp_adj, local_source, local_ground, visited_components, valid_components
+            )
+
+        return valid_components
+
+    def _process_bridge_tree(self, root, comp_adj, local_source, local_ground, visited_components, valid_components):
+        """DP numa árvore de pontes: soma fontes/terras por subárvore e decide,
+        por componente, se existem dois "braços" distintos (local ou vizinho)
+        que juntos cobrem uma fonte e uma terra."""
+        parent = {root: None}
+        parent_edge = {root: None}
+        order = [root]
+        queue = deque([root])
+        visited_components.add(root)
+        while queue:
+            u = queue.popleft()
+            for v, edge_id in comp_adj[u]:
+                if v not in parent:
+                    parent[v] = u
+                    parent_edge[v] = edge_id
+                    order.append(v)
+                    visited_components.add(v)
+                    queue.append(v)
+
+        count_s = {c: local_source.get(c, 0) for c in order}
+        count_g = {c: local_ground.get(c, 0) for c in order}
+        for c in reversed(order):
+            p = parent[c]
+            if p is not None:
+                count_s[p] += count_s[c]
+                count_g[p] += count_g[c]
+
+        total_s = count_s[root]
+        total_g = count_g[root]
+
+        for c in order:
+            if local_source.get(c, 0) > 0 and local_ground.get(c, 0) > 0:
+                # Fonte e terra caem no mesmo bloco 2-aresta-conexo (ex: dois
+                # contatos independentes do mesmo relé fechados ao mesmo tempo,
+                # cada um completando um caminho fonte->terra por rota
+                # diferente) -- a corrente fecha dentro do próprio bloco, sem
+                # precisar de "braços" externos distintos.
+                valid_components.add(c)
+                continue
+
+            s_arms = set()
+            g_arms = set()
+            if local_source.get(c, 0) > 0:
+                s_arms.add("local")
+            if local_ground.get(c, 0) > 0:
+                g_arms.add("local")
+
+            for v, edge_id in comp_adj[c]:
+                if parent.get(v) == c:
+                    region_s, region_g = count_s[v], count_g[v]
+                else:
+                    region_s = total_s - count_s[c]
+                    region_g = total_g - count_g[c]
+                if region_s > 0:
+                    s_arms.add(edge_id)
+                if region_g > 0:
+                    g_arms.add(edge_id)
+
+            if not s_arms or not g_arms:
+                continue
+            if s_arms != g_arms or len(s_arms) > 1:
+                valid_components.add(c)
 
     P_MAX = 10e8
 

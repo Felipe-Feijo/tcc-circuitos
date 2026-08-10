@@ -127,37 +127,31 @@ def apply(data: dict) -> dict:
     #
     #   vsource_row_y/ramo_row_y/ramo_stack_gap: a v0 tinha uma colisão real
     #   aqui -- vsource_row_y (700) coincidia EXATAMENTE com a primeira
-    #   linha empilhada de sensores (ramo_row_y - 1*ramo_stack_gap =
-    #   850-150 = 700), fazendo a barra da fonte se sobrepor ao primeiro
-    #   contato de sensor de cada bloco. A v1 original "corrigiu" isso só
-    #   para depth 1 (a distância de vsource até ramo_row -- 500px -- não é
-    #   a distância até uma linha EMPILHADA, que fica cada vez mais perto
-    #   de vsource conforme a profundidade do stack aumenta); com 3 eventos
-    #   simultâneos num mesmo átomo (bloco paralelo com 3 ramos, ex.
-    #   "(A+B+C+)A-B-C-"), a linha de profundidade 3 ainda colidia com a
-    #   VoltageSource. ramo_row_y foi elevada para 1700 para que MESMO a
-    #   profundidade 5 (bem além de qualquer caso realista) mantenha uma
-    #   folga positiva em relação à base da VoltageSource:
-    #     vsource ocupa y em [700, 700+vsource_pix_h] = [700, 800].
-    #     linha de profundidade d ocupa y em
-    #       [1700 - d*150, 1700 - d*150 + relay_switch_height] =
-    #       [1700 - d*150, 1700 - d*150 + 75].
-    #     d=1 -> [1550, 1625]  (folga de 750px até a base da vsource)
-    #     d=2 -> [1400, 1475]  (folga de 600px)
-    #     d=3 -> [1250, 1325]  (folga de 450px -- caso testado em
-    #                           TestNoCollisionOrDuplicatePositions)
-    #     d=4 -> [1100, 1175]  (folga de 300px)
-    #     d=5 -> [ 950, 1025]  (folga de 150px)
-    #     d=6 -> [ 800,  875]  (toca a base da vsource -- fora do range
-    #                           defensivo que este layout garante; um
-    #                           bloco paralelo com 6+ ramos simultâneos
-    #                           não é um caso realista para este método).
+    #   linha empilhada de sensores. Uma correção posterior fixou ramo_row_y
+    #   numa constante (1700) grande o bastante pro PIOR CASO defensivo
+    #   (profundidade até 5), mas isso deixava o circuito artificialmente
+    #   alto pra qualquer sequência mais rasa (ex: "A+B+A-B-", profundidade
+    #   1, sobrava ~750px de vão vazio). ramo_row_y agora é calculada a
+    #   partir da profundidade MÁXIMA REAL do circuito (max_stack_above =
+    #   maior stack de sensores entre todos os átomos), garantindo sempre
+    #   exatamente 1 nível de folga (ramo_stack_gap) entre o nível mais
+    #   fundo do stack e a base da VoltageSource -- nem mais, nem menos:
+    #     ramo_row_y = vsource_row_y + vsource_pix_h + (max_stack_above+1)*ramo_stack_gap
+    #   Reproduz exatamente os valores antigos quando max_stack_above=5
+    #   (dava 1700), mas cresce/encolhe com a profundidade real de cada
+    #   sequência.
+    #
+    #   O botão de início (gen-btn-start, só no átomo 0) entra como só mais
+    #   um nível empilhado nessa MESMA grade, 1 ramo_stack_gap abaixo de
+    #   ramo_row (em vez de uma linha própria numa fração arbitrária entre
+    #   ramo_row e reset_row) -- eletricamente ele já é só mais um contato
+    #   em série no ramo A, então visualmente também deveria ser só mais um
+    #   degrau da mesma pilha.
     cyl_cell_w = 1000
     cyl_first_x = 0.0
     cyl_row_y = 0.0
     v42_row_y = 400.0
     vsource_row_y = 700.0
-    ramo_row_y = 1700.0
     ramo_stack_gap = 150.0
     reset_gap = 150.0
     coil_gap = 150.0
@@ -166,7 +160,16 @@ def apply(data: dict) -> dict:
     ramo_cell_w = 200.0
     zone3_cell_w = 200.0
 
-    reset_row_y = ramo_row_y + reset_gap
+    contact_by_role = roles["contact_by_role"]
+    sensor_depth_by_atom = {
+        k: sum(1 for role_key in contact_by_role if role_key.startswith(f"{k}-ramo_a_sensor"))
+        for k in range(n_atoms)
+    }
+    max_stack_above = max(sensor_depth_by_atom.values(), default=0)
+
+    ramo_row_y = vsource_row_y + _M.vsource_pix_h + (max_stack_above + 1) * ramo_stack_gap
+    start_btn_row_y = ramo_row_y + ramo_stack_gap
+    reset_row_y = start_btn_row_y + reset_gap
     coil_row_y = reset_row_y + coil_gap
     ground_row_y = coil_row_y + ground_gap
 
@@ -195,18 +198,15 @@ def apply(data: dict) -> dict:
     grid.add_row("ramo_row", ramo_cell_w, _M.relay_switch_height, ramo_row_y,
                  x_origin=cyl_first_x)
     # Botão de início do ciclo: em série no fim do ramo A do PRIMEIRO átomo
-    # -- mesma coluna do ramo A (0), numa linha própria entre ramo_row e
-    # reset_row (onde ele fica eletricamente: depois do contato do K
-    # anterior, antes de convergir com o ramo B).
-    start_btn_row_y = ramo_row_y + reset_gap / 2
+    # -- mesma coluna do ramo A (0), 1 nível abaixo de ramo_row na mesma
+    # grade dos sensores (onde ele fica eletricamente: depois do contato do
+    # K anterior, antes de convergir com o ramo B).
     grid.add_row("start_btn_row", ramo_cell_w, _M.button_switch_height, start_btn_row_y,
                  x_origin=cyl_first_x)
     grid.add_row("reset_row", ramo_cell_w, _M.relay_switch_height, reset_row_y,
                  x_origin=cyl_first_x)
     grid.add_row("coil_row", ramo_cell_w, _M.relay_coil_height, coil_row_y,
                  x_origin=cyl_first_x)
-
-    contact_by_role = roles["contact_by_role"]
 
     def _contact(role_key: str) -> str:
         return contact_by_role[role_key]
@@ -469,6 +469,29 @@ def apply(data: dict) -> dict:
         local = anchor_local_for_routing(ntype, anchor_name)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
+    def _bus_vh_route(spos, tpos):
+        """Roteamento VH determinístico p/ conexões que tocam VoltageSource/Ground.
+
+        Substitui o A* pra esse caso -- fonte e barramento sempre trocam
+        verticalmente (fonte sempre sai por baixo, terra sempre entra por
+        cima, e tudo que conecta nelas encara verticalmente também: T
+        sempre pra cima, B sempre pra baixo), então o caminho é sempre
+        reto ou, no máximo, um jog horizontal no meio (VHV) -- nunca
+        precisa desviar de nada, já que não existe nenhum sprite entre o
+        barramento e as linhas do anel abaixo dele. Evita o "degrau" que
+        o A* produzia por causa do snap de exit-point perto do retângulo
+        de bloqueio do próprio sprite do barramento.
+        """
+        sx, sy = spos
+        tx, ty = tpos
+        if abs(sx - tx) < 0.5 or abs(sy - ty) < 0.5:
+            return None
+        mid_y = (sy + ty) / 2
+        return [
+            {"x": round(sx, 1), "y": round(mid_y, 1)},
+            {"x": round(tx, 1), "y": round(mid_y, 1)},
+        ]
+
     astar_grid = build_grid(data["nodes"])
     for conn in data.get("connections", []):
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
@@ -478,10 +501,13 @@ def apply(data: dict) -> dict:
         if spos is None or tpos is None:
             continue
         s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
-        wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),
-                                tpos, get_exit_dir(t_type, t_anc),
-                                src_type=s_type, tgt_type=t_type,
-                                src_id=s_id, tgt_id=t_id)
+        if s_type in ("VoltageSource", "Ground") or t_type in ("VoltageSource", "Ground"):
+            wps = _bus_vh_route(spos, tpos)
+        else:
+            wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),
+                                    tpos, get_exit_dir(t_type, t_anc),
+                                    src_type=s_type, tgt_type=t_type,
+                                    src_id=s_id, tgt_id=t_id)
         if wps is not None:
             conn["waypoints"] = wps
 

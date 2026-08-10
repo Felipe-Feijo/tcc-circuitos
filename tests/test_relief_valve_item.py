@@ -49,7 +49,7 @@ def test_piloted_true_adds_y_anchor_and_overlay():
     node.apply_properties()
 
     assert "Y" in node.anchors
-    assert (node.anchors["Y"].pos().x(), node.anchors["Y"].pos().y()) == (node.width, node.height / 2)
+    assert (node.anchors["Y"].pos().x(), node.anchors["Y"].pos().y()) == (node.width, node.height * 53.5 / 162)
     assert node._pilot_overlay is not None
 
 

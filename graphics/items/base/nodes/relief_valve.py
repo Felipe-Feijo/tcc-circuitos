@@ -4,10 +4,15 @@ pilotada).
 Sprite layout
 -------------
 Width x Height: 200 x 162 px
-Anchor P (topo)  : (width*99/199, 0)       exit -> top
-Anchor T (base)  : (width*99/199, height)  exit -> bottom
-Anchor Y (piloto): (width, height/2)       exit -> right
-                   presente apenas quando properties["piloted"] é True
+Anchor P (topo)  : (width*99/199, 0)          exit -> top
+Anchor T (base)  : (width*99/199, height)     exit -> bottom
+Anchor Y (piloto): (width, height*53.5/162)   exit -> right
+                   presente apenas quando properties["piloted"] é True.
+                   Altura medida no overlay relief_valve_pilot.png: a
+                   linha pontilhada toca a borda direita (x=199) entre
+                   y=51 e y=56 — 53.5 é o centro desse intervalo, não
+                   height/2 (que ficaria bem mais abaixo, na metade do
+                   corpo).
 
 Sprites
 -------
@@ -60,7 +65,7 @@ class ReliefValve(NodeItem):
         mudar (apply_properties / apply_properties_from_dialog)."""
         if self.properties.get("piloted"):
             self.add_anchor(AnchorItem(
-                "Y", QPointF(self.width, self.height / 2), node=self, domain=self.domain,
+                "Y", QPointF(self.width, self.height * 53.5 / 162), node=self, domain=self.domain,
                 exit_directions={"external": ["right"]},
             ))
             self._pilot_overlay = self._pixmap_pilot

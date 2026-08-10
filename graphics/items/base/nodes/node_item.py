@@ -1,7 +1,7 @@
 import uuid
 import copy
 from PyQt6.QtWidgets import QGraphicsItem, QMenu
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
+from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPixmap, QColor
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -449,23 +449,45 @@ class NodeItem(DiagramItemBase):
         self.anchors[anchor.name] = anchor
 
     def remove_anchor(self, name: str) -> None:
+        """Remove a âncora `name` e qualquer conexão ligada a ela.
+
+        A contabilidade lógica (self.anchors, self.internal_connections,
+        conn.prepare_delete()) acontece de imediato -- outros métodos
+        (hydraulic_ports(), etc.) já podem contar com isso no retorno desta
+        chamada. Mas a remoção física da cena (scene().removeItem(...)) é
+        adiada via QTimer.singleShot(0, ...), pelo mesmo motivo documentado
+        em editor/delete_manager.py: remove_anchor() é tipicamente chamado
+        de dentro do call stack de um evento Qt ativo (ex.: o botão OK de um
+        PropertiesDialog, via apply_properties_from_dialog), e remover itens
+        da cena de forma síncrona nesse ponto pode deixar a árvore de itens
+        (ou o estado de hover) com um ponteiro C++ inválido -- resultando em
+        "Windows fatal exception: access violation" no próximo
+        mouseMoveEvent, não em uma exceção Python capturável.
+        """
         anchor = self.anchors.pop(name, None)
         if not anchor:
             return
 
-        for conn in self.connections[:]:
-            if conn.source_anchor == anchor or conn.target_anchor == anchor:
-                conn.prepare_delete()
-                if conn.scene():
-                    conn.scene().removeItem(conn)
+        conns_to_remove = [
+            conn for conn in self.connections[:]
+            if conn.source_anchor == anchor or conn.target_anchor == anchor
+        ]
+        for conn in conns_to_remove:
+            conn.prepare_delete()
 
         if hasattr(self, "internal_connections"):
             for conn in self.internal_connections[:]:
                 if conn.source_anchor == anchor or conn.target_anchor == anchor:
                     self.internal_connections.remove(conn)
 
-        if anchor.scene():
-            anchor.scene().removeItem(anchor)
+        def _remove_from_scene():
+            for conn in conns_to_remove:
+                if conn.scene():
+                    conn.scene().removeItem(conn)
+            if anchor.scene():
+                anchor.scene().removeItem(anchor)
+
+        QTimer.singleShot(0, _remove_from_scene)
 
     def add_label(self, key: str, label: LabelItem, special: bool = False) -> None:
         """Add a label to this node.

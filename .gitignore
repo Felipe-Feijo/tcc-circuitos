@@ -8,3 +8,4 @@ dist/
 
 # Superpowers skill scratch state (not project content)
 .superpowers/
+.claude/settings.local.json

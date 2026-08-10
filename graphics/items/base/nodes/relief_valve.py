@@ -1,5 +1,21 @@
 """Nó gráfico de válvula de alívio de ação direta (sequence valve quando
-pilotada — ver properties["piloted"])."""
+pilotada).
+
+Sprite layout
+-------------
+Width x Height: 200 x 162 px
+Anchor P (topo)  : (width*99/199, 0)       exit -> top
+Anchor T (base)  : (width*99/199, height)  exit -> bottom
+Anchor Y (piloto): (width, height/2)       exit -> right
+                   presente apenas quando properties["piloted"] é True
+
+Sprites
+-------
+relief_valve.png       -- corpo (sem seta de mola ajustável)
+relief_valve_pilot.png -- overlay de pilotagem externa (linha pontilhada
+                          + porta Y), desenhado por cima do corpo quando
+                          piloted=True.
+"""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
@@ -26,13 +42,43 @@ class ReliefValve(NodeItem):
         )
 
     def setup(self) -> None:
-        self.properties = {}
+        self.properties = {"piloted": False}
         self.pixmap = QPixmap(f"{_SPRITE_DIR}/relief_valve.png")
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
         self.add_anchor(AnchorItem("T", QPointF(self.width*99/199, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
         self.add_anchor(AnchorItem("P", QPointF(self.width*99/199, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+
+        self._pixmap_pilot = QPixmap(f"{_SPRITE_DIR}/relief_valve_pilot.png")
+        self._pilot_overlay = None
+        self._update_pilot_anchor()
+
+    def _update_pilot_anchor(self) -> None:
+        """Adiciona/remove a âncora Y e o overlay de pilotagem conforme
+        self.properties. Chamado em setup() e sempre que a propriedade
+        mudar (apply_properties / apply_properties_from_dialog)."""
+        if self.properties.get("piloted"):
+            self.add_anchor(AnchorItem(
+                "Y", QPointF(self.width, self.height / 2), node=self, domain=self.domain,
+                exit_directions={"external": ["right"]},
+            ))
+            self._pilot_overlay = self._pixmap_pilot
+        else:
+            self.remove_anchor("Y")
+            self._pilot_overlay = None
+
+    def apply_properties(self) -> None:
+        self._update_pilot_anchor()
+        self.update()
+
+    def paint(self, painter, option, widget=None):
+        super().paint(painter, option, widget)
+        if self._pilot_overlay is not None:
+            painter.save()
+            painter.translate(self._visual_offset)
+            self.draw_pixmap(painter, QPointF(0, 0), self._pilot_overlay)
+            painter.restore()
 
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Relief Valve — Properties")
@@ -42,11 +88,19 @@ class ReliefValve(NodeItem):
                 value=self.properties.get("p_set"),
                 required=True,
             )
+            dialog._field_piloted = dialog.add_bool_field(
+                "Pilotagem externa (Y)", value=self.properties.get("piloted", False),
+            )
         else:
             dialog._field_p_set = None
+            dialog._field_piloted = None
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
         if dialog._field_p_set is not None:
             p_set_text = dialog._field_p_set.text().strip()
             self.properties["p_set"] = float(p_set_text) if p_set_text else None
+        if dialog._field_piloted is not None:
+            self.properties["piloted"] = dialog._field_piloted.isChecked()
+        self._update_pilot_anchor()
+        self.update()

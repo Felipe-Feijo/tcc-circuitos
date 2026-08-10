@@ -1,7 +1,7 @@
 import uuid
 import copy
-from PyQt6.QtWidgets import QGraphicsItem, QMenu
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, pyqtProperty
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu
+from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPixmap, QColor
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -449,23 +449,61 @@ class NodeItem(DiagramItemBase):
         self.anchors[anchor.name] = anchor
 
     def remove_anchor(self, name: str) -> None:
+        """Remove a âncora `name` e qualquer conexão ligada a ela.
+
+        Confirmado por repro real (2026-08): remover a âncora e sua conexão
+        de forma síncrona -- mesmo com prepare_delete()+removeItem() feitos
+        de imediato -- é uma condição de corrida sensível a timing que pode
+        deixar o índice espacial (BSP) da QGraphicsScene inconsistente,
+        derrubando o processo com "Windows fatal exception: access
+        violation" num mouseMoveEvent real subsequente (o crash somem
+        quando se adiciona qualquer instrumentação de debug que atrase o
+        event loop, o que é a assinatura clássica desse tipo de corrida).
+        Não reproduzível com QTest sintético -- só com mouse real.
+
+        Mitigação: seguir o EXATO padrão já usado por
+        editor/delete_manager.py (DeleteManager.do_delete()) para o mesmo
+        problema -- adiar TUDO (contabilidade + remoção física) como uma
+        única unidade atômica via QTimer.singleShot(0, ...), e forçar a
+        reconstrução do índice espacial da cena depois. A âncora some de
+        self.anchors de imediato (outros métodos como hydraulic_ports()
+        continuam podendo contar com isso no retorno desta chamada), mas a
+        conexão só é desligada (prepare_delete) e removida da cena no
+        próximo ciclo do event loop -- exatamente como uma deleção pelo
+        DeleteManager.
+        """
         anchor = self.anchors.pop(name, None)
         if not anchor:
             return
 
-        for conn in self.connections[:]:
-            if conn.source_anchor == anchor or conn.target_anchor == anchor:
+        matched_connections = [
+            conn for conn in self.connections[:]
+            if conn.source_anchor == anchor or conn.target_anchor == anchor
+        ]
+
+        def _do_remove():
+            for conn in matched_connections:
                 conn.prepare_delete()
+            for conn in matched_connections:
                 if conn.scene():
                     conn.scene().removeItem(conn)
+            scene = anchor.scene()
+            if scene:
+                scene.removeItem(anchor)
+                # Força reconstrução do índice espacial (BSP) -- mesma
+                # dança usada em DeleteManager.do_delete() depois de
+                # remover itens da cena.
+                current_index = scene.itemIndexMethod()
+                scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
+                scene.setItemIndexMethod(current_index)
+                scene.update()
 
         if hasattr(self, "internal_connections"):
             for conn in self.internal_connections[:]:
                 if conn.source_anchor == anchor or conn.target_anchor == anchor:
                     self.internal_connections.remove(conn)
 
-        if anchor.scene():
-            anchor.scene().removeItem(anchor)
+        QTimer.singleShot(0, _do_remove)
 
     def add_label(self, key: str, label: LabelItem, special: bool = False) -> None:
         """Add a label to this node.
@@ -558,7 +596,17 @@ class NodeItem(DiagramItemBase):
         if dialog.exec():
             self.apply_properties_from_dialog(dialog)
             if before is not None:
-                undo_stack.push_snapshot(scene, self.editor, before, "Editar propriedades")
+                # Adiado (mesma fila de QTimer.singleShot(0, ...) usada por
+                # remove_anchor()): se apply_properties_from_dialog() acabou
+                # de agendar a remoção de uma âncora/conexão, aquele
+                # callback foi enfileirado ANTES deste -- roda primeiro,
+                # garantindo que o snapshot "depois" veja a cena já
+                # totalmente assentada, sem uma conexão pela metade.
+                editor = self.editor
+                QTimer.singleShot(
+                    0,
+                    lambda: undo_stack.push_snapshot(scene, editor, before, "Editar propriedades"),
+                )
 
         event.accept()
 

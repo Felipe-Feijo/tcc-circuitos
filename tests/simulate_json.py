@@ -34,7 +34,7 @@ from simulation.simulation_engine import SimulationEngine
 
 def _get_node_classes():
     from simulation.nodes.reservoir import Reservoir
-    from simulation.nodes.relief_valve import DirectOperatedReliefValve
+    from simulation.nodes.relief_valve import ReliefValve
     from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
     from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
@@ -44,7 +44,7 @@ def _get_node_classes():
 
     return {
         "Reservoir":                  Reservoir,
-        "DirectOperatedReliefValve":  DirectOperatedReliefValve,
+        "ReliefValve":                ReliefValve,
         "FixedDisplacementPump":      FixedDisplacementPump,
         "Valve_3_2_Ways":             Valve_3_2_Ways,
         "Valve_4_2_Ways":             Valve_4_2_Ways,
@@ -59,7 +59,7 @@ def _get_node_classes():
 
 ANCHORS_BY_TYPE = {
     "Reservoir":                 ["T"],
-    "DirectOperatedReliefValve": ["P", "T"],
+    "ReliefValve":               ["P", "T"],
     "FixedDisplacementPump":     ["P", "S"],
     "Valve_3_2_Ways":            ["P", "A", "R"],
     "Valve_4_2_Ways":            ["P", "A", "B", "T"],

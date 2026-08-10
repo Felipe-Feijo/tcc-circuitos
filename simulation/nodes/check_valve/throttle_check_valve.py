@@ -63,7 +63,7 @@ elimina essa ambiguidade.
 Diferente da retenção pura, isso NÃO é complementaridade (nunca força
 vazão ou pressão exatamente a zero) -- é uma resistência que muda de
 valor conforme o sentido, então usa uma ramificação dura (if/else, igual
-ao já usado em DirectOperatedReliefValve) em vez de Fischer-Burmeister.
+ao já usado em ReliefValve) em vez de Fischer-Burmeister.
 
 `k` é obrigatório no domínio hidráulico (mesmo padrão de Valve_3_2_Ways).
 Mais a conservação de vazão: Q_X + Q_Y = 0.

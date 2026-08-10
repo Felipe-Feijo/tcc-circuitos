@@ -64,7 +64,7 @@ Behaviour (hydraulic)
 Mais simples que o pneumático: nenhum estado próprio, tudo decidido a
 cada solve pelas equações. Modela a válvula via complementaridade
 suavizada (Fischer-Burmeister), o mesmo mecanismo já usado por
-DirectOperatedReliefValve (simulation/nodes/relief_valve.py) para
+ReliefValve (simulation/nodes/relief_valve.py) para
 alternar entre dois regimes sem uma transição abrupta que quebre a
 convergência do solver:
 

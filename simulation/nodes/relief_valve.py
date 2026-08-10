@@ -1,16 +1,17 @@
-"""Nó de simulação de válvula de alívio de ação direta."""
+"""Nó de simulação de válvula de alívio de ação direta (sequence valve
+quando pilotada — ver properties["piloted"])."""
 
 import math
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
 
-class DirectOperatedReliefValve(Node, HydraulicMixin):
+class ReliefValve(Node, HydraulicMixin):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
-        super().__init__(node_id, "direct_operated_relief_valve", domain=domain, properties=properties)
+        super().__init__(node_id, "relief_valve", domain=domain, properties=properties)
         if self.domain == "hydraulic":
             p_set = self.properties.get("p_set")
             if p_set is None:
-                raise ValueError(f"DirectOperatedReliefValve '{self.id}': propriedade obrigatória 'p_set' não preenchida.")
+                raise ValueError(f"ReliefValve '{self.id}': propriedade obrigatória 'p_set' não preenchida.")
             self.p_set        = float(p_set)
             self.flow_var_in  = f"Q_{self.id}_in"
             self.flow_var_out = f"Q_{self.id}_out"
@@ -18,9 +19,6 @@ class DirectOperatedReliefValve(Node, HydraulicMixin):
     @property
     def p_hint(self) -> float:
         return self.p_set
-        # anchor_p = self.anchors.get("P")
-        # p_hint = anchor_p.pressure if isinstance(anchor_p.pressure, (int, float)) and anchor_p.pressure >= self.p_set else 0.0
-        # return p_hint
 
     @property
     def variables(self) -> list:

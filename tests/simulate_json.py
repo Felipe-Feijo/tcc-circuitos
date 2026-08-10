@@ -100,7 +100,10 @@ def load_circuit(path: str) -> tuple[dict, list]:
         node = cls(nid, domain=domain, properties=props)
 
         # adiciona âncoras hidráulicas
-        for aname in ANCHORS_BY_TYPE.get(ntype, []):
+        anchor_names = ANCHORS_BY_TYPE.get(ntype, [])
+        if ntype == "ReliefValve" and props.get("piloted"):
+            anchor_names = anchor_names + ["Y"]
+        for aname in anchor_names:
             anchor = node.add_anchor(aname, domain)
             anchor_index[(nid, aname)] = anchor
 

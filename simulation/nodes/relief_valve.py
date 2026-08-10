@@ -63,7 +63,13 @@ class ReliefValve(Node, HydraulicMixin):
         eq_conservation = (Q_in + Q_out) / Q_scale
 
         if self.piloted:
-            P_y = x[idx[self.anchors["Y"].pressure_var]]
+            y_anchor = self.anchors.get("Y")
+            if y_anchor is None or not y_anchor.connections:
+                raise ValueError(
+                    f"ReliefValve '{self.id}': porta 'Y' pilotada mas não conectada a nada — "
+                    "conecte Y a uma referência de pressão ou desative a pilotagem."
+                )
+            P_y = x[idx[y_anchor.pressure_var]]
             effective_p_set = self.p_set + P_y
         else:
             effective_p_set = self.p_set

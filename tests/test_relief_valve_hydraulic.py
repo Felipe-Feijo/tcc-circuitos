@@ -19,6 +19,10 @@ def make_valve(piloted=False, p_set=1.5e7):
     if piloted:
         valve.add_anchor("Y", domain="hydraulic")
         valve.anchors["Y"].pressure_var = "P_Y"
+        # sentinela -- simula Y conectada a algo, já que este helper não
+        # monta um grafo de conexões real. Testes que exercitam o caso
+        # "Y desconectada" removem isto explicitamente.
+        valve.anchors["Y"].connections.append(object())
     return valve
 
 
@@ -137,6 +141,98 @@ def test_piloted_open_regime_also_uses_effective_threshold():
     _, eq_fb, _ = valve.equations(x, idx)
     # No regime fechado com Q_in=0: a = (effective_p_set - P_in)/P_scale > 0, b=0 -> raiz.
     assert abs(eq_fb) < 1e-9
+
+
+def test_effective_p_set_is_exactly_p_set_plus_p_y_not_a_larger_multiple():
+    """Ancora a fórmula pelos dois lados: um P_in acima de p_set + p_y é
+    raiz no regime aberto; um P_in estritamente entre p_set + p_y e
+    p_set + 2*p_y NÃO é raiz em nenhum regime -- isso só é verdade se o
+    limiar efetivo for exatamente p_set + p_y (uma fórmula errada como
+    p_set + 2*p_y tornaria esse segundo P_in uma raiz do regime fechado)."""
+    p_set = 1.5e7
+    p_y = 1e6
+    threshold = p_set + p_y  # 1.6e7
+
+    # ---- lado 1: regime aberto, P_in e P_out acima do limiar, Q_in > 0 ----
+    valve = make_valve(piloted=True, p_set=p_set)
+    idx = make_idx(valve, piloted=True)
+    p_above = threshold + 1e6  # 1.7e7 -- bem acima do limiar efetivo
+    x_open = np.array([1e-4, -1e-4, p_above, p_above, 0.0, p_y])
+    _, eq_fb_open, _ = valve.equations(x_open, idx)
+    assert abs(eq_fb_open) < 1e-9  # eq_fb = (P_in - P_out)/P_scale = 0 -- raiz
+
+    # ---- lado 2: P_in estritamente entre threshold e p_set + 2*p_y ----
+    valve2 = make_valve(piloted=True, p_set=p_set)
+    idx2 = make_idx(valve2, piloted=True)
+    p_between = p_set + 1.5 * p_y  # 1.65e7 -- entre threshold (1.6e7) e p_set+2*p_y (1.7e7)
+    x_closed = np.array([0.0, 0.0, p_between, 0.0, 0.0, p_y])
+    _, eq_fb_closed, _ = valve2.equations(x_closed, idx2)
+    # Só não é raiz se o limiar efetivo for 1.6e7 (P_in já passou dele);
+    # se a fórmula usasse p_set + 2*p_y (1.7e7), P_in ainda estaria abaixo
+    # do limiar e isso seria (erroneamente) uma raiz.
+    assert abs(eq_fb_closed) > 1e-6
+
+
+def test_piloted_with_unconnected_y_raises_value_error():
+    """Y pilotada mas nunca conectada a nada -- P_y ficaria com o seed
+    default (p_ref, igual a p_set), dobrando silenciosamente o limiar
+    efetivo. Deve falhar alto e claro em vez de simular errado."""
+    valve = make_valve(piloted=True)
+    idx = make_idx(valve, piloted=True)
+    valve.anchors["Y"].connections.clear()  # desfaz o sentinela do helper
+    assert valve.anchors["Y"].connections == []
+    x = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    try:
+        valve.equations(x, idx)
+        assert False, "esperava ValueError para Y pilotada desconectada"
+    except ValueError as e:
+        assert "Y" in str(e)
+
+
+def test_piloted_with_connected_y_does_not_raise():
+    """Com pelo menos uma conexão em Y.connections (já fornecida pelo
+    helper make_valve), a validação passa e equations() não levanta."""
+    valve = make_valve(piloted=True)
+    idx = make_idx(valve, piloted=True)
+    assert valve.anchors["Y"].connections  # helper já conectou o sentinela
+    x = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    valve.equations(x, idx)  # não deve levantar
+
+
+# ---------------------------------------------------------------------------
+# Regressão -- criação de âncoras via mapa estático (tests/simulate_json.py)
+# ---------------------------------------------------------------------------
+
+def test_piloted_valve_built_like_simulate_json_does_not_raise_keyerror():
+    """tests/simulate_json.py cria âncoras a partir de um mapa estático
+    ANCHORS_BY_TYPE antes de aplicar properties. Para um ReliefValve com
+    piloted=True, isso precisa incluir 'Y', senão equations() explode com
+    KeyError ao tentar ler self.anchors['Y']. Este teste replica o padrão
+    de load_circuit() em tests/simulate_json.py."""
+    from tests.simulate_json import ANCHORS_BY_TYPE
+
+    props = {"p_set": 1.5e7, "piloted": True}
+    valve = ReliefValve("rv2", domain="hydraulic", properties=props)
+
+    anchor_names = ANCHORS_BY_TYPE.get("ReliefValve", [])
+    if props.get("piloted"):
+        anchor_names = anchor_names + ["Y"]
+    for aname in anchor_names:
+        valve.add_anchor(aname, "hydraulic")
+
+    assert set(valve.hydraulic_ports().keys()) <= set(valve.anchors.keys())
+
+    for aname, anchor in valve.anchors.items():
+        anchor.pressure_var = f"P_{aname}"
+    valve.anchors["Y"].connections.append(object())
+
+    idx = {
+        valve.flow_var_in: 0, valve.flow_var_out: 1,
+        valve.flow_var_y: 2,
+        "P_P": 3, "P_T": 4, "P_Y": 5,
+    }
+    x = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    valve.equations(x, idx)  # não deve levantar KeyError
 
 
 def test_y_port_has_zero_flow_equation():

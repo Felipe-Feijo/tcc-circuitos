@@ -568,14 +568,33 @@ class ConnectionItem(DiagramItemBase):
         if self._drag_mode == 'waypoint':
             i = self._drag_wp_index
             if i is not None and 0 <= i < len(self._drag_original_wps):
-                wps  = [QPointF(p) for p in self._drag_original_wps]
-                orig = wps[i]
-                prev_h = i > 0          and abs(wps[i-1].y() - orig.y()) < 0.5
-                prev_v = i > 0          and abs(wps[i-1].x() - orig.x()) < 0.5
-                next_h = i < len(wps)-1 and abs(wps[i+1].y() - orig.y()) < 0.5
-                next_v = i < len(wps)-1 and abs(wps[i+1].x() - orig.x()) < 0.5
-                new_x  = sp.x() if (prev_v or next_v) else orig.x()
-                new_y  = sp.y() if (prev_h or next_h) else orig.y()
+                orig_wps = self._drag_original_wps
+                _, _, p1_out, p2_in, _, _ = self._compute_exit_entry()
+                full = [p1_out, *orig_wps, p2_in]
+                fi   = i + 1  # desloca pro índice em `full`, que tem p1_out na ponta
+                orig = full[fi]
+                prev_h = abs(full[fi-1].y() - orig.y()) < 0.5
+                prev_v = abs(full[fi-1].x() - orig.x()) < 0.5
+                next_h = abs(full[fi+1].y() - orig.y()) < 0.5
+                next_v = abs(full[fi+1].x() - orig.x()) < 0.5
+                # full[0]/full[-1] são os pontos de margem do anchor (p1_out/p2_in),
+                # não waypoints -- eles nunca se movem pra acompanhar o arrasto. Por
+                # isso, quando o vizinho em questão É o anchor (fi-1 == 0 ou
+                # fi+1 == len(full)-1), um eixo "batendo" tem que TRAVAR esse eixo
+                # (senão o segmento até o anchor vira diagonal, já que não há como
+                # compensar movendo o outro lado). Quando o vizinho é um waypoint de
+                # verdade, o eixo batendo LIBERA o movimento nesse eixo, porque o
+                # bloco de escrita abaixo arrasta o vizinho junto pra manter o
+                # segmento ortogonal.
+                prev_is_anchor = fi - 1 == 0
+                next_is_anchor = fi + 1 == len(full) - 1
+                lock_y = (prev_h and prev_is_anchor) or (next_h and next_is_anchor)
+                lock_x = (prev_v and prev_is_anchor) or (next_v and next_is_anchor)
+                free_y = not lock_y and ((prev_h and not prev_is_anchor) or (next_h and not next_is_anchor))
+                free_x = not lock_x and ((prev_v and not prev_is_anchor) or (next_v and not next_is_anchor))
+                new_x  = sp.x() if free_x else orig.x()
+                new_y  = sp.y() if free_y else orig.y()
+                wps = [QPointF(p) for p in orig_wps]
                 wps[i] = QPointF(new_x, new_y)
                 if i > 0:
                     if prev_h:   wps[i-1] = QPointF(wps[i-1].x(), new_y)

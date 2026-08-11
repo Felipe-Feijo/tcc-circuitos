@@ -234,7 +234,7 @@ class ConnectionItem(DiagramItemBase):
         return p1, p2, self._apply_margin(p1, exit_dir, source_margin), \
                self._apply_margin(p2, entry_dir, target_margin), exit_dir, entry_dir
 
-    def _resolved_points(self) -> tuple[list, frozenset]:
+    def _resolved_points(self, wps: list | None = None) -> tuple[list, frozenset]:
         """Sequência completa de pontos pra cálculo de vizinhança/colinearidade,
         incluindo os pontos de margem do anchor como entradas 'ancoradas'.
 
@@ -243,9 +243,14 @@ class ConnectionItem(DiagramItemBase):
         arrasto direto nem aparece como handle; nunca é deletável. Fonte única
         de verdade sobre "quem é vizinho de quem" -- usada tanto pelo drag de
         waypoint quanto pelo reajuste de borda após mover um nó.
+
+        `wps` permite calcular contra uma lista de waypoints explícita (ex.
+        um snapshot congelado durante um drag) em vez de `self.waypoints`.
         """
+        if not self.target_anchor:
+            return [], frozenset()
         _, _, p1_out, p2_in, _, _ = self._compute_exit_entry()
-        points = [p1_out, *self.waypoints, p2_in]
+        points = [p1_out, *(self.waypoints if wps is None else wps), p2_in]
         return points, frozenset({0, len(points) - 1})
 
     # =========================================================================
@@ -573,8 +578,7 @@ class ConnectionItem(DiagramItemBase):
             i = self._drag_wp_index
             if i is not None and 0 <= i < len(self._drag_original_wps):
                 orig_wps = self._drag_original_wps
-                _, _, p1_out, p2_in, _, _ = self._compute_exit_entry()
-                full = [p1_out, *orig_wps, p2_in]
+                full, _  = self._resolved_points(orig_wps)
                 fi   = i + 1  # desloca pro índice em `full`, que tem p1_out na ponta
                 orig = full[fi]
                 prev_h = abs(full[fi-1].y() - orig.y()) < 0.5
@@ -655,9 +659,9 @@ class ConnectionItem(DiagramItemBase):
         """Remove waypoints redundantes após drag de segmento (3 pontos colineares)."""
         if not self.waypoints:
             return
-        pts    = self.get_path_points()
-        p1_out = pts[1]  if len(pts) > 1 else None
-        p2_in  = pts[-2] if len(pts) > 1 else None
+        resolved = self._resolved_points()[0]
+        p1_out   = resolved[0]  if resolved else None
+        p2_in    = resolved[-1] if resolved else None
 
         def neighbour(i):
             if i < 0:                    return p1_out
@@ -681,7 +685,11 @@ class ConnectionItem(DiagramItemBase):
                 else:
                     i += 1
         self.prepareGeometryChange()
-        self.adjust_waypoints_for_node_move()
+        # Um drag de segmento/waypoint nunca é um "node move" -- moved_source/
+        # moved_target=True faria o branch de colapso de dobra colinear em
+        # adjust_waypoints_for_node_move rerrotear a conexão do zero mesmo
+        # numa rota gerada externamente (ver Important #2 do review final).
+        self.adjust_waypoints_for_node_move(moved_source=False, moved_target=False)
 
     def _undo_segment_split(self):
         """Desfaz o split temporário de segmento quando o press+release não

@@ -126,13 +126,39 @@ def test_dragging_first_waypoint_keeps_boundary_segment_orthogonal():
     with patch.object(DiagramItemBase, 'mouseReleaseEvent', lambda self, event: None):
         conn.mouseReleaseEvent(FakeMouseEvent(wp0.x() + 40, wp0.y() + 40))
 
-    p1_out, _ = conn._resolved_points()[0], None
     p1_out = conn._resolved_points()[0][0]
     new_wp0 = conn.waypoints[0]
     same_x = abs(p1_out.x() - new_wp0.x()) < 0.5
     same_y = abs(p1_out.y() - new_wp0.y()) < 0.5
     assert same_x or same_y, (
         f"segmento p1_out->waypoints[0] não é ortogonal: {p1_out} -> {new_wp0}"
+    )
+
+
+def test_dragging_last_waypoint_keeps_boundary_segment_orthogonal():
+    """Espelho de test_dragging_first_waypoint_keeps_boundary_segment_orthogonal
+    para o último waypoint, contra p2_in em vez de p1_out (spec Sec.4)."""
+    scene = QGraphicsScene()
+    node_a = make_node(scene, 0, 0, ["right"])
+    node_b = make_node(scene, 200, 50, ["left"])
+    conn = make_connection(scene, node_a, node_b)
+    conn.get_path_points()  # inicializa a rota padrão (2 waypoints, hvh)
+
+    last_idx = len(conn.waypoints) - 1
+    wp_last = conn.waypoints[last_idx]
+    conn.mousePressEvent(FakeMouseEvent(wp_last.x(), wp_last.y()))
+    assert conn._drag_mode == 'waypoint'
+
+    conn.mouseMoveEvent(FakeMouseEvent(wp_last.x() + 40, wp_last.y() + 40))
+    with patch.object(DiagramItemBase, 'mouseReleaseEvent', lambda self, event: None):
+        conn.mouseReleaseEvent(FakeMouseEvent(wp_last.x() + 40, wp_last.y() + 40))
+
+    p2_in = conn._resolved_points()[0][-1]
+    new_wp_last = conn.waypoints[last_idx]
+    same_x = abs(p2_in.x() - new_wp_last.x()) < 0.5
+    same_y = abs(p2_in.y() - new_wp_last.y()) < 0.5
+    assert same_x or same_y, (
+        f"segmento waypoints[-1]->p2_in não é ortogonal: {new_wp_last} -> {p2_in}"
     )
 
 
@@ -187,3 +213,54 @@ def test_real_segment_drag_still_moves_the_segment():
     # Um drag real desloca o segmento -- os waypoints do meio devem ter
     # mudado de x (segmento vertical arrastado horizontalmente).
     assert any(abs(wp.x() - click_x) > 1.0 for wp in conn.waypoints)
+
+
+def test_real_drag_on_single_waypoint_generator_route_does_not_degenerate():
+    """Reprodução do achado 'Important #2' do review final: uma rota de 1
+    waypoint só vinda de um gerador (ex. cascade_layout), quando arrastada de
+    verdade (não um clique), não pode virar uma bagunça de pontos duplicados
+    -- _collapse_segment_corners() chamava adjust_waypoints_for_node_move()
+    sem argumentos, que default pra moved_source=moved_target=True e aciona
+    o branch de 'todos os waypoints colineares' (pensado pra node moves de
+    verdade), descartando a rota do gerador via _reroute_waypoints()."""
+    scene = QGraphicsScene()
+    node_a = make_node(scene, 0, 0, ["right"])
+    node_b = make_node(scene, 0, 100, ["right"])
+    # Elbow de 1 waypoint só, igual ao repro do reviewer -- rota vinda de um
+    # gerador que desviou de um obstáculo (não é o que o heurístico padrão
+    # escolheria sozinho para duas âncoras que saem ambas pra direita).
+    conn = make_connection(scene, node_a, node_b, waypoints=[(80, 0)])
+
+    pts = conn.get_path_points()
+    # Segmento horizontal entre p1_out e o waypoint único.
+    seg_a, seg_b = pts[1], pts[2]
+    click_x = (seg_a.x() + seg_b.x()) / 2
+    click_y = (seg_a.y() + seg_b.y()) / 2
+
+    conn.mousePressEvent(FakeMouseEvent(click_x, click_y))
+    assert conn._drag_mode == 'segment'
+    # Drag real de 3px -- acima do _CLICK_EPSILON, então dispara
+    # _collapse_segment_corners() em vez de _undo_segment_split().
+    conn.mouseMoveEvent(FakeMouseEvent(click_x, click_y + 3))
+    with patch.object(DiagramItemBase, 'mouseReleaseEvent', lambda self, event: None):
+        conn.mouseReleaseEvent(FakeMouseEvent(click_x, click_y + 3))
+
+    # Antes do fix, o call sem argumentos a adjust_waypoints_for_node_move()
+    # (moved_source=moved_target=True default) disparava o branch de "todos
+    # colineares" e produzia pontos consecutivos duplicados em self.waypoints
+    # (comprovado empiricamente: virava algo como
+    # [(15,100), (80,100), (80,100)]). Verificamos aqui contra self.waypoints
+    # -- não contra o caminho completo incluindo as pernas até os anchors,
+    # já que a perna waypoint->p2_in é inerentemente não-ortogonal nesta
+    # geometria sintética (duas âncoras que saem ambas pra direita não têm
+    # como ser unidas por uma dobra de 1 waypoint só sem um 4º segmento;
+    # isso é uma característica da fixture, não do bug sendo testado aqui).
+    wps = conn.waypoints
+    assert len(wps) >= 1
+    for a, b in zip(wps, wps[1:]):
+        assert abs(a.x() - b.x()) > 0.5 or abs(a.y() - b.y()) > 0.5, (
+            f"waypoints consecutivos duplicados: {a} == {b}"
+        )
+        same_x = abs(a.x() - b.x()) < 0.5
+        same_y = abs(a.y() - b.y()) < 0.5
+        assert same_x or same_y, f"segmento não-ortogonal entre waypoints: {a} -> {b}"

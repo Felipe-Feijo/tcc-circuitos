@@ -233,6 +233,20 @@ class ConnectionItem(DiagramItemBase):
         return p1, p2, self._apply_margin(p1, exit_dir, source_margin), \
                self._apply_margin(p2, entry_dir, target_margin), exit_dir, entry_dir
 
+    def _resolved_points(self) -> tuple[list, frozenset]:
+        """Sequência completa de pontos pra cálculo de vizinhança/colinearidade,
+        incluindo os pontos de margem do anchor como entradas 'ancoradas'.
+
+        Ancorado = sempre recalculado a partir da posição atual do anchor (por
+        isso já acompanha o componente ao mover, de graça); nunca é alvo de
+        arrasto direto nem aparece como handle; nunca é deletável. Fonte única
+        de verdade sobre "quem é vizinho de quem" -- usada tanto pelo drag de
+        waypoint quanto pelo reajuste de borda após mover um nó.
+        """
+        _, _, p1_out, p2_in, _, _ = self._compute_exit_entry()
+        points = [p1_out, *self.waypoints, p2_in]
+        return points, frozenset({0, len(points) - 1})
+
     # =========================================================================
     # Routing helpers
     # =========================================================================

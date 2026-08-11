@@ -134,3 +134,56 @@ def test_dragging_first_waypoint_keeps_boundary_segment_orthogonal():
     assert same_x or same_y, (
         f"segmento p1_out->waypoints[0] não é ortogonal: {p1_out} -> {new_wp0}"
     )
+
+
+def test_click_without_drag_does_not_reroute_single_waypoint_connection():
+    """Reprodução do bug: uma conexão com 1 waypoint só (o formato mais
+    comum vindo dos geradores, ex. cascade_layout) sempre cai no branch de
+    'reroteia tudo' de adjust_waypoints_for_node_move -- clicar (sem
+    arrastar) no corpo da linha não pode disparar esse branch."""
+    scene = QGraphicsScene()
+    node_a = make_node(scene, 0, 0, ["right"])
+    node_b = make_node(scene, 0, 100, ["right"])
+    # Elbow de 1 waypoint só, deliberadamente diferente do que o heurístico
+    # padrão (_route_between_points) escolheria sozinho -- simula uma rota
+    # vinda de um gerador que desviou de um obstáculo.
+    conn = make_connection(scene, node_a, node_b, waypoints=[(80, 0)])
+
+    pts_before = conn.get_path_points()
+    original_waypoints = [QPointF(p) for p in conn.waypoints]
+
+    # Clica em cima do segmento entre p1_out e o waypoint (índice 0 dos
+    # segmentos internos), sem se mover antes de soltar.
+    seg_a, seg_b = pts_before[1], pts_before[2]
+    click_x = (seg_a.x() + seg_b.x()) / 2
+    click_y = (seg_a.y() + seg_b.y()) / 2
+
+    conn.mousePressEvent(FakeMouseEvent(click_x, click_y))
+    assert conn._drag_mode == 'segment'
+    with patch.object(DiagramItemBase, 'mouseReleaseEvent', lambda self, event: None):
+        conn.mouseReleaseEvent(FakeMouseEvent(click_x, click_y))
+
+    assert len(conn.waypoints) == len(original_waypoints)
+    for got, want in zip(conn.waypoints, original_waypoints):
+        assert abs(got.x() - want.x()) < 0.5 and abs(got.y() - want.y()) < 0.5
+
+
+def test_real_segment_drag_still_moves_the_segment():
+    scene = QGraphicsScene()
+    node_a = make_node(scene, 0, 0, ["right"])
+    node_b = make_node(scene, 200, 50, ["left"])
+    conn = make_connection(scene, node_a, node_b)
+    pts = conn.get_path_points()  # 2-waypoint hvh route
+
+    seg_a, seg_b = pts[2], pts[3]  # segmento entre os 2 waypoints (vertical)
+    click_x = (seg_a.x() + seg_b.x()) / 2
+    click_y = (seg_a.y() + seg_b.y()) / 2
+
+    conn.mousePressEvent(FakeMouseEvent(click_x, click_y))
+    conn.mouseMoveEvent(FakeMouseEvent(click_x + 30, click_y))
+    with patch.object(DiagramItemBase, 'mouseReleaseEvent', lambda self, event: None):
+        conn.mouseReleaseEvent(FakeMouseEvent(click_x + 30, click_y))
+
+    # Um drag real desloca o segmento -- os waypoints do meio devem ter
+    # mudado de x (segmento vertical arrastado horizontalmente).
+    assert any(abs(wp.x() - click_x) > 1.0 for wp in conn.waypoints)

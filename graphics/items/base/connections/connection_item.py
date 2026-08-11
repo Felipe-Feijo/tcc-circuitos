@@ -31,6 +31,7 @@ class ConnectionItem(DiagramItemBase):
         self._drag_wp_index:         int | None   = None
         self._drag_is_horizontal:    bool         = True
         self._drag_original_wps:     list         = []
+        self._drag_press_pos:        QPointF | None = None
         self._last_exit_dir:         str          = "right"
         self._last_entry_dir:        str          = "left"
         self._selected_wp:           int | None   = None
@@ -379,6 +380,7 @@ class ConnectionItem(DiagramItemBase):
     _WP_HOVER_RANGE   = 20
     _SEG_HIT_DIST     = 8
     _WP_VISIBLE_RANGE = 40
+    _CLICK_EPSILON     = 2.0   # px -- abaixo disso, press+release conta como clique, não drag
 
     # =========================================================================
     # Waypoints — hit detection
@@ -501,6 +503,7 @@ class ConnectionItem(DiagramItemBase):
         self._drag_wp_index      = None
         self._drag_is_horizontal = True
         self._drag_original_wps  = []
+        self._drag_press_pos     = None
 
     # =========================================================================
     # Mouse events
@@ -553,6 +556,7 @@ class ConnectionItem(DiagramItemBase):
             self._drag_is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
             self._drag_mode          = 'segment'
             self._drag_wp_index      = ins_idx
+            self._drag_press_pos     = QPointF(sp)
             self.prepareGeometryChange()
             self.waypoints.insert(ins_idx,     QPointF(seg_a))
             self.waypoints.insert(ins_idx + 1, QPointF(seg_b))
@@ -631,7 +635,16 @@ class ConnectionItem(DiagramItemBase):
     def mouseReleaseEvent(self, event):
         was_waypoint_drag = (self._drag_mode == 'waypoint')
         if self._drag_mode == 'segment':
-            self._collapse_segment_corners()
+            sp     = event.scenePos()
+            press  = self._drag_press_pos
+            moved  = press is not None and (
+                abs(sp.x() - press.x()) >= self._CLICK_EPSILON or
+                abs(sp.y() - press.y()) >= self._CLICK_EPSILON
+            )
+            if moved:
+                self._collapse_segment_corners()
+            else:
+                self._undo_segment_split()
         self._reset_drag_state()
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         super().mouseReleaseEvent(event)
@@ -669,6 +682,21 @@ class ConnectionItem(DiagramItemBase):
                     i += 1
         self.prepareGeometryChange()
         self.adjust_waypoints_for_node_move()
+
+    def _undo_segment_split(self):
+        """Desfaz o split temporário de segmento quando o press+release não
+        teve deslocamento real -- ou seja, foi um clique de seleção, não um
+        drag. Remove os 2 waypoints inseridos em mousePressEvent e pronto:
+        não passa por adjust_waypoints_for_node_move, então uma conexão com
+        rota não-trivial (ex. vinda de um gerador) não corre o risco de ser
+        substituída pelo roteamento heurístico padrão só por ter sido clicada.
+        """
+        i = self._drag_wp_index
+        if i is not None and 0 <= i + 1 < len(self.waypoints):
+            self.prepareGeometryChange()
+            self.waypoints.pop(i + 1)
+            self.waypoints.pop(i)
+            self.update()
 
     def mouseDoubleClickEvent(self, event):
         """Double-click num segmento insere um waypoint naquela posição."""

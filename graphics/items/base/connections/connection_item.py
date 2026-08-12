@@ -350,6 +350,28 @@ class ConnectionItem(DiagramItemBase):
         wps = self.waypoints
         n   = len(wps)
 
+        # Rota ainda "intocada" (pristine): se os waypoints atuais batem
+        # exatamente com o que `_route_between_points` geraria a partir da
+        # última posição validada dos anchors (`_last_p1_out`/`_last_p2_in`
+        # + direções cacheadas), então ninguém nunca arrastou/inseriu/editou
+        # nada aqui -- é uma rota puramente automática (hvh/vhv/hvhv/vhvh).
+        # `_adjust_boundary` não tem como saber isso: seu único sinal é
+        # "`w` estava alinhado com o anchor" (`was_aligned`), o que é falso
+        # por construção pro ponto de offset intermediário de um hvhv/vhvh
+        # (ele fica no meio do caminho, nunca em cima do anchor) -- sem essa
+        # checagem, uma rota automática de 3 pontos ganha uma ponte espúria
+        # ao mover, em vez de simplesmente re-rotear (que é sempre seguro
+        # aqui, já que não existe desvio manual pra preservar).
+        if ((moved_source or moved_target) and wps and
+                self._last_p1_out is not None and self._last_p2_in is not None):
+            pristine = self._route_between_points(self._last_p1_out, self._last_p2_in,
+                                                    self._last_exit_dir, self._last_entry_dir)
+            if len(pristine) == len(wps) and all(
+                    abs(a.x() - b.x()) < 0.5 and abs(a.y() - b.y()) < 0.5
+                    for a, b in zip(pristine, wps)):
+                self._reroute_waypoints()
+                return
+
         if moved_source and moved_target and exit_h == entry_h:
             axis_val = (lambda p: p.x()) if not exit_h else (lambda p: p.y())
             ref = axis_val(wps[0])
@@ -364,6 +386,14 @@ class ConnectionItem(DiagramItemBase):
         if moved_target:
             self._adjust_boundary(-1, p2_in, self._last_p2_in, entry_h)
             self._last_p2_in = QPointF(p2_in)
+        if moved_source or moved_target:
+            # Mantém a checagem "pristine" acima válida em movimentos
+            # seguintes: sem isso, `_last_exit_dir`/`_last_entry_dir`
+            # ficariam presos na direção de antes do PRIMEIRO move desta
+            # conexão (só `get_path_points()`/`_reroute_waypoints()`
+            # atualizavam esses dois campos).
+            self._last_exit_dir  = exit_dir
+            self._last_entry_dir = entry_dir
         self.update()
 
     def _adjust_boundary(self, step: int, anchor_pt: QPointF,
@@ -534,8 +564,10 @@ class ConnectionItem(DiagramItemBase):
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
         self.waypoints = [QPointF(pt) for pt in
                           self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
-        self._last_p1_out = QPointF(p1_out)
-        self._last_p2_in  = QPointF(p2_in)
+        self._last_p1_out    = QPointF(p1_out)
+        self._last_p2_in     = QPointF(p2_in)
+        self._last_exit_dir  = exit_dir
+        self._last_entry_dir = entry_dir
         self.prepareGeometryChange()
 
     def _delete_waypoint(self, idx: int):

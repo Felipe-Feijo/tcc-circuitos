@@ -154,3 +154,63 @@ def test_redundant_collinear_filler_points_slide_together_with_the_anchor():
     assert abs(wps[0].y() - (-231.0)) < 0.5
     assert abs(wps[1].x() - p2_in_after_move.x()) < 0.5
     assert abs(wps[1].y() - (-142.0)) < 0.5
+
+
+def test_double_click_loose_point_slides_with_boundary_no_bridge():
+    """O caso que o fix de 29/06 resolveu: um ponto solto inserido no meio
+    de um segmento reto perto da borda deve acompanhar o movimento do
+    anchor sem gerar uma ponte extra (é genuinamente redundante, não um
+    canto deliberado)."""
+    conn, target, source = _load(_state((-342.5, -124.0), []))
+    # `ConnectionItem.from_dict` marca `_waypoints_initialized = True` assim
+    # que a lista de waypoints salva (vazia aqui) é aplicada, sem nunca
+    # chamar `_route_between_points` -- `get_path_points()` então vê
+    # "já inicializado" e não roteia nada, deixando `self.waypoints == []`
+    # pra sempre (o desenho vira só p1_out->p2_in, uma reta possivelmente
+    # diagonal). Isso é diferente de uma conexão nova numa sessão ao vivo,
+    # que nunca passa por `from_dict` e por isso roteia normalmente na
+    # primeira `get_path_points()`. `_reroute_waypoints()` força esse
+    # roteamento real (e popula `_last_p1_out`/`_last_p2_in`), reproduzindo
+    # o estado de uma sessão ao vivo já assentada nesta posição.
+    conn._reroute_waypoints()
+
+    p1_out = conn._resolved_points()[0][0]
+    first_wp = conn.waypoints[0]
+    mid = QPointF((p1_out.x() + first_wp.x()) / 2, (p1_out.y() + first_wp.y()) / 2)
+    ins_idx = conn._insert_waypoint_at_segment(mid)
+    assert ins_idx is not None, "duplo-clique não achou o segmento perto da borda -- ajuste o fixture"
+    n_before = len(conn.waypoints)
+
+    source.setPos(source.x() + 3, source.y() + 3)
+    conn.adjust_waypoints_for_node_move(moved_source=True, moved_target=False)
+
+    assert len(conn.waypoints) == n_before, (
+        f"não deveria inserir ponte pra um ponto solto redundante, achou "
+        f"{[(p.x(), p.y()) for p in conn.waypoints]}"
+    )
+    pts = conn.get_path_points()
+    for a, b in zip(pts, pts[1:]):
+        assert abs(a.x() - b.x()) < 0.5 or abs(a.y() - b.y()) < 0.5, f"segmento diagonal: {a} -> {b}"
+
+
+def test_auto_route_move_does_not_insert_spurious_bridge():
+    """Rota automática (2 ou 3 pontos) não deve nunca ganhar uma ponte
+    espúria ao mover um dos componentes -- é o caso mais comum e não pode
+    regredir."""
+    conn, target, source = _load(_state((-342.5, -124.0), []))
+    # Mesma ressalva do teste acima: força o roteamento automático real em
+    # vez de depender de `get_path_points()`, que é um no-op aqui porque
+    # `from_dict` já marcou `_waypoints_initialized = True` sem rotear.
+    conn._reroute_waypoints()
+    n_before = len(conn.waypoints)
+
+    target.setPos(-300.0, -110.0)
+    conn.adjust_waypoints_for_node_move(moved_source=False, moved_target=True)
+
+    assert len(conn.waypoints) == n_before, (
+        f"rota automática não deveria ganhar waypoint extra, achou "
+        f"{[(p.x(), p.y()) for p in conn.waypoints]}"
+    )
+    pts = conn.get_path_points()
+    for a, b in zip(pts, pts[1:]):
+        assert abs(a.x() - b.x()) < 0.5 or abs(a.y() - b.y()) < 0.5, f"segmento diagonal: {a} -> {b}"

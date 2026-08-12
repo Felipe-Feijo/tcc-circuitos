@@ -177,3 +177,39 @@ class TestAnchorLocalForRouting:
     def test_unknown_anchor_returns_none(self):
         from circuit_generator.sprite_metrics import anchor_local_for_routing
         assert anchor_local_for_routing("Valve_4_2_Ways", "NOPE") is None
+
+
+class TestValve32PAnchorPeerAwareOffset:
+    def test_default_no_peer_type_keeps_worst_case_offset(self):
+        """Comportamento atual preservado quando peer_type não é passado
+        (todos os chamadores existentes que não sabem/precisam do peer)."""
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS
+        base_x = METRICS.anchor_local["Valve_3_2_Ways"]["P"][0]
+        offset = METRICS.pilot_side_offset_x.get("Valve_3_2_Ways", 0.0)
+        local = anchor_local_for_routing("Valve_3_2_Ways", "P")
+        assert local[0] == base_x + offset
+
+    def test_pressure_line_peer_keeps_worst_case_offset(self):
+        """PressureLine -> sig.P é o caso pra que o offset foi desenhado --
+        deve continuar aplicado quando o peer é explicitamente uma PL."""
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS
+        base_x = METRICS.anchor_local["Valve_3_2_Ways"]["P"][0]
+        offset = METRICS.pilot_side_offset_x.get("Valve_3_2_Ways", 0.0)
+        local = anchor_local_for_routing("Valve_3_2_Ways", "P", peer_type="PressureLine")
+        assert local[0] == base_x + offset
+
+    def test_non_pressure_line_peer_drops_the_offset(self):
+        """sig.A -> sig.P (elo de cadeia entre válvulas de sinalização) não
+        deve ter o offset -- é ele quem causava o loop reportado pelo usuário."""
+        from circuit_generator.sprite_metrics import anchor_local_for_routing, METRICS
+        base_x = METRICS.anchor_local["Valve_3_2_Ways"]["P"][0]
+        local = anchor_local_for_routing("Valve_3_2_Ways", "P", peer_type="Valve_3_2_Ways")
+        assert local[0] == base_x
+
+    def test_pr_anchor_unaffected_by_peer_type(self):
+        """PR nunca teve essa ambiguidade (comutação, não PL) -- peer_type
+        não deve mudar seu comportamento em nenhum caso."""
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+        local_no_peer = anchor_local_for_routing("Valve_4_2_Ways", "PR")
+        local_with_peer = anchor_local_for_routing("Valve_4_2_Ways", "PR", peer_type="Valve_3_2_Ways")
+        assert local_no_peer == local_with_peer

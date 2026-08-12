@@ -761,7 +761,8 @@ def apply(data: dict) -> dict:
     # ── Roteamento A* ─────────────────────────────────────────────────────
     from circuit_generator.astar_router import build_grid, route_connection, get_exit_dir
 
-    def _scene_xy(node_id: str, anchor_name: str) -> tuple[float, float] | None:
+    def _scene_xy(node_id: str, anchor_name: str,
+                  peer_type: str | None = None) -> tuple[float, float] | None:
         pos = node_by_id[node_id]["position"]
         ntype = node_type_map.get(node_id, "")
         if ntype == "PressureLine" and anchor_name.startswith("X"):
@@ -781,18 +782,18 @@ def apply(data: dict) -> dict:
             # a PL reservou anchors à esquerda.
             list_origin = min(int(a[1:]) for a in node_by_id[node_id]["properties"]["anchors"])
             return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, pos["y"] + _M.pl_pix_h)
-        local = anchor_local_for_routing(ntype, anchor_name)
+        local = anchor_local_for_routing(ntype, anchor_name, peer_type=peer_type)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
     astar_grid = build_grid(data["nodes"])
     for conn in data.get("connections", []):
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
         t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
-        spos = _scene_xy(s_id, s_anc)
-        tpos = _scene_xy(t_id, t_anc)
+        s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
+        spos = _scene_xy(s_id, s_anc, peer_type=t_type)
+        tpos = _scene_xy(t_id, t_anc, peer_type=s_type)
         if spos is None or tpos is None:
             continue
-        s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
         wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),
                                 tpos, get_exit_dir(t_type, t_anc),
                                 src_type=s_type, tgt_type=t_type,

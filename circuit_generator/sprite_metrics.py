@@ -368,7 +368,8 @@ def _load() -> SpriteMetrics:
 METRICS: SpriteMetrics = _load()
 
 
-def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, float] | None:
+def anchor_local_for_routing(node_type: str, anchor_name: str,
+                              peer_type: str | None = None) -> tuple[float, float] | None:
     """
     Como METRICS.anchor_local[node_type][anchor_name], mas para PR soma
     sempre o deslocamento de comutação -- o pior caso (mais à direita)
@@ -377,16 +378,29 @@ def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, f
     caso, mais à esquerda, já é o valor sem deslocamento). Ver
     docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
 
-    Valve_3_2_Ways.P recebe o MESMO ajuste, pelo mesmo motivo: é ele quem
-    recebe a conexão direta de uma PressureLine nas válvulas de sinalização
-    de confirmação (cascata e passo a passo), e seu anchor local também é
-    uma fração fixa de self.width (graphics/items/base/nodes/
-    directional_valve/valve_3_2_ways.py), sem compensar o deslocamento
-    visual de BODY_VISUALS[1] (comutado). Não estende pra Valve_4_2_Ways.P/
-    Valve_5_2_Ways.P: nesses tipos, P nunca é alimentado por uma
-    PressureLine (vem de um Exhaust/PressureSource dedicado -- ver
-    circuit_generator/methods/cascade.py), então o deslocamento nunca
-    importa ali.
+    Valve_3_2_Ways.P recebe o MESMO ajuste, mas só quando `peer_type` é
+    `None` (chamador não sabe/não importa quem alimenta o P -- ex.: cálculo
+    de espaço reservado no pior caso) ou é explicitamente `"PressureLine"`
+    -- é ela quem alimenta esse P nas válvulas de sinalização de
+    confirmação (cascata e passo a passo), e o offset compensa o
+    deslocamento visual de BODY_VISUALS[1] (comutado) que o anchor local
+    (uma fração fixa de self.width) não embute sozinho.
+
+    Quando `peer_type` é passado e NÃO é `"PressureLine"` (ex.: outra
+    válvula de sinalização alimentando este P via elo de cadeia
+    sig.A -> sig.P), o offset NÃO se aplica -- P não está recebendo de uma
+    PressureLine, então o deslocamento de comutação é irrelevante ali.
+    Sem essa distinção, o roteador mirava 147px à direita da posição real
+    do anchor nesses elos, produzindo um pequeno loop espúrio quando o
+    editor reparava o waypoint desalinhado ao carregar o circuito (achado
+    testando um circuito com C+(A+B+)C-A-B-, cadeia de sigs empilhados na
+    mesma coluna -- ver docs/superpowers/specs/
+    2026-08-12-sig-chain-p-anchor-offset-design.md).
+
+    Não estende pra Valve_4_2_Ways.P/Valve_5_2_Ways.P: nesses tipos, P
+    nunca é alimentado por uma PressureLine (vem de um Exhaust/
+    PressureSource dedicado -- ver circuit_generator/methods/cascade.py),
+    então o deslocamento nunca importa ali.
     """
     base = METRICS.anchor_local.get(node_type, {}).get(anchor_name)
     if base is None:
@@ -394,7 +408,9 @@ def anchor_local_for_routing(node_type: str, anchor_name: str) -> tuple[float, f
     if anchor_name == "PR":
         return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
     if anchor_name == "P" and node_type == "Valve_3_2_Ways":
-        return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
+        if peer_type is None or peer_type == "PressureLine":
+            return (base[0] + METRICS.pilot_side_offset_x.get(node_type, 0.0), base[1])
+        return base
     return base
 
 

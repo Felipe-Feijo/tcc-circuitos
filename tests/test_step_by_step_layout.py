@@ -854,3 +854,35 @@ class TestMultiCycleEndToEnd:
                     )
             checked += 1
         assert checked > 0
+
+
+class TestSigChainPAnchorRouting:
+    def test_stacked_sig_chain_routes_as_a_straight_vertical_line(self):
+        """Reprodução exata do bug reportado pelo usuário: duas válvulas
+        de sinalização empilhadas na MESMA coluna (bloco paralelo
+        C+(A+B+)C-A-B-) conectadas por um elo A->P devem rotear com uma
+        linha reta vertical -- sem desvio pro offset de comutação errado
+        (ver docs/superpowers/specs/2026-08-12-sig-chain-p-anchor-offset-design.md)."""
+        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
+        result = layout.apply(data)
+
+        sig_a = _node(result, "gen-sig-A-ext-1")
+        sig_b = _node(result, "gen-sig-B-ext-2")
+        assert sig_a["position"]["x"] == sig_b["position"]["x"], (
+            "fixture não está mais empilhada na mesma coluna -- ajuste o teste"
+        )
+
+        conn = next(
+            c for c in result["connections"]
+            if c["source"]["node"] == "gen-sig-A-ext-1" and c["target"]["node"] == "gen-sig-B-ext-2"
+        )
+        wps = conn.get("waypoints") or []
+        # Todo waypoint (se houver) deve ficar na mesma coluna X do anchor A
+        # (roteamento reto) -- nenhum desvio de 147px pro offset errado.
+        from circuit_generator.sprite_metrics import anchor_local_for_routing
+        expected_x = sig_a["position"]["x"] + anchor_local_for_routing("Valve_3_2_Ways", "A")[0]
+        for wp in wps:
+            assert abs(wp["x"] - expected_x) < 1.0, (
+                f"waypoint {wp} desviou da coluna reta esperada (x={expected_x}) -- "
+                f"offset de comutação sendo aplicado indevidamente?"
+            )

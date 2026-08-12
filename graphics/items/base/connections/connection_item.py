@@ -778,11 +778,11 @@ class ConnectionItem(DiagramItemBase):
                 else:
                     i += 1
         self.prepareGeometryChange()
-        # Um drag de segmento/waypoint nunca é um "node move" -- moved_source/
-        # moved_target=True faria o branch de colapso de dobra colinear em
-        # adjust_waypoints_for_node_move rerrotear a conexão do zero mesmo
-        # numa rota gerada externamente (ver Important #2 do review final).
-        self.adjust_waypoints_for_node_move(moved_source=False, moved_target=False)
+        # Não chama adjust_waypoints_for_node_move()/_adjust_boundary() aqui:
+        # um drag de segmento move as cópias inseridas de seg_a/seg_b juntas
+        # (mousePressEvent/mouseMoveEvent acima), preservando a ortogonalidade
+        # da borda por construção -- não há reparo de borda a fazer.
+        self.update()
 
     def _undo_segment_split(self):
         """Desfaz o split temporário de segmento quando o press+release não
@@ -896,6 +896,20 @@ class ConnectionItem(DiagramItemBase):
         conn._waypoints_initialized = True
         source_node.connections.append(conn)
         target_node.connections.append(conn)
+        # Semeia o cache de posição/direção dos anchors com os valores atuais
+        # (== os valores no momento do save, já que os anchors não se moveram
+        # desde então) ANTES da repara abaixo. Sem isso, `_last_p1_out`/
+        # `_last_p2_in`/`_last_exit_dir`/`_last_entry_dir` ficam nos defaults
+        # de `__init__` e a checagem "rota pristina" de
+        # `adjust_waypoints_for_node_move` nunca dispara aqui -- qualquer rota
+        # automática de 3+ pontos (hvhv/vhvh) carregada do arquivo ganha uma
+        # ponte espúria (zero-length, sentada em cima do próprio anchor) só
+        # por essa falta de histórico, e essa ponte é persistida de volta no
+        # próximo save.
+        if conn._anchors_in_scene():
+            _, _, p1_out, p2_in, exit_dir, entry_dir = conn._compute_exit_entry()
+            conn._last_p1_out, conn._last_p2_in = QPointF(p1_out), QPointF(p2_in)
+            conn._last_exit_dir, conn._last_entry_dir = exit_dir, entry_dir
         # Repara waypoints não-ortogonais salvos por versões antigas.
         # Seguro para waypoints do A* pois o sanity check é apenas wp→wp.
         conn.adjust_waypoints_for_node_move()

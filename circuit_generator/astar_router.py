@@ -443,7 +443,7 @@ def route_connection(
     # PRECISA de um 3º waypoint que já pouse no Y real do alvo (tgt_px[1])
     # ANTES do ponto final -- X/Y só aceitam entrada horizontal (exit_dir
     # "left"/"right", ver or_valve.py), e connection_item.py
-    # (adjust_waypoints_for_node_move -> _shift_collinear_run) corrige
+    # (adjust_waypoints_for_node_move -> _adjust_boundary) corrige
     # automaticamente qualquer sequência de waypoints COLINEARES adjacente
     # à borda do alvo pra bater com o Y real dele. Com só 2 waypoints (os
     # dois na mesma altura "oy", ver versão anterior deste atalho), os DOIS

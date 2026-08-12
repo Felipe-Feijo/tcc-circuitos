@@ -193,6 +193,40 @@ def test_double_click_loose_point_slides_with_boundary_no_bridge():
         assert abs(a.x() - b.x()) < 0.5 or abs(a.y() - b.y()) < 0.5, f"segmento diagonal: {a} -> {b}"
 
 
+def test_from_dict_round_trips_auto_route_without_spurious_bridge():
+    """Reprodução do Important #1 do review final da branch: `from_dict()`
+    roda seu passe de reparo legado (`adjust_waypoints_for_node_move()`) com
+    o cache `_last_p1_out`/`_last_p2_in`/`_last_exit_dir`/`_last_entry_dir`
+    ainda nos defaults de `__init__` -- sem histórico, a checagem "rota
+    pristina" nunca dispara e `_adjust_boundary` trata QUALQUER waypoint
+    perto da borda que compartilhe o eixo travado com seu vizinho interno
+    como "canto deliberado", inserindo uma ponte degenerada (sentada em cima
+    do próprio anchor) numa rota que era puramente automática. Essa ponte é
+    persistida de volta no próximo save, marcando a conexão como
+    "não-pristina" pra sempre. Constrói uma rota automática real numa sessão
+    "ao vivo" (via `_reroute_waypoints()`, não via `from_dict`), serializa
+    com `to_dict()` e recarrega com `from_dict()` -- a lista de waypoints
+    deve bater exatamente, sem ponte extra."""
+    conn, target, source = _load(_state((-342.5, -124.0), []))
+    conn._reroute_waypoints()
+    before = [(p.x(), p.y()) for p in conn.waypoints]
+    assert len(before) == 3, (
+        f"pré-condição: rota automática vhvh de 3 pontos, achou {before} -- "
+        "ajuste o fixture se o roteador mudou de comportamento"
+    )
+
+    data = conn.to_dict()
+    node_index = {"source": source, "target": target}
+    conn2 = ConnectionItem.from_dict(data, node_index)
+    conn2._test_scene_ref = conn._test_scene_ref
+
+    after = [(p.x(), p.y()) for p in conn2.waypoints]
+    assert after == before, (
+        f"round-trip do_dict/from_dict deveria preservar a rota automática "
+        f"intacta, esperava {before}, achou {after}"
+    )
+
+
 def test_auto_route_move_does_not_insert_spurious_bridge():
     """Rota automática (2 ou 3 pontos) não deve nunca ganhar uma ponte
     espúria ao mover um dos componentes -- é o caso mais comum e não pode

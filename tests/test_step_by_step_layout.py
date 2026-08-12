@@ -881,6 +881,7 @@ class TestSigChainPAnchorRouting:
         # (roteamento reto) -- nenhum desvio de 147px pro offset errado.
         from circuit_generator.sprite_metrics import anchor_local_for_routing
         expected_x = sig_a["position"]["x"] + anchor_local_for_routing("Valve_3_2_Ways", "A")[0]
+        assert wps == [], f"esperava rota reta sem waypoints, achou {wps}"
         for wp in wps:
             assert abs(wp["x"] - expected_x) < 1.0, (
                 f"waypoint {wp} desviou da coluna reta esperada (x={expected_x}) -- "

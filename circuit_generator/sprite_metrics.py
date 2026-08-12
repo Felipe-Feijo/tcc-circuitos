@@ -369,7 +369,7 @@ METRICS: SpriteMetrics = _load()
 
 
 def anchor_local_for_routing(node_type: str, anchor_name: str,
-                              peer_type: str | None = None) -> tuple[float, float] | None:
+                             peer_type: str | None = None) -> tuple[float, float] | None:
     """
     Como METRICS.anchor_local[node_type][anchor_name], mas para PR soma
     sempre o deslocamento de comutação -- o pior caso (mais à direita)
@@ -385,6 +385,17 @@ def anchor_local_for_routing(node_type: str, anchor_name: str,
     confirmação (cascata e passo a passo), e o offset compensa o
     deslocamento visual de BODY_VISUALS[1] (comutado) que o anchor local
     (uma fração fixa de self.width) não embute sozinho.
+
+    Importante: o anchor P em si NUNCA se move com body_state (só PL/PR
+    seguem o corpo comutado -- ver directional_valve_item.py) -- o offset
+    no caso PressureLine não descreve onde o anchor é desenhado, é mantido
+    por compatibilidade com a escolha de coluna do anchor da PL (ver
+    _target_x em step_by_step_layout.py e os testes de
+    tests/test_cascade_layout.py que dependem dessa aproximação pela
+    direita pra desviar da mola). Corrigir isso de verdade (fazer o ponto
+    final da rota pousar na posição real do anchor, mantendo a aproximação
+    pela direita como regra de roteamento explícita em vez de embutida na
+    coordenada) é um problema maior, separado, fora do escopo deste fix.
 
     Quando `peer_type` é passado e NÃO é `"PressureLine"` (ex.: outra
     válvula de sinalização alimentando este P via elo de cadeia

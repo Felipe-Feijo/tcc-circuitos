@@ -790,8 +790,8 @@ def apply(data: dict) -> dict:
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
         t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
         s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
-        spos = _scene_xy(s_id, s_anc, peer_type=t_type)
-        tpos = _scene_xy(t_id, t_anc, peer_type=s_type)
+        spos = _scene_xy(s_id, s_anc, peer_type=t_type or None)
+        tpos = _scene_xy(t_id, t_anc, peer_type=s_type or None)
         if spos is None or tpos is None:
             continue
         wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),

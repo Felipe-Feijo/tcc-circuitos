@@ -49,6 +49,20 @@ def test_anchors_p_a_b_r_present():
     assert node.anchors["R"].pos().y() == node.height
 
 
+def test_anchors_x_matches_measured_sprite_port_columns():
+    # Regressão: os anchors P/A/B/R usavam a fórmula width*191/300 e
+    # width*256/300 herdada de Valve_4_2_Ways (sprite 300px), mas o sprite
+    # da 4/3 é 450px -- os anchors ficavam ~96-129px deslocados à direita
+    # dos stubs de porta reais desenhados no PNG (medidos em
+    # valve_4_3_body_middle.png: colunas 188-192 e 253-257, centro 190 e
+    # 255). Trava esses valores pra não regredir num futuro reajuste de
+    # sprite.
+    node = Valve_4_3_Ways(domain="pneumatic")
+    assert node.width == 450
+    assert node.anchors["P"].pos().x() == node.anchors["A"].pos().x() == node.width * 190 / 450
+    assert node.anchors["B"].pos().x() == node.anchors["R"].pos().x() == node.width * 255 / 450
+
+
 def test_default_position_menu_renamed_with_3_options():
     node = Valve_4_3_Ways(domain="pneumatic")
     menu = QMenu()

@@ -39,7 +39,12 @@ class Valve_4_3_Ways(DirectionalValveItem):
         )
 
     def initialize_anchors(self):
-        self.add_anchor(AnchorItem("P", QPointF(self.width*191/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
-        self.add_anchor(AnchorItem("A", QPointF(self.width*191/300, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
-        self.add_anchor(AnchorItem("B", QPointF(self.width*256/300, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
-        self.add_anchor(AnchorItem("R", QPointF(self.width*256/300, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
+        # Constantes medidas nos pixels reais do sprite (450x180) -- ver
+        # docs/superpowers/specs/2026-08-12-valve-4-3-anchor-offset-design.md.
+        # A fórmula antiga (width*191/300 e width*256/300) era herdada de
+        # Valve_4_2_Ways, cujo sprite é 300px de largura; o sprite da 4/3 é
+        # 450px, então os anchors ficavam ~96-129px deslocados pra direita.
+        self.add_anchor(AnchorItem("P", QPointF(self.width*190/450, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
+        self.add_anchor(AnchorItem("A", QPointF(self.width*190/450, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("B", QPointF(self.width*255/450, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
+        self.add_anchor(AnchorItem("R", QPointF(self.width*255/450, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))

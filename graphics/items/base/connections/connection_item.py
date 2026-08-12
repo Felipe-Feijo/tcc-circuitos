@@ -35,6 +35,8 @@ class ConnectionItem(DiagramItemBase):
         self._last_exit_dir:         str          = "right"
         self._last_entry_dir:        str          = "left"
         self._selected_wp:           int | None   = None
+        self._last_p1_out:           QPointF | None = None
+        self._last_p2_in:            QPointF | None = None
 
         self.setPos(0, 0)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
@@ -191,6 +193,8 @@ class ConnectionItem(DiagramItemBase):
             self._waypoints_initialized = True
             self.waypoints = [QPointF(pt) for pt in
                               self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
+            self._last_p1_out = QPointF(p1_out)
+            self._last_p2_in  = QPointF(p2_in)
 
         self._last_exit_dir  = exit_dir
         self._last_entry_dir = entry_dir
@@ -317,12 +321,11 @@ class ConnectionItem(DiagramItemBase):
     def adjust_waypoints_for_node_move(self, moved_source: bool = True, moved_target: bool = True) -> None:
         """Realinha o trecho de borda do lado que mudou de posição.
 
-        Desloca wps[0] (lado source) e/ou wps[-1] (lado target) para
-        acompanhar o anchor que moveu, propagando o mesmo deslocamento por
-        qualquer sequência de waypoints colineares adjacentes à borda —
-        pontos "soltos" inseridos no meio de um segmento reto (double-click)
-        — parando assim que encontra uma curva real, que é edição manual do
-        usuário e não deve ser tocada.
+        Delega para `_adjust_boundary()`, que distingue um ponto solto
+        redundante (deve acompanhar a borda) de um canto deliberado do
+        usuário que só coincide de eixo com a borda por acaso (deve virar
+        uma ponte nova, preservando o resto do desvio intocado) -- ver
+        `_adjust_boundary` para os detalhes do algoritmo.
 
         Caso especial: quando TODOS os waypoints são colineares entre si
         no eixo compartilhado por exit_dir/entry_dir (ambos H ou ambos V —
@@ -356,26 +359,82 @@ class ConnectionItem(DiagramItemBase):
 
         self.prepareGeometryChange()
         if moved_source:
-            self._shift_collinear_run(range(n), p1_out, exit_h)
+            self._adjust_boundary(1, p1_out, self._last_p1_out, exit_h)
+            self._last_p1_out = QPointF(p1_out)
         if moved_target:
-            self._shift_collinear_run(range(n - 1, -1, -1), p2_in, entry_h)
+            self._adjust_boundary(-1, p2_in, self._last_p2_in, entry_h)
+            self._last_p2_in = QPointF(p2_in)
         self.update()
 
-    def _shift_collinear_run(self, indices: range, anchor_pt: QPointF, is_horizontal: bool) -> None:
-        """Desloca a sequência de waypoints colineares a partir da borda para
-        acompanhar anchor_pt, parando no primeiro waypoint que já representa
-        uma curva real (não compartilha a coordenada constrangida com a borda).
+    def _adjust_boundary(self, step: int, anchor_pt: QPointF,
+                          old_anchor_pt: 'QPointF | None', is_horizontal: bool) -> None:
+        """Realinha o(s) waypoint(s) perto da borda que se moveu.
+
+        step: +1 para o lado source (caminha wps[0], wps[1], ...), -1 para
+        o lado target (caminha wps[-1], wps[-2], ...).
+        anchor_pt: posição atual (pós-movimento) do ponto de margem do anchor.
+        old_anchor_pt: cache da posição do anchor na última vez que a
+        geometria foi validada (None se nunca validada -- trata como "sem
+        histórico", nunca assume redundância).
+        is_horizontal: eixo travado é Y (True) ou X (False).
+
+        Caminha da borda pra dentro. Em cada waypoint `w`:
+          - Sem vizinho interno (fim da lista): gruda `w` no anchor, para.
+          - `w` não compartilha o eixo travado com o vizinho interno `w2`:
+            gruda só `w`, para (sem conflito -- caso comum de rota
+            automática, w2 e o resto ficam intocados).
+          - `w` compartilha o eixo travado com `w2` E `w` já estava
+            alinhado com `old_anchor_pt` nesse eixo (ponto solto
+            redundante, ex.: inserido por duplo-clique numa reta): gruda
+            `w`, continua para `w2` usando a posição ANTIGA de `w` como
+            nova referência (a reta continua).
+          - `w` compartilha o eixo travado com `w2` mas NÃO estava
+            alinhado com `old_anchor_pt` (canto deliberado do usuário --
+            ex.: um desvio manual que termina nesse eixo por coincidência):
+            não toca em `w` nem em nada depois dele. Insere um waypoint
+            "ponte" entre `w` e o anchor -- eixo travado batendo com o
+            anchor, outro eixo batendo com `w` -- exatamente o que um
+            usuário faria manualmente pra resolver esse conflito.
         """
         wps = self.waypoints
-        first = wps[indices[0]]
-        old_val = first.y() if is_horizontal else first.x()
-        new_val = anchor_pt.y() if is_horizontal else anchor_pt.x()
-        for k in indices:
-            p   = wps[k]
-            cur = p.y() if is_horizontal else p.x()
-            if abs(cur - old_val) >= 0.5:
-                break
-            wps[k] = QPointF(p.x(), new_val) if is_horizontal else QPointF(new_val, p.y())
+        n = len(wps)
+        if n == 0:
+            return
+        idx = 0 if step == 1 else n - 1
+        ref_anchor = old_anchor_pt
+
+        def locked(p: QPointF) -> float:
+            return p.y() if is_horizontal else p.x()
+
+        def snap(p: QPointF, target: QPointF) -> QPointF:
+            return QPointF(p.x(), target.y()) if is_horizontal else QPointF(target.x(), p.y())
+
+        while True:
+            w = wps[idx]
+            inward_idx = idx + step
+            has_inward = 0 <= inward_idx < n
+
+            if not has_inward:
+                wps[idx] = snap(w, anchor_pt)
+                return
+
+            w2 = wps[inward_idx]
+            if abs(locked(w) - locked(w2)) >= 0.5:
+                wps[idx] = snap(w, anchor_pt)
+                return
+
+            was_aligned = ref_anchor is not None and abs(locked(w) - locked(ref_anchor)) < 0.5
+            if was_aligned:
+                old_w = QPointF(w)
+                wps[idx] = snap(w, anchor_pt)
+                ref_anchor = old_w
+                idx = inward_idx
+                continue
+
+            bridge = snap(QPointF(w), anchor_pt)
+            insert_at = idx if step == 1 else idx + 1
+            wps.insert(insert_at, bridge)
+            return
 
     # =========================================================================
     # Waypoints — constants
@@ -475,6 +534,8 @@ class ConnectionItem(DiagramItemBase):
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
         self.waypoints = [QPointF(pt) for pt in
                           self._route_between_points(p1_out, p2_in, exit_dir, entry_dir)]
+        self._last_p1_out = QPointF(p1_out)
+        self._last_p2_in  = QPointF(p2_in)
         self.prepareGeometryChange()
 
     def _delete_waypoint(self, idx: int):

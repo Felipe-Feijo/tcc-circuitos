@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QPointF
 
 app = QApplication.instance() or QApplication([])
 
@@ -61,11 +62,32 @@ def test_deliberate_offset_gets_a_bridge_instead_of_collapsing():
         (-342.5, -124.0),
         [{"x": -663.0, "y": -231.0}, {"x": 46.0, "y": -231.0}, {"x": 46.0, "y": -142.0}],
     ))
+
+    # `ConnectionItem.from_dict` roda seu próprio passe de "reparo de
+    # waypoints legados" (uma chamada a `adjust_waypoints_for_node_move()`)
+    # logo após construir a conexão, com `_last_p2_in` ainda None nesse
+    # ponto -- sem histórico, `_adjust_boundary` não tem como distinguir
+    # "ponto solto redundante" de "canto deliberado" e insere uma ponte por
+    # padrão. Sem o reset abaixo, esse efeito colateral do load já produziria
+    # os 4 waypoints esperados sozinho, e o teste passaria mesmo que o
+    # código acionado pelo *move* (o que esta task corrige) estivesse
+    # quebrado. Reseta pra geometria pristina do fixture e prepara
+    # `_last_p2_in` como estaria numa sessão ao vivo recém-assentada nessa
+    # posição pré-move, pra que as asserções abaixo dependam só da chamada
+    # explícita de `setPos` + `adjust_waypoints_for_node_move()` mais adiante.
+    conn.waypoints = [QPointF(-663.0, -231.0), QPointF(46.0, -231.0), QPointF(46.0, -142.0)]
+    _, _, _, p2_in_before_move, _, _ = conn._compute_exit_entry()
+    conn._last_p2_in = p2_in_before_move
+    assert len(conn.waypoints) == 3, "pré-condição: geometria pristina, sem ponte ainda"
+
     target.setPos(-342.5, -123.0)
     conn.adjust_waypoints_for_node_move(moved_source=False, moved_target=True)
 
     wps = conn.waypoints
-    assert len(wps) == 4, f"esperava uma ponte inserida (4 pontos), achou {[(p.x(), p.y()) for p in wps]}"
+    assert len(wps) == 4, (
+        "esperava uma ponte inserida pela chamada de move+adjust (4 pontos), "
+        f"achou {[(p.x(), p.y()) for p in wps]}"
+    )
     assert (wps[0].x(), wps[0].y()) == (-663.0, -231.0)
     assert (wps[1].x(), wps[1].y()) == (46.0, -231.0)
     assert (wps[2].x(), wps[2].y()) == (46.0, -142.0)
@@ -96,3 +118,39 @@ def test_bridge_already_present_only_moves_itself():
     assert (wps[2].x(), wps[2].y()) == (46.0, -142.0)
     assert abs(wps[3].y() - (-142.0)) < 0.5   # y intocado
     assert wps[3].x() != -86.5                # x acompanhou o anchor
+
+
+def test_redundant_collinear_filler_points_slide_together_with_the_anchor():
+    """Cobre o ramo `was_aligned=True` de `_adjust_boundary`: dois waypoints
+    "soltos" (ex.: inseridos por duplo-clique numa reta), ambos já alinhados
+    com o anchor no eixo travado antes do move, devem andar JUNTOS com o
+    anchor -- sem virar ponte e sem travar no primeiro.
+
+    Setup análogo aos testes acima: prepara a geometria e o cache
+    `_last_p2_in` manualmente (em vez de depender do reparo automático do
+    `from_dict`, que roda sem histórico -- ver comentário no primeiro teste
+    acima) pra isolar exatamente o comportamento de
+    `adjust_waypoints_for_node_move` quando os dois waypoints PRÉ-move já
+    estavam colineares entre si E alinhados com o anchor (o oposto do
+    "canto deliberado" do primeiro teste)."""
+    conn, target, source = _load(_state(
+        (-210.0, -124.0),
+        [{"x": 46.0, "y": -231.0}, {"x": 46.0, "y": -142.0}],
+    ))
+
+    conn.waypoints = [QPointF(46.0, -231.0), QPointF(46.0, -142.0)]
+    _, _, _, p2_in_before_move, _, _ = conn._compute_exit_entry()
+    assert abs(p2_in_before_move.x() - 46.0) < 0.5, "pré-condição: os 2 wps já alinhados com o anchor"
+    conn._last_p2_in = p2_in_before_move
+
+    target.setPos(-342.5, -124.0)
+    conn.adjust_waypoints_for_node_move(moved_source=False, moved_target=True)
+
+    wps = conn.waypoints
+    assert len(wps) == 2, f"não deveria inserir ponte (são fillers redundantes), achou {[(p.x(), p.y()) for p in wps]}"
+    _, _, _, p2_in_after_move, _, _ = conn._compute_exit_entry()
+    # os dois pontos acompanharam o novo x do anchor, cada um mantendo seu y original
+    assert abs(wps[0].x() - p2_in_after_move.x()) < 0.5
+    assert abs(wps[0].y() - (-231.0)) < 0.5
+    assert abs(wps[1].x() - p2_in_after_move.x()) < 0.5
+    assert abs(wps[1].y() - (-142.0)) < 0.5

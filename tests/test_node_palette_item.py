@@ -27,3 +27,21 @@ def test_apply_size_updates_widths_and_font():
     assert item.text_label.font().pointSize() == base_pt + 2
     assert item.image_label.pixmap().width() <= 112
     assert item.image_label.pixmap().height() <= 76
+
+
+def test_sprite_and_label_are_horizontally_centered_together():
+    # image_label is fixed to the (smaller) pixmap size while text_label
+    # is fixed to the full item width -- both must be centered within
+    # the item, or the sprite drifts left of its label (regression: the
+    # image_label default-aligned left in the QVBoxLayout instead of
+    # centering like the text).
+    item = NodePaletteItem("Accumulator", ICON_PATH)
+    item.apply_size(pixmap_wh=(60, 40), item_width=100, font_delta=0)
+    item.resize(item.sizeHint())
+    item.show()
+
+    image_center_x = item.image_label.geometry().center().x()
+    text_center_x = item.text_label.geometry().center().x()
+
+    assert image_center_x == text_center_x
+    item.hide()

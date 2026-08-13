@@ -35,8 +35,8 @@ class NodePaletteItem(QWidget):
             QSizePolicy.Policy.Minimum,
         )
 
-        layout.addWidget(self.image_label)
-        layout.addWidget(self.text_label)
+        layout.addWidget(self.image_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.text_label, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -49,7 +49,9 @@ class NodePaletteItem(QWidget):
         self.image_label.setPixmap(pixmap)
         self.image_label.setFixedSize(w, h)
 
-        self.text_label.setFixedWidth(item_width)
+        margins = self.layout().contentsMargins()
+        content_width = item_width - margins.left() - margins.right()
+        self.text_label.setFixedWidth(content_width)
         font = self.text_label.font()
         font.setPointSize(QApplication.instance().font().pointSize() + font_delta)
         self.text_label.setFont(font)

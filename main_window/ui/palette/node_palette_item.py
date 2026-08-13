@@ -3,39 +3,59 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QPen
+from graphics.utils.pixmap_utils import generate_pixmap_for_palette
+
+DEFAULT_PIXMAP_WH = (60, 40)
+DEFAULT_ITEM_WIDTH = 100
+
 
 class NodePaletteItem(QWidget):
-    def __init__(self, name: str, pixmap, parent=None):
+    def __init__(self, name: str, icon_path: str, parent=None):
         super().__init__(parent)
 
         self.selected = False
+        self.icon_path = icon_path
 
-        self.setFixedWidth(100)
+        self.setFixedWidth(DEFAULT_ITEM_WIDTH)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(2)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        image_label = QLabel()
-        image_label.setPixmap(pixmap)
-        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_label.setFixedSize(92, 68)
-        image_label.setScaledContents(False)
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setScaledContents(False)
 
-        text_label = QLabel(name)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        text_label.setWordWrap(True)
-        text_label.setFixedWidth(92)
-        text_label.setSizePolicy(
+        self.text_label = QLabel(name)
+        self.text_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.text_label.setWordWrap(True)
+        self.text_label.setSizePolicy(
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Minimum,
         )
 
-        layout.addWidget(image_label)
-        layout.addWidget(text_label)
+        layout.addWidget(self.image_label)
+        layout.addWidget(self.text_label)
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self._base_font_pt = self.text_label.font().pointSize()
+        self.apply_size(DEFAULT_PIXMAP_WH, DEFAULT_ITEM_WIDTH, font_delta=0)
+
+    def apply_size(self, pixmap_wh: tuple[int, int], item_width: int, font_delta: int):
+        w, h = pixmap_wh
+
+        pixmap = generate_pixmap_for_palette(self.icon_path, w, h)
+        self.image_label.setPixmap(pixmap)
+        self.image_label.setFixedSize(w, h)
+
+        self.text_label.setFixedWidth(item_width)
+        font = self.text_label.font()
+        font.setPointSize(self._base_font_pt + font_delta)
+        self.text_label.setFont(font)
+
+        self.setFixedWidth(item_width)
 
     def set_selected(self, value: bool):
         self.selected = value

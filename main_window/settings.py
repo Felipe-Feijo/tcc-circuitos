@@ -19,7 +19,11 @@ def _default_settings() -> QSettings:
 
 def get_font_size(settings: QSettings | None = None) -> int:
     s = settings or _default_settings()
-    return int(s.value(_FONT_SIZE_KEY, DEFAULT_FONT_SIZE))
+    try:
+        size = int(s.value(_FONT_SIZE_KEY, DEFAULT_FONT_SIZE))
+    except (TypeError, ValueError):
+        return DEFAULT_FONT_SIZE
+    return max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
 
 
 def set_font_size(pt: int, settings: QSettings | None = None) -> None:

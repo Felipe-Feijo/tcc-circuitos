@@ -111,6 +111,8 @@ class NodePalette(QWidget):
         if persist:
             settings.set_palette_tier(name, self._settings_obj)
 
+        self._recompute_columns()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._recompute_columns()

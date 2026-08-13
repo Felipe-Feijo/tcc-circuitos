@@ -12,6 +12,7 @@ from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.scene import GraphicsScene
 from main_window.ui.docks.node_palette_dock import create_node_palette
+from main_window import settings
 from graphics.items.base.nodes.node_item import NodeItem
 
 from graphics.view import GraphicsView
@@ -188,8 +189,8 @@ class MainWindow(QMainWindow):
         )
 
     def on_change_font_size(self):
-        from main_window import settings
-        settings.prompt_and_apply_font_size(self)
+        if settings.prompt_and_apply_font_size(self):
+            self.node_palette.set_size_tier(self.node_palette.current_tier, persist=False)
 
     def add_node_at(self, x, y):
         if not self.state.pending_node:

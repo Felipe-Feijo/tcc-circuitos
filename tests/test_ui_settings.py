@@ -6,8 +6,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from PyQt6.QtWidgets import QApplication, QWidget
 app = QApplication.instance() or QApplication([])
 
+import pytest
+
 from PyQt6.QtCore import QSettings
 import main_window.settings as settings
+
+
+@pytest.fixture(autouse=True)
+def _restore_app_font():
+    original = app.font()
+    yield
+    app.setFont(original)
 
 
 def _ini_settings(tmp_path):
@@ -69,3 +78,21 @@ def test_prompt_and_apply_font_size_cancel(tmp_path, monkeypatch):
     changed = settings.prompt_and_apply_font_size(parent, s)
     assert changed is False
     assert settings.get_font_size(s) == 12
+
+
+def test_get_font_size_falls_back_on_non_numeric_value(tmp_path):
+    s = _ini_settings(tmp_path)
+    s.setValue(settings._FONT_SIZE_KEY, "not-a-number")
+    assert settings.get_font_size(s) == settings.DEFAULT_FONT_SIZE
+
+
+def test_get_font_size_clamps_out_of_range_high_value(tmp_path):
+    s = _ini_settings(tmp_path)
+    s.setValue(settings._FONT_SIZE_KEY, 999)
+    assert settings.get_font_size(s) == settings.MAX_FONT_SIZE
+
+
+def test_get_font_size_clamps_out_of_range_low_value(tmp_path):
+    s = _ini_settings(tmp_path)
+    s.setValue(settings._FONT_SIZE_KEY, 0)
+    assert settings.get_font_size(s) == settings.MIN_FONT_SIZE

@@ -53,3 +53,41 @@ def test_set_size_tier_persists(tmp_path):
 
     from main_window import settings
     assert settings.get_palette_tier(s) == "large"
+
+
+def test_set_size_tier_recomputes_columns(tmp_path):
+    palette = NodePalette(settings_obj=_ini_settings(tmp_path))
+    palette.show()
+    section = palette.add_section("Hydraulic")
+    section.add_node("Accumulator", ICON_PATH, callback=lambda: None)
+
+    palette.resize(600, 400)
+    app.processEvents()
+
+    palette.set_size_tier("small")
+    small_cols = section.num_columns
+
+    palette.set_size_tier("large")
+    app.processEvents()
+    large_cols = section.num_columns
+
+    assert large_cols != small_cols
+
+
+def test_apply_size_tracks_live_app_font(tmp_path):
+    palette = NodePalette(settings_obj=_ini_settings(tmp_path))
+    section = palette.add_section("Hydraulic")
+    item = section.add_node("Accumulator", ICON_PATH, callback=lambda: None)
+
+    original_font = app.font()
+    try:
+        new_font = app.font()
+        new_font.setPointSize(original_font.pointSize() + 9)
+        app.setFont(new_font)
+
+        palette.set_size_tier("large")
+
+        expected = app.font().pointSize() + NodePalette.SIZE_TIERS["large"]["font_delta"]
+        assert item.text_label.font().pointSize() == expected
+    finally:
+        app.setFont(original_font)

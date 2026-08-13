@@ -1,6 +1,6 @@
 """Item individual da paleta: ícone e nome do componente, arrastável para a cena."""
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QPen
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
@@ -40,7 +40,6 @@ class NodePaletteItem(QWidget):
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self._base_font_pt = self.text_label.font().pointSize()
         self.apply_size(DEFAULT_PIXMAP_WH, DEFAULT_ITEM_WIDTH, font_delta=0)
 
     def apply_size(self, pixmap_wh: tuple[int, int], item_width: int, font_delta: int):
@@ -52,7 +51,7 @@ class NodePaletteItem(QWidget):
 
         self.text_label.setFixedWidth(item_width)
         font = self.text_label.font()
-        font.setPointSize(self._base_font_pt + font_delta)
+        font.setPointSize(QApplication.instance().font().pointSize() + font_delta)
         self.text_label.setFont(font)
 
         self.setFixedWidth(item_width)

@@ -46,7 +46,7 @@ class CircuitGeneratorDialog(QDialog):
         seq_layout = QVBoxLayout(seq_box)
 
         hint = QLabel("Ex: A+B+A-B-   (letras maiúsculas seguidas de + ou -)")
-        hint.setStyleSheet("color: gray; font-size: 11px;")
+        hint.setStyleSheet("color: gray; font-size: 13px;")
         seq_layout.addWidget(hint)
 
         self._seq_edit = QLineEdit()
@@ -57,7 +57,7 @@ class CircuitGeneratorDialog(QDialog):
         self._seq_error = QLabel("")
         self._seq_error.setWordWrap(True)
         self._seq_error.setMinimumHeight(32)
-        self._seq_error.setStyleSheet("color: red; font-size: 11px;")
+        self._seq_error.setStyleSheet("color: red; font-size: 13px;")
         seq_layout.addWidget(self._seq_error)
 
         root.addWidget(seq_box)

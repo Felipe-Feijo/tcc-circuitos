@@ -35,3 +35,12 @@ def test_dock_applies_persisted_tier_on_startup(tmp_path, monkeypatch):
     palette, dock = create_node_palette(main_window)
 
     assert palette.current_tier == "large"
+
+    # Prove the item-level resizing wiring actually ran (the second
+    # set_size_tier call after register_nodes), not just that
+    # palette.current_tier happens to match what NodePalette.__init__
+    # already reads from settings on its own.
+    section = next(s for s in palette.sections.values() if s._items)
+    item = section._items[0]
+    assert item.width() == palette.SIZE_TIERS["large"]["item_width"]
+    assert item.width() == 160

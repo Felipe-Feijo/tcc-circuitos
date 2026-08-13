@@ -187,6 +187,9 @@ class MainWindow(QMainWindow):
             "Built with PyQt6"
         )
 
+    def on_change_font_size(self):
+        from main_window import settings
+        settings.prompt_and_apply_font_size(self)
 
     def add_node_at(self, x, y):
         if not self.state.pending_node:

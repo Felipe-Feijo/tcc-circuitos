@@ -21,10 +21,12 @@ if sys.stderr is None:
 
 from PyQt6.QtWidgets import QApplication
 from main_window.main_window import MainWindow
+from main_window import settings
 
 faulthandler.enable()
 
 app = QApplication(sys.argv)
+settings.apply_font_from_settings(app)
 
 with open("resources/styles.qss", "r") as f:
     app.setStyleSheet(f.read())

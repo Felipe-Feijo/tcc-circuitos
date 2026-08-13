@@ -27,6 +27,8 @@ def create_menus(main_window, actions):
     view_menu.addAction(actions["zoom_in"])
     view_menu.addAction(actions["zoom_out"])
     view_menu.addAction(actions["zoom_fit"])
+    view_menu.addSeparator()
+    view_menu.addAction(actions["font_size"])
 
     help_menu = menubar.addMenu("Help")
     help_menu.addAction(actions["about"])

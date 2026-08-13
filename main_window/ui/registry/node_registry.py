@@ -20,7 +20,6 @@ from pathlib import Path
 
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import NodeDescriptor, PaletteMeta
-from graphics.utils.pixmap_utils import generate_pixmap_for_palette
 from paths import get_base_dir
 
 
@@ -110,11 +109,10 @@ def register_nodes(palette, on_add_node) -> None:
         section = palette.sections[section_key]
         for cls, meta in entries:
             display_name = meta.name or cls.__name__
-            pixmap = generate_pixmap_for_palette(meta.sprite)
             # captura de variáveis por default-argument evita o late-binding clássico
             section.add_node(
                 name=display_name,
-                pixmap=pixmap,
+                icon_path=meta.sprite,
                 callback=lambda c=cls, d=section_key.lower():
                     on_add_node(NodeDescriptor(c, domain=d)),
             )

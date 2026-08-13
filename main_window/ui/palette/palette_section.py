@@ -13,6 +13,7 @@ class PaletteSection(QWidget):
         self.title = title
         self.num_columns = num_columns
         self._collapsed = False
+        self._items: list[NodePaletteItem] = []
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setSpacing(20)
@@ -41,13 +42,30 @@ class PaletteSection(QWidget):
             f"{'▸' if self._collapsed else '▾'} {self.title}"
         )
 
-    def add_node(self, name: str, pixmap, callback):
-        item = NodePaletteItem(name, pixmap)
-        count = self.grid_layout.count()
-        row = count // self.num_columns
-        col = count % self.num_columns
-
-        self.grid_layout.addWidget(item, row, col)
+    def add_node(self, name: str, icon_path: str, callback):
+        item = NodePaletteItem(name, icon_path)
+        self._items.append(item)
+        self._place_item(item, len(self._items) - 1)
 
         item.mouseReleaseEvent = lambda e: callback()
         return item
+
+    def _place_item(self, item: NodePaletteItem, index: int):
+        row = index // self.num_columns
+        col = index % self.num_columns
+        self.grid_layout.addWidget(item, row, col)
+
+    def set_num_columns(self, cols: int):
+        if cols == self.num_columns or cols < 1:
+            return
+        self.num_columns = cols
+
+        while self.grid_layout.count():
+            self.grid_layout.takeAt(0)
+
+        for index, item in enumerate(self._items):
+            self._place_item(item, index)
+
+    def apply_item_size(self, pixmap_wh: tuple[int, int], item_width: int, font_delta: int):
+        for item in self._items:
+            item.apply_size(pixmap_wh, item_width, font_delta)

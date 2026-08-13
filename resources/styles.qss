@@ -1,7 +1,8 @@
 QToolBar QToolButton {
     background: transparent;
     border: none;
-    padding: 6px;
+    padding: 10px 16px;
+    min-height: 28px;
 }
 
 QToolBar QToolButton:hover {
@@ -11,4 +12,19 @@ QToolBar QToolButton:hover {
 
 QToolBar QToolButton:checked {
     background-color: #505050;
+}
+
+QPushButton#sizeTierButton {
+    background: transparent;
+    border: 1px solid #555555;
+    padding: 4px 10px;
+}
+
+QPushButton#sizeTierButton:hover {
+    background-color: #3a3a3a;
+}
+
+QPushButton#sizeTierButton:checked {
+    background-color: #505050;
+    border-color: #808080;
 }

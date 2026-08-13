@@ -110,3 +110,18 @@ class NodePalette(QWidget):
 
         if persist:
             settings.set_palette_tier(name, self._settings_obj)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._recompute_columns()
+
+    def _recompute_columns(self):
+        item_width = self.SIZE_TIERS[self.current_tier]["item_width"]
+        spacing = 8
+        # Calculate available width from the palette's width minus layout margins
+        # (the main_layout has 4-pixel margins on all sides, so 8 total)
+        available_width = self.width() - 8
+        available_width = max(available_width, 1)
+        cols = max(1, available_width // (item_width + spacing))
+        for section in self.sections.values():
+            section.set_num_columns(cols)

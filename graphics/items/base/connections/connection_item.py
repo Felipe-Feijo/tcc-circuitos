@@ -162,7 +162,7 @@ class ConnectionItem(DiagramItemBase):
         return self.pen
 
     def _draw_flow_arrows(self, painter: QPainter, points: list, pen: QPen):
-        arrow_offset = 4
+        arrow_offset = 6
         flow_a = getattr(self.source_anchor, "flow", 0.0)
         if not isinstance(flow_a, str) and abs(flow_a) > 1e-10:
             exit_dir = self._get_exit_direction()
@@ -177,7 +177,7 @@ class ConnectionItem(DiagramItemBase):
                 self._draw_arrow_at(painter, self._apply_margin(points[-2], entry_dir, -arrow_offset), entry_dir, flow_b, pen)
 
     def _draw_arrow_at(self, painter: QPainter, point: QPointF, direction: str, flow: float, pen: QPen):
-        size = 6
+        size = 10
         ux, uy = _DIR_VEC.get(direction, (1, 0))
         if flow > 0:
             ux, uy = -ux, -uy

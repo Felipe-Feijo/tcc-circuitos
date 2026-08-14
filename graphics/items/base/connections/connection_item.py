@@ -185,8 +185,10 @@ class ConnectionItem(DiagramItemBase):
         base  = QPointF(point.x() - ux * size,      point.y() - uy * size)
         left  = QPointF(base.x() - uy * size * 0.6, base.y() + ux * size * 0.6)
         right = QPointF(base.x() + uy * size * 0.6, base.y() - ux * size * 0.6)
-        painter.setBrush(QBrush(pen.color()))
-        painter.setPen(pen)
+        # Preto fixo (independente da cor da linha) — contraste garantido
+        # contra qualquer cor de estado hidráulico (azul, ciano, laranja...).
+        painter.setBrush(QBrush(Qt.GlobalColor.black))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawPolygon(QPolygonF([tip, left, right]))
 
     # =========================================================================

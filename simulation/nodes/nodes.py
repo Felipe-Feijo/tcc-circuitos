@@ -147,3 +147,15 @@ class Exhaust(Node):
     def update(self, outputs=None):
         self.get_anchor("R").state = False
         self.get_anchor("R").is_driver = True
+
+
+class Junction(Node):
+    """Nó de junção: ponto de derivação num fio/tubo, sem dinâmica própria.
+
+    Único anchor, nome "J". O fan-out elétrico/hidráulico/pneumático
+    acontece de graça -- `Anchor.connections` já é uma lista, então basta
+    ligar 3+ Connections ao mesmo Anchor. Sem overrides: `update()` e
+    `get_internal_connections()` herdados de Node já são no-op/[]."""
+
+    def __init__(self, node_id, **kwargs):
+        super().__init__(node_id=node_id, node_type="junction", **kwargs)

@@ -101,8 +101,7 @@ class AnchorItem(QGraphicsEllipseItem):
         )
 
         if not is_source_anchor:
-            self.setBrush(Qt.GlobalColor.transparent)
-            self.update()
+            self.refresh_junction_dot()
 
     def set_exit_directions(self, directions) -> None:
         """Define as direções de saída permitidas para o roteador A*.
@@ -111,6 +110,33 @@ class AnchorItem(QGraphicsEllipseItem):
             directions: Valor aceito por exit_directions (ex: dict ou lista).
         """
         self.exit_directions = directions
+
+    def connection_count(self) -> int:
+        """Quantas ConnectionItem vivas têm este anchor como endpoint --
+        conta só as deste anchor específico, não todas as do node (um node
+        multi-anchor não deve ganhar bolinha num anchor com 1 conexão só
+        porque outro anchor seu tem 3)."""
+        node = self.node
+        if not node:
+            return 0
+        return sum(
+            1 for c in getattr(node, "connections", [])
+            if c.source_anchor is self or c.target_anchor is self
+        )
+
+    def refresh_junction_dot(self) -> None:
+        """Mostra uma bolinha permanente quando este anchor vira uma junção
+        real (3+ conexões) -- T-fitting hidráulico/pneumático ou nó
+        elétrico de 3+ condutores. Chamado sempre que uma conexão é
+        criada/removida deste anchor (GraphicsView.create_connection,
+        GraphicsView.split_connection_at, ConnectionItem.prepare_delete)."""
+        if self.connection_count() >= 3:
+            self.setBrush(Qt.GlobalColor.lightGray)
+            self.setPen(QPen(Qt.GlobalColor.white, 1))
+        else:
+            self.setBrush(Qt.GlobalColor.transparent)
+            self.setPen(QPen(Qt.PenStyle.NoPen))
+        self.update()
 
     def reposition_hydraulic_label(self) -> None:
         """Recalcula e aplica o offset do label hidráulico.

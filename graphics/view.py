@@ -1,12 +1,13 @@
 """Viewport do editor de diagramas: zoom, pan e interação de mouse."""
 
 from PyQt6.QtWidgets import QGraphicsView
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPen
 
 from graphics.items.base.connections.connection_item import ConnectionItem
 from editor.mode import EditorMode
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
 
 
 class GraphicsView(QGraphicsView):
@@ -42,6 +43,12 @@ class GraphicsView(QGraphicsView):
 
         # Snapshot capturado no início de um arrasto de nó para undo de move
         self._move_before_snapshot = None
+
+        # Snapshot capturado se um gesto CONNECT envolveu split de conexão
+        # (linha->anchor ou anchor->linha) -- usado para desfazer o split
+        # se o gesto for cancelado, ou pra empilhar um único undo combinado
+        # se a conexão for criada.
+        self._connect_before_snapshot = None
 
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -125,17 +132,7 @@ class GraphicsView(QGraphicsView):
             and self.editor.mode == EditorMode.CONNECT
         ):
             if self.editor._connecting:
-                target_anchor = self.editor.hover_anchor
-                source_anchor = self.editor._conn_source_anchor
-                source_item = source_anchor.node if source_anchor else None
-
-                self.cleanup_temp_connection()
-
-                if target_anchor and source_item and target_anchor.node is not source_item:
-                    self.create_connection(
-                        source_item, source_anchor,
-                        target_anchor.node, target_anchor,
-                    )
+                self._complete_connect_press(event)
             else:
                 self.handle_connect_press(event)
             return
@@ -170,6 +167,8 @@ class GraphicsView(QGraphicsView):
 
         if self.editor.mode == EditorMode.CONNECT:
             if self.editor.hover_anchor:
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            elif self._connection_at(self.mapToScene(event.pos()), exclude={self._temp_connection}):
                 self.setCursor(Qt.CursorShape.CrossCursor)
             else:
                 self.unsetCursor()
@@ -232,18 +231,149 @@ class GraphicsView(QGraphicsView):
     # Criação de conexões
 
     def handle_connect_press(self, event) -> None:
-        """Inicia uma nova conexão a partir do âncora sob o cursor.
-
-        Só age se houver um hover_anchor definido no EditorState.
-        """
+        """Inicia uma nova conexão a partir do âncora sob o cursor -- ou,
+        se não houver âncora sob o cursor, a partir de um ponto sobre uma
+        ConnectionItem existente (cria uma JunctionNodeItem ali e começa
+        dela, como se fosse um âncora comum)."""
         anchor = self.editor.hover_anchor
         if not anchor:
-            return
+            scene_pos = self.mapToScene(event.pos())
+            conn = self._connection_at(scene_pos)
+            if conn is None:
+                return
+            from editor.undo import UndoStack
+            self._connect_before_snapshot = UndoStack.snapshot(self.scene())
+            anchor = self.split_connection_at(conn, scene_pos)
+            if anchor is None:
+                self._connect_before_snapshot = None
+                return
         self.editor._connecting = True
         self.editor._conn_source_anchor = anchor
         self.start_temp_connection(anchor.node, anchor)
 
-    def create_connection(self, source_item, source_anchor, target_item, target_anchor) -> None:
+    def _complete_connect_press(self, event) -> None:
+        """Segundo clique do modo CONNECT: completa a conexão num âncora,
+        num ponto sobre uma linha existente (split + junção), ou cancela
+        (clique em vazio). Se um split aconteceu neste gesto (no início ou
+        agora) e a conexão acaba não sendo criada, desfaz o split via
+        rollback de snapshot -- não deve sobrar uma junção órfã de um
+        gesto cancelado.
+
+        Pop `_connect_before_snapshot` para uma variável local e zera o
+        atributo da instância ANTES de chamar cleanup_temp_connection():
+        isso garante que cleanup_temp_connection() (que agora também
+        cobre Escape/troca de modo -- ver seu docstring) nunca enxergue
+        um snapshot pertencente a um gesto que está prestes a ser
+        completado com sucesso por ESTE método. Só os outros chamadores
+        de cleanup_temp_connection (que nunca fazem esse pop antes) deixam
+        o snapshot lá pra cleanup_temp_connection fazer o rollback."""
+        target_anchor = self.editor.hover_anchor
+        source_anchor = self.editor._conn_source_anchor
+        source_item = source_anchor.node if source_anchor else None
+
+        if target_anchor is None and source_anchor is not None:
+            scene_pos = self.mapToScene(event.pos())
+            conn = self._connection_at(scene_pos, exclude={self._temp_connection})
+            if conn is not None and conn.domain == source_anchor.domain:
+                if self._connect_before_snapshot is None:
+                    from editor.undo import UndoStack
+                    self._connect_before_snapshot = UndoStack.snapshot(self.scene())
+                target_anchor = self.split_connection_at(conn, scene_pos)
+
+        before_snapshot = self._connect_before_snapshot
+        self._connect_before_snapshot = None
+        self.cleanup_temp_connection()
+
+        created = None
+        if target_anchor and source_item and target_anchor.node is not source_item:
+            created = self.create_connection(
+                source_item, source_anchor,
+                target_anchor.node, target_anchor,
+                record_undo=before_snapshot is None,
+            )
+
+        if before_snapshot is not None:
+            if created is not None:
+                self.editor.undo_stack.push_snapshot(
+                    self.scene(), self.editor, before_snapshot, "Criar conexão",
+                )
+            else:
+                from editor.undo import _restore_snapshot
+                _restore_snapshot(before_snapshot, self.scene(), self.editor)
+
+    def _connection_at(self, scene_pos, exclude=None):
+        """Primeira ConnectionItem cujo compute_split_point aceita
+        scene_pos (i.e., o cursor está perto o bastante de algum de seus
+        segmentos), ignorando os itens em `exclude` (tipicamente a conexão
+        temporária de preview)."""
+        exclude = exclude or set()
+        for item in self.scene().items(scene_pos):
+            if (isinstance(item, ConnectionItem) and item not in exclude
+                    and item.compute_split_point(scene_pos) is not None):
+                return item
+        return None
+
+    def split_connection_at(self, conn: ConnectionItem, scene_pos):
+        """Divide `conn` em dois, ligando os dois pedaços a uma
+        JunctionNodeItem nova posicionada em scene_pos (projetado sobre a
+        rota de `conn`). Retorna o AnchorItem "J" da junção, ou None se
+        scene_pos não estiver perto o bastante de nenhum segmento de
+        `conn`."""
+        split = conn.compute_split_point(scene_pos)
+        if split is None:
+            return None
+        point, wp_before, wp_after = split
+
+        junction = JunctionNodeItem(domain=conn.domain)
+        junction.editor = self.editor
+        junction.setPos(point)
+        self.scene().addItem(junction)
+        j_anchor = junction.anchors["J"]
+
+        source_item, source_anchor = conn.source, conn.source_anchor
+        target_item, target_anchor = conn.target, conn.target_anchor
+
+        conn_a = ConnectionItem(source_item, source_anchor, junction, j_anchor)
+        conn_a.waypoints = list(wp_before)
+        conn_a._waypoints_initialized = True
+        conn_a.editor = self.editor
+
+        conn_b = ConnectionItem(junction, j_anchor, target_item, target_anchor)
+        conn_b.waypoints = list(wp_after)
+        conn_b._waypoints_initialized = True
+        conn_b.editor = self.editor
+
+        self.scene().addItem(conn_a)
+        self.scene().addItem(conn_b)
+        source_item.connections.append(conn_a)
+        junction.connections.append(conn_a)
+        junction.connections.append(conn_b)
+        target_item.connections.append(conn_b)
+
+        # prepare_delete()+removeItem() da conexão original são adiados
+        # como uma unidade atômica via QTimer.singleShot(0, ...) -- mesmo
+        # padrão de editor/delete_manager.py (DeleteManager.do_delete) e
+        # NodeItem.remove_anchor. split_connection_at roda de dentro de
+        # mousePressEvent; fazer isso de forma síncrona já causou "Windows
+        # fatal exception: access violation" num mouseMoveEvent real
+        # subsequente por deixar o índice espacial (BSP) da QGraphicsScene
+        # inconsistente (ver tests/test_node_item_remove_anchor_defers_scene_removal.py).
+        # A criação da junção/conexões filhas e os refresh_junction_dot()
+        # abaixo continuam síncronos -- não são a operação arriscada.
+        def _finish_old_connection_removal():
+            conn.prepare_delete()
+            if conn.scene():
+                self.scene().removeItem(conn)
+        QTimer.singleShot(0, _finish_old_connection_removal)
+
+        source_anchor.refresh_junction_dot()
+        target_anchor.refresh_junction_dot()
+        j_anchor.refresh_junction_dot()
+
+        return j_anchor
+
+    def create_connection(self, source_item, source_anchor, target_item, target_anchor,
+                           *, record_undo: bool = True):
         """Cria uma ConnectionItem entre dois âncoras, ignorando duplicatas.
 
         Args:
@@ -251,8 +381,16 @@ class GraphicsView(QGraphicsView):
             source_anchor: AnchorItem de saída no nó de origem.
             target_item: NodeItem de destino.
             target_anchor: AnchorItem de entrada no nó de destino.
+            record_undo: Se True (padrão), captura e empilha snapshot de
+                undo aqui mesmo. Chamadores que já fazem sua própria
+                captura de snapshot ao redor de uma operação composta
+                (ex.: split + connect de um clique em junção) passam
+                False e cuidam do undo eles mesmos.
+
+        Returns:
+            A ConnectionItem criada, ou None se já existia uma conexão
+            idêntica (source/target/âncoras) e nada foi feito.
         """
-        # Proteção contra conexão duplicada entre os mesmos âncoras
         for conn in source_item.connections:
             if (
                 conn.source is source_item
@@ -260,25 +398,26 @@ class GraphicsView(QGraphicsView):
                 and conn.source_anchor == source_anchor
                 and conn.target_anchor == target_anchor
             ):
-                return
+                return None
 
-        # Captura snapshot ANTES de criar a conexão
-        from editor.undo import UndoStack
-        before = UndoStack.snapshot(self.scene())
+        before = None
+        if record_undo:
+            from editor.undo import UndoStack
+            before = UndoStack.snapshot(self.scene())
 
         conn = ConnectionItem(source_item, source_anchor, target_item, target_anchor)
         conn.editor = self.editor
         self.scene().addItem(conn)
         source_item.connections.append(conn)
         target_item.connections.append(conn)
+        source_anchor.refresh_junction_dot()
+        target_anchor.refresh_junction_dot()
 
-        # Empilha o command de undo APÓS a conexão ser criada
-        self.editor.undo_stack.push_snapshot(
-            self.scene(),
-            self.editor,
-            before,
-            "Criar conexão",
-        )
+        if record_undo:
+            self.editor.undo_stack.push_snapshot(
+                self.scene(), self.editor, before, "Criar conexão",
+            )
+        return conn
 
     def start_temp_connection(self, source_item, source_anchor) -> None:
         """Cria a ConnectionItem temporária (tracejada) de preview de conexão.
@@ -296,15 +435,34 @@ class GraphicsView(QGraphicsView):
         source_anchor.update()
 
     def cleanup_temp_connection(self) -> None:
-        """Remove a conexão temporária de preview e restaura o estado do âncora."""
+        """Remove a conexão temporária de preview e restaura o estado do âncora.
+
+        Chamado ao final de QUALQUER gesto CONNECT -- sucesso (via
+        _complete_connect_press), cancelamento por clique em vazio (idem),
+        Escape (MainWindow.cancel_current_mode) ou troca de modo pelo
+        toolbar (MainWindow.set_mode). Por isso também é o único lugar
+        correto para tratar um `_connect_before_snapshot` pendente: se o
+        gesto envolveu um split de conexão (linha->anchor ou anchor->linha)
+        e ainda houver um snapshot aqui quando este método for chamado,
+        significa que o gesto está sendo abortado por um desses caminhos
+        externos (não por _complete_connect_press, que já zera o atributo
+        ANTES de chamar este método quando o gesto vai completar com
+        sucesso -- ver seu docstring) -- desfaz o split via rollback, senão
+        ele fica um scene mutation não registrada no undo e "vaza" pro
+        próximo gesto CONNECT, fazendo o próximo cancelamento reverter
+        pra este snapshot velho."""
         if self._temp_connection:
             self.scene().removeItem(self._temp_connection)
             self._temp_connection = None
         if self.editor._conn_source_anchor:
-            self.editor._conn_source_anchor.setBrush(Qt.GlobalColor.transparent)
-            self.editor._conn_source_anchor.update()
+            self.editor._conn_source_anchor.refresh_junction_dot()
         self.editor._connecting = False
         self.editor._conn_source_anchor = None
+
+        if self._connect_before_snapshot is not None:
+            from editor.undo import _restore_snapshot
+            _restore_snapshot(self._connect_before_snapshot, self.scene(), self.editor)
+            self._connect_before_snapshot = None
 
     # Preview de nó
 

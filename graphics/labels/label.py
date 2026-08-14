@@ -1,8 +1,14 @@
 """Item de texto editável usado como rótulo sobre componentes do diagrama."""
 
-from PyQt6.QtWidgets import QGraphicsTextItem
+from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QFont, QPainter, QPen
+
+# Delta aplicado sobre a fonte da aplicação (main_window.settings) quando
+# "font_size" não é explicitamente informado -- mantém os labels do
+# diagrama acompanhando o ajuste global de fonte (View > Font Size...) em
+# vez de um tamanho fixo. Com a fonte padrão do app em 11pt, isso dá 14pt.
+DEFAULT_FONT_DELTA = 3
 
 
 class LabelItem(QGraphicsTextItem):
@@ -11,6 +17,13 @@ class LabelItem(QGraphicsTextItem):
     Suporta edição inline (duplo clique), arrasto e renderização com borda
     opcional. Todas as propriedades visuais são controladas pelo dicionário
     `properties`, mesclado com DEFAULT_PROPERTIES no construtor.
+
+    O tamanho de fonte é dinâmico por padrão: se "font_size" não for
+    informado (fica None), o label acompanha a fonte global da aplicação
+    (deslocada por "font_delta") e se atualiza via refresh_default_font_size()
+    quando o usuário muda a fonte em View > Font Size... Um "font_size"
+    explícito (ex: vindo de um arquivo salvo antigo) fixa o tamanho e o
+    label deixa de acompanhar mudanças futuras.
 
     Attributes:
         DEFAULT_PROPERTIES: Valores padrão para todas as propriedades visuais.
@@ -23,7 +36,8 @@ class LabelItem(QGraphicsTextItem):
         "movable": False,
         "max_length": None,
         "on_commit": None,
-        "font_size": 12,
+        "font_size": None,
+        "font_delta": DEFAULT_FONT_DELTA,
         "bold": False,
         "color": Qt.GlobalColor.white,
         "border": True,
@@ -58,10 +72,7 @@ class LabelItem(QGraphicsTextItem):
         # o zoom. Contra-rotacionar cancela só a rotação, preservando o
         # resto da cadeia de transformação (zoom) normalmente.
 
-        font = QFont()
-        font.setPointSize(self.properties["font_size"])
-        font.setBold(self.properties["bold"])
-        self.setFont(font)
+        self._apply_font()
 
         self.setDefaultTextColor(self.properties["color"])
 
@@ -138,6 +149,32 @@ class LabelItem(QGraphicsTextItem):
             self.on_commit(text)
 
         self.update()
+
+    # =========================
+    # Fonte
+    # =========================
+
+    def _apply_font(self) -> None:
+        """(Re)calcula e aplica o QFont a partir de properties["font_size"]
+        (se explícito) ou da fonte da aplicação + properties["font_delta"]."""
+        size = self.properties.get("font_size")
+        if size is None:
+            size = QApplication.instance().font().pointSize() + self.properties["font_delta"]
+
+        font = QFont()
+        font.setPointSize(size)
+        font.setBold(self.properties["bold"])
+        self.setFont(font)
+
+    def refresh_default_font_size(self) -> None:
+        """Reaplica o tamanho de fonte a partir da fonte atual da aplicação.
+
+        No-op se este label tiver um "font_size" explícito (ex: carregado
+        de um arquivo salvo antigo) -- só labels em modo dinâmico (o
+        padrão) acompanham mudanças posteriores da fonte global.
+        """
+        if self.properties.get("font_size") is None:
+            self._apply_font()
 
     # =========================
     # API externa

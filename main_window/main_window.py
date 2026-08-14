@@ -14,6 +14,7 @@ from graphics.scene import GraphicsScene
 from main_window.ui.docks.node_palette_dock import create_node_palette
 from main_window import settings
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.labels.label import LabelItem
 
 from graphics.view import GraphicsView
 from simulation.simulation_session import SimulationSession
@@ -191,6 +192,9 @@ class MainWindow(QMainWindow):
     def on_change_font_size(self):
         if settings.prompt_and_apply_font_size(self):
             self.node_palette.set_size_tier(self.node_palette.current_tier, persist=False)
+            for item in self.scene.items():
+                if isinstance(item, LabelItem):
+                    item.refresh_default_font_size()
 
     def add_node_at(self, x, y):
         if not self.state.pending_node:

@@ -133,7 +133,7 @@ class AnchorItem(QGraphicsEllipseItem):
             "editable": False,
             "movable": True,
             "border": False,
-            "font_size": 8,
+            "font_delta": -1,
         })
         self._label_hydraulic.setParentItem(self)
         # Se a âncora nascer depois do node já ter girado (ex: anchor Z

@@ -48,7 +48,7 @@ class FixedDisplacementMotor(NodeItem):
             "editable": False,
             "movable": True,
             "border": False,
-            "font_size": 8,
+            "font_delta": -1,
         })
         self._label_output.setParentItem(self)
         self._label_output.setPos(QPointF(self.width / 2, -18))

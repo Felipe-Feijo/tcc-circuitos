@@ -169,7 +169,7 @@ class CylinderItem(NodeItem):
             "editable": False,
             "movable": True,
             "border": False,
-            "font_size": 8,
+            "font_delta": -1,
         })
         self._label_velocity.setParentItem(self)
         # Posiciona acima do centro do corpo

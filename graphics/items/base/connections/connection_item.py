@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPainter, QPainterPathStroker, QPolygonF, QBrush, QAction
 from PyQt6.QtCore import Qt, QPointF, QRectF
 from graphics.items.base.diagram_item_base import DiagramItemBase
+from editor.mode import EditorMode
 
 # Vetores unitários por direção — compartilhado entre _apply_margin e _draw_arrow_at.
 _DIR_VEC = {"right": (1, 0), "left": (-1, 0), "bottom": (0, 1), "top": (0, -1)}
@@ -560,6 +561,8 @@ class ConnectionItem(DiagramItemBase):
     # =========================================================================
 
     def _draw_waypoint_handles(self, painter: QPainter):
+        if self.editor and self.editor.mode == EditorMode.SIMULATE:
+            return
         if self._hovered_wp is None and self._drag_mode is None and self._selected_wp is None:
             return
         r              = self._WP_HIT_RADIUS

@@ -71,13 +71,18 @@ class GraphBuilder:
             connection_item: Instância de ConnectionItem presente na cena.
 
         Returns:
-            A Connection de domínio criada ou já existente para este par de âncoras.
+            A Connection de domínio criada, ou None se um dos nós ligados
+            a esta conexão falhou ao ser criado (propriedade obrigatória
+            ausente -- o erro já foi acumulado por add_node_from_item e
+            será reportado por raise_if_errors(); não há nó pra conectar).
         """
         source_anchor_item = connection_item.source_anchor
         target_anchor_item = connection_item.target_anchor
 
-        source_node = self.nodes[source_anchor_item.node.id]
-        target_node = self.nodes[target_anchor_item.node.id]
+        source_node = self.nodes.get(source_anchor_item.node.id)
+        target_node = self.nodes.get(target_anchor_item.node.id)
+        if source_node is None or target_node is None:
+            return None
 
         source_anchor = source_node.get_anchor(source_anchor_item.name)
         target_anchor = target_node.get_anchor(target_anchor_item.name)

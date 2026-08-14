@@ -213,6 +213,12 @@ class NodeItem(DiagramItemBase):
         self._domain_node = None
         self._defect_indicator = False
 
+        for anchor in self.anchors.values():
+            if anchor.domain == "hydraulic":
+                anchor.pressure = 0.0
+                anchor.flow = 0.0
+                anchor.update_hydraulic_labels()
+
         if hasattr(self, "initialize_actuators"):
             self.initialize_actuators()
 

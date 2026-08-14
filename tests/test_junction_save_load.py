@@ -49,6 +49,7 @@ def test_junction_survives_round_trip():
     junction_item = next(i for i in items if getattr(i, "id", None) == "junction")
     assert isinstance(junction_item, JunctionNodeItem)
     assert junction_item.anchors["J"].connection_count() == 3
+    assert junction_item.anchors["J"].brush().color().alpha() > 0  # bolinha visível
 
     reserialized = serialize_scene(scene)
     node_types = {n["id"]: n["type"] for n in reserialized["nodes"]}

@@ -104,8 +104,16 @@ def test_split_connection_at_creates_junction_and_two_children():
 
     assert j_anchor is not None
     assert isinstance(j_anchor.node, JunctionNodeItem)
-    assert conn.scene() is None  # a conexão original foi removida
     assert len(j_anchor.node.connections) == 2
+
+    # A remoção da conexão original (prepare_delete()+removeItem()) é
+    # adiada via QTimer.singleShot(0, ...) -- mesmo padrão de
+    # DeleteManager/NodeItem.remove_anchor -- pra evitar mexer no índice
+    # espacial da cena de forma síncrona dentro de mousePressEvent. Só
+    # depois do event loop processar é que ela some de fato.
+    app.processEvents()
+
+    assert conn.scene() is None  # a conexão original foi removida
     assert len(node_a.connections) == 1
     assert node_a.connections[0] is not conn
     assert len(node_b.connections) == 1
@@ -146,6 +154,10 @@ def test_anchor_to_line_flow_creates_three_way_junction_with_dot():
     assert j_anchor.brush().color().alpha() > 0  # bolinha visível
     assert editor._connecting is False
 
+    # Flush da remoção adiada da conexão original do split (QTimer.singleShot),
+    # pra não deixar um timer pendente vazando pro próximo teste do módulo.
+    app.processEvents()
+
 
 def test_cancel_after_split_rolls_back_completely():
     scene = QGraphicsScene()
@@ -168,6 +180,16 @@ def test_cancel_after_split_rolls_back_completely():
     view.handle_connect_press(_event_at(view, QPointF(50, 0)))
     assert editor._connecting is True
     assert len(scene.items()) > before_node_count  # split já aconteceu
+
+    # Em uso real, o event loop roda entre dois cliques de mouse distintos
+    # -- o que dá tempo do QTimer.singleShot(0, ...) da remoção adiada da
+    # conexão original (ver split_connection_at) disparar e assentar ANTES
+    # do segundo clique. Sem isso aqui, o rollback abaixo (_restore_snapshot
+    # -> deserialize_scene(clear_scene=True) -> scene.clear()) deletaria o
+    # objeto C++ da conexão original ainda pendente de remoção, e o timer
+    # adiado explodiria com RuntimeError ao disparar mais tarde (inclusive
+    # possivelmente durante processEvents() de um teste totalmente diferente).
+    app.processEvents()
 
     # 2º clique: em vazio, sem hover_anchor nem conexão sob o cursor --
     # cancela o gesto inteiro.

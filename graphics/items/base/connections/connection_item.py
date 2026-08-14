@@ -2,8 +2,9 @@
 
 from PyQt6.QtWidgets import QGraphicsItem, QMenu
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPainter, QPainterPathStroker, QPolygonF, QBrush, QAction
-from PyQt6.QtCore import Qt, QPointF, QRectF
+from PyQt6.QtCore import Qt, QPointF, QRectF, QTimer
 from graphics.items.base.diagram_item_base import DiagramItemBase
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
 
 # Vetores unitários por direção — compartilhado entre _apply_margin e _draw_arrow_at.
 _DIR_VEC = {"right": (1, 0), "left": (-1, 0), "bottom": (0, 1), "top": (0, -1)}
@@ -939,12 +940,38 @@ class ConnectionItem(DiagramItemBase):
             self.source.connections.remove(self)
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
-        if self.source_anchor:
-            self.source_anchor.refresh_junction_dot()
-        if self.target_anchor:
-            self.target_anchor.refresh_junction_dot()
+        for anchor in (self.source_anchor, self.target_anchor):
+            if anchor is None:
+                continue
+            anchor.refresh_junction_dot()
+            self._cleanup_orphan_junction(anchor)
         self.source = self.target = None
         self.prepareGeometryChange()
+
+    @staticmethod
+    def _cleanup_orphan_junction(anchor) -> None:
+        """Remove a JunctionNodeItem dona de `anchor` se ela acabou de
+        ficar com 0 conexões vivas.
+
+        Uma JunctionNodeItem tem boundingRect()/shape() 0x0 (sem corpo
+        visível por design) -- se ambos os ramos dela forem deletados um
+        de cada vez, ela vira um nó órfão inclicável/inselecionável/
+        indeletável pela UI normal, mas continua sendo serializado em
+        todo save futuro para sempre. Usa o MESMO padrão adiado de
+        split_connection_at/DeleteManager -- prepare_delete() pode já
+        estar rodando dentro de um QTimer.singleShot(0, ...) do
+        DeleteManager ou de split_connection_at; aninhar outro
+        singleShot(0, ...) aqui compõe normalmente com isso, do mesmo jeito
+        que NodeItem.remove_anchor já compõe com o DeleteManager."""
+        node = anchor.node
+        if not isinstance(node, JunctionNodeItem) or anchor.connection_count() != 0:
+            return
+
+        def _remove_orphan_junction():
+            if node.scene():
+                node.prepare_delete()
+                node.scene().removeItem(node)
+        QTimer.singleShot(0, _remove_orphan_junction)
 
     # =========================================================================
     # Serialization
@@ -971,6 +998,11 @@ class ConnectionItem(DiagramItemBase):
         conn._waypoints_initialized = True
         source_node.connections.append(conn)
         target_node.connections.append(conn)
+        # Sem isso, todo undo/redo (que reconstrói a cena inteira via
+        # _restore_snapshot -> deserialize_scene) apagava a bolinha de
+        # junção até o usuário re-passar o mouse sobre o anchor.
+        source_anchor.refresh_junction_dot()
+        target_anchor.refresh_junction_dot()
         # Semeia o cache de posição/direção dos anchors com os valores atuais
         # (== os valores no momento do save, já que os anchors não se moveram
         # desde então) ANTES da repara abaixo. Sem isso, `_last_p1_out`/

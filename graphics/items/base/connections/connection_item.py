@@ -333,10 +333,14 @@ class ConnectionItem(DiagramItemBase):
 
     # Primitivas de roteamento ortogonal (nomes = sequência de segmentos H/V).
     def _vhv(self, p1, p2):
+        if p1.x() == p2.x():
+            return []  # já alinhados no eixo x -- reta direta, sem "V" degenerado
         mid_y = (p1.y() + p2.y()) / 2
         return [QPointF(p1.x(), mid_y), QPointF(p2.x(), mid_y)]
 
     def _hvh(self, p1, p2):
+        if p1.y() == p2.y():
+            return []  # já alinhados no eixo y -- reta direta, sem "V" degenerado
         mid_x = (p1.x() + p2.x()) / 2
         return [QPointF(mid_x, p1.y()), QPointF(mid_x, p2.y())]
 
@@ -554,6 +558,26 @@ class ConnectionItem(DiagramItemBase):
             if d < best_d:
                 best_d, result = d, (i, QPointF(a), QPointF(b))
         return result
+
+    def compute_split_point(self, scene_pos: QPointF):
+        """Ponto mais próximo de `scene_pos` sobre a rota roteada (não a
+        reta ponto-a-ponto), pra criar uma junção ali.
+
+        Retorna (ponto, waypoints_antes, waypoints_depois) -- as duas
+        listas já prontas pra virar `self.waypoints` das duas
+        ConnectionItem resultantes do split -- ou None se `scene_pos`
+        estiver longe demais de qualquer segmento (mesmo raio de
+        `_seg_hit_at`, usado também pelo duplo-clique que insere
+        waypoint).
+        """
+        hit = self._seg_hit_at(scene_pos)
+        if hit is None:
+            return None
+        k, seg_a, seg_b = hit
+        is_horizontal = abs(seg_a.y() - seg_b.y()) < 1.0
+        point = (QPointF(scene_pos.x(), seg_a.y()) if is_horizontal
+                 else QPointF(seg_a.x(), scene_pos.y()))
+        return point, list(self.waypoints[:k]), list(self.waypoints[k:])
 
     # =========================================================================
     # Waypoints — drawing
@@ -915,6 +939,10 @@ class ConnectionItem(DiagramItemBase):
             self.source.connections.remove(self)
         if self.target and self in self.target.connections:
             self.target.connections.remove(self)
+        if self.source_anchor:
+            self.source_anchor.refresh_junction_dot()
+        if self.target_anchor:
+            self.target_anchor.refresh_junction_dot()
         self.source = self.target = None
         self.prepareGeometryChange()
 

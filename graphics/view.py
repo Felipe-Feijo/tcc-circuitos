@@ -7,6 +7,7 @@ from PyQt6.QtGui import QPen
 from graphics.items.base.connections.connection_item import ConnectionItem
 from editor.mode import EditorMode
 from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
 
 
 class GraphicsView(QGraphicsView):
@@ -42,6 +43,12 @@ class GraphicsView(QGraphicsView):
 
         # Snapshot capturado no início de um arrasto de nó para undo de move
         self._move_before_snapshot = None
+
+        # Snapshot capturado se um gesto CONNECT envolveu split de conexão
+        # (linha->anchor ou anchor->linha) -- usado para desfazer o split
+        # se o gesto for cancelado, ou pra empilhar um único undo combinado
+        # se a conexão for criada.
+        self._connect_before_snapshot = None
 
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -125,17 +132,7 @@ class GraphicsView(QGraphicsView):
             and self.editor.mode == EditorMode.CONNECT
         ):
             if self.editor._connecting:
-                target_anchor = self.editor.hover_anchor
-                source_anchor = self.editor._conn_source_anchor
-                source_item = source_anchor.node if source_anchor else None
-
-                self.cleanup_temp_connection()
-
-                if target_anchor and source_item and target_anchor.node is not source_item:
-                    self.create_connection(
-                        source_item, source_anchor,
-                        target_anchor.node, target_anchor,
-                    )
+                self._complete_connect_press(event)
             else:
                 self.handle_connect_press(event)
             return
@@ -170,6 +167,8 @@ class GraphicsView(QGraphicsView):
 
         if self.editor.mode == EditorMode.CONNECT:
             if self.editor.hover_anchor:
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            elif self._connection_at(self.mapToScene(event.pos()), exclude={self._temp_connection}):
                 self.setCursor(Qt.CursorShape.CrossCursor)
             else:
                 self.unsetCursor()
@@ -232,18 +231,126 @@ class GraphicsView(QGraphicsView):
     # Criação de conexões
 
     def handle_connect_press(self, event) -> None:
-        """Inicia uma nova conexão a partir do âncora sob o cursor.
-
-        Só age se houver um hover_anchor definido no EditorState.
-        """
+        """Inicia uma nova conexão a partir do âncora sob o cursor -- ou,
+        se não houver âncora sob o cursor, a partir de um ponto sobre uma
+        ConnectionItem existente (cria uma JunctionNodeItem ali e começa
+        dela, como se fosse um âncora comum)."""
         anchor = self.editor.hover_anchor
         if not anchor:
-            return
+            scene_pos = self.mapToScene(event.pos())
+            conn = self._connection_at(scene_pos)
+            if conn is None:
+                return
+            from editor.undo import UndoStack
+            self._connect_before_snapshot = UndoStack.snapshot(self.scene())
+            anchor = self.split_connection_at(conn, scene_pos)
+            if anchor is None:
+                self._connect_before_snapshot = None
+                return
         self.editor._connecting = True
         self.editor._conn_source_anchor = anchor
         self.start_temp_connection(anchor.node, anchor)
 
-    def create_connection(self, source_item, source_anchor, target_item, target_anchor) -> None:
+    def _complete_connect_press(self, event) -> None:
+        """Segundo clique do modo CONNECT: completa a conexão num âncora,
+        num ponto sobre uma linha existente (split + junção), ou cancela
+        (clique em vazio). Se um split aconteceu neste gesto (no início ou
+        agora) e a conexão acaba não sendo criada, desfaz o split via
+        rollback de snapshot -- não deve sobrar uma junção órfã de um
+        gesto cancelado."""
+        target_anchor = self.editor.hover_anchor
+        source_anchor = self.editor._conn_source_anchor
+        source_item = source_anchor.node if source_anchor else None
+
+        if target_anchor is None and source_anchor is not None:
+            scene_pos = self.mapToScene(event.pos())
+            conn = self._connection_at(scene_pos, exclude={self._temp_connection})
+            if conn is not None and conn.domain == source_anchor.domain:
+                if self._connect_before_snapshot is None:
+                    from editor.undo import UndoStack
+                    self._connect_before_snapshot = UndoStack.snapshot(self.scene())
+                target_anchor = self.split_connection_at(conn, scene_pos)
+
+        self.cleanup_temp_connection()
+
+        created = None
+        if target_anchor and source_item and target_anchor.node is not source_item:
+            created = self.create_connection(
+                source_item, source_anchor,
+                target_anchor.node, target_anchor,
+                record_undo=self._connect_before_snapshot is None,
+            )
+
+        if self._connect_before_snapshot is not None:
+            if created is not None:
+                self.editor.undo_stack.push_snapshot(
+                    self.scene(), self.editor, self._connect_before_snapshot, "Criar conexão",
+                )
+            else:
+                from editor.undo import _restore_snapshot
+                _restore_snapshot(self._connect_before_snapshot, self.scene(), self.editor)
+            self._connect_before_snapshot = None
+
+    def _connection_at(self, scene_pos, exclude=None):
+        """Primeira ConnectionItem cujo compute_split_point aceita
+        scene_pos (i.e., o cursor está perto o bastante de algum de seus
+        segmentos), ignorando os itens em `exclude` (tipicamente a conexão
+        temporária de preview)."""
+        exclude = exclude or set()
+        for item in self.scene().items(scene_pos):
+            if (isinstance(item, ConnectionItem) and item not in exclude
+                    and item.compute_split_point(scene_pos) is not None):
+                return item
+        return None
+
+    def split_connection_at(self, conn: ConnectionItem, scene_pos):
+        """Divide `conn` em dois, ligando os dois pedaços a uma
+        JunctionNodeItem nova posicionada em scene_pos (projetado sobre a
+        rota de `conn`). Retorna o AnchorItem "J" da junção, ou None se
+        scene_pos não estiver perto o bastante de nenhum segmento de
+        `conn`."""
+        split = conn.compute_split_point(scene_pos)
+        if split is None:
+            return None
+        point, wp_before, wp_after = split
+
+        junction = JunctionNodeItem(domain=conn.domain)
+        junction.editor = self.editor
+        junction.setPos(point)
+        self.scene().addItem(junction)
+        j_anchor = junction.anchors["J"]
+
+        source_item, source_anchor = conn.source, conn.source_anchor
+        target_item, target_anchor = conn.target, conn.target_anchor
+
+        conn_a = ConnectionItem(source_item, source_anchor, junction, j_anchor)
+        conn_a.waypoints = list(wp_before)
+        conn_a._waypoints_initialized = True
+        conn_a.editor = self.editor
+
+        conn_b = ConnectionItem(junction, j_anchor, target_item, target_anchor)
+        conn_b.waypoints = list(wp_after)
+        conn_b._waypoints_initialized = True
+        conn_b.editor = self.editor
+
+        self.scene().addItem(conn_a)
+        self.scene().addItem(conn_b)
+        source_item.connections.append(conn_a)
+        junction.connections.append(conn_a)
+        junction.connections.append(conn_b)
+        target_item.connections.append(conn_b)
+
+        conn.prepare_delete()
+        self.scene().removeItem(conn)
+
+        source_anchor.refresh_junction_dot()
+        target_anchor.refresh_junction_dot()
+        j_anchor.refresh_junction_dot()
+
+        return j_anchor
+
+    def create_connection(self, source_item, source_anchor, target_item, target_anchor,
+                           *, record_undo: bool = True):
         """Cria uma ConnectionItem entre dois âncoras, ignorando duplicatas.
 
         Args:
@@ -251,8 +358,16 @@ class GraphicsView(QGraphicsView):
             source_anchor: AnchorItem de saída no nó de origem.
             target_item: NodeItem de destino.
             target_anchor: AnchorItem de entrada no nó de destino.
+            record_undo: Se True (padrão), captura e empilha snapshot de
+                undo aqui mesmo. Chamadores que já fazem sua própria
+                captura de snapshot ao redor de uma operação composta
+                (ex.: split + connect de um clique em junção) passam
+                False e cuidam do undo eles mesmos.
+
+        Returns:
+            A ConnectionItem criada, ou None se já existia uma conexão
+            idêntica (source/target/âncoras) e nada foi feito.
         """
-        # Proteção contra conexão duplicada entre os mesmos âncoras
         for conn in source_item.connections:
             if (
                 conn.source is source_item
@@ -260,25 +375,26 @@ class GraphicsView(QGraphicsView):
                 and conn.source_anchor == source_anchor
                 and conn.target_anchor == target_anchor
             ):
-                return
+                return None
 
-        # Captura snapshot ANTES de criar a conexão
-        from editor.undo import UndoStack
-        before = UndoStack.snapshot(self.scene())
+        before = None
+        if record_undo:
+            from editor.undo import UndoStack
+            before = UndoStack.snapshot(self.scene())
 
         conn = ConnectionItem(source_item, source_anchor, target_item, target_anchor)
         conn.editor = self.editor
         self.scene().addItem(conn)
         source_item.connections.append(conn)
         target_item.connections.append(conn)
+        source_anchor.refresh_junction_dot()
+        target_anchor.refresh_junction_dot()
 
-        # Empilha o command de undo APÓS a conexão ser criada
-        self.editor.undo_stack.push_snapshot(
-            self.scene(),
-            self.editor,
-            before,
-            "Criar conexão",
-        )
+        if record_undo:
+            self.editor.undo_stack.push_snapshot(
+                self.scene(), self.editor, before, "Criar conexão",
+            )
+        return conn
 
     def start_temp_connection(self, source_item, source_anchor) -> None:
         """Cria a ConnectionItem temporária (tracejada) de preview de conexão.
@@ -301,8 +417,7 @@ class GraphicsView(QGraphicsView):
             self.scene().removeItem(self._temp_connection)
             self._temp_connection = None
         if self.editor._conn_source_anchor:
-            self.editor._conn_source_anchor.setBrush(Qt.GlobalColor.transparent)
-            self.editor._conn_source_anchor.update()
+            self.editor._conn_source_anchor.refresh_junction_dot()
         self.editor._connecting = False
         self.editor._conn_source_anchor = None
 

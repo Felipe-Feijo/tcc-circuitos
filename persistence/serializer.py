@@ -91,6 +91,7 @@ def deserialize_scene(data: dict, scene, editor, *, clear_scene=True) -> list:
     # Passo 2: cria as conexões (dependem dos nós já existirem)
     for conn_data in data["connections"]:
         conn = ConnectionItem.from_dict(conn_data, node_index)
+        conn.editor = editor
         scene.addItem(conn)
         created_items.append(conn)
 

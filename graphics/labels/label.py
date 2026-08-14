@@ -166,6 +166,16 @@ class LabelItem(QGraphicsTextItem):
         font.setBold(self.properties["bold"])
         self.setFont(font)
 
+    def apply_theme(self, is_light: bool) -> None:
+        """Ajusta cor do texto e da borda pro tema atual — preto no claro,
+        branco no escuro. Não existe UI hoje pra customizar a cor de um
+        label individualmente, então é seguro sempre seguir o tema."""
+        color = Qt.GlobalColor.black if is_light else Qt.GlobalColor.white
+        self.properties["color"] = color
+        self.properties["border_color"] = color
+        self.setDefaultTextColor(color)
+        self.update()
+
     def refresh_default_font_size(self) -> None:
         """Reaplica o tamanho de fonte a partir da fonte atual da aplicação.
 

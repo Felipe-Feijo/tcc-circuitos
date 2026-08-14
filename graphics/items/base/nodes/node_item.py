@@ -573,6 +573,12 @@ class NodeItem(DiagramItemBase):
         self.use_light_theme = is_light
         if hasattr(self, "_pixmap_cache"):
             self._pixmap_cache.clear()
+        for label in (*self.labels.values(), *self.special_labels.values()):
+            label.apply_theme(is_light)
+        for anchor in self.anchors.values():
+            hydraulic_label = getattr(anchor, "_label_hydraulic", None)
+            if hydraulic_label is not None:
+                hydraulic_label.apply_theme(is_light)
         self.update()
 
     def update_connections(self) -> None:

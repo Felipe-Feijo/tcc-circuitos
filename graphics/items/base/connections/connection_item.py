@@ -185,10 +185,12 @@ class ConnectionItem(DiagramItemBase):
         base  = QPointF(point.x() - ux * size,      point.y() - uy * size)
         left  = QPointF(base.x() - uy * size * 0.6, base.y() + ux * size * 0.6)
         right = QPointF(base.x() + uy * size * 0.6, base.y() - ux * size * 0.6)
-        # Preto fixo (independente da cor da linha) — contraste garantido
-        # contra qualquer cor de estado hidráulico (azul, ciano, laranja...).
-        painter.setBrush(QBrush(Qt.GlobalColor.black))
-        painter.setPen(QPen(Qt.GlobalColor.black, 1))
+        # Preto no tema claro, branco no escuro — contraste garantido contra
+        # qualquer cor de estado hidráulico (azul, ciano, laranja...),
+        # independente da cor da linha em si.
+        arrow_color = Qt.GlobalColor.black if self.use_light_theme else Qt.GlobalColor.white
+        painter.setBrush(QBrush(arrow_color))
+        painter.setPen(QPen(arrow_color, 1))
         painter.drawPolygon(QPolygonF([tip, left, right]))
 
     # =========================================================================

@@ -314,6 +314,7 @@ class GraphicsView(QGraphicsView):
             return
         desc = self.editor.pending_node
         item = desc.cls(domain=desc.domain)
+        item.editor = self.editor
         item.apply_preview_constraints()
         self._preview_node = item
         self.scene().addItem(item)

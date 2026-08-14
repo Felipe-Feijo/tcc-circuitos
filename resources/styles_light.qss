@@ -1,0 +1,108 @@
+/* Ver comentário equivalente em styles_dark.qss: o QMenuBar/QMenu nativo
+   do Windows não segue a QPalette pro fundo, só pro texto -- forçar via
+   QSS evita texto escuro sobre fundo que continuaria escuro. */
+QMenuBar {
+    background-color: #f0f0f0;
+    color: #141414;
+}
+
+QMenuBar::item {
+    background: transparent;
+    color: #141414;
+}
+
+QMenuBar::item:selected {
+    background-color: #d8d8d8;
+}
+
+QMenu {
+    background-color: #f0f0f0;
+    color: #141414;
+    border: 1px solid #a0a0a0;
+}
+
+QMenu::item:selected {
+    background-color: #d8d8d8;
+}
+
+/* Ver comentário equivalente em styles_dark.qss: a QScrollBar nativa
+   também ignora a QPalette, então as barras de pan da view ficavam
+   sempre escuras mesmo no tema light. */
+QScrollBar:vertical {
+    background-color: #f0f0f0;
+    width: 14px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #b0b0b0;
+    min-height: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #999999;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    background-color: #f0f0f0;
+    height: 14px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #b0b0b0;
+    min-width: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #999999;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+QToolBar QToolButton {
+    background: transparent;
+    border: none;
+    padding: 10px 16px;
+    min-height: 28px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #d8d8d8;
+    border-radius: 4px;
+}
+
+QToolBar QToolButton:checked {
+    background-color: #b8b8b8;
+}
+
+QPushButton#sizeTierButton {
+    background: transparent;
+    border: 1px solid #a0a0a0;
+    padding: 4px 10px;
+}
+
+QPushButton#sizeTierButton:hover {
+    background-color: #d8d8d8;
+}
+
+QPushButton#sizeTierButton:checked {
+    background-color: #b8b8b8;
+    border-color: #606060;
+}

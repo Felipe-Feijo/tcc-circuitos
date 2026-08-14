@@ -69,3 +69,7 @@ class PaletteSection(QWidget):
     def apply_item_size(self, pixmap_wh: tuple[int, int], item_width: int, font_delta: int):
         for item in self._items:
             item.apply_size(pixmap_wh, item_width, font_delta)
+
+    def set_light_theme(self, is_light: bool):
+        for item in self._items:
+            item.set_light_theme(is_light)

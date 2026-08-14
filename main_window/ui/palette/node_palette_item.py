@@ -15,6 +15,8 @@ class NodePaletteItem(QWidget):
 
         self.selected = False
         self.icon_path = icon_path
+        self.use_light_theme = False
+        self._pixmap_wh = DEFAULT_PIXMAP_WH
 
         self.setFixedWidth(DEFAULT_ITEM_WIDTH)
 
@@ -44,8 +46,9 @@ class NodePaletteItem(QWidget):
 
     def apply_size(self, pixmap_wh: tuple[int, int], item_width: int, font_delta: int):
         w, h = pixmap_wh
+        self._pixmap_wh = pixmap_wh
 
-        pixmap = generate_pixmap_for_palette(self.icon_path, w, h)
+        pixmap = generate_pixmap_for_palette(self.icon_path, w, h, self.use_light_theme)
         self.image_label.setPixmap(pixmap)
         self.image_label.setFixedSize(w, h)
 
@@ -61,6 +64,12 @@ class NodePaletteItem(QWidget):
     def set_selected(self, value: bool):
         self.selected = value
         self.update()
+
+    def set_light_theme(self, is_light: bool):
+        self.use_light_theme = is_light
+        w, h = self._pixmap_wh
+        pixmap = generate_pixmap_for_palette(self.icon_path, w, h, self.use_light_theme)
+        self.image_label.setPixmap(pixmap)
 
     def paintEvent(self, event):
         super().paintEvent(event)

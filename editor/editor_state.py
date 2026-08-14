@@ -18,6 +18,9 @@ class EditorState(QObject):
         active_context_menu: QMenu aberto no momento, fechado ao deletar.
         actions: Dicionário de QActions preenchido pela MainWindow após construção.
         undo_stack: Pilha de undo/redo compartilhada por todo o editor.
+        is_light_theme: Tema atual, mantido em sincronia com MainWindow.set_light_theme.
+            Itens criados depois de um toggle (sem ouvir o sinal theme_changed)
+            leem esse valor pra nascer já na cor certa.
 
     Signals:
         add_node_requested(x, y): Usuário clicou para posicionar um nó.
@@ -42,6 +45,7 @@ class EditorState(QObject):
         self._conn_source_anchor = None
 
         self.actions: dict = {}
+        self.is_light_theme: bool = False
 
         # Pilha de undo/redo — usada por DeleteManager, ClipboardManager,
         # GraphicsView e MainWindow

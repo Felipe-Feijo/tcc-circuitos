@@ -1,9 +1,10 @@
 """Janela principal da aplicação: monta e conecta todos os subsistemas."""
 
 from pathlib import Path
-from PyQt6.QtWidgets import QMainWindow, QMessageBox, QGraphicsItem
+from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsItem
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
+from main_window import theme
 from editor.clipboard_manager import ClipboardManager
 from editor.editor_state import EditorState
 from editor.mode import EditorMode
@@ -357,6 +358,10 @@ class MainWindow(QMainWindow):
 
     def set_light_theme(self, enabled: bool):
         self.use_light_theme = enabled
+        self.state.is_light_theme = enabled
+
+        # 🔹 tema da aplicação inteira (toolbar, menus, docks, diálogos)
+        theme.apply_theme(QApplication.instance(), enabled)
 
         # 🔹 muda fundo
         if not enabled:

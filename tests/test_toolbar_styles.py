@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-STYLES_PATH = Path(__file__).parent.parent / "resources" / "styles.qss"
+STYLES_PATH = Path(__file__).parent.parent / "resources" / "styles_dark.qss"
 
 
 def test_toolbar_buttons_have_larger_padding_and_min_height():

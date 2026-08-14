@@ -2,13 +2,14 @@ import uuid
 import copy
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu
 from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, pyqtProperty
-from PyQt6.QtGui import QPainter, QPixmap, QColor
+from PyQt6.QtGui import QPainter, QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 from graphics.utils.properties_dialog import PropertiesDialog
 from graphics.utils.defect_dialog import DefectDialog
+from graphics.utils.pixmap_utils import recolor_pixmap_black
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
 # Mapeamento genérico "default_side" -> body_state para nós de 3 posições
@@ -562,6 +563,9 @@ class NodeItem(DiagramItemBase):
                 except (TypeError, RuntimeError):
                     pass
                 self.editor.theme_changed.connect(self.on_theme_changed)
+                # Sincroniza com o tema atual: o item pode ter sido criado
+                # depois do último toggle, sem nunca ter recebido o sinal.
+                self.on_theme_changed(getattr(self.editor, "is_light_theme", False))
 
         return super().itemChange(change, value)
 
@@ -644,14 +648,7 @@ class NodeItem(DiagramItemBase):
             painter.drawPixmap(pos, pixmap)
             return
 
-        colored = QPixmap(pixmap.size())
-        colored.fill(Qt.GlobalColor.transparent)
-        p = QPainter(colored)
-        p.drawPixmap(0, 0, pixmap)
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-        p.fillRect(colored.rect(), QColor(0, 0, 0))
-        p.end()
-        painter.drawPixmap(pos, colored)
+        painter.drawPixmap(pos, recolor_pixmap_black(pixmap))
 
     # ── visual_offset property (used by Qt animations) ───────────────────────
     def getVisualOffset(self) -> QPointF:

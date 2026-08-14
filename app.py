@@ -28,9 +28,6 @@ faulthandler.enable()
 app = QApplication(sys.argv)
 settings.apply_font_from_settings(app)
 
-with open("resources/styles.qss", "r") as f:
-    app.setStyleSheet(f.read())
-
 window = MainWindow()
 window.resize(800, 600)
 window.show()

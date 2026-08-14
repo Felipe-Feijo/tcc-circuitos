@@ -851,6 +851,9 @@ class ConnectionItem(DiagramItemBase):
                 except (TypeError, RuntimeError):
                     pass
                 self.editor.theme_changed.connect(self.on_theme_changed)
+                # Sincroniza com o tema atual: o item pode ter sido criado
+                # depois do último toggle, sem nunca ter recebido o sinal.
+                self.on_theme_changed(getattr(self.editor, "is_light_theme", False))
         return super().itemChange(change, value)
 
     def on_theme_changed(self, is_light: bool) -> None:

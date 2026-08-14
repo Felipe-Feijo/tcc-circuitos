@@ -35,4 +35,7 @@ def create_node_palette(main_window):
     register_nodes(palette, lambda node_desc: main_window.set_mode(EditorMode.ADD, node_desc=node_desc))
     palette.set_size_tier(palette.current_tier, persist=False)  # re-apply to newly-registered items
 
+    if hasattr(main_window, "state"):
+        main_window.state.theme_changed.connect(palette.set_light_theme)
+
     return palette, dock

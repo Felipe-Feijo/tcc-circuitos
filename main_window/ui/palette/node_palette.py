@@ -63,6 +63,7 @@ class NodePalette(QWidget):
         self.scroll.setWidget(container)
 
         self.selected_item: NodePaletteItem | None = None
+        self.use_light_theme = False
 
         self.current_tier = settings.get_palette_tier(self._settings_obj)
         if self.current_tier not in self.SIZE_TIERS:
@@ -91,6 +92,7 @@ class NodePalette(QWidget):
             return self.sections[name]
 
         section = PaletteSection(name, num_columns=1)
+        section.set_light_theme(self.use_light_theme)
         self.sections[name] = section
         self.container_layout.addWidget(section)
         return section
@@ -112,6 +114,11 @@ class NodePalette(QWidget):
             settings.set_palette_tier(name, self._settings_obj)
 
         self._recompute_columns()
+
+    def set_light_theme(self, is_light: bool):
+        self.use_light_theme = is_light
+        for section in self.sections.values():
+            section.set_light_theme(is_light)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

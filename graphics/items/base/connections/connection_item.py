@@ -83,12 +83,30 @@ class ConnectionItem(DiagramItemBase):
     # Paint
     # =========================================================================
 
+    _ACTIVE_WIDTH   = 5
+    _INACTIVE_WIDTH = 3
+    _OUTLINE_WIDTH  = 8     # levemente maior que _ACTIVE_WIDTH — sobra um contorno fino
+    _OUTLINE_ALPHA  = 140
+
+    def _is_active(self) -> bool:
+        """Conexão carregando fluxo/sinal no momento — mesma condição que
+        `_get_pen` já usa para escolher a cor "ativa" de cada domínio."""
+        if self.domain == "pneumatic":
+            return self.state == 1
+        if self.domain == "electric":
+            return self.state == 1
+        if self.domain == "hydraulic":
+            return self.state not in (0, "ERR", "PRESSURIZING")
+        return False
+
     def paint(self, painter: QPainter, option, widget=None):
         points = self.get_path_points()
         if len(points) < 2:
             return
         is_preview = self.target_anchor is None
         pen = self._get_pen(is_preview)
+        if not is_preview and self._is_active():
+            self._draw_outline(painter, points, pen)
         painter.setPen(pen)
         for start, end in zip(points, points[1:]):
             painter.drawLine(start, end)
@@ -98,22 +116,44 @@ class ConnectionItem(DiagramItemBase):
             if len(points) >= 3:
                 self._draw_flow_arrows(painter, points, pen)
 
+    def _draw_outline(self, painter: QPainter, points: list, pen: QPen):
+        """Contorno fino atrás da linha principal, mesma cor do pen, pra
+        reforçar visualmente que a conexão está ativa na simulação.
+
+        Desenhado como um único QPainterPath (em vez de uma drawLine por
+        segmento) pra que cada canto tenha um join só — segmentos separados
+        com RoundCap se sobrepõem nas juntas e, por serem semi-transparentes,
+        empilham alpha e viram bolhas mais opacas exatamente nos waypoints.
+        """
+        outline_color = QColor(pen.color())
+        outline_color.setAlpha(self._OUTLINE_ALPHA)
+        outline_pen = QPen(outline_color, self._OUTLINE_WIDTH)
+        outline_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        outline_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        path = QPainterPath()
+        path.moveTo(points[0])
+        for pt in points[1:]:
+            path.lineTo(pt)
+        painter.setPen(outline_pen)
+        painter.drawPath(path)
+
     def _get_pen(self, is_preview: bool = False) -> QPen:
         if is_preview:
             pen = QPen(QColor(150, 150, 150), 2)
             pen.setStyle(Qt.PenStyle.DashLine)
             return pen
+        width = self._ACTIVE_WIDTH if self._is_active() else self._INACTIVE_WIDTH
         if self.isSelected():
             return QPen(Qt.GlobalColor.blue, 3)
         if self.domain == "pneumatic" and self.state == 1:
-            return QPen(Qt.GlobalColor.green, 3)
+            return QPen(Qt.GlobalColor.green, width)
         if self.domain == "electric" and self.state == 1:
-            return QPen(Qt.GlobalColor.yellow, 3)
+            return QPen(Qt.GlobalColor.yellow, width)
         if self.domain == "hydraulic":
             if self.state == "ERR":          return QPen(Qt.GlobalColor.red, 3)
             if self.state == "PRESSURIZING": return QPen(QColor(255, 140, 0), 3)
-            if self.state > 0:               return QPen(Qt.GlobalColor.blue, 3)
-            if self.state < 0:               return QPen(QColor(100, 180, 255), 3)
+            if self.state > 0:               return QPen(Qt.GlobalColor.blue, width)
+            if self.state < 0:               return QPen(QColor(100, 180, 255), width)
             return QPen(Qt.GlobalColor.cyan, 3)
         # Default pen — white on dark theme, black on light theme.
         if self.domain != "hydraulic":

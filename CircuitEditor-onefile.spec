@@ -17,6 +17,8 @@
 # *_layout_config.json de circuit_generator/ nao sao coletados
 # automaticamente pelo PyInstaller.
 
+from PyInstaller.utils.hooks import collect_data_files
+
 a = Analysis(
     ['app.py'],
     pathex=[],
@@ -28,6 +30,7 @@ a = Analysis(
         ('simulation', 'simulation'),
         ('editor', 'editor'),
         ('persistence', 'persistence'),
+        *collect_data_files('imageio_ffmpeg'),
     ],
     hiddenimports=[],
     hookspath=[],

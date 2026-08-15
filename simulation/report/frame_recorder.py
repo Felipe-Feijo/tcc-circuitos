@@ -112,7 +112,7 @@ class FrameRecorder:
 
     def _render_frame(self, path: str) -> None:
         image = QImage(self._frame_width, self._frame_height, QImage.Format.Format_ARGB32)
-        image.fill(Qt.GlobalColor.white)
+        image.fill(self._background_color())
 
         painter = QPainter(image)
         try:
@@ -121,3 +121,18 @@ class FrameRecorder:
             painter.end()
 
         image.save(path)
+
+    def _background_color(self):
+        """Cor de fundo do frame, espelhando o tema atual da cena.
+
+        `scene.render()` bypassa a QGraphicsView (só ela tinha a cor do
+        tema antes desta correção), então o preenchimento inicial do
+        QImage precisa vir da própria cena — senão componentes desenhados
+        para o tema escuro ficam invisíveis contra um fundo branco fixo.
+        Cai para branco se a cena não tiver um `backgroundBrush` definido
+        (ex: cena de teste isolada, sem passar por `set_light_theme`).
+        """
+        brush = self.scene.backgroundBrush()
+        if brush.style() == Qt.BrushStyle.NoBrush:
+            return Qt.GlobalColor.white
+        return brush.color()

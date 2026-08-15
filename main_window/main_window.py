@@ -377,10 +377,15 @@ class MainWindow(QMainWindow):
         theme.apply_theme(QApplication.instance(), enabled)
 
         # 🔹 muda fundo
+        # Espelhado também na scene (não só na view): o relatório de
+        # simulação renderiza frames direto da QGraphicsScene, sem passar
+        # pela view, então precisa que a cena carregue a cor do tema atual.
         if not enabled:
-            self.view.setBackgroundBrush(QBrush(QColor(30, 30, 30)))  # cinza escuro
+            background = QBrush(QColor(30, 30, 30))  # cinza escuro
         else:
-            self.view.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # branco
+            background = QBrush(QColor(255, 255, 255))  # branco
+        self.view.setBackgroundBrush(background)
+        self.scene.setBackgroundBrush(background)
 
         # 🔹 notifica nodes
         self.state.theme_changed.emit(enabled)

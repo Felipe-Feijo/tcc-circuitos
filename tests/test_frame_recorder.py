@@ -145,6 +145,47 @@ def test_frame_dimensions_stay_fixed_across_scene_rect_changes():
     recorder.discard()
 
 
+def test_frame_background_matches_scene_theme():
+    """A cena carrega o tema atual via `setBackgroundBrush` (espelhado pelo
+    MainWindow.set_light_theme); o frame renderizado deve usar essa cor,
+    não branco fixo, senão componentes desenhados para tema escuro somem."""
+    from PyQt6.QtGui import QBrush, QColor, QImage
+
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    dark = QColor(30, 30, 30)
+    scene.setBackgroundBrush(QBrush(dark))
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    image = QImage(data.frames[0].image_path)
+    corner_pixel = QColor(image.pixel(0, 0))
+    assert (corner_pixel.red(), corner_pixel.green(), corner_pixel.blue()) == (30, 30, 30)
+
+    recorder.discard()
+
+
+def test_frame_background_falls_back_to_white_without_scene_brush():
+    """Cena sem `backgroundBrush` definido (ex: cena de teste isolada) não
+    deve quebrar — cai para o branco de sempre."""
+    from PyQt6.QtGui import QColor, QImage
+
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()  # sem setBackgroundBrush
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    image = QImage(data.frames[0].image_path)
+    corner_pixel = QColor(image.pixel(0, 0))
+    assert (corner_pixel.red(), corner_pixel.green(), corner_pixel.blue()) == (255, 255, 255)
+
+    recorder.discard()
+
+
 def test_set_dt_changes_subsequent_sim_time():
     engine, cyl = _build_engine_with_piston()
     scene = _build_scene()

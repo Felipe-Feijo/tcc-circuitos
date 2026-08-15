@@ -1,5 +1,6 @@
 """Gerencia o ciclo de vida de uma sessão de simulação."""
 
+import logging
 from dataclasses import dataclass
 
 from graphics.items.base.connections.connection_item import ConnectionItem
@@ -9,6 +10,8 @@ from simulation.simulation_engine import SimulationEngine
 from simulation.simulation_controller import SimulationController
 from simulation.report import report_builder
 from simulation.report.frame_recorder import FrameRecorder
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,7 +100,9 @@ class SimulationSession:
 
         Returns:
             `ReportResult` apontando para o diretório temporário com o
-            relatório montado, ou None se a sessão não estava ativa.
+            relatório montado, ou None se a sessão não estava ativa, ou se
+            a montagem do relatório falhou (ex: erro de I/O) — nesse caso o
+            diretório pode estar incompleto e não deve ser usado.
         """
         if not self.active:
             return None
@@ -105,15 +110,20 @@ class SimulationSession:
         self._deactivate_node_items()
 
         result = None
-        if self._recorder is not None:
-            data = self._recorder.finalize()
-            report_builder.build(data.frames, data.temp_dir)
-            result = ReportResult(report_dir=data.temp_dir, keep=self._recorder.keep)
+        try:
+            if self._recorder is not None:
+                data = self._recorder.finalize()
+                report_builder.build(data.frames, data.temp_dir)
+                result = ReportResult(report_dir=data.temp_dir, keep=self._recorder.keep)
+        except Exception:
+            logger.exception("falha ao montar o relatório de simulação")
+            result = None
+        finally:
             self._recorder = None
+            self.engine = None
+            self.controller = None
+            self.active = False
 
-        self.engine = None
-        self.controller = None
-        self.active = False
         return result
 
     def play(self):
@@ -147,6 +157,21 @@ class SimulationSession:
         estiver ativa."""
         if self._recorder is not None:
             self._recorder.keep = True
+
+    def report_kept(self) -> bool:
+        """Retorna True se o relatório desta sessão já foi marcado para
+        ser mantido (via `mark_keep_report()`). False se a sessão não
+        estiver ativa ou o relatório ainda não tiver sido marcado."""
+        return self._recorder.keep if self._recorder is not None else False
+
+    def set_dt(self, value: float) -> None:
+        """Atualiza o `dt` da sessão, do controller (se ativo) e do
+        recorder de relatório (se ativo), mantendo os três em sincronia."""
+        self.dt = value
+        if self.controller is not None:
+            self.controller.set_dt(value)
+        if self._recorder is not None:
+            self._recorder.set_dt(value)
 
     # Métodos internos
 

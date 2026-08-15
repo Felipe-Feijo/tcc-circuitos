@@ -325,9 +325,7 @@ class MainWindow(QMainWindow):
             0.001, 1.0, 3
         )
         if ok:
-            self.simulation.dt = value  # salva na session
-            if self.simulation.controller:
-                self.simulation.controller.set_dt(value)
+            self.simulation.set_dt(value)  # salva na session, controller e recorder
             self.actions["dt"].setText(f"dt: {value:.3f}s")
 
     def on_cycle_speed(self):
@@ -366,7 +364,7 @@ class MainWindow(QMainWindow):
         steps_enabled = not ctrl.playing
         step_back.setEnabled(steps_enabled and ctrl.can_step_back())
         step_fwd.setEnabled(steps_enabled)
-        generate_report.setEnabled(True)
+        generate_report.setEnabled(not self.simulation.report_kept())
     def _update_mode_actions(self, active_mode):
         for action in self.mode_group.actions():
             action.setChecked(action.data() == active_mode)

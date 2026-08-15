@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import glob
+
 from PIL import Image
 
 from simulation.report.frame_recorder import Frame
@@ -67,3 +69,31 @@ def test_build_handles_no_frames(tmp_path):
 
     assert (out_dir / "relatorio.html").exists()
     assert (out_dir / "graficos.pdf").exists()
+
+
+def test_build_deletes_frame_pngs_from_out_dir(tmp_path):
+    """Reproduz o cenário real: FrameRecorder grava os PNGs dentro do
+    próprio `out_dir` (seu temp_dir). Depois de build(), só os 3
+    artefatos finais devem sobrar — nenhum frame_*.png."""
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    frames = []
+    for i in range(3):
+        img_path = out_dir / f"frame_{i:05d}.png"
+        Image.new("RGB", (64, 48), color=(i * 50, 0, 0)).save(img_path)
+        frames.append(Frame(
+            step_index=i,
+            sim_time=i * 0.1,
+            piston_positions={"c1": i / 2.0},
+            image_path=str(img_path),
+        ))
+
+    build(frames, str(out_dir))
+
+    remaining_frame_pngs = glob.glob(str(out_dir / "frame_*.png"))
+    assert remaining_frame_pngs == []
+
+    assert (out_dir / "relatorio.html").exists()
+    assert (out_dir / "graficos.pdf").exists()
+    assert (out_dir / "video.mp4").exists()

@@ -132,6 +132,17 @@ def build_html(chart_pngs: list, has_video: bool) -> str:
 """
 
 
+def _delete_frame_images(frames: list) -> None:
+    """Apaga os PNGs brutos de cada frame após o vídeo ter sido montado (ou
+    tentado). Eles não devem sobrar em `out_dir` junto com os artefatos
+    finais do relatório. Um arquivo já ausente não é um erro."""
+    for frame in frames:
+        try:
+            os.remove(frame.image_path)
+        except OSError:
+            pass
+
+
 def build(frames: list, out_dir: str) -> None:
     """Monta os 3 artefatos do relatório (`relatorio.html`, `graficos.pdf`,
     `video.mp4`) em `out_dir`.
@@ -161,6 +172,8 @@ def build(frames: list, out_dir: str) -> None:
 
     frame_paths = [f.image_path for f in frames if os.path.exists(f.image_path)]
     has_video = build_video(frame_paths, os.path.join(out_dir, "video.mp4"))
+
+    _delete_frame_images(frames)
 
     html = build_html(chart_pngs, has_video)
     with open(os.path.join(out_dir, "relatorio.html"), "w", encoding="utf-8") as fh:

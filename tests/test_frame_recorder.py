@@ -3,12 +3,37 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import os
+import shutil
+import tempfile
+
+import pytest
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsRectItem
 app = QApplication.instance() or QApplication([])
 
 from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
 from simulation.simulation_engine import SimulationEngine
 from simulation.report.frame_recorder import FrameRecorder
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_report_temp_dirs():
+    """Apaga todo diretório `circuit_report_*` criado por um FrameRecorder
+    durante o teste, mesmo que o teste não chame `.discard()`."""
+    created = []
+    original_mkdtemp = tempfile.mkdtemp
+
+    def tracking_mkdtemp(*args, **kwargs):
+        path = original_mkdtemp(*args, **kwargs)
+        created.append(path)
+        return path
+
+    tempfile.mkdtemp = tracking_mkdtemp
+    try:
+        yield
+    finally:
+        tempfile.mkdtemp = original_mkdtemp
+        for path in created:
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def _build_engine_with_piston():
@@ -95,3 +120,41 @@ def test_finalize_stops_accepting_frames():
 
     data2 = recorder.finalize()
     assert len(data2.frames) == 1
+
+
+def test_frame_dimensions_stay_fixed_across_scene_rect_changes():
+    """Zoom/pan mid-simulação muda `scene.sceneRect()` — as dimensões dos
+    PNGs gravados devem permanecer as mesmas (fixadas na criação do
+    recorder), senão o encoder de vídeo rejeita o frame com shape diferente."""
+    from PyQt6.QtGui import QImage
+
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    scene.setSceneRect(0, 0, 800, 600)  # simula zoom/pan
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert len(data.frames) == 2
+
+    sizes = [QImage(f.image_path).size() for f in data.frames]
+    assert sizes[0] == sizes[1]
+
+    recorder.discard()
+
+
+def test_set_dt_changes_subsequent_sim_time():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()  # sim_time = 0.0
+    recorder.set_dt(1.0)
+    recorder.capture_step()  # sim_time = 1 * 1.0 = 1.0
+
+    data = recorder.finalize()
+    assert [f.sim_time for f in data.frames] == [0.0, 1.0]
+
+    recorder.discard()

@@ -10,7 +10,7 @@ cycler==0.12.1
     # via matplotlib
 fonttools==4.60.1
     # via matplotlib
-ImageIO==2.37.4
+imageio==2.37.4
     # via -r requirements.in
 imageio-ffmpeg==0.6.0
     # via -r requirements.in

@@ -1,10 +1,22 @@
 """Gerencia o ciclo de vida de uma sessão de simulação."""
 
+from dataclasses import dataclass
+
 from graphics.items.base.connections.connection_item import ConnectionItem
 from graphics.items.base.nodes.node_item import NodeItem
 from editor.editor_controller import EditorController
 from simulation.simulation_engine import SimulationEngine
 from simulation.simulation_controller import SimulationController
+from simulation.report import report_builder
+from simulation.report.frame_recorder import FrameRecorder
+
+
+@dataclass
+class ReportResult:
+    """Resultado de `SimulationSession.stop()`: onde o relatório foi
+    montado e se a UI deve pular o popup de confirmação."""
+    report_dir: str
+    keep: bool
 
 
 class SimulationSession:
@@ -25,6 +37,7 @@ class SimulationSession:
         self.engine = None
         self.controller = None
         self.active = False
+        self._recorder: FrameRecorder | None = None
 
         # Configurações persistentes entre sessões
         self.dt = 0.1
@@ -69,6 +82,9 @@ class SimulationSession:
 
         self.active = True
 
+        self._recorder = FrameRecorder(self.engine, self.scene, self.dt)
+        self.controller.state_changed.connect(self._recorder.capture_step)
+
         # Passo 3: ativa os itens gráficos no modo simulação
         self._activate_node_items()
 
@@ -76,16 +92,29 @@ class SimulationSession:
         self.controller.request_step(1)
         return None
 
-    def stop(self):
-        """Para a simulação e restaura o estado visual dos itens gráficos."""
+    def stop(self) -> ReportResult | None:
+        """Para a simulação, restaura o estado visual e monta o relatório.
+
+        Returns:
+            `ReportResult` apontando para o diretório temporário com o
+            relatório montado, ou None se a sessão não estava ativa.
+        """
         if not self.active:
-            return
+            return None
 
         self._deactivate_node_items()
+
+        result = None
+        if self._recorder is not None:
+            data = self._recorder.finalize()
+            report_builder.build(data.frames, data.temp_dir)
+            result = ReportResult(report_dir=data.temp_dir, keep=self._recorder.keep)
+            self._recorder = None
 
         self.engine = None
         self.controller = None
         self.active = False
+        return result
 
     def play(self):
         """Inicia a execução contínua por timer."""
@@ -111,6 +140,13 @@ class SimulationSession:
     def is_playing(self) -> bool:
         """Retorna True se a simulação estiver rodando continuamente."""
         return bool(self.active and self.controller and self.controller.playing)
+
+    def mark_keep_report(self) -> None:
+        """Marca que o relatório desta sessão deve ser mantido ao final,
+        sem exibir o popup de confirmação. Não faz nada se a sessão não
+        estiver ativa."""
+        if self._recorder is not None:
+            self._recorder.keep = True
 
     # Métodos internos
 

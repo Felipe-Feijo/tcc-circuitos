@@ -30,8 +30,4 @@ def create_simulation_actions(main_window):
     actions["speed"] = QAction("1x", main_window)
     actions["speed"].triggered.connect(main_window.on_cycle_speed)
 
-    actions["generate_report"] = QAction("Gerar Relatório", main_window)
-    actions["generate_report"].setEnabled(False)
-    actions["generate_report"].triggered.connect(main_window.on_generate_report)
-
     return actions

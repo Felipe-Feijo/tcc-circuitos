@@ -17,9 +17,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ReportResult:
     """Resultado de `SimulationSession.stop()`: onde o relatório foi
-    montado e se a UI deve pular o popup de confirmação."""
+    montado, pronto para `resolve_report()` decidir o destino."""
     report_dir: str
-    keep: bool
 
 
 class SimulationSession:
@@ -114,7 +113,7 @@ class SimulationSession:
             if self._recorder is not None:
                 data = self._recorder.finalize()
                 report_builder.build(data.frames, data.temp_dir)
-                result = ReportResult(report_dir=data.temp_dir, keep=self._recorder.keep)
+                result = ReportResult(report_dir=data.temp_dir)
         except Exception:
             logger.exception("falha ao montar o relatório de simulação")
             result = None
@@ -150,19 +149,6 @@ class SimulationSession:
     def is_playing(self) -> bool:
         """Retorna True se a simulação estiver rodando continuamente."""
         return bool(self.active and self.controller and self.controller.playing)
-
-    def mark_keep_report(self) -> None:
-        """Marca que o relatório desta sessão deve ser mantido ao final,
-        sem exibir o popup de confirmação. Não faz nada se a sessão não
-        estiver ativa."""
-        if self._recorder is not None:
-            self._recorder.keep = True
-
-    def report_kept(self) -> bool:
-        """Retorna True se o relatório desta sessão já foi marcado para
-        ser mantido (via `mark_keep_report()`). False se a sessão não
-        estiver ativa ou o relatório ainda não tiver sido marcado."""
-        return self._recorder.keep if self._recorder is not None else False
 
     def set_dt(self, value: float) -> None:
         """Atualiza o `dt` da sessão, do controller (se ativo) e do

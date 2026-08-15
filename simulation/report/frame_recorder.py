@@ -49,7 +49,6 @@ class FrameRecorder:
         self.engine = engine
         self.scene = scene
         self.dt = dt
-        self.keep: bool = False
 
         self._frames: list[Frame] = []
         self._temp_dir = tempfile.mkdtemp(prefix="circuit_report_")

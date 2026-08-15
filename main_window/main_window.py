@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
             Path(self.file_session.current_file).stem
             if self.file_session.current_file else "circuito"
         )
-        resolve_report(self, result.report_dir, result.keep, circuit_name)
+        resolve_report(self, result.report_dir, circuit_name)
 
     def save_scene(self):
         self.file_session.save()
@@ -313,10 +313,6 @@ class MainWindow(QMainWindow):
         if self.simulation.controller.step_forward():
             self.update_simulation_actions()
 
-    def on_generate_report(self):
-        self.simulation.mark_keep_report()
-        self.actions["generate_report"].setEnabled(False)
-
     def on_dt_clicked(self):
         from PyQt6.QtWidgets import QInputDialog
         value, ok = QInputDialog.getDouble(
@@ -340,7 +336,6 @@ class MainWindow(QMainWindow):
         run       = self.actions["run"]
         step_back = self.actions["step_back"]
         step_fwd  = self.actions["step_forward"]
-        generate_report = self.actions["generate_report"]
 
         in_simulation = (
             self.state.mode == EditorMode.SIMULATE
@@ -353,7 +348,6 @@ class MainWindow(QMainWindow):
             run.setText("Run")
             step_back.setEnabled(False)
             step_fwd.setEnabled(False)
-            generate_report.setEnabled(False)
             return
 
         ctrl = self.simulation.controller
@@ -364,7 +358,7 @@ class MainWindow(QMainWindow):
         steps_enabled = not ctrl.playing
         step_back.setEnabled(steps_enabled and ctrl.can_step_back())
         step_fwd.setEnabled(steps_enabled)
-        generate_report.setEnabled(not self.simulation.report_kept())
+
     def _update_mode_actions(self, active_mode):
         for action in self.mode_group.actions():
             action.setChecked(action.data() == active_mode)

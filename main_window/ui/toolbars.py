@@ -23,7 +23,6 @@ def create_toolbars(main_window, actions):
     toolbar.addAction(actions["run"])
     toolbar.addAction(actions["step_back"])
     toolbar.addAction(actions["step_forward"])
-    toolbar.addAction(actions["generate_report"])
 
     toolbar.addSeparator()
     toolbar.addAction(actions["speed"])

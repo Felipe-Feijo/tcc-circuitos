@@ -71,28 +71,8 @@ def test_stop_builds_report_and_returns_result(monkeypatch):
 
     assert result is not None
     assert isinstance(result, ReportResult)
-    assert result.keep is False
     assert os.path.exists(os.path.join(result.report_dir, "relatorio.html"))
     assert os.path.exists(os.path.join(result.report_dir, "graficos.pdf"))
-
-
-def test_mark_keep_report_sets_flag_on_result(monkeypatch):
-    _patch_build_graph(monkeypatch)
-    scene = QGraphicsScene(0, 0, 100, 100)
-    session = SimulationSession(scene)
-    session.start()
-
-    session.mark_keep_report()
-    result = session.stop()
-
-    assert result.keep is True
-
-
-def test_mark_keep_report_before_start_is_a_noop():
-    scene = QGraphicsScene(0, 0, 100, 100)
-    session = SimulationSession(scene)
-
-    session.mark_keep_report()  # não deve lançar exceção
 
 
 def test_stop_returns_none_and_resets_state_when_build_raises(monkeypatch):
@@ -119,21 +99,3 @@ def test_stop_returns_none_and_resets_state_when_build_raises(monkeypatch):
     error = session.start()
     assert error is None
     assert session.active is True
-
-
-def test_report_kept_reflects_mark_keep_report(monkeypatch):
-    _patch_build_graph(monkeypatch)
-    scene = QGraphicsScene(0, 0, 100, 100)
-    session = SimulationSession(scene)
-    session.start()
-
-    assert session.report_kept() is False
-    session.mark_keep_report()
-    assert session.report_kept() is True
-
-
-def test_report_kept_false_when_not_active():
-    scene = QGraphicsScene(0, 0, 100, 100)
-    session = SimulationSession(scene)
-
-    assert session.report_kept() is False

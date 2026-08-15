@@ -3,3 +3,5 @@ PyQt6
 numpy
 matplotlib
 scipy
+imageio
+imageio-ffmpeg

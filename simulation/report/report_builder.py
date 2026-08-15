@@ -1,7 +1,9 @@
 """Monta os artefatos finais do relatório de simulação: gráficos, PDF, vídeo e HTML."""
 
+import base64
 import io
 import logging
+import os
 
 import imageio
 import matplotlib
@@ -90,3 +92,76 @@ def build_video(frame_paths: list, path: str, fps: int = 10) -> bool:
     except Exception:
         logger.exception("falha ao montar vídeo do relatório")
         return False
+
+
+def build_html(chart_pngs: list, has_video: bool) -> str:
+    """Monta o HTML autocontido do relatório.
+
+    Args:
+        chart_pngs: PNGs dos gráficos de trajetória, embutidos em base64.
+        has_video: Se True, referencia `video.mp4` (arquivo ao lado do
+            HTML); se False, mostra uma mensagem no lugar do player.
+    """
+    charts_html = "".join(
+        '<img src="data:image/png;base64,{}" alt="Gráfico de trajetória" '
+        'style="max-width:100%;margin-bottom:24px;">'.format(base64.b64encode(png).decode("ascii"))
+        for png in chart_pngs
+    )
+    video_html = (
+        '<video controls style="max-width:100%;">'
+        '<source src="video.mp4" type="video/mp4"></video>'
+        if has_video else
+        "<p>Vídeo não disponível para esta simulação.</p>"
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Relatório de Simulação</title>
+</head>
+<body>
+<h1>Relatório de Simulação</h1>
+<h2>Circuito ao longo do tempo</h2>
+{video_html}
+<h2>Trajetória dos pistões</h2>
+{charts_html}
+<p><a href="graficos.pdf">Ver gráficos (PDF)</a></p>
+</body>
+</html>
+"""
+
+
+def build(frames: list, out_dir: str) -> None:
+    """Monta os 3 artefatos do relatório (`relatorio.html`, `graficos.pdf`,
+    `video.mp4`) em `out_dir`.
+
+    Falha ao montar o vídeo não impede a geração do HTML/PDF — o HTML
+    reflete a ausência do vídeo (ver `build_html`).
+
+    Args:
+        frames: Frames gravados pelo `FrameRecorder` (pode ser vazio).
+        out_dir: Diretório onde os arquivos serão escritos (já deve existir).
+    """
+    figures = build_charts(frames)
+    try:
+        if figures:
+            save_pdf(figures, os.path.join(out_dir, "graficos.pdf"))
+            chart_pngs = save_chart_pngs(figures)
+        else:
+            # Create an empty PDF with a blank page when there are no figures
+            blank_fig = plt.figure(figsize=(8, 6))
+            with PdfPages(os.path.join(out_dir, "graficos.pdf")) as pdf:
+                pdf.savefig(blank_fig)
+            plt.close(blank_fig)
+            chart_pngs = []
+    finally:
+        for fig in figures:
+            plt.close(fig)
+
+    frame_paths = [f.image_path for f in frames if os.path.exists(f.image_path)]
+    has_video = build_video(frame_paths, os.path.join(out_dir, "video.mp4"))
+
+    html = build_html(chart_pngs, has_video)
+    with open(os.path.join(out_dir, "relatorio.html"), "w", encoding="utf-8") as fh:
+        fh.write(html)

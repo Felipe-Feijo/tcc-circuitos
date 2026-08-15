@@ -1,13 +1,20 @@
 """Uma JunctionNodeItem tem boundingRect()/shape() 0x0 (sem corpo visível
-por design) -- se ambos os ramos dela forem deletados um de cada vez (não
-os dois juntos), ela vira um nó órfão de 0 conexões inclicável/
-inselecionável/indeletável pela UI normal, mas continua sendo serializado
-em todo save futuro para sempre. ConnectionItem.prepare_delete() precisa
-detectar essa condição (anchor.connection_count() caiu pra 0 num anchor
-cujo node é uma JunctionNodeItem) e remover o node órfão também, pelo
-mesmo padrão adiado (QTimer.singleShot(0, ...)) usado em
-split_connection_at/DeleteManager -- ver
-tests/test_node_item_remove_anchor_defers_scene_removal.py."""
+por design) -- se ambos os ramos dela forem deletados um de cada vez, ela
+vira um nó órfão de 0 conexões inclicável/inselecionável/indeletável pela
+UI normal, mas continua sendo serializado em todo save futuro para
+sempre. ConnectionItem.prepare_delete() precisa detectar essa condição
+(anchor.connection_count() caiu pra 0 num anchor cujo node é uma
+JunctionNodeItem) e remover o node órfão também, pelo mesmo padrão adiado
+(QTimer.singleShot(0, ...)) usado em split_connection_at/DeleteManager --
+ver tests/test_node_item_remove_anchor_defers_scene_removal.py.
+
+Setup: a junção nasce com exatamente 2 conexões (não 3) -- desde que o
+merge-on-collapse (ver tests/test_junction_merge_on_collapse.py) passou a
+existir, uma junção com 3 conexões funde e desaparece assim que cai pra 2,
+então o caminho até 0 usado aqui precisa partir de 2 diretamente (estado
+estável, comprovado em
+test_junction_merge_on_collapse.py::test_junction_with_only_two_connections_from_the_start_is_untouched)
+pra nunca passar pelo gatilho do merge."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -53,39 +60,31 @@ def test_orphan_junction_removed_after_last_branch_deleted():
 
     source = _make_leaf(scene, 0, 0)
     ground = _make_leaf(scene, 100, 0)
-    dead   = _make_leaf(scene, 50, 100)
 
     junction = JunctionNodeItem(domain="electric")
     junction.setPos(50, 0)
     scene.addItem(junction)
     j_anchor = junction.anchors["J"]
 
+    # Nasce com exatamente 2 conexões -- ver docstring do módulo sobre por
+    # que não pode nascer com 3 (o merge-on-collapse fundiria e removeria
+    # a junção assim que caísse pra 2, antes de chegarmos em 1).
     conn_source = ConnectionItem(source, source.anchors["P"], junction, j_anchor)
     conn_ground = ConnectionItem(junction, j_anchor, ground, ground.anchors["P"])
-    conn_dead   = ConnectionItem(junction, j_anchor, dead, dead.anchors["P"])
-    for conn in (conn_source, conn_ground, conn_dead):
+    for conn in (conn_source, conn_ground):
         scene.addItem(conn)
     source.connections.append(conn_source)
-    junction.connections.extend([conn_source, conn_ground, conn_dead])
+    junction.connections.extend([conn_source, conn_ground])
     ground.connections.append(conn_ground)
-    dead.connections.append(conn_dead)
-
-    assert j_anchor.connection_count() == 3
-    assert junction.scene() is scene
-
-    # Deleta o primeiro ramo: junction ainda tem 2 conexões -- não deve
-    # ser removida (esse caso intermediário já é coberto por outros
-    # testes; aqui só confirmamos que não dispara cedo demais).
-    conn_ground.prepare_delete()
-    scene.removeItem(conn_ground)
-    app.processEvents()
 
     assert j_anchor.connection_count() == 2
     assert junction.scene() is scene
 
-    # Deleta o segundo ramo: junction cai pra 1 conexão -- ainda viva.
-    conn_dead.prepare_delete()
-    scene.removeItem(conn_dead)
+    # Deleta o primeiro ramo: junction cai pra 1 conexão -- nem o merge
+    # (só dispara em 2) nem a limpeza de órfão (só dispara em 0) devem
+    # agir aqui; ela continua viva com 1 ponta solta.
+    conn_ground.prepare_delete()
+    scene.removeItem(conn_ground)
     app.processEvents()
 
     assert j_anchor.connection_count() == 1

@@ -350,6 +350,14 @@ class GraphicsView(QGraphicsView):
         junction.connections.append(conn_b)
         target_item.connections.append(conn_b)
 
+        # wp_before/wp_after foram capturados sob as margens da conexão
+        # ORIGINAL (conn) -- o anchor "J" da junção aceita as 4 direções,
+        # então a direção "ideal" de conn_a/conn_b pode diferir da de
+        # conn mesmo sem nada ter se movido. Sem isso, o segmento perto
+        # da junção pode sair diagonal já aqui.
+        conn_a.reanchor_waypoints()
+        conn_b.reanchor_waypoints()
+
         # prepare_delete()+removeItem() da conexão original são adiados
         # como uma unidade atômica via QTimer.singleShot(0, ...) -- mesmo
         # padrão de editor/delete_manager.py (DeleteManager.do_delete) e
@@ -360,10 +368,22 @@ class GraphicsView(QGraphicsView):
         # inconsistente (ver tests/test_node_item_remove_anchor_defers_scene_removal.py).
         # A criação da junção/conexões filhas e os refresh_junction_dot()
         # abaixo continuam síncronos -- não são a operação arriscada.
+        #
+        # A reconstrução do índice espacial abaixo (invalidate + toggle de
+        # itemIndexMethod) é parte OBRIGATÓRIA dessa mesma mitigação, não
+        # um extra -- sem ela, o índice BSP fica consistente o bastante pra
+        # não estourar imediatamente, mas ainda contém entradas obsoletas
+        # que corrompem uma query espacial (scene().items(pos), usada por
+        # _connection_at em todo mouseMoveEvent em modo CONNECT) num ciclo
+        # de evento subsequente -- reprodução real: "Windows fatal
+        # exception: access violation" em GraphicsView._connection_at
+        # chamado de mouseMoveEvent, minutos depois de um split.
         def _finish_old_connection_removal():
             conn.prepare_delete()
+            scene = self.scene()
             if conn.scene():
-                self.scene().removeItem(conn)
+                scene.removeItem(conn)
+            ConnectionItem._rebuild_scene_index(scene)
         QTimer.singleShot(0, _finish_old_connection_removal)
 
         source_anchor.refresh_junction_dot()

@@ -1,6 +1,6 @@
 """Item gráfico de conexão entre dois âncoras do diagrama."""
 
-from PyQt6.QtWidgets import QGraphicsItem, QMenu
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPainter, QPainterPathStroker, QPolygonF, QBrush, QAction
 from PyQt6.QtCore import Qt, QPointF, QRectF, QTimer
 from graphics.items.base.diagram_item_base import DiagramItemBase
@@ -392,13 +392,31 @@ class ConnectionItem(DiagramItemBase):
         """
         if getattr(self, '_being_deleted', False) or not self._waypoints_initialized:
             return
-        if not self._anchors_in_scene() or not self.waypoints:
+        if not self._anchors_in_scene():
             return
 
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
         exit_h, entry_h = exit_dir in ("left", "right"), entry_dir in ("left", "right")
         wps = self.waypoints
         n   = len(wps)
+
+        # Rota reta (sem waypoint nenhum) -- o caso mais comum de todos
+        # (qualquer split feito exatamente sobre uma reta nasce assim).
+        # _adjust_boundary() abaixo não tem o que ajustar aqui (não há
+        # `w` nenhum pra tocar), então esse trecho ficava completamente
+        # desprotegido: se o lado que moveu tem anchor de direção livre
+        # (o "J" de uma JunctionNodeItem aceita as 4), o segmento
+        # p1_out->p2_in deixa de compartilhar eixo e vira uma diagonal
+        # reta -- reprodução real do usuário, fácil de disparar arrastando
+        # uma junção recém-criada por um split reto. Reroteia do zero
+        # nesse caso -- não há nada pra preservar num trecho sem waypoint.
+        if n == 0:
+            if moved_source or moved_target:
+                same_axis = (abs(p1_out.x() - p2_in.x()) < 0.5
+                             or abs(p1_out.y() - p2_in.y()) < 0.5)
+                if not same_axis:
+                    self._reroute_waypoints()
+            return
 
         # Rota ainda "intocada" (pristine): se os waypoints atuais batem
         # exatamente com o que `_route_between_points` geraria a partir da
@@ -628,6 +646,38 @@ class ConnectionItem(DiagramItemBase):
     # =========================================================================
     # Waypoints — mutation
     # =========================================================================
+
+    def reanchor_waypoints(self) -> None:
+        """Corrige a rota logo após construir uma ConnectionItem cujos
+        waypoints vieram de OUTRA conexão (split de linha em
+        GraphicsView.split_connection_at ou merge ao colapsar uma junção
+        em _merge_junction_if_collapsed) -- eles foram capturados sob as
+        margens/direção de saída da conexão de origem, que não são
+        necessariamente as mesmas que esta conexão nova calcula pra si.
+
+        O anchor "J" de uma JunctionNodeItem aceita as 4 direções (ver
+        JunctionNodeItem.setup), então a direção "ideal" escolhida por
+        _choose_best_exit_direction pode mudar em relação à conexão de
+        origem mesmo sem nenhum node ter se movido -- sem essa correção,
+        o primeiro/último segmento pode sair diagonal já na criação
+        (reprodução real: usuário reportou linhas perdendo ortogonalidade
+        ao criar/mover/deletar junções).
+
+        Sem waypoints (rota reta): reroteia do zero -- nada a preservar.
+        Com waypoints: reaproveita adjust_waypoints_for_node_move() como
+        se fosse a primeira vez que os dois lados "se moveram" -- mesma
+        lógica de snap/bridge já usada (e correta por construção: cada
+        chamada a `snap()` só sobrescreve a coordenada do eixo que não é
+        compartilhado com o vizinho interno, então o eixo que já era
+        compartilhado nunca é tocado) quando um node existente é
+        arrastado.
+        """
+        if not self._anchors_in_scene():
+            return
+        if not self.waypoints:
+            self._reroute_waypoints()
+            return
+        self.adjust_waypoints_for_node_move(moved_source=True, moved_target=True)
 
     def _reroute_waypoints(self):
         """Descarta os waypoints atuais e recalcula a rota do zero."""
@@ -948,8 +998,108 @@ class ConnectionItem(DiagramItemBase):
                 continue
             anchor.refresh_junction_dot()
             self._cleanup_orphan_junction(anchor)
+            self._merge_junction_if_collapsed(anchor)
         self.source = self.target = None
         self.prepareGeometryChange()
+
+    @staticmethod
+    def _merge_junction_if_collapsed(anchor) -> None:
+        """Funde de volta as duas pernas remanescentes de uma
+        JunctionNodeItem que acabou de cair pra 2 conexões vivas -- ela
+        deixou de ser um T de verdade, então não faz mais sentido existir
+        como nó separado.
+
+        Mesmo padrão adiado de `_cleanup_orphan_junction`: cria a
+        ConnectionItem fundida e deleta as duas pernas antigas dentro de
+        um QTimer.singleShot(0, ...), porque prepare_delete() pode já
+        estar rodando dentro de outro adiamento (DeleteManager ou
+        split_connection_at) -- aninhar mais um compõe normalmente, do
+        jeito que o resto do codebase já faz.
+
+        Remove o node da junção explicitamente aqui (não deixa pro
+        cascade genérico de `_cleanup_orphan_junction`, disparado quando
+        leg2.prepare_delete() zera a contagem do anchor): esse cascade
+        agendaria um SEGUNDO QTimer.singleShot(0, ...) aninhado, que só
+        assenta numa segunda volta do event loop -- exigindo dois
+        processEvents() em vez de um pra completar o merge inteiro. Fazer
+        a remoção aqui mesmo, dentro deste único nível de adiamento, é
+        seguro (mesma composição já estabelecida) e mantém o merge inteiro
+        assentando numa única volta do event loop.
+        """
+        node = anchor.node
+        if not isinstance(node, JunctionNodeItem) or anchor.connection_count() != 2:
+            return
+
+        leg1, leg2 = node.connections[0], node.connections[1]
+
+        def _waypoints_toward_junction(leg):
+            """Retorna (node_do_outro_lado, anchor_do_outro_lado,
+            waypoints_ordenados_do_outro_lado_ATÉ_a_junção) -- pra virar
+            a METADE ANTES do ponto de passagem no merge (wp1). Os
+            waypoints armazenados em `leg.waypoints` já estão na ordem
+            source->target; se a junção for o source (não o target), essa
+            ordem precisa ser invertida."""
+            if leg.target is node:
+                return leg.source, leg.source_anchor, list(leg.waypoints)
+            return leg.target, leg.target_anchor, list(reversed(leg.waypoints))
+
+        def _waypoints_away_from_junction(leg):
+            """Retorna (node_do_outro_lado, anchor_do_outro_lado,
+            waypoints_ordenados_DA_junção_até_o_outro_lado) -- pra virar a
+            METADE DEPOIS do ponto de passagem no merge (wp2). Direção
+            oposta de `_waypoints_toward_junction` -- reusar a mesma
+            função pras duas pernas inverteria a ordem de uma delas e
+            produzia um segmento diagonal (bug real encontrado testando o
+            merge de verdade: o ponto de passagem ficava ligado ao ponto
+            errado da segunda perna)."""
+            if leg.source is node:
+                return leg.target, leg.target_anchor, list(leg.waypoints)
+            return leg.source, leg.source_anchor, list(reversed(leg.waypoints))
+
+        def _merge():
+            if not (leg1.scene() and leg2.scene()):
+                return  # já foi mexido por outro caminho nesse meio tempo
+
+            p1_node, p1_anchor, wp1 = _waypoints_toward_junction(leg1)
+            p2_node, p2_anchor, wp2 = _waypoints_away_from_junction(leg2)
+
+            scene = leg1.scene()
+            leg1.prepare_delete()
+            leg2.prepare_delete()
+            if leg1.scene():
+                scene.removeItem(leg1)
+            if leg2.scene():
+                scene.removeItem(leg2)
+            if node.scene():
+                node.prepare_delete()
+                scene.removeItem(node)
+            ConnectionItem._rebuild_scene_index(scene)
+
+            merged = ConnectionItem(p1_node, p1_anchor, p2_node, p2_anchor)
+            merged.waypoints = wp1 + [QPointF(node.pos())] + wp2
+            merged._waypoints_initialized = True
+            merged.editor = leg1.editor or leg2.editor
+            scene.addItem(merged)
+            p1_node.connections.append(merged)
+            p2_node.connections.append(merged)
+
+            # wp1/wp2 foram capturados sob as margens das pernas
+            # ANTIGAS (leg1/leg2, que apontavam pra o anchor "J" da
+            # junção) -- merged aponta direto pra p1_node/p2_node, cuja
+            # direção "ideal" pode diferir da que a junção tinha. Sem
+            # isso, o segmento perto do ponto de passagem pode sair
+            # diagonal.
+            merged.reanchor_waypoints()
+
+            # Descarta o ponto da junção (e qualquer outro) se virou
+            # redundante -- 3 pontos colineares -- preserva se for uma
+            # curva de verdade.
+            merged._collapse_segment_corners()
+
+            p1_anchor.refresh_junction_dot()
+            p2_anchor.refresh_junction_dot()
+
+        QTimer.singleShot(0, _merge)
 
     @staticmethod
     def _cleanup_orphan_junction(anchor) -> None:
@@ -971,10 +1121,29 @@ class ConnectionItem(DiagramItemBase):
             return
 
         def _remove_orphan_junction():
-            if node.scene():
+            scene = node.scene()
+            if scene:
                 node.prepare_delete()
-                node.scene().removeItem(node)
+                scene.removeItem(node)
+                ConnectionItem._rebuild_scene_index(scene)
         QTimer.singleShot(0, _remove_orphan_junction)
+
+    @staticmethod
+    def _rebuild_scene_index(scene) -> None:
+        """Força a reconstrução do índice espacial (BSP) da cena depois de
+        remover itens fora do ciclo síncrono normal de eventos Qt --
+        mesma dança usada por DeleteManager.do_delete() e
+        NodeItem.remove_anchor(). Sem isso, o índice fica com entradas
+        obsoletas que corrompem uma query espacial subsequente
+        (scene().items(pos), usada por GraphicsView._connection_at em
+        todo mouseMoveEvent em modo CONNECT) -- reprodução real: "Windows
+        fatal exception: access violation" minutos depois de uma
+        remoção adiada sem essa reconstrução."""
+        scene.invalidate(scene.sceneRect(), QGraphicsScene.SceneLayer.AllLayers)
+        current_index = scene.itemIndexMethod()
+        scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
+        scene.setItemIndexMethod(current_index)
+        scene.update()
 
     # =========================================================================
     # Serialization

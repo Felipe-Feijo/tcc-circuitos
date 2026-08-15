@@ -3,6 +3,7 @@
 import io
 import logging
 
+import imageio
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -61,3 +62,31 @@ def save_chart_pngs(figures: list) -> list:
         fig.savefig(buf, format="png", dpi=100)
         pngs.append(buf.getvalue())
     return pngs
+
+
+def build_video(frame_paths: list, path: str, fps: int = 10) -> bool:
+    """Monta um MP4 a partir de uma sequência de PNGs, um frame por step.
+
+    Args:
+        frame_paths: Caminhos dos PNGs em ordem cronológica.
+        path: Caminho de saída do arquivo .mp4.
+        fps: Quadros por segundo do vídeo gerado (independente do `dt` da
+            simulação — um `dt` muito pequeno geraria um vídeo
+            imperceptivelmente rápido se usado diretamente como fps).
+
+    Returns:
+        True se o vídeo foi gerado com sucesso, False se `frame_paths`
+        estiver vazio ou se o encoder falhar (ex: binário ffmpeg
+        indisponível). Nunca lança exceção.
+    """
+    if not frame_paths:
+        return False
+
+    try:
+        with imageio.get_writer(path, fps=fps, codec="libx264", quality=8) as writer:
+            for frame_path in frame_paths:
+                writer.append_data(imageio.v2.imread(frame_path))
+        return True
+    except Exception:
+        logger.exception("falha ao montar vídeo do relatório")
+        return False

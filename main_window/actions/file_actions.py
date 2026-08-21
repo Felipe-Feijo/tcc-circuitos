@@ -1,4 +1,4 @@
-"""Ações de arquivo: novo, abrir, salvar e salvar como."""
+"""File actions: new, open, save and save as."""
 
 from PyQt6.QtGui import QAction
 

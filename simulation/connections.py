@@ -1,8 +1,8 @@
-"""Representa conexões entre âncoras no domínio de simulação.
+"""Represents connections between anchors in the simulation domain.
 
-Uma Connection é não-direcional: conecta dois objetos Anchor e notifica
-ambos no momento da criação. Usada pelo SimulationEngine para propagar
-estado entre nós de domínios pneumático, elétrico e hidráulico.
+A Connection is non-directional: it connects two Anchor objects and
+notifies both at creation time. Used by SimulationEngine to propagate
+state between pneumatic, electric and hydraulic domain nodes.
 """
 
 from __future__ import annotations
@@ -24,16 +24,16 @@ class Connection:
         return self.anchor_a, self.anchor_b
 
     def get_other(self, anchor: Anchor) -> Anchor:
-        """Retorna o âncora oposto ao fornecido.
+        """Returns the anchor opposite the one given.
 
         Args:
-            anchor: Um dos dois âncoras da conexão.
+            anchor: One of the connection's two anchors.
 
         Returns:
-            O âncora na outra extremidade da conexão.
+            The anchor at the other end of the connection.
 
         Raises:
-            ValueError: Se o âncora fornecido não pertencer a esta conexão.
+            ValueError: If the given anchor doesn't belong to this connection.
         """
         if anchor == self.anchor_a:
             return self.anchor_b
@@ -43,15 +43,15 @@ class Connection:
             raise ValueError(f"Anchor {anchor.id} not in connection {self.id}")
 
     def get_state(self) -> float:
-        """Retorna o estado da conexão de acordo com o domínio.
+        """Returns the connection's state according to the domain.
 
-        Para domínios pneumático e elétrico, retorna 1 se ambos os âncoras
-        estiverem ativos, 0 caso contrário. Para o domínio hidráulico,
-        retorna a pressão média ou uma string de erro/estado de pressurização.
+        For pneumatic and electric domains, returns 1 if both anchors are
+        active, 0 otherwise. For the hydraulic domain, returns the average
+        pressure or an error/pressurizing status string.
 
         Returns:
-            0 ou 1 para pneumático/elétrico; pressão média (float),
-            "ERR" ou "PRESSURIZING" para hidráulico.
+            0 or 1 for pneumatic/electric; average pressure (float),
+            "ERR" or "PRESSURIZING" for hydraulic.
         """
         domain = getattr(self.anchor_a, "domain", "pneumatic")
 

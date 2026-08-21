@@ -1,4 +1,4 @@
-"""Controlador do editor: constrói o grafo de simulação a partir da cena gráfica."""
+"""Editor controller: builds the simulation graph from the graphics scene."""
 
 from simulation.graph_builder import GraphBuilder
 from graphics.items.base.nodes.node_item import NodeItem
@@ -6,24 +6,24 @@ from graphics.items.base.connections.connection_item import ConnectionItem
 
 
 class EditorController:
-    """Coordena operações do editor sobre o grafo de simulação.
+    """Coordinates editor operations on the simulation graph.
 
-    Responsável por varrer a cena gráfica e construir a representação
-    de domínio (nós e conexões) usada pelo SimulationEngine.
+    Responsible for scanning the graphics scene and building the domain
+    representation (nodes and connections) used by SimulationEngine.
     """
 
     def __init__(self, scene):
         self.scene = scene
 
     def build_graph(self) -> GraphBuilder:
-        """Varre a cena e constrói o grafo de simulação.
+        """Scans the scene and builds the simulation graph.
 
-        Percorre todos os itens da cena em duas passagens: primeiro
-        registra os nós, depois as conexões (que dependem dos nós
-        já estarem no grafo).
+        Walks all scene items in two passes: first registers the nodes,
+        then the connections (which depend on the nodes already being
+        in the graph).
 
         Returns:
-            GraphBuilder populado com os nós e conexões da cena atual.
+            GraphBuilder populated with the current scene's nodes and connections.
         """
         builder = GraphBuilder()
 

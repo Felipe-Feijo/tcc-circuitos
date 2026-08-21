@@ -1,4 +1,4 @@
-"""Nó de simulação de referência de terra elétrico."""
+"""Simulation node for the electrical ground reference."""
 
 from simulation.nodes.nodes import Node
 
@@ -7,13 +7,13 @@ class Ground(Node):
         super().__init__(node_id, "ground", domain=domain, properties=properties)
 
     def update(self, outputs=None):
-        # marca apenas a primeira anchor como ground
+        # marks only the first anchor as ground
         first_anchor = next(iter(self.anchors.values()))
         first_anchor.type = "ground"
 
     def get_internal_connections(self):
         """
-        Conecta todas as anchors em série:
+        Connects all anchors in series:
         X1 -> X2 -> X3 -> ... -> Xn
         """
         names = list(self.anchors.keys())

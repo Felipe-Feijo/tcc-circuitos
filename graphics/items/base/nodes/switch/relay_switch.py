@@ -1,4 +1,4 @@
-"""Nó gráfico de contato de relé (NA/NF controlado por bobina)."""
+"""Relay contact graphics node (NO/NC controlled by a coil)."""
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QAction
@@ -57,7 +57,7 @@ class RelaySwitch(SwitchItem):
             self.sensor_registry.sensor_renamed.connect(self._on_sensor_renamed)
 
     def initialize_anchors(self):
-        # Posicionamento similar ao ButtonSwitch, pode ajustar conforme o sprite
+        # Positioning similar to ButtonSwitch, can adjust depending on the sprite
         self.add_anchor(AnchorItem("T", QPointF(self.width*39/50, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
         self.add_anchor(AnchorItem("B", QPointF(self.width*39/50, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom"]}))
 
@@ -76,7 +76,7 @@ class RelaySwitch(SwitchItem):
             }
         )
 
-        # posiciona à esquerda e centrado verticalmente
+        # positions to the left and vertically centered
         x = -label.boundingRect().width() - 10
         y = self.height / 2 - label.boundingRect().height() / 2
         label.setPos(QPointF(x, y))
@@ -84,7 +84,7 @@ class RelaySwitch(SwitchItem):
         self.add_label("relay_sensor_name", label)
 
     # --------------------------
-    # Menu específico para relay
+    # Relay-specific menu
     # --------------------------
 
     def _available_relay_signals(self) -> list[str]:
@@ -124,8 +124,8 @@ class RelaySwitch(SwitchItem):
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
         if self.simulation_mode:
-            # Simulação rodando: escolha de sinal de relé muta self.properties
-            # -- indisponível enquanto simulation_mode for True.
+            # Simulation running: choosing a relay signal mutates
+            # self.properties -- unavailable while simulation_mode is True.
             return
 
         relay_signals = self._available_relay_signals()
@@ -151,7 +151,7 @@ class RelaySwitch(SwitchItem):
 
         self.properties["relay_sensor"] = sensor_name
 
-        # atualiza label
+        # updates the label
         label = self.labels.get("relay_sensor_name")
         if label:
             label.set_text(sensor_name or "")
@@ -160,23 +160,23 @@ class RelaySwitch(SwitchItem):
 
     def apply_properties(self):
         """
-        Atualiza o switch com os valores de properties.
-        Especialmente usado ao carregar/instanciar.
+        Updates the switch with the properties values.
+        Especially used when loading/instantiating.
         """
         self._init_label()
         self.update()
 
     # --------------------------
-    # Atualiza o sensor selecionado manualmente
+    # Updates the manually selected sensor
     # --------------------------
     def _set_relay_sensor_name(self, new_name: str):
         old_name = self.properties.get("relay_sensor")
         if not new_name or new_name == old_name:
             return
 
-        # valida existência no registry
+        # validates it exists in the registry
         if self.sensor_registry and not self.sensor_registry.exists(new_name):
-            # volta ao antigo
+            # reverts to the old one
             label = self.labels.get("relay_sensor_name")
             if label:
                 label.set_text(old_name or "")
@@ -188,13 +188,13 @@ class RelaySwitch(SwitchItem):
             label.set_text(new_name)
 
     # --------------------------
-    # Tratamento quando sensores são removidos do registry
+    # Handling for when sensors are removed from the registry
     # --------------------------
     def _on_sensor_registry_changed(self, *args):
         changed = False
         current_sensor = self.properties.get("relay_sensor")
         if current_sensor and self.sensor_registry and not self.sensor_registry.exists(current_sensor):
-            # sensor sumiu → desassocia
+            # sensor disappeared -> unlinks
             self.properties["relay_sensor"] = None
             changed = True
 
@@ -203,7 +203,7 @@ class RelaySwitch(SwitchItem):
             self.update()
 
     # --------------------------
-    # Tratamento de renomeação de sensor
+    # Handling for sensor renaming
     # --------------------------
     def _on_sensor_renamed(self, old_name, new_name, node):
         current_sensor = self.properties.get("relay_sensor")

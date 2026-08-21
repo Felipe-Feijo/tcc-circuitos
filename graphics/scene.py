@@ -1,4 +1,4 @@
-"""Cena gráfica principal do editor de diagramas."""
+"""Main graphics scene of the diagram editor."""
 
 from PyQt6.QtWidgets import QGraphicsScene
 
@@ -7,11 +7,11 @@ from graphics.items.base.connections.connection_item import ConnectionItem
 
 
 class GraphicsScene(QGraphicsScene):
-    """Subclasse de QGraphicsScene que gerencia os itens do diagrama e o SensorRegistry.
+    """QGraphicsScene subclass that manages the diagram items and the SensorRegistry.
 
-    Responsabilidades adicionais em relação à classe base:
-    - Manter o SensorRegistry compartilhado entre todos os itens da cena.
-    - Desselecionar waypoints de conexão ao clicar em área vazia.
+    Additional responsibilities beyond the base class:
+    - Keep the SensorRegistry shared across all scene items.
+    - Deselect connection waypoints when clicking on empty area.
     """
 
     def __init__(self, *args, **kwargs):
@@ -19,10 +19,10 @@ class GraphicsScene(QGraphicsScene):
         self.sensor_registry = SensorRegistry()
 
     def mousePressEvent(self, event):
-        """Deseleciona waypoints ao clicar fora de uma ConnectionItem.
+        """Deselects waypoints when clicking outside a ConnectionItem.
 
-        Garante o comportamento esperado de "clicar em área vazia desmarca
-        o waypoint selecionado", sem interferir com a seleção de itens normais.
+        Ensures the expected behavior of "clicking empty area deselects
+        the selected waypoint", without interfering with normal item selection.
         """
         hit_items = self.items(event.scenePos())
         if not any(isinstance(i, ConnectionItem) for i in hit_items):

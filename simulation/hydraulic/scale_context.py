@@ -1,24 +1,24 @@
 """
 simulation/hydraulic/scale_context.py
 
-Contexto de escala para o domínio hidráulico.
+Scale context for the hydraulic domain.
 
 ScaleContext
-    Objeto imutável montado uma vez por solve. Carrega p_ref, q_ref
-    e o zc calculado pelo ZcScheduler. Passado para NodeContinuity
-    e para todos os nós via set_scale().
+    Immutable object built once per solve. Carries p_ref, q_ref and
+    the zc computed by ZcScheduler. Passed to NodeContinuity and to
+    every node via set_scale().
 
 ZcScheduler
-    Calcula o zc (impedância do capacitor virtual de pressurização)
-    em função da iteração atual. O zc cresce uma década a cada `tau`
-    iterações, ancorado em p_ref/q_ref, com teto em zc_max.
+    Computes zc (the virtual pressurization capacitor's impedance) as
+    a function of the current iteration. zc grows one decade every
+    `tau` iterations, anchored on p_ref/q_ref, capped at zc_max.
 
 ScaleManager
-    Estima p_ref e q_ref a partir dos hints dos nós, com memória
-    da última escala válida para sobreviver a transições.
+    Estimates p_ref and q_ref from the nodes' hints, with memory of
+    the last valid scale to survive transitions.
 
-Faixa de operação alvo: 50–300 bar (5e6–3e7 Pa)
-Vazões típicas: 5–50 L/min (8e-5–8e-4 m³/s)
+Target operating range: 50-300 bar (5e6-3e7 Pa)
+Typical flows: 5-50 L/min (8e-5-8e-4 m3/s)
 """
 
 from __future__ import annotations
@@ -28,23 +28,23 @@ from dataclasses import dataclass
 
 
 # ---------------------------------------------------------------------------
-# Defaults para a faixa hidráulica industrial (50–300 bar)
+# Defaults for the industrial hydraulic range (50-300 bar)
 # ---------------------------------------------------------------------------
 
-#: Pressão de referência default em Pa (≈ 100 bar)
+#: Default reference pressure in Pa (~100 bar)
 DEFAULT_P_REF: float = 100 * 1e5
 
-#: Vazão de referência default em m³/s (≈ 20 L/min)
+#: Default reference flow in m3/s (~20 L/min)
 DEFAULT_Q_REF: float = 20 / 60_000
 
-#: Ganho base do zc: p_ref/q_ref × ZC_BASE_FACTOR
-#: Fator 10 posiciona o capacitor virtual como "moderadamente rígido"
+#: zc's base gain: p_ref/q_ref x ZC_BASE_FACTOR
+#: Factor 10 positions the virtual capacitor as "moderately stiff"
 ZC_BASE_FACTOR: float = 10.0
 
-#: Número de iterações para subir uma década no zc
+#: Number of iterations to climb one decade in zc
 ZC_TAU: float = 3.0
 
-#: Teto do zc em múltiplos do zc_base (4 décadas)
+#: zc's cap, in multiples of zc_base (4 decades)
 ZC_MAX_DECADES: float = 4.0
 
 
@@ -55,25 +55,25 @@ ZC_MAX_DECADES: float = 4.0
 @dataclass(frozen=True)
 class ScaleContext:
     """
-    Contexto de escala imutável para um solve específico.
+    Immutable scale context for one specific solve.
 
-    Criado pelo engine via ScaleManager.build_context() antes de
-    cada chamada ao solver. Distribuído para NodeContinuity e nós.
+    Created by the engine via ScaleManager.build_context() before
+    each call to the solver. Distributed to NodeContinuity and nodes.
 
-    Atributos
-    ---------
-    p_ref : pressão de referência em Pa
-    q_ref : vazão de referência em m³/s
-    zc    : impedância do capacitor virtual em Pa·s/m³
+    Attributes
+    ----------
+    p_ref : reference pressure in Pa
+    q_ref : reference flow in m3/s
+    zc    : the virtual capacitor's impedance in Pa*s/m3
     """
     p_ref: float
     q_ref: float
     zc: float
 
     def __post_init__(self):
-        assert self.p_ref > 0, f"p_ref deve ser positivo, got {self.p_ref}"
-        assert self.q_ref > 0, f"q_ref deve ser positivo, got {self.q_ref}"
-        assert self.zc > 0,    f"zc deve ser positivo, got {self.zc}"
+        assert self.p_ref > 0, f"p_ref must be positive, got {self.p_ref}"
+        assert self.q_ref > 0, f"q_ref must be positive, got {self.q_ref}"
+        assert self.zc > 0,    f"zc must be positive, got {self.zc}"
 
     def __repr__(self) -> str:
         return (
@@ -90,27 +90,28 @@ class ScaleContext:
 
 class ZcScheduler:
     """
-    Calcula o zc em função da iteração atual.
+    Computes zc as a function of the current iteration.
 
-    Crescimento: zc(iter) = zc_base × 10^(iter / tau)
-    Teto:        zc_max   = zc_base × 10^(ZC_MAX_DECADES)
+    Growth: zc(iter) = zc_base x 10^(iter / tau)
+    Cap:    zc_max   = zc_base x 10^(ZC_MAX_DECADES)
 
-    O zc_base é ancorado em p_ref/q_ref × ZC_BASE_FACTOR, garantindo
-    que o capacitor virtual opera na mesma escala do circuito real.
+    zc_base is anchored on p_ref/q_ref x ZC_BASE_FACTOR, guaranteeing
+    the virtual capacitor operates on the same scale as the real
+    circuit.
 
-    Por que crescer por iteração?
-    ------------------------------
-    Se o circuito não convergiu (ex: relief ainda fechada mas deveria
-    abrir), a pressão precisa subir o suficiente para mudar o estado
-    de algum componente. O zc crescente aumenta progressivamente a
-    "rigidez" da acumulância, forçando a pressão a subir até que a
-    topologia mude. O teto de 4 décadas evita explosão numérica.
+    Why grow per iteration?
+    ------------------------
+    If the circuit hasn't converged (e.g. a relief valve still closed
+    when it should open), the pressure needs to rise enough to change
+    some component's state. The growing zc progressively increases the
+    accumulation's "stiffness", forcing the pressure to rise until the
+    topology changes. The 4-decade cap avoids numerical blow-up.
 
-    Parâmetros
+    Parameters
     ----------
-    tau           : iterações por década de zc (default: 3)
-    base_factor   : multiplicador sobre p_ref/q_ref (default: ZC_BASE_FACTOR)
-    max_decades   : teto em décadas acima do base (default: ZC_MAX_DECADES)
+    tau           : iterations per decade of zc (default: 3)
+    base_factor   : multiplier over p_ref/q_ref (default: ZC_BASE_FACTOR)
+    max_decades   : cap in decades above the base (default: ZC_MAX_DECADES)
     """
 
     def __init__(
@@ -124,15 +125,15 @@ class ZcScheduler:
         self.max_decades = max_decades
 
     def zc_base(self, p_ref: float, q_ref: float) -> float:
-        """zc na iteração 0, ancorado na escala do circuito."""
+        """zc at iteration 0, anchored to the circuit's scale."""
         return (p_ref / q_ref) * self.base_factor
 
     def zc_at(self, iteration: int, p_ref: float, q_ref: float) -> float:
         """
-        zc para a iteração dada.
+        zc for the given iteration.
 
-        Nunca desce abaixo de zc_base nem sobe acima de
-        zc_base × 10^max_decades.
+        Never drops below zc_base nor rises above
+        zc_base x 10^max_decades.
         """
         base = self.zc_base(p_ref, q_ref)
         gain = 10 ** (iteration / self.tau)
@@ -146,33 +147,33 @@ class ZcScheduler:
 
 class ScaleManager:
     """
-    Estima p_ref e q_ref a partir dos hints dos nós hidráulicos.
+    Estimates p_ref and q_ref from the hydraulic nodes' hints.
 
-    Estratégia em cascata para p_ref:
-      1. max dos p_hint dos nós (se algum > 1 Pa)
-      2. inferência via atributo `pressure` (Reservoir com P > 0)
-      3. memória da última escala válida (EMA sobre resultados reais)
-      4. fallback absoluto: DEFAULT_P_REF
+    Cascading strategy for p_ref:
+      1. max of the nodes' p_hint (if any > 1 Pa)
+      2. inference via the `pressure` attribute (a Reservoir with P > 0)
+      3. memory of the last valid scale (EMA over real results)
+      4. absolute fallback: DEFAULT_P_REF
 
-    Estratégia em cascata para q_ref:
-      1. max dos flow_hint dos nós (se algum > 1e-10)
-      2. memória da última escala válida (EMA sobre resultados reais)
-      3. fallback absoluto: DEFAULT_Q_REF
+    Cascading strategy for q_ref:
+      1. max of the nodes' flow_hint (if any > 1e-10)
+      2. memory of the last valid scale (EMA over real results)
+      3. absolute fallback: DEFAULT_Q_REF
 
-    A memória usa EMA (média exponencial móvel) sobre os valores reais
-    da solução anterior — não apenas os hints estáticos dos nós. Isso
-    garante que o scaling acompanha o estado real do circuito após
-    transições de topologia (válvula comuta, cilindro trava), onde os
-    hints podem ficar desatualizados por várias iterações.
+    The memory uses an EMA (exponential moving average) over the
+    previous solution's real values -- not just the nodes' static
+    hints. This keeps the scaling tracking the circuit's real state
+    after topology transitions (a valve commutates, a cylinder hits an
+    end stop), where the hints can go stale for several iterations.
 
-    Parâmetros
+    Parameters
     ----------
-    ema_alpha : peso do valor novo na EMA (0 < alpha <= 1).
-                Alpha=1 desativa a memória (comportamento original).
-                Alpha=0.2 dá 80% de peso à história — rastreamento suave.
+    ema_alpha : weight of the new value in the EMA (0 < alpha <= 1).
+                Alpha=1 disables the memory (original behavior).
+                Alpha=0.2 gives 80% weight to history -- smooth tracking.
     """
 
-    #: peso EMA para atualização via resultados reais do solve
+    #: EMA weight for updates from the solve's real results
     EMA_ALPHA: float = 0.2
 
     def __init__(self):
@@ -181,14 +182,14 @@ class ScaleManager:
 
     def estimate(self, nodes: list) -> tuple[float, float]:
         """
-        Retorna (p_ref, q_ref) em Pa e m³/s.
+        Returns (p_ref, q_ref) in Pa and m3/s.
 
-        Atualiza a memória interna se os valores estimados são válidos.
+        Updates the internal memory if the estimated values are valid.
         """
         p_ref = self._estimate_pressure(nodes)
         q_ref = self._estimate_flow(nodes)
 
-        # atualiza memória só quando temos valores confiáveis dos hints
+        # only updates the memory when we have trustworthy values from the hints
         if p_ref > 1.0:
             self._last_p = p_ref
         if q_ref > 1e-10:
@@ -198,17 +199,17 @@ class ScaleManager:
 
     def update_from_solution(self, sol: dict[str, float]) -> None:
         """
-        Atualiza a memória de escala com EMA sobre os resultados reais
-        do último solve bem-sucedido.
+        Updates the scale memory with an EMA over the last successful
+        solve's real results.
 
-        Deve ser chamado pelo engine após cada solve aceito, antes de
-        descartar a solução. Isso fecha o loop de feedback: em vez de
-        depender apenas de hints estáticos, o scaling aprende com os
-        valores reais que o solver encontrou.
+        Should be called by the engine after each accepted solve,
+        before discarding the solution. This closes the feedback loop:
+        instead of relying only on static hints, the scaling learns
+        from the real values the solver found.
 
-        Parâmetros
+        Parameters
         ----------
-        sol : dicionário {nome_variavel: valor} retornado pelo solver
+        sol : {variable_name: value} dict returned by the solver
         """
         p_values = [v for k, v in sol.items()
                     if k.startswith("P_") and isinstance(v, float) and v > 1.0]
@@ -232,13 +233,13 @@ class ScaleManager:
         scheduler: ZcScheduler | None = None,
     ) -> ScaleContext:
         """
-        Monta um ScaleContext completo para o solve atual.
+        Builds a complete ScaleContext for the current solve.
 
-        Parâmetros
+        Parameters
         ----------
-        nodes     : lista de HydraulicNode do circuito
-        iteration : iteração atual do loop de convergência hidráulica
-        scheduler : ZcScheduler customizado (usa default se None)
+        nodes     : list of the circuit's HydraulicNode instances
+        iteration : the current hydraulic convergence loop's iteration
+        scheduler : a custom ZcScheduler (uses the default if None)
         """
         if scheduler is None:
             scheduler = ZcScheduler()
@@ -249,11 +250,11 @@ class ScaleManager:
         return ScaleContext(p_ref=p_ref, q_ref=q_ref, zc=zc)
 
     # ------------------------------------------------------------------
-    # Internos
+    # Internal
     # ------------------------------------------------------------------
 
     def _estimate_pressure(self, nodes: list) -> float:
-        # 1. hints explícitos dos nós
+        # 1. the nodes' explicit hints
         hints = [
             n.p_hint for n in nodes
             if hasattr(n, "p_hint") and isinstance(n.p_hint, (int, float))
@@ -262,7 +263,7 @@ class ScaleManager:
         if hints:
             return max(hints)
 
-        # 2. inferência via Reservoir ou nó com pressão fixada
+        # 2. inference via a Reservoir or a node with fixed pressure
         inferred = [
             n.pressure for n in nodes
             if hasattr(n, "pressure")
@@ -272,7 +273,7 @@ class ScaleManager:
         if inferred:
             return max(inferred)
 
-        # 3. memória
+        # 3. memory
         return self._last_p
 
     def _estimate_flow(self, nodes: list) -> float:
@@ -284,5 +285,5 @@ class ScaleManager:
         if hints:
             return max(hints)
 
-        # memória
+        # memory
         return self._last_q

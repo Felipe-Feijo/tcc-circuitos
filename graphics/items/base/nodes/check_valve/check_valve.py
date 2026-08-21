@@ -5,24 +5,24 @@ Sprite layout
 Width x Height: 150 x 150 px
 Anchor X (left)  : (0, 75)      exit -> left
 Anchor Y (right) : (150, 75)    exit -> right
-Anchor Z (pilot) : (150, 42) por padrão
-                   (150, 108) se properties["pilot_mirrored"] for True
-                   presente apenas quando properties["piloted"] é True
+Anchor Z (pilot) : (150, 42) by default
+                   (150, 108) if properties["pilot_mirrored"] is True
+                   present only when properties["piloted"] is True
 
-Nota: "pilot_mirrored" é relativo ao sprite (coordenada local), não à
-tela -- ao contrário de rótulos "top"/"bottom", continua correto depois
-de o componente ser rotacionado (a rotação do NodeItem já gira a âncora
-e o overlay junto, então um rótulo absoluto de tela ficaria enganoso).
+Note: "pilot_mirrored" is relative to the sprite (local coordinate), not
+the screen -- unlike "top"/"bottom" labels, it stays correct after the
+component is rotated (NodeItem rotation already rotates the anchor and
+overlay together, so a screen-absolute label would be misleading).
 
 Sprites
 -------
 check_valve_open.png    -- corpo, Y=1 (fluxo livre passando)
 check_valve_closed.png  -- corpo, Y=0
-check_valve_pilot.png   -- overlay de pilotagem (moldura + rabo pontilhado
-                           saindo do lado direito, curva pro topo por
-                           padrão). Desenhado por cima do corpo quando
-                           piloted=True. Espelhado verticalmente
-                           (QTransform().scale(1, -1)) quando
+check_valve_pilot.png   -- pilot overlay (frame + dotted tail leaving
+                           from the right side, curving toward the top
+                           by default). Drawn on top of the body when
+                           piloted=True. Mirrored vertically
+                           (QTransform().scale(1, -1)) when
                            pilot_mirrored=True.
 """
 
@@ -82,9 +82,9 @@ class CheckValve(NodeItem):
         self._update_pilot_anchor()
 
     def _update_pilot_anchor(self) -> None:
-        """Adiciona/remove a anchor Z e o overlay de pilotagem conforme
-        self.properties. Chamado em setup() e sempre que a propriedade
-        muda (apply_properties / apply_properties_from_dialog)."""
+        """Adds/removes the Z anchor and the pilot overlay based on
+        self.properties. Called in setup() and whenever the property
+        changes (apply_properties / apply_properties_from_dialog)."""
         if self.properties.get("piloted"):
             mirrored = self.properties.get("pilot_mirrored", False)
             anchor_y = _PILOT_ANCHOR_Y[mirrored]

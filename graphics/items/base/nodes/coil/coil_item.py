@@ -1,4 +1,4 @@
-"""Classe base para bobinas elétricas (relé e solenóide)."""
+"""Base class for electric coils (relay and solenoid)."""
 
 from PyQt6.QtGui import QPixmap, QPainterPath
 from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -11,7 +11,7 @@ from .....anchors.anchor import AnchorItem
 
 class CoilItem(NodeItem):
     """
-    Classe base para bobinas, parametrizável para sprite, prefixo e tipo de sinal.
+    Base class for coils, parameterizable by sprite, prefix and signal type.
     """
     def setup(self) -> None:
         self.properties = {
@@ -31,12 +31,12 @@ class CoilItem(NodeItem):
         self._unregister_sensor()
 
     # --------------------------
-    # Inicialização
+    # Initialization
     # --------------------------
 
     def initialize_body_visuals(self):
         if not self.SPRITE_PATH:
-            raise ValueError("SPRITE_PATH deve ser definido na subclasse")
+            raise ValueError("SPRITE_PATH must be defined in the subclass")
 
         self.body_sprite = QPixmap(self.SPRITE_PATH)
         self.visual_offset = QPointF(0, 0)
@@ -45,10 +45,10 @@ class CoilItem(NodeItem):
 
     def initialize_anchors(self):
         """
-        Duas anchors elétricas:
-        - topo
-        - fundo
-        ambas centralizadas na largura
+        Two electric anchors:
+        - top
+        - bottom
+        both centered on the width
         """
         x = self.width / 2
         self.add_anchor(AnchorItem("T", QPointF(x, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))
@@ -56,7 +56,7 @@ class CoilItem(NodeItem):
 
     def initialize_label(self):
         """
-        Label editável à esquerda do sprite, centrada verticalmente.
+        Editable label to the left of the sprite, vertically centered.
         """
         label = LabelItem(
             properties={
@@ -75,7 +75,7 @@ class CoilItem(NodeItem):
         self.add_label("sensor_name", label, special=True)
 
     # --------------------------
-    # Geometria
+    # Geometry
     # --------------------------
 
     def boundingRect(self):
@@ -93,7 +93,7 @@ class CoilItem(NodeItem):
         return path
 
     # --------------------------
-    # Desenho
+    # Drawing
     # --------------------------
 
 
@@ -167,17 +167,17 @@ class CoilItem(NodeItem):
                     if label_name and self.sensor_registry.exists(label_name):
                         self.sensor_registry.unregister(label_name)
 
-        # limpa o label (o dict NÃO é zerado aqui: apply_properties() chama
-        # _unregister_sensor() logo após rebindar self.sensors aos properties
-        # recém-carregados, e o nome ali já é o valor desejado a registrar em
-        # seguida por _register_sensor() -- zerar apagaria esse valor antes
-        # que fosse lido).
+        # clears the label (the dict is NOT reset here: apply_properties()
+        # calls _unregister_sensor() right after rebinding self.sensors to
+        # the freshly loaded properties, and the name there is already
+        # the value _register_sensor() should register next -- clearing
+        # it would erase that value before it's read).
         label = self.special_labels.get("sensor_name")
         if label:
             label.set_text("")
 
     def _set_sensor_name(self, new_name):
-        sensor = self.sensors["coil"]  # ← chave 'coil'
+        sensor = self.sensors["coil"]  # -- 'coil' key
         old_name = sensor.get("name")
 
         if not new_name or new_name == old_name:
@@ -188,7 +188,7 @@ class CoilItem(NodeItem):
 
         if not ok:
             if label:
-                label.set_text(old_name)  # volta ao antigo nome
+                label.set_text(old_name)  # reverts to the old name
             QMessageBox.warning(None, "Erro ao renomear",
                                 f"Já existe um sinal com o nome '{new_name}'.")
             return

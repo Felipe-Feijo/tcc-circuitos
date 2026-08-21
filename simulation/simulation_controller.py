@@ -1,4 +1,4 @@
-"""Orquestra a execução da simulação, delegando a três módulos focados."""
+"""Orchestrates simulation execution, delegating to three focused modules."""
 
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 class SimulationController(QObject):
-    """Orquestra uma simulação em execução.
+    """Orchestrates a running simulation.
 
-    Delega responsabilidades a três módulos especializados:
-      StepScheduler   — timer, play/pause, fila de passos.
-      ViewSync        — empurra estado de domínio para os itens gráficos.
-      HistoryManager  — snapshots para step_backward.
+    Delegates responsibilities to three specialized modules:
+      StepScheduler   -- timer, play/pause, step queue.
+      ViewSync        -- pushes domain state to the graphics items.
+      HistoryManager  -- snapshots for step_backward.
 
-    A API pública é compatível com a versão anterior monolítica,
-    portanto SimulationSession e o código de UI não precisam de alterações.
+    The public API is compatible with the previous monolithic version,
+    so SimulationSession and the UI code need no changes.
 
     Signals:
-        state_changed: Emitido após cada passo ou ação que altera o estado.
+        state_changed: Emitted after each step or action that changes state.
     """
 
     state_changed = pyqtSignal()
@@ -39,7 +39,7 @@ class SimulationController(QObject):
         self._view_sync = ViewSync()
         self._history = HistoryManager(max_history)
 
-    # Propriedades de compatibilidade (lidas diretamente por Session e UI)
+    # Compatibility properties (read directly by Session and the UI)
 
     @property
     def playing(self) -> bool:
@@ -69,53 +69,53 @@ class SimulationController(QObject):
     def on_update_connection(self, value: dict) -> None:
         self._view_sync.connection_map = value or {}
 
-    # API pública
+    # Public API
 
     def play(self) -> None:
-        """Inicia a execução contínua por timer."""
+        """Starts continuous execution via timer."""
         self._scheduler.play()
 
     def pause(self) -> None:
-        """Pausa a execução contínua."""
+        """Pauses continuous execution."""
         self._scheduler.pause()
 
     def set_dt(self, dt: float) -> None:
-        """Define o intervalo de tempo entre passos de simulação."""
+        """Sets the time interval between simulation steps."""
         self.dt = dt
 
     def set_timer_interval(self, ms: int) -> None:
-        """Define o intervalo do timer de play em milissegundos."""
+        """Sets the play timer interval in milliseconds."""
         self._scheduler.set_timer_interval(ms)
 
     def request_step(self, n: int = 1, reset_timer: bool = False) -> None:
-        """Enfileira n passos de simulação.
+        """Queues n simulation steps.
 
         Args:
-            n: Número de passos a enfileirar.
-            reset_timer: Se True e em play, reinicia o timer para evitar
-                disparo duplo após um comando manual.
+            n: Number of steps to queue.
+            reset_timer: If True and playing, restarts the timer to avoid
+                a double trigger after a manual command.
         """
         self._scheduler.request_step(n, reset_timer=reset_timer)
 
     def command(self, node_id: str, cmd: dict) -> None:
-        """Recebe um comando de um NodeItem e o repassa ao nó de domínio.
+        """Receives a command from a NodeItem and forwards it to the domain node.
 
         Args:
-            node_id: Identificador do nó que emitiu o comando.
-            cmd: Dicionário de payload (ex: {"action": "toggle"}).
+            node_id: Identifier of the node that emitted the command.
+            cmd: Payload dict (e.g. {"action": "toggle"}).
         """
         node = self.engine.nodes.get(node_id)
         if not node:
-            logger.warning("command: nó %s não encontrado", node_id)
+            logger.warning("command: node %s not found", node_id)
             return
         node.handle_command(cmd)
         self._scheduler.request_step(1, reset_timer=True)
 
     def step_forward(self) -> bool:
-        """Executa um passo manualmente (somente se pausado).
+        """Executes a step manually (only if paused).
 
         Returns:
-            True se o passo foi enfileirado, False se em play.
+            True if the step was queued, False if playing.
         """
         if self._scheduler.playing:
             return False
@@ -123,10 +123,10 @@ class SimulationController(QObject):
         return True
 
     def step_backward(self) -> bool:
-        """Restaura o snapshot anterior (somente se pausado).
+        """Restores the previous snapshot (only if paused).
 
         Returns:
-            True se a restauração ocorreu, False se em play ou sem histórico.
+            True if the restore happened, False if playing or with no history.
         """
         if self._scheduler.playing:
             return False
@@ -139,22 +139,22 @@ class SimulationController(QObject):
         return True
 
     def can_step_back(self) -> bool:
-        """Retorna True se há histórico disponível para step_backward."""
+        """Returns True if history is available for step_backward."""
         return self._history.can_go_back()
 
-    # Método interno
+    # Internal method
 
     def _execute_step(self) -> None:
-        """Executa um passo de simulação: engine → view sync → histórico."""
+        """Executes a simulation step: engine -> view sync -> history."""
         self._scheduler.mark_step_started()
-        logger.debug("passo de simulação iniciado")
+        logger.debug("simulation step started")
         try:
             self.engine.run_until_stable(dt=self.dt)
             self._view_sync.sync()
             self._history.push(self.engine.nodes)
         except Exception:
-            logger.exception("erro durante o passo de simulação")
+            logger.exception("error during simulation step")
         finally:
-            logger.debug("passo de simulação concluído")
+            logger.debug("simulation step finished")
             self._scheduler.mark_step_done()
             self.state_changed.emit()

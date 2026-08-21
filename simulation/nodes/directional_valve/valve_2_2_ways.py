@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula direcional 2/2 vias."""
+"""2/2-way directional valve simulation node."""
 
 import math
 
@@ -16,20 +16,20 @@ class Valve_2_2_Ways(DirectionalValve, HydraulicMixin):
             self.flow_var_out = f"Q_{self.id}_out"
 
     def get_internal_connections(self):
-        """body_state == 1 (ativa): conecta P<->A. body_state == 0 (repouso,
-        normalmente fechada): bloqueada, sem conexão nenhuma."""
+        """body_state == 1 (active): connects P<->A. body_state == 0 (rest,
+        normally closed): blocked, no connection at all."""
         if self.body_state == 1:
             return [("P", "A")]
         return []
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
-    # Diferente das 3/2, 4/2 e 5/2 vias (sempre têm algum par de portas
-    # conectado, só muda o pareamento), a 2/2 pode ficar genuinamente
-    # BLOQUEADA no repouso -- nesse estado não há orifício nem conservação
-    # entre P e A, cada porta fica isolada (variables/hydraulic_ports
-    # vazios, equations() não contribui equação nenhuma).
+    # Unlike the 3/2, 4/2 and 5/2-way valves (always have some port pair
+    # connected, only the pairing changes), the 2/2-way can genuinely be
+    # BLOCKED at rest -- in that state there's no orifice or conservation
+    # between P and A, each port stays isolated (variables/hydraulic_ports
+    # empty, equations() contributes no equation at all).
 
     @property
     def variables(self):

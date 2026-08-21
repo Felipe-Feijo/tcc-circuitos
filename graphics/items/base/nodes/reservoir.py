@@ -1,4 +1,4 @@
-"""Nó gráfico de reservatório hidráulico."""
+"""Graphics node for the hydraulic reservoir."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF

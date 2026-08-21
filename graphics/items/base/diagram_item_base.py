@@ -1,4 +1,4 @@
-"""Classe base para todos os itens gráficos do diagrama."""
+"""Base class for every graphics item in the diagram."""
 
 from PyQt6.QtWidgets import QGraphicsItem, QMenu, QGraphicsObject
 from PyQt6.QtGui import QPen, QColor
@@ -8,21 +8,21 @@ from editor.mode import EditorMode
 
 
 class DiagramItemBase(QGraphicsObject):
-    """Base comum para NodeItem e ConnectionItem.
+    """Common base for NodeItem and ConnectionItem.
 
-    Fornece:
-    - Seleção Qt habilitada por padrão.
-    - Atualização do retângulo da cena ao soltar o mouse.
-    - Menu de contexto nos modos SELECT e SIMULATE, extensível por
-      subclasses via extend_context_menu(). Em SIMULATE, "Deletar" fica de
-      fora (edição de projeto continua desabilitada) -- só entradas que as
-      próprias subclasses decidiram expor durante simulação (checando
-      self.simulation_mode) aparecem; ver NodeItem.extend_context_menu().
-    - Renderização de destaque de seleção via paint_selection_feedback().
+    Provides:
+    - Qt selection enabled by default.
+    - Scene rect update on mouse release.
+    - Context menu in SELECT and SIMULATE modes, extensible by
+      subclasses via extend_context_menu(). In SIMULATE, "Delete" is
+      left out (project editing stays disabled) -- only entries each
+      subclass has decided to expose during simulation (checking
+      self.simulation_mode) appear; see NodeItem.extend_context_menu().
+    - Selection-highlight rendering via paint_selection_feedback().
 
     Attributes:
-        editor: EditorState injetado após adicionar o item à cena.
-        draw_selection: Se False, suprime o destaque azul de seleção.
+        editor: EditorState injected after the item is added to the scene.
+        draw_selection: If False, suppresses the blue selection highlight.
     """
 
     def __init__(self):
@@ -32,19 +32,19 @@ class DiagramItemBase(QGraphicsObject):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
     def mouseReleaseEvent(self, event):
-        """Solicita atualização do retângulo da cena ao soltar o mouse."""
+        """Requests a scene rect update on mouse release."""
         super().mouseReleaseEvent(event)
         if self.editor:
             self.editor.update_scene_rect()
 
     def contextMenuEvent(self, event):
-        """Exibe menu de contexto nos modos SELECT e SIMULATE; ignora nos demais.
+        """Shows the context menu in SELECT and SIMULATE modes; ignored otherwise.
 
-        Em SIMULATE, "Deletar" não é oferecido (deletar um nó/conexão no
-        meio de uma simulação corromperia o grafo de domínio em execução);
-        o restante do conteúdo do menu é decidido por extend_context_menu(),
-        que cada subclasse já restringe a entradas cientes de simulação
-        quando self.simulation_mode é True.
+        In SIMULATE, "Delete" isn't offered (deleting a node/connection
+        mid-simulation would corrupt the running domain graph); the rest
+        of the menu's content is decided by extend_context_menu(), which
+        each subclass already restricts to simulation-aware entries when
+        self.simulation_mode is True.
         """
         if not self.editor:
             return
@@ -64,10 +64,10 @@ class DiagramItemBase(QGraphicsObject):
         self.extend_context_menu(menu)
 
         if menu.isEmpty():
-            # Em SIMULATE, a maioria dos itens não tem nenhuma entrada ciente
-            # de simulação (ex.: só Valve_4_2_Ways define build_defect_dialog
-            # por enquanto) -- sem isso, o right-click abriria um popup
-            # cinza vazio em quase todo nó durante a simulação.
+            # In SIMULATE, most items have no simulation-aware entry at
+            # all (e.g. only Valve_4_2_Ways defines build_defect_dialog so
+            # far) -- without this, right-click would open an empty gray
+            # popup on almost every node during simulation.
             self.editor.active_context_menu = None
             event.ignore()
             return
@@ -77,23 +77,23 @@ class DiagramItemBase(QGraphicsObject):
         event.accept()
 
     def _context_menu_allowed(self) -> bool:
-        """True se o menu de contexto deve abrir no modo atual do editor.
+        """True if the context menu should open in the editor's current mode.
 
-        SELECT: edição normal de projeto. SIMULATE: simulação rodando --
-        o menu ainda abre, mas com conteúdo restrito (sem "Deletar"; o
-        resto depende de cada subclasse checar self.simulation_mode em
-        extend_context_menu()). ADD/CONNECT: bloqueado, como antes.
+        SELECT: normal project editing. SIMULATE: simulation running --
+        the menu still opens, but with restricted content (no "Delete";
+        the rest depends on each subclass checking self.simulation_mode
+        in extend_context_menu()). ADD/CONNECT: blocked, as before.
         """
         return self.editor.mode in (EditorMode.SELECT, EditorMode.SIMULATE)
 
     def extend_context_menu(self, menu: QMenu) -> None:
-        """Permite que subclasses adicionem entradas ao menu de contexto.
+        """Lets subclasses add entries to the context menu.
 
-        Chamado por contextMenuEvent antes de exibir o menu. No-op por padrão.
+        Called by contextMenuEvent before showing the menu. No-op by default.
         """
 
     def paint_selection_feedback(self, painter) -> None:
-        """Desenha destaque de seleção (azul) e/ou de defeito ativo (vermelho)."""
+        """Draws the selection highlight (blue) and/or active-defect highlight (red)."""
         if self.draw_selection and self.isSelected():
             pen = QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
             painter.setPen(pen)
@@ -107,4 +107,4 @@ class DiagramItemBase(QGraphicsObject):
             painter.drawPath(self.shape())
 
     def update_from_domain(self, domain_node) -> None:
-        """Atualiza estado visual a partir do nó de domínio. No-op por padrão."""
+        """Updates visual state from the domain node. No-op by default."""

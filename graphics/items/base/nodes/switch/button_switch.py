@@ -1,4 +1,4 @@
-"""Nó gráfico de chave tipo botão (normalmente aberta ou fechada)."""
+"""Graphics node for a push-button switch (normally open or closed)."""
 
 from PyQt6.QtCore import QPointF
 from simulation.nodes.switch.button_switch import ButtonSwitch as ButtonSwitchNode

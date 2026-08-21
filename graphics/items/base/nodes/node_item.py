@@ -12,10 +12,10 @@ from graphics.utils.defect_dialog import DefectDialog
 from graphics.utils.pixmap_utils import recolor_pixmap_black
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
-# Mapeamento genérico "default_side" -> body_state para nós de 3 posições
-# (THREE_POSITION=True). Vive aqui, na classe base, porque reset_visual_state()
-# precisa dele e não pode depender de um módulo de subclasse específico
-# (ex.: directional_valve_item.py, que importa esta constante daqui).
+# Generic "default_side" -> body_state mapping for 3-position nodes
+# (THREE_POSITION=True). Lives here, in the base class, because
+# reset_visual_state() needs it and can't depend on a specific subclass
+# module (e.g. directional_valve_item.py, which imports this constant from here).
 THREE_POSITION_SIDE_MAP = {"right": 0, "center": 1, "left": 2}
 
 
@@ -90,11 +90,12 @@ class NodeItem(DiagramItemBase):
 
     @classmethod
     def palette_meta(cls) -> "PaletteMeta | None":
-        """Retorna metadados de paleta para este tipo de nó.
+        """Returns palette metadata for this node type.
 
-        Retorne uma instância de ``PaletteMeta`` para que o nó apareça
-        automaticamente na paleta.  Classes base (abstratas) não precisam
-        sobrescrever — o default ``None`` as exclui do auto-discovery.
+        Return a ``PaletteMeta`` instance so the node automatically
+        appears in the palette. Base (abstract) classes don't need to
+        override this -- the ``None`` default excludes them from
+        auto-discovery.
 
         Example::
 
@@ -135,10 +136,10 @@ class NodeItem(DiagramItemBase):
         self.draw_selection: bool = True
         self._visual_offset: QPointF = QPointF(0, 0)
 
-        # Referência ao nó de domínio mais recente (atualizada a cada passo
-        # de simulação por update_from_domain) e indicador de defeito ativo,
-        # usados por build_defect_dialog()/apply_defect_from_dialog() e por
-        # paint_selection_feedback() em DiagramItemBase.
+        # Reference to the most recent domain node (updated each
+        # simulation step by update_from_domain) and the active-defect
+        # indicator, used by build_defect_dialog()/apply_defect_from_dialog()
+        # and by paint_selection_feedback() in DiagramItemBase.
         self._domain_node = None
         self._defect_indicator: bool = False
 
@@ -300,11 +301,11 @@ class NodeItem(DiagramItemBase):
         }
 
     def anchor_labels_to_dict(self) -> dict:
-        """Serializa a posição (relativa à âncora) dos labels hidráulicos.
+        """Serializes the hydraulic labels' position (relative to the anchor).
 
-        Esses labels são filhos do AnchorItem (não de self.labels), pois
-        acompanham a âncora individualmente — por isso precisam de uma
-        chave própria de serialização.
+        These labels are children of the AnchorItem (not of
+        self.labels), since they follow their anchor individually --
+        that's why they need their own serialization key.
         """
         data = {}
         for name, anchor in self.anchors.items():
@@ -368,9 +369,10 @@ class NodeItem(DiagramItemBase):
         node.properties = data.get("properties", {})
         node.apply_properties()
 
-        # Aplicado após apply_properties(): algumas subclasses recriam suas
-        # âncoras ali (ex.: mudança de número de portas), o que substituiria
-        # os AnchorItem existentes e descartaria a posição restaurada antes.
+        # Applied after apply_properties(): some subclasses recreate
+        # their anchors there (e.g. a port-count change), which would
+        # replace the existing AnchorItems and discard the position
+        # restored above.
         for name, pos in data.get("anchor_labels", {}).items():
             anchor = node.anchors.get(name)
             label = getattr(anchor, "_label_hydraulic", None) if anchor else None
@@ -411,13 +413,13 @@ class NodeItem(DiagramItemBase):
         self.update_connections()
 
     def _counter_rotate_labels(self) -> None:
-        """Cancela a rotação do node em cada label filho, mantendo o
-        texto sempre reto.
+        """Cancels the node's rotation on each child label, keeping the
+        text always upright.
 
-        Ao contrário de ItemIgnoresTransformations (não usada em
-        LabelItem de propósito -- ver comentário lá), isso só neutraliza
-        a ROTAÇÃO herdada; a posição e a escala (zoom da view) continuam
-        seguindo a cadeia de transformação normal do Qt.
+        Unlike ItemIgnoresTransformations (deliberately not used by
+        LabelItem -- see the comment there), this only neutralizes the
+        inherited ROTATION; position and scale (the view's zoom) still
+        follow Qt's normal transformation chain.
         """
         angle = -self.rotation()
         for label in self.labels.values():
@@ -456,28 +458,28 @@ class NodeItem(DiagramItemBase):
         self.anchors[anchor.name] = anchor
 
     def remove_anchor(self, name: str) -> None:
-        """Remove a âncora `name` e qualquer conexão ligada a ela.
+        """Removes the `name` anchor and any connection attached to it.
 
-        Confirmado por repro real (2026-08): remover a âncora e sua conexão
-        de forma síncrona -- mesmo com prepare_delete()+removeItem() feitos
-        de imediato -- é uma condição de corrida sensível a timing que pode
-        deixar o índice espacial (BSP) da QGraphicsScene inconsistente,
-        derrubando o processo com "Windows fatal exception: access
-        violation" num mouseMoveEvent real subsequente (o crash somem
-        quando se adiciona qualquer instrumentação de debug que atrase o
-        event loop, o que é a assinatura clássica desse tipo de corrida).
-        Não reproduzível com QTest sintético -- só com mouse real.
+        Confirmed by a real repro (2026-08): removing the anchor and its
+        connection synchronously -- even with prepare_delete()+removeItem()
+        done immediately -- is a timing-sensitive race that can leave
+        the QGraphicsScene's spatial index (BSP) inconsistent, crashing
+        the process with a "Windows fatal exception: access violation"
+        on a subsequent real mouseMoveEvent (the crash disappears when
+        any debug instrumentation that delays the event loop is added,
+        the classic signature of this kind of race). Not reproducible
+        with synthetic QTest -- only with a real mouse.
 
-        Mitigação: seguir o EXATO padrão já usado por
-        editor/delete_manager.py (DeleteManager.do_delete()) para o mesmo
-        problema -- adiar TUDO (contabilidade + remoção física) como uma
-        única unidade atômica via QTimer.singleShot(0, ...), e forçar a
-        reconstrução do índice espacial da cena depois. A âncora some de
-        self.anchors de imediato (outros métodos como hydraulic_ports()
-        continuam podendo contar com isso no retorno desta chamada), mas a
-        conexão só é desligada (prepare_delete) e removida da cena no
-        próximo ciclo do event loop -- exatamente como uma deleção pelo
-        DeleteManager.
+        Mitigation: follow the EXACT pattern already used by
+        editor/delete_manager.py (DeleteManager.do_delete()) for the
+        same problem -- defer EVERYTHING (bookkeeping + physical
+        removal) as a single atomic unit via QTimer.singleShot(0, ...),
+        and force a rebuild of the scene's spatial index afterward. The
+        anchor disappears from self.anchors immediately (other methods
+        like hydraulic_ports() can still count on that once this call
+        returns), but the connection is only disconnected
+        (prepare_delete) and removed from the scene on the next
+        event-loop cycle -- exactly like a DeleteManager deletion.
         """
         anchor = self.anchors.pop(name, None)
         if not anchor:
@@ -497,9 +499,9 @@ class NodeItem(DiagramItemBase):
             scene = anchor.scene()
             if scene:
                 scene.removeItem(anchor)
-                # Força reconstrução do índice espacial (BSP) -- mesma
-                # dança usada em DeleteManager.do_delete() depois de
-                # remover itens da cena.
+                # Forces a rebuild of the spatial index (BSP) -- same
+                # dance used in DeleteManager.do_delete() after removing
+                # items from the scene.
                 current_index = scene.itemIndexMethod()
                 scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
                 scene.setItemIndexMethod(current_index)
@@ -569,8 +571,9 @@ class NodeItem(DiagramItemBase):
                 except (TypeError, RuntimeError):
                     pass
                 self.editor.theme_changed.connect(self.on_theme_changed)
-                # Sincroniza com o tema atual: o item pode ter sido criado
-                # depois do último toggle, sem nunca ter recebido o sinal.
+                # Syncs with the current theme: the item may have been
+                # created after the last toggle, never having received
+                # the signal.
                 self.on_theme_changed(getattr(self.editor, "is_light_theme", False))
 
         return super().itemChange(change, value)
@@ -604,7 +607,7 @@ class NodeItem(DiagramItemBase):
             event.ignore()
             return
 
-        # Captura snapshot antes de abrir o dialog — só empilha se o usuário confirmar
+        # Captures a snapshot before opening the dialog -- only pushed if the user confirms
         scene = self.scene()
         undo_stack = getattr(getattr(self, "editor", None), "undo_stack", None)
         before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
@@ -612,12 +615,12 @@ class NodeItem(DiagramItemBase):
         if dialog.exec():
             self.apply_properties_from_dialog(dialog)
             if before is not None:
-                # Adiado (mesma fila de QTimer.singleShot(0, ...) usada por
-                # remove_anchor()): se apply_properties_from_dialog() acabou
-                # de agendar a remoção de uma âncora/conexão, aquele
-                # callback foi enfileirado ANTES deste -- roda primeiro,
-                # garantindo que o snapshot "depois" veja a cena já
-                # totalmente assentada, sem uma conexão pela metade.
+                # Deferred (same QTimer.singleShot(0, ...) queue used by
+                # remove_anchor()): if apply_properties_from_dialog() just
+                # scheduled an anchor/connection removal, that callback
+                # was queued BEFORE this one -- it runs first, guaranteeing
+                # the "after" snapshot sees the scene already fully
+                # settled, with no half-finished connection.
                 editor = self.editor
                 QTimer.singleShot(
                     0,
@@ -686,9 +689,9 @@ class NodeItem(DiagramItemBase):
 
     def extend_context_menu(self, menu: QMenu) -> None:
         if self.simulation_mode:
-            # Simulação rodando: edição de projeto (rotacionar, labels,
-            # propriedades) fica indisponível -- só a entrada de defeito,
-            # explicitamente ciente de simulação, é oferecida.
+            # Simulation running: project editing (rotate, labels,
+            # properties) becomes unavailable -- only the defect entry,
+            # explicitly simulation-aware, is offered.
             defect_dialog = self.build_defect_dialog()
             if defect_dialog is not None:
                 defect_action = menu.addAction("Simular defeito...")

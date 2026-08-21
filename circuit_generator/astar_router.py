@@ -1,13 +1,13 @@
 """
-A* orthogonal router para circuitos pneumáticos estáticos.
+A* orthogonal router for static pneumatic circuits.
 
-Princípios de design:
-  1. O A* roteia entre dois pontos FORA dos sprites (exit points)
-  2. Os waypoints gerados são APENAS os pontos de dobra intermediários
-     (não incluem src_anchor nem tgt_anchor)
-  3. O primeiro wp é "snapped" à coordenada exata do src_anchor na direção perpendicular
-  4. O último wp é "snapped" à coordenada exata do tgt_anchor na direção perpendicular
-  5. Exhaust/PS nunca precisam de waypoints (sempre linhas retas)
+Design principles:
+  1. A* routes between two points OUTSIDE the sprites (exit points)
+  2. The generated waypoints are ONLY the intermediate bend points
+     (don't include src_anchor or tgt_anchor)
+  3. The first wp is "snapped" to src_anchor's exact coordinate on the perpendicular axis
+  4. The last wp is "snapped" to tgt_anchor's exact coordinate on the perpendicular axis
+  5. Exhaust/PS never need waypoints (always straight lines)
 """
 
 from __future__ import annotations
@@ -16,21 +16,21 @@ import math
 
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
-CELL      = 20    # pixels por célula
-EXIT_PX   = 40    # pixels de saída antes do A* (2 células)
-TURN_COST = 8     # custo por mudança de direção
-WIRE_COST = 3     # custo por passar sobre fio existente
+CELL      = 20    # pixels per cell
+EXIT_PX   = 40    # exit pixels before A* runs (2 cells)
+TURN_COST = 8     # cost per direction change
+WIRE_COST = 3     # cost per pass over an existing wire
 
 DIRS = [(0, -1), (0, 1), (-1, 0), (1, 0)]   # UP DOWN LEFT RIGHT
 
-# Fonte única de verdade: sprite_metrics.py (lê os PNGs reais). Antes, estes
-# valores eram hardcoded aqui separadamente e haviam ficado desatualizados
-# (ex: Valve_4_2_Ways com 447px em vez dos 300px reais) -- o retângulo de
-# bloqueio de colisão do A* ficava maior que o sprite de verdade, e um
-# anchor legitimamente posicionado logo além da borda real (ex: PR, que
-# sprite_metrics.py posiciona em v42_width + pilot_w) caía "dentro" desse
-# bloqueio inflado, forçando o roteador a escapar bem mais longe do que
-# necessário e depois saltar de volta -- ver
+# Single source of truth: sprite_metrics.py (reads the real PNGs). These
+# values used to be hardcoded here separately and had drifted out of
+# date (e.g. Valve_4_2_Ways at 447px instead of the real 300px) -- A*'s
+# collision-blocking rectangle ended up bigger than the real sprite, and
+# an anchor legitimately positioned just past the real edge (e.g. PR,
+# which sprite_metrics.py places at v42_width + pilot_w) fell "inside"
+# that inflated block, forcing the router to escape much further than
+# necessary and then jump back -- see
 # tests/test_astar_router.py::TestSpriteSizesMatchMetrics.
 SPRITE_SIZES: dict[str, tuple[int, int]] = {
     "Valve_4_2_Ways":        (_M.v42_width, _M.v42_height),
@@ -49,7 +49,7 @@ SPRITE_SIZES: dict[str, tuple[int, int]] = {
     "Ground":                (_M.ground_pix_w,        _M.ground_pix_h),
 }
 
-# Direção de saída padrão de cada anchor
+# Each anchor's default exit direction
 EXIT_DIR_MAP: dict[tuple[str, str], str] = {
     ("DoubleActingCylinder", "A"):  "DOWN",
     ("DoubleActingCylinder", "B"):  "DOWN",
@@ -114,8 +114,8 @@ class Grid:
     def px_to_cell(self, px: float, py: float) -> tuple[int, int]:
         return (int((px - self.ox) / CELL), int((py - self.oy) / CELL))
 
-    # Converter célula → pixel usando a grade (não o centro)
-    # O snap vai ajustar para o valor exato depois
+    # Convert cell -> pixel using the grid (not the center)
+    # The snap step adjusts to the exact value afterward
     def cell_to_px(self, cx: int, cy: int) -> tuple[float, float]:
         return (self.ox + cx * CELL, self.oy + cy * CELL)
 
@@ -135,7 +135,7 @@ class Grid:
         return o + self._wire[idx]
 
     def block_rect_px(self, x0: float, y0: float, x1: float, y1: float):
-        """Bloqueia retângulo definido por cantos (x0,y0)→(x1,y1) em pixels."""
+        """Blocks the rectangle defined by corners (x0,y0)->(x1,y1) in pixels."""
         cx0, cy0 = self.px_to_cell(x0, y0)
         cx1, cy1 = self.px_to_cell(x1, y1)
         for cy in range(max(0, cy0), min(self.rows, cy1 + 1)):
@@ -148,29 +148,28 @@ class Grid:
                 self._wire[self._idx(cx, cy)] += WIRE_COST
 
 
-# Guarda posição/tamanho de cada nó para calcular exits fora do bloco
+# Stores each node's position/size, to compute exits outside its block
 _NODE_BOUNDS: dict[str, tuple[float,float,float,float]] = {}  # id→(x,y,w,h)
 
 VALVE_TYPES = {"Valve_4_2_Ways", "Valve_5_2_Ways", "Valve_3_2_Ways"}
 
 
 def _commutation_shift(n: dict) -> float:
-    """Deslocamento horizontal REAL do sprite de uma válvula direcional
-    quando renderizada no estado comutado (body_state=1, default_side ==
-    "left" -- ver graphics/items/base/nodes/directional_valve/
-    directional_valve_item.py: `self.body_state = 1 if default_side ==
-    "left" else 0`, e cada Valve_*_ways.py's BODY_VISUALS[1]["offset"]).
-    0.0 pra qualquer outro tipo ou estado -- o sprite nunca desloca pra
-    esquerda, só pra direita, então isso é sempre o pior caso (mais à
-    direita) que o corpo pode realmente ocupar.
+    """A directional valve sprite's REAL horizontal shift when rendered
+    in the commutated state (body_state=1, default_side == "left" -- see
+    graphics/items/base/nodes/directional_valve/directional_valve_item.py:
+    `self.body_state = 1 if default_side == "left" else 0`, and each
+    Valve_*_ways.py's BODY_VISUALS[1]["offset"]). 0.0 for any other type
+    or state -- the sprite never shifts left, only right, so this is
+    always the worst case (furthest right) the body can actually occupy.
 
-    Sem isso, build_grid() bloqueava o retângulo de colisão na posição
-    LÓGICA (não-deslocada) da válvula -- quando ela estava no estado
-    comutado, o sprite de verdade renderizava mais à direita do que o
-    retângulo de bloqueio previa, e um fio podia entrar "por dentro" do
-    corpo real mesmo o A* achando aquele trecho livre (achado testando a
-    UI real: conexão sig.A -> mem.PR cruzando o corpo de uma memória
-    comutada).
+    Without this, build_grid() blocked the collision rectangle at the
+    valve's LOGICAL (unshifted) position -- when it was in the
+    commutated state, the real sprite rendered further right than the
+    blocking rectangle predicted, and a wire could enter "inside" the
+    real body even though A* thought that stretch was clear (found via
+    live-UI testing: a sig.A -> mem.PR connection crossing a commutated
+    memory's body).
     """
     if n["type"] not in VALVE_TYPES:
         return 0.0
@@ -183,13 +182,13 @@ def build_grid(nodes: list[dict]) -> Grid:
     global _NODE_BOUNDS
     _NODE_BOUNDS = {}
 
-    # Os limites do grid precisam alcançar qualquer anchor real que o
-    # roteamento vá mirar -- não só o tamanho bruto do sprite. PL/PR de
-    # válvulas direcionais protudem além do sprite (anchor_local_for_routing
-    # já embute a margem de comutação pro pior caso de PR, ver Task 1) --
-    # sem isso, um anchor de válvula perto da borda do circuito cai fora
-    # do grid e o roteamento falha silenciosamente (route_connection
-    # devolve None). Ver docs/superpowers/specs/
+    # The grid's bounds need to reach every real anchor routing might
+    # target -- not just the sprite's raw size. Directional valves' PL/PR
+    # protrude past the sprite (anchor_local_for_routing already bakes in
+    # the worst-case commutation margin for PR, see Task 1) -- without
+    # this, a valve anchor near the circuit's edge falls outside the grid
+    # and routing silently fails (route_connection returns None). See
+    # docs/superpowers/specs/
     # 2026-07-11-directional-valve-pilot-anchor-offset-design.md.
     xs, ys = [], []
     for n in nodes:
@@ -207,15 +206,15 @@ def build_grid(nodes: list[dict]) -> Grid:
     grid = Grid(min(xs), min(ys), max(xs), max(ys))
 
     CYL_TYPES   = {"DoubleActingCylinder"}
-    SMALL_OBS   = {"Exhaust", "PressureSource"}  # pequenos obstáculos sem margem
-    SKIP_TYPES  = {"PressureLine"}                # PLs não bloqueiam
+    SMALL_OBS   = {"Exhaust", "PressureSource"}  # small obstacles, no margin
+    SKIP_TYPES  = {"PressureLine"}                # PLs don't block
     OR_TYPES    = {"OrValve"}
-    MH = 80   # margem horizontal para válvulas
-    # Margem vertical só pra OrValve -- feedback direto testando a UI
-    # real: sem nenhuma margem (caía no ramo genérico, bloqueio exato do
-    # sprite), um fio podia passar rente por cima/embaixo da OrValve. X/Y
-    # (esquerda/direita) já têm folga própria via _find_free_exit e não
-    # precisam de margem horizontal aqui.
+    MH = 80   # horizontal margin for valves
+    # Vertical margin, OrValve only -- found via live-UI testing: with no
+    # margin at all (falling into the generic branch, exact sprite
+    # blocking), a wire could graze right past the OrValve's top/bottom.
+    # X/Y (left/right) already have their own clearance via
+    # _find_free_exit and don't need a horizontal margin here.
     MV_OR = 20
 
     for n in nodes:
@@ -229,7 +228,7 @@ def build_grid(nodes: list[dict]) -> Grid:
             continue
 
         if t in SMALL_OBS:
-            # PS e Exhaust: obstáculos sem margem (são pequenos)
+            # PS and Exhaust: obstacles with no margin (they're small)
             grid.block_rect_px(px, py, px + w, py + h)
             _NODE_BOUNDS[n["id"]] = (px, py, w, h)
             continue
@@ -297,7 +296,7 @@ def _astar(
 
 
 def _find_free_exit(grid: Grid, ax: int, ay: int, ddx: int, ddy: int, steps: int = 15) -> tuple[int,int] | None:
-    """Encontra a primeira célula livre saindo de (ax,ay) na direção (ddx,ddy)."""
+    """Finds the first free cell going out from (ax,ay) in direction (ddx,ddy)."""
     for i in range(0, steps + 1):
         nx, ny = ax + ddx * i, ay + ddy * i
         if grid.in_bounds(nx, ny) and grid.cost(nx, ny) < 1e6:
@@ -312,33 +311,34 @@ def _exit_point_for_anchor(
     dir_: str,
 ) -> tuple[int, int] | None:
     """
-    Calcula o exit point correto para um anchor com saída lateral (LEFT/RIGHT).
-    Para anchors RIGHT/LEFT que ficam DENTRO do sprite, o exit deve estar
-    imediatamente além da borda do bloco de obstáculos.
-    Para anchors UP/DOWN (nas bordas H do sprite), usa _find_free_exit normal.
+    Computes the correct exit point for an anchor with a sideways exit
+    (LEFT/RIGHT). For RIGHT/LEFT anchors that sit INSIDE the sprite, the
+    exit must be immediately past the obstacle block's edge.
+    For UP/DOWN anchors (on the sprite's H edges), uses the normal
+    _find_free_exit.
     """
     ddx, ddy = DIR_VEC[dir_]
     ax, ay = grid.px_to_cell(*anchor_px)
 
     if dir_ in ("UP", "DOWN"):
-        # Anchor na borda superior/inferior — exit está próximo
+        # Anchor on the top/bottom edge -- exit is nearby
         return _find_free_exit(grid, ax, ay, ddx, ddy)
 
-    # Anchor lateral (LEFT/RIGHT) — pode estar dentro do bloco
-    # Calcular a borda do bloco e ir para além dela
+    # Sideways anchor (LEFT/RIGHT) -- may be inside the block
+    # Compute the block's edge and go past it
     bounds = _NODE_BOUNDS.get(node_id)
     if bounds is not None:
         bx, by, bw, bh = bounds
         if dir_ == "RIGHT":
-            # Sair pela direita: exit.x > bx + bw
+            # Exit to the right: exit.x > bx + bw
             exit_px_x = bx + bw + CELL
             exit_px_y = anchor_px[1]
         else:
-            # Sair pela esquerda: exit.x < bx
+            # Exit to the left: exit.x < bx
             exit_px_x = bx - CELL
             exit_px_y = anchor_px[1]
         ex, ey = grid.px_to_cell(exit_px_x, exit_px_y)
-        # Verificar se está livre, senão buscar próxima livre
+        # Check whether it's free, otherwise look for the next free one
         for extra in range(0, 5):
             nx, ny = ex + ddx * extra, ey
             if grid.in_bounds(nx, ny) and grid.cost(nx, ny) < 1e6:
@@ -356,22 +356,22 @@ def route_connection(
     src_id: str = "", tgt_id: str = "",
 ) -> list[dict] | None:
     """
-    Roteia ortogonalmente de src_px a tgt_px.
-    Retorna lista de waypoints intermediários (sem src nem tgt).
-    None = linha reta (sem waypoints necessários).
+    Routes orthogonally from src_px to tgt_px.
+    Returns a list of intermediate waypoints (without src or tgt).
+    None = straight line (no waypoints needed).
     """
-    # Exhaust/PS: sempre linha reta
+    # Exhaust/PS: always a straight line
     if src_type in ("Exhaust", "PressureSource") or tgt_type in ("Exhaust", "PressureSource"):
         return None
 
-    # Conexão já reta?
+    # Already a straight connection?
     if abs(src_px[0] - tgt_px[0]) < 3 or abs(src_px[1] - tgt_px[1]) < 3:
         return None
 
-    # ── Offset unificado na direção de entrada do target ─────────────────────
-    # O editor aplica um margin de 6-18px na saída/entrada de cada anchor.
-    # Nos blocos determinísticos, empurramos o último wp 20px além do anchor
-    # na direção de entrada, para o fio chegar limpo sem rabinho.
+    # -- Unified offset in the target's entry direction ------------------------
+    # The editor applies a 6-18px margin on each anchor's exit/entry. In
+    # the deterministic blocks, we push the last wp 20px past the anchor
+    # in the entry direction, so the wire arrives clean, no little tail.
     _OFFSET = 20
     _OFF = {
         "UP":    ( 0, -_OFFSET),
@@ -390,15 +390,15 @@ def route_connection(
 
     def wp(x, y): return {"x": round(x, 1), "y": round(y, 1)}
 
-    # ── pilot (PL/PR) → PressureLine ─────────────────────────────────────────
-    # Sai horizontal do pilot → desce/sobe até y da PL → entra na PL.
+    # -- pilot (PL/PR) -> PressureLine ------------------------------------------
+    # Exits the pilot horizontally -> moves down/up to the PL's y -> enters the PL.
     if src_dir in ("LEFT", "RIGHT") and tgt_type == "PressureLine":
         return [
             wp(tgt_px[0], src_px[1]),
         ]
 
-    # ── PressureLine → Valve_3_2_Ways.P (sig.P) ──────────────────────────────
-    # anchor P fica na base (DOWN). Chega por baixo com offset.
+    # -- PressureLine -> Valve_3_2_Ways.P (sig.P) --------------------------------
+    # Anchor P sits at the base (DOWN). Arrives from below with an offset.
     if src_type == "PressureLine" and tgt_type == "Valve_3_2_Ways" and tgt_dir == "DOWN":
         ox, oy = tgt_off("DOWN")
         return [
@@ -406,9 +406,9 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
-    # ── Valve_4_2_Ways.A/B → DoubleActingCylinder ────────────────────────────
-    # A/B saem UP do topo da v42, pistão recebe DOWN na base.
-    # Chega no pistão por baixo com offset.
+    # -- Valve_4_2_Ways.A/B -> DoubleActingCylinder -------------------------------
+    # A/B exit UP from the v42's top, the piston receives DOWN at its base.
+    # Arrives at the piston from below with an offset.
     if src_type == "Valve_4_2_Ways" and tgt_type == "DoubleActingCylinder":
         ox, oy = tgt_off("DOWN")
         return [
@@ -416,8 +416,8 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
-    # ── Valve_5_2_Ways.A/B → PressureLine ────────────────────────────────────
-    # Sobe do anchor UP da 5/2, vai horizontal até x da PL, desce até PL.
+    # -- Valve_5_2_Ways.A/B -> PressureLine ---------------------------------------
+    # Goes up from the 5/2's UP anchor, moves horizontally to the PL's x, goes down to the PL.
     if src_type == "Valve_5_2_Ways" and tgt_type == "PressureLine":
         ox, oy = src_off("UP")
         return [
@@ -425,7 +425,7 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
-    # ── PressureLine → Valve_5_2_Ways ────────────────────────────────────────
+    # -- PressureLine -> Valve_5_2_Ways -------------------------------------------
     if src_type == "PressureLine" and tgt_type == "Valve_5_2_Ways":
         ox, oy = tgt_off("UP")
         return [
@@ -433,26 +433,27 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
-    # ── OrValve.A → OrValve.X/Y (elo de cadeia multi-ciclo) ──────────────────
-    # A fica sempre no topo (exit "UP"). Sem este atalho, a A* geral às
-    # vezes prefere contornar por BAIXO das duas válvulas (passando pela
-    # folga entre or_row e a região de lógica, mais larga que a folga
-    # entre or_row e main_valve) -- confirmado pelo usuário, que pediu
-    # explicitamente pra passar por CIMA.
+    # -- OrValve.A -> OrValve.X/Y (multi-cycle chain link) ------------------------
+    # A always exits at the top ("UP"). Without this shortcut, general A*
+    # sometimes prefers routing BELOW both valves (through the gap
+    # between or_row and the logic region, wider than the gap between
+    # or_row and main_valve) -- confirmed by the user, who explicitly
+    # asked for it to go OVER the top instead.
     #
-    # PRECISA de um 3º waypoint que já pouse no Y real do alvo (tgt_px[1])
-    # ANTES do ponto final -- X/Y só aceitam entrada horizontal (exit_dir
-    # "left"/"right", ver or_valve.py), e connection_item.py
-    # (adjust_waypoints_for_node_move -> _adjust_boundary) corrige
-    # automaticamente qualquer sequência de waypoints COLINEARES adjacente
-    # à borda do alvo pra bater com o Y real dele. Com só 2 waypoints (os
-    # dois na mesma altura "oy", ver versão anterior deste atalho), os DOIS
-    # compartilham o mesmo Y e a correção colapsa a ponte inteira pro Y do
-    # alvo -- destruindo a subida por cima (confirmado pelo usuário
-    # revendo o resultado: o fio ainda descia reto pelo meio). Com 3
-    # pontos, só o último (já no Y do alvo) é tocado -- os dois primeiros
-    # (na altura "oy", diferente) ficam fora da corrida colinear e
-    # preservam a ponte.
+    # NEEDS a 3rd waypoint that already sits at the target's real Y
+    # (tgt_px[1]) BEFORE the final point -- X/Y only accept horizontal
+    # entry (exit_dir "left"/"right", see or_valve.py), and
+    # connection_item.py (adjust_waypoints_for_node_move ->
+    # _adjust_boundary) automatically fixes any run of COLLINEAR
+    # waypoints adjacent to the target's boundary to match its real Y.
+    # With only 2 waypoints (both at the same height "oy", see this
+    # shortcut's earlier version), BOTH share the same Y and the fix
+    # collapses the whole bridge to the target's Y -- destroying the
+    # over-the-top route (confirmed by the user reviewing the result:
+    # the wire still went straight down through the middle). With 3
+    # points, only the last one (already at the target's Y) gets
+    # touched -- the first two (at the different "oy" height) stay out
+    # of the collinear run and preserve the bridge.
     if src_type == "OrValve" and tgt_type == "OrValve":
         ox, oy = src_off("UP")
         tox, toy = tgt_off(tgt_dir)
@@ -462,52 +463,55 @@ def route_connection(
             wp(tox, toy),
         ]
 
-    # ── Direção de saída contextual ───────────────────────────────────────────
-    # Para anchors verticais (UP/DOWN), usar a direção que aponta PARA o destino.
-    # Para PressureLine (src ou tgt), a direção nominal é sempre "UP" (emissão),
-    # mas o roteamento precisa da direção CONTEXTUAL (em relação ao destino).
+    # -- Contextual exit direction -----------------------------------------------
+    # For vertical anchors (UP/DOWN), use the direction that points TOWARD the target.
+    # For PressureLine (src or tgt), the nominal direction is always "UP" (emission),
+    # but routing needs the CONTEXTUAL direction (relative to the target).
     dy_total = tgt_px[1] - src_px[1]   # + = tgt abaixo, - = tgt acima
     dx_total = tgt_px[0] - src_px[0]
 
     sdx, sdy = DIR_VEC[src_dir]
     tdx, tdy = DIR_VEC[tgt_dir]
 
-    # FIX Bug 2 (rabinhos): src_dir corrigido ANTES de calcular o exit point,
-    # para que exit point e direção inicial do A* sempre concordem.
+    # FIX Bug 2 (little tails): src_dir corrected BEFORE computing the
+    # exit point, so the exit point and A*'s initial direction always
+    # agree.
     #
-    # Anchors UP/DOWN: apontar para o destino contextualmente.
-    # PressureLine como src: idem — seu anchor Xi é nominal UP mas deve rotear
-    # para baixo quando o destino está abaixo.
+    # UP/DOWN anchors: point toward the target contextually.
+    # PressureLine as src: same idea -- its Xi anchor is nominally UP but
+    # must route downward when the target is below.
     if src_dir in ("UP", "DOWN") or src_type == "PressureLine":
         sdy = 1 if dy_total >= 0 else -1
         sdx = 0
 
-    # FIX Bug 1 (loops na PL): quando PressureLine é TARGET, o exit point de
-    # chegada deve estar do lado de onde a conexão vem, não no lado de emissão.
-    # tgt_dir_used controla onde _find_free_exit posiciona o exit point:
-    #   src ABAIXO da PL (dy_total < 0) → viaja UP → exit point ABAIXO da PL → DOWN (+1)
-    #   src ACIMA  da PL (dy_total > 0) → viaja DOWN → exit point ACIMA da PL → UP  (-1)
+    # FIX Bug 1 (loops on the PL): when PressureLine is the TARGET, the
+    # arrival exit point must be on the side the connection comes from,
+    # not the emission side. tgt_dir_used controls where _find_free_exit
+    # places the exit point:
+    #   src BELOW the PL (dy_total < 0) -> travels UP -> exit point BELOW the PL -> DOWN (+1)
+    #   src ABOVE the PL (dy_total > 0) -> travels DOWN -> exit point ABOVE the PL -> UP  (-1)
     if tgt_type == "PressureLine":
         tdy = 1 if dy_total <= 0 else -1
         tdx = 0
 
-    # Guardar direções finais para passar ao _exit_point_for_anchor
+    # Store the final directions to pass to _exit_point_for_anchor
     src_dir_used = {(0,-1):"UP",(0,1):"DOWN",(-1,0):"LEFT",(1,0):"RIGHT"}.get((sdx,sdy), src_dir)
     tgt_dir_used = {(0,-1):"UP",(0,1):"DOWN",(-1,0):"LEFT",(1,0):"RIGHT"}.get((tdx,tdy), tgt_dir)
 
-    # ── Células dos anchors ───────────────────────────────────────────────────
+    # -- Anchor cells --------------------------------------------------------------
     sx_c, sy_c = grid.px_to_cell(src_px[0], src_px[1])
     tx_c, ty_c = grid.px_to_cell(tgt_px[0], tgt_px[1])
 
-    # Calcular exit points usando borda do bloco (não o anchor em si).
-    # Para PressureLine como src: _find_free_exit retorna i=0 (própria célula,
-    # pois PL não tem bloco de obstáculo). Isso faz o exit point ficar na célula
-    # de grade arredondada (≠ anchor real), causando um mini-segmento "rabinho"
-    # antes do A* virar na direção correta. Fix: forçar EXIT_PX na direção correta.
+    # Compute exit points using the block's edge (not the anchor itself).
+    # For PressureLine as src: _find_free_exit returns i=0 (its own cell,
+    # since PL has no obstacle block). This leaves the exit point at the
+    # rounded grid cell (!= the real anchor), causing a mini "tail"
+    # segment before A* turns in the right direction. Fix: force EXIT_PX
+    # in the right direction.
     if src_type == "PressureLine":
         ddx, ddy = DIR_VEC[src_dir_used]
         ax, ay = grid.px_to_cell(src_px[0], src_px[1])
-        # Avançar ao menos 1 célula além do anchor para garantir saída limpa
+        # Advance at least 1 cell past the anchor to guarantee a clean exit
         steps = max(1, EXIT_PX // CELL)
         s_exit = None
         for i in range(1, steps + 3):
@@ -519,25 +523,27 @@ def route_connection(
             s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
     else:
         s_exit = _exit_point_for_anchor(grid, src_id, src_px, src_dir_used)
-    # FIX Bug PressureLine como TARGET:
-    # _find_free_exit começa em i=0 (própria célula) e como a PL está em SKIP_TYPES
-    # (sem bloco de obstáculo), retorna imediatamente o próprio anchor, ignorando
-    # tgt_dir_used. O A* sempre termina no topo da PL.
-    # Fix: calcular t_exit avançando explicitamente na direção correta, igual ao
-    # tratamento de PressureLine como src.
+    # FIX Bug PressureLine as TARGET:
+    # _find_free_exit starts at i=0 (its own cell) and since PL is in
+    # SKIP_TYPES (no obstacle block), it immediately returns the anchor
+    # itself, ignoring tgt_dir_used. A* always ends up at the PL's top.
+    # Fix: compute t_exit by explicitly stepping in the right direction,
+    # same treatment as PressureLine as src.
     if tgt_type == "PressureLine":
         ddx_t, ddy_t = DIR_VEC[tgt_dir_used]
-        # tgt_dir_used já foi calculado (bloco "FIX Bug 1" acima) para
-        # apontar pro lado de onde a conexão VEM, não pro lado de emissão:
-        #   src ABAIXO da PL (dy_total <= 0) → tgt_dir_used="DOWN" (ddy_t=+1)
-        #   src ACIMA  da PL (dy_total > 0)  → tgt_dir_used="UP"   (ddy_t=-1)
-        # O exit point (onde o A* termina antes do hop final até o anchor
-        # real) precisa ficar do MESMO lado -- por isso usa ddy_t direto,
-        # sem inverter. Uma versão anterior deste bloco invertia o sinal
-        # (opp_ddy = -ddy_t) por engano -- o comentário daquela versão
-        # descrevia a convenção OPOSTA da que o bloco "FIX Bug 1" realmente
-        # usa, colocando o exit point do lado ERRADO da PL: o fio cruzava
-        # a linha inteira e voltava (ver
+        # tgt_dir_used was already computed (the "FIX Bug 1" block above)
+        # to point at the side the connection COMES FROM, not the
+        # emission side:
+        #   src BELOW the PL (dy_total <= 0) -> tgt_dir_used="DOWN" (ddy_t=+1)
+        #   src ABOVE the PL (dy_total > 0)  -> tgt_dir_used="UP"   (ddy_t=-1)
+        # The exit point (where A* ends before the final hop to the real
+        # anchor) needs to be on the SAME side -- hence using ddy_t
+        # directly, without negating. An earlier version of this block
+        # negated the sign (opp_ddy = -ddy_t) by mistake -- that
+        # version's comment described the OPPOSITE convention from what
+        # the "FIX Bug 1" block actually uses, placing the exit point on
+        # the WRONG side of the PL: the wire crossed the whole line and
+        # came back (see
         # tests/test_step_by_step_layout.py::TestComponentToPressureLineDoesNotCrossThrough).
         t_exit = None
         steps = max(1, EXIT_PX // CELL)
@@ -547,17 +553,17 @@ def route_connection(
                 t_exit = (tx_c, ny)
                 break
         if t_exit is None:
-            t_exit = (tx_c, ty_c)  # fallback: próprio anchor
+            t_exit = (tx_c, ty_c)  # fallback: the anchor itself
     else:
         t_exit = _exit_point_for_anchor(grid, tgt_id, tgt_px, tgt_dir_used)
 
     if s_exit is None or t_exit is None:
         return None
 
-    # Para chegada vertical (tdx=0): forçar t_exit.x = anchor.x (mesma coluna)
-    # Para chegada horizontal (tdy=0): forçar t_exit.y = anchor.y (mesma linha)
+    # For vertical arrival (tdx=0): force t_exit.x = anchor.x (same column)
+    # For horizontal arrival (tdy=0): force t_exit.y = anchor.y (same row)
     if tgt_type == "PressureLine":
-        pass  # t_exit já calculado acima com x=tx_c e y correto
+        pass  # t_exit already computed above with x=tx_c and the right y
     elif tdx == 0:
         t_exit = (tx_c, t_exit[1])
         if not grid.in_bounds(t_exit[0], t_exit[1]) or grid.cost(t_exit[0], t_exit[1]) >= 1e6:
@@ -577,13 +583,13 @@ def route_connection(
             else:
                 return None
 
-    # ── Rodar A* ─────────────────────────────────────────────────────────────
+    # -- Run A* ----------------------------------------------------------------
     init_dir_idx = DIRS.index((sdx, sdy))
     cells = _astar(grid, s_exit[0], s_exit[1], t_exit[0], t_exit[1], init_dir_idx)
     if cells is None:
         return None
 
-    # Simplificar: remover colineares
+    # Simplify: remove collinear points
     def simplify(pts):
         if len(pts) < 3:
             return pts
@@ -599,27 +605,27 @@ def route_connection(
     cells = simplify(cells)
     grid.mark_wire(cells)
 
-    # ── Converter células para pixels com snap de ortogonalidade ────────────
-    # Estratégia:
-    #   1. Converter cada célula para px (grid alinhado)
-    #   2. Propagar src.x (se saída vertical) para todos os pontos do trecho
-    #      inicial que ficam na mesma coluna x → garante src→wp0 seja vertical
-    #   3. Idem para chegada no tgt
-    #   4. Verificar cada segmento; se diagonal, inserir ponto de dobra
+    # -- Convert cells to pixels with orthogonality snapping --------------------
+    # Strategy:
+    #   1. Convert each cell to px (grid-aligned)
+    #   2. Propagate src.x (if exiting vertically) to every point in the
+    #      initial stretch that shares the same x column -> guarantees src->wp0 is vertical
+    #   3. Same for the arrival at tgt
+    #   4. Check each segment; if diagonal, insert a bend point
 
     wps_px = [grid.cell_to_px(cx, cy) for cx, cy in cells]
     if not wps_px:
         return None
 
-    # Snap inicial: propagar coordenada do src para o trecho de saída
-    if sdx == 0:  # saída vertical → fixar x = src.x em todos os pts iniciais mesma coluna
+    # Initial snap: propagate the src's coordinate to the exit stretch
+    if sdx == 0:  # vertical exit -> fix x = src.x on every initial point in the same column
         ref_x = wps_px[0][0]
         for i in range(len(wps_px)):
             if abs(wps_px[i][0] - ref_x) < CELL:
                 wps_px[i] = (src_px[0], wps_px[i][1])
             else:
                 break
-    else:  # saída horizontal → fixar y = src.y
+    else:  # horizontal exit -> fix y = src.y
         ref_y = wps_px[0][1]
         for i in range(len(wps_px)):
             if abs(wps_px[i][1] - ref_y) < CELL:
@@ -627,15 +633,15 @@ def route_connection(
             else:
                 break
 
-    # Snap final: propagar coordenada do tgt para o trecho de chegada
-    if tdx == 0:  # chegada vertical → fixar x = tgt.x
+    # Final snap: propagate the tgt's coordinate to the arrival stretch
+    if tdx == 0:  # vertical arrival -> fix x = tgt.x
         ref_x = wps_px[-1][0]
         for i in range(len(wps_px)-1, -1, -1):
             if abs(wps_px[i][0] - ref_x) < CELL:
                 wps_px[i] = (tgt_px[0], wps_px[i][1])
             else:
                 break
-    else:  # chegada horizontal → fixar y = tgt.y
+    else:  # horizontal arrival -> fix y = tgt.y
         ref_y = wps_px[-1][1]
         for i in range(len(wps_px)-1, -1, -1):
             if abs(wps_px[i][1] - ref_y) < CELL:
@@ -643,31 +649,31 @@ def route_connection(
             else:
                 break
 
-    # Garantir ortogonalidade em cada segmento:
-    # src → wp[0] → wp[1] → ... → wp[N] → tgt
+    # Ensure orthogonality on every segment:
+    # src -> wp[0] -> wp[1] -> ... -> wp[N] -> tgt
     def enforce_ortho(all_pts):
-        """Garante que todos os segmentos são H ou V, inserindo pontos de dobra se necessário."""
+        """Ensures every segment is H or V, inserting bend points as needed."""
         out = [all_pts[0]]
         for pt in all_pts[1:]:
             px_, py_ = out[-1]
             cx_, cy_ = pt
             dx_, dy_ = abs(cx_ - px_), abs(cy_ - py_)
             if dx_ < 2 or dy_ < 2:
-                # Ortogonal — snap para alinhar exatamente
+                # Orthogonal -- snap to align exactly
                 if dx_ < dy_:
-                    out.append((px_, cy_))   # mesma x que anterior
+                    out.append((px_, cy_))   # same x as the previous point
                 else:
-                    out.append((cx_, py_))   # mesmo y que anterior
+                    out.append((cx_, py_))   # same y as the previous point
             else:
-                # Diagonal — inserir ponto de dobra (H depois V)
-                out.append((px_, cy_))   # dobra na y do próximo, mantendo x do atual
+                # Diagonal -- insert a bend point (H then V)
+                out.append((px_, cy_))   # bend at the next point's y, keeping the current x
                 out.append((cx_, cy_))
         return out
 
     all_pts = [src_px] + wps_px + [tgt_px]
     fixed = enforce_ortho(all_pts)
 
-    # Extrair apenas os intermediários (sem src e tgt) e remover duplicados
+    # Extract only the intermediates (without src and tgt) and dedupe
     interior = fixed[1:-1]
     clean = []
     for px, py in interior:

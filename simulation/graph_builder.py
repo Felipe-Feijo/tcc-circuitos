@@ -1,15 +1,15 @@
-"""Constrói o grafo de simulação a partir dos itens gráficos da cena."""
+"""Builds the simulation graph from the scene's graphics items."""
 
 from simulation.connections import Connection
 
 
 class GraphBuilder:
-    """Converte itens gráficos da cena em nós e conexões do domínio de simulação.
+    """Converts the scene's graphics items into simulation-domain nodes and connections.
 
-    Uso típico pelo EditorController:
+    Typical usage by EditorController:
         builder = GraphBuilder()
-        builder.add_node_from_item(node_item)       # para cada NodeItem
-        builder.add_connection_from_item(conn_item) # para cada ConnectionItem
+        builder.add_node_from_item(node_item)       # for each NodeItem
+        builder.add_connection_from_item(conn_item) # for each ConnectionItem
         builder.raise_if_errors()
     """
 
@@ -21,24 +21,24 @@ class GraphBuilder:
         self._errors: list[str] = []
 
     def add_node_from_item(self, node_item):
-        """Cria o nó de domínio correspondente a um NodeItem gráfico.
+        """Creates the domain node corresponding to a graphics NodeItem.
 
         Args:
-            node_item: Instância de NodeItem presente na cena.
+            node_item: A NodeItem instance present in the scene.
 
         Returns:
-            O nó de domínio criado, ou None se a criação falhar por
-            propriedades obrigatórias ausentes (o erro é acumulado
-            internamente e pode ser lançado via raise_if_errors).
+            The created domain node, or None if creation failed due to
+            missing required properties (the error is accumulated
+            internally and can be raised via raise_if_errors).
 
         Raises:
-            ValueError: Se a subclasse de NodeItem não declarar simulation_cls.
+            ValueError: If the NodeItem subclass doesn't declare simulation_cls.
         """
         node_cls = node_item.simulation_cls
         if node_cls is None:
             raise ValueError(
-                f"{type(node_item).__name__} não define 'simulation_cls'. "
-                "Declare o atributo de classe na subclasse de NodeItem."
+                f"{type(node_item).__name__} doesn't define 'simulation_cls'. "
+                "Declare the class attribute in the NodeItem subclass."
             )
 
         try:
@@ -65,16 +65,17 @@ class GraphBuilder:
         return node
 
     def add_connection_from_item(self, connection_item):
-        """Cria a conexão de domínio correspondente a um ConnectionItem gráfico.
+        """Creates the domain connection corresponding to a graphics ConnectionItem.
 
         Args:
-            connection_item: Instância de ConnectionItem presente na cena.
+            connection_item: A ConnectionItem instance present in the scene.
 
         Returns:
-            A Connection de domínio criada, ou None se um dos nós ligados
-            a esta conexão falhou ao ser criado (propriedade obrigatória
-            ausente -- o erro já foi acumulado por add_node_from_item e
-            será reportado por raise_if_errors(); não há nó pra conectar).
+            The created domain Connection, or None if one of the nodes
+            wired to this connection failed to be created (a required
+            property is missing -- the error was already accumulated by
+            add_node_from_item and will be reported by
+            raise_if_errors(); there's no node to connect to).
         """
         source_anchor_item = connection_item.source_anchor
         target_anchor_item = connection_item.target_anchor
@@ -96,10 +97,10 @@ class GraphBuilder:
         return self.connections[connection.id]
 
     def raise_if_errors(self) -> None:
-        """Lança ValueError consolidado se algum nó tiver propriedades obrigatórias ausentes.
+        """Raises a consolidated ValueError if any node has missing required properties.
 
         Raises:
-            ValueError: Mensagem combinada de todos os erros acumulados.
+            ValueError: Combined message of every accumulated error.
         """
         if self._errors:
             raise ValueError("\n".join(self._errors))

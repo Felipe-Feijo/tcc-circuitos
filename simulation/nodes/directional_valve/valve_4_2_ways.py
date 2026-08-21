@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula direcional 4/2 vias."""
+"""Simulation node for the 4/2-way directional valve."""
 
 import math
 
@@ -17,20 +17,20 @@ class Valve_4_2_Ways(DirectionalValve, HydraulicMixin):
             }
 
     def get_internal_connections(self):
-        """Retorna pares de anchors conectados internamente."""
+        """Returns pairs of internally connected anchors."""
         if self.body_state == 0:
             return [("P", "A"), ("B", "R")]
         else:
             return [("P", "B"), ("A", "R")]
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
-    # Diferente da 3/2 vias (um único par ativo, dos três portos), aqui os
-    # quatro portos estão SEMPRE conectados -- só muda o pareamento
-    # conforme body_state. Cada par ativo (get_internal_connections())
-    # ganha sua própria conservação + equação de orifício turbulento
-    # (mesma equação da 3/2, só aplicada duas vezes).
+    # Unlike the 3/2-way (a single active pair out of three ports), here
+    # all four ports are ALWAYS connected -- only the pairing changes
+    # with body_state. Each active pair (get_internal_connections())
+    # gets its own conservation + turbulent orifice equation
+    # (same equation as the 3/2-way, just applied twice).
 
     @property
     def variables(self):

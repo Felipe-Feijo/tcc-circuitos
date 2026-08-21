@@ -1,39 +1,39 @@
 """
-Gerador de circuito pelo método passo a passo elétrico.
+Circuit generator for the step-by-step electric method.
 
-Topologia gerada para uma sequência com M átomos (mesmo conceito de átomo
-usado em circuit_generator.methods.step_by_step_pneumatic: um evento
-sozinho, ou um bloco "(...)" inteiro de movimentos simultâneos):
-  - 1 VoltageSource + 1 Ground (barramentos elétricos, anchors crescem sob
-    demanda, mesmo padrão do PressureLine pneumático)
-  - 1 ButtonSwitch de bootstrap do ciclo
-  - Por cilindro: 1 DoubleActingCylinder + 1 Valve_4_2_Ways (P/R com
-    PressureSource/Exhaust dedicados, igual ao pneumático)
-  - Por átomo: 1 RelayCoil K_k + 3 RelaySwitch de degrau (ramo A: sensor(es)
-    de fim de curso do átomo anterior em série + contato do K do átomo
-    anterior; ramo B: self-hold do próprio K_k; reset: NC do K do próximo
-    átomo) -- anel de lógica, ver docs/superpowers/specs/
+Topology generated for a sequence with M atoms (same atom concept used
+in circuit_generator.methods.step_by_step_pneumatic: a single event, or
+a whole "(...)" block of simultaneous moves):
+  - 1 VoltageSource + 1 Ground (electric buses, anchors grow on demand,
+    same pattern as the pneumatic PressureLine)
+  - 1 cycle-bootstrap ButtonSwitch
+  - Per cylinder: 1 DoubleActingCylinder + 1 Valve_4_2_Ways (P/R with
+    dedicated PressureSource/Exhaust, same as pneumatic)
+  - Per atom: 1 RelayCoil K_k + 3 step RelaySwitches (ramo A: previous
+    atom's end-of-stroke sensor(s) in series + the previous atom's K
+    contact; ramo B: K_k's own self-hold; reset: NC of the next atom's
+    K) -- logic ring, see docs/superpowers/specs/
     2026-07-31-step-by-step-electric-power-contacts-design.md
-  - Por (cilindro, direção) presente na sequência: 1 SolenoidCoil Y
-    (sensor "Y{letra}{1|0}") + 1 contato de potência NO dedicado por átomo
-    que dispara aquele movimento (relay_sensor = K do átomo), todos em
-    paralelo alimentando a mesma bobina Y -- multi-ciclo vira só mais um
-    contato em paralelo, sem sig nem OrValve.
-  - Pilotagem da 4/2: atuador "solenoid" sempre, lendo direto o Y do
-    (cilindro, direção) correspondente.
+  - Per (cylinder, direction) present in the sequence: 1 SolenoidCoil Y
+    (sensor "Y{letter}{1|0}") + 1 dedicated NO power contact per atom
+    that triggers that move (relay_sensor = the atom's K), all in
+    parallel feeding the same Y coil -- multi-cycle becomes just one
+    more parallel contact, no sig or OrValve.
+  - 4/2 piloting: always the "solenoid" actuator, reading the matching
+    (cylinder, direction)'s Y directly.
 
-Anel de lógica (auto-mantido, self-holding):
-  VoltageSource --> [sensor(s) fim de curso átomo k-1] --> [K_{k-1} NO] --\
+Logic ring (self-maintaining, self-holding):
+  VoltageSource --> [atom k-1's end-of-stroke sensor(s)] --> [K_{k-1} NO] --\
   VoltageSource --> [K_k NO self-hold] -------------------------------------+--> [K_{k+1} NC] --> K_k --> Ground
-  (só o átomo M-1) VoltageSource --> [botão NO] -----------------------/
-  (só o átomo 0) VoltageSource --> [K_último NO] --> [botão de início NO] --/
+  (atom M-1 only) VoltageSource --> [button NO] -----------------------/
+  (atom 0 only) VoltageSource --> [K_last NO] --> [start button NO] --/
 
-Zona de potência (independente por (cilindro, direção)):
+Power zone (independent per (cylinder, direction)):
   VoltageSource --> [K_k1 NO] --\
-  VoltageSource --> [K_k2 NO] ----+--> Y_{letra}{dir} --> Ground   (k1, k2, ... = átomos que disparam esse movimento)
+  VoltageSource --> [K_k2 NO] ----+--> Y_{letter}{dir} --> Ground   (k1, k2, ... = atoms triggering that move)
 
-Diferente do pneumático: não há PressureLine nem memória 3/2 -- o "passo
-ativo" é lembrado pelo próprio estado energizado/desenergizado dos K_k.
+Unlike pneumatic: there's no PressureLine or 3/2 memory -- the "active
+step" is remembered by the K_k's own energized/de-energized state.
 """
 
 import uuid
@@ -41,14 +41,14 @@ from circuit_generator.sequence_parser import extract_cylinders
 
 
 def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
-    """Agrupa os eventos da sequência inteira em átomos: eventos consecutivos
-    com o mesmo parallel_id (3º campo) formam um átomo; os demais viram
-    átomos de 1 evento. Cada evento é anotado com seu índice original na
-    sequência (flat_idx).
+    """Groups the whole sequence's events into atoms: consecutive events
+    sharing the same parallel_id (3rd field) form one atom; the rest
+    become single-event atoms. Each event is annotated with its
+    original index in the sequence (flat_idx).
 
-    Reimplementado aqui (não compartilhado com
-    step_by_step_pneumatic._atomize) -- mesmo princípio adotado em todo o
-    resto do gerador para essa função utilitária.
+    Reimplemented here (not shared with step_by_step_pneumatic._atomize)
+    -- same principle followed throughout the rest of the generator for
+    this utility function.
     """
     atoms: list[list[tuple[int, str, str]]] = []
     i, n = 0, len(events)
@@ -80,8 +80,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
 
     if n_atoms < 3:
         raise ValueError(
-            f"step_by_step_electric requer pelo menos 3 átomos no anel de relés "
-            f"(sequência gerou {n_atoms})."
+            f"step_by_step_electric requires at least 3 atoms in the relay ring "
+            f"(sequence generated {n_atoms})."
         )
 
     nodes       = []
@@ -118,11 +118,11 @@ def generate(events: list[tuple[str, str]]) -> dict:
     def power_sensor(letter, direction):
         return f"Y{letter}{'1' if direction == '+' else '0'}"
 
-    # Estado inicial: se o primeiro movimento for "-", o cilindro começa estendido.
+    # Initial state: if the first move is "-", the cylinder starts extended.
     first_event     = {letter: direction for letter, direction, *_ in reversed(events)}
     starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
 
-    # ── 1. Cilindros (idêntico ao pneumático) ────────────────────────────
+    # -- 1. Cylinders (identical to pneumatic) -----------------------------------
 
     for letter in cylinders:
         add_node(f"gen-cyl-{letter}", "DoubleActingCylinder", f"cylinder:{letter}",
@@ -134,8 +134,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
 
-    # ── 2. Válvulas 4/2 com PS e Exhaust dedicados (atuadores ficam vazios
-    #      aqui -- preenchidos na seção 6, "zona de potência") ────────────
+    # -- 2. 4/2 valves with dedicated PS and Exhaust (actuators stay empty
+    #      here -- filled in section 6, "power zone") ----------------------
 
     v42_node_by_letter: dict[str, dict] = {}
     for letter in cylinders:
@@ -153,7 +153,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(exh_v42, "R", f"gen-v42-{letter}", "P")
         connect(ps_v42,  "P", f"gen-v42-{letter}", "R")
 
-    # ── 3. Barramentos elétricos (fonte, terra) e botão de bootstrap ─────
+    # -- 3. Electric buses (source, ground) and bootstrap button ------------
 
     add_node("gen-vsource", "VoltageSource", "voltage_source", domain="electric",
              properties={"anchors": []})
@@ -174,26 +174,26 @@ def generate(events: list[tuple[str, str]]) -> dict:
         bus_node["properties"]["anchors"].append(name)
         return name
 
-    # ── 4. Anel de bobinas K_k (uma por átomo) e degraus self-holding ────
+    # -- 4. K_k coil ring (one per atom) and self-holding steps -------------
     #
-    #   Cada átomo ganha exatamente 1 RelayCoil (K_k, sensor "K{k+1}",
-    #   1-indexado) e um degrau de 3 grupos de contatos RelaySwitch:
-    #     - ramo A (partida): cadeia serial de contatos NO lendo os
-    #       sensores de fim de curso do átomo ANTERIOR (1 contato por
-    #       evento do átomo, em série -- mesma técnica de confirmação
-    #       serial já usada no pneumático), seguida de 1 contato NO do K do
-    #       átomo anterior.
-    #     - ramo B (self-hold): 1 contato NO do próprio K_k, em paralelo
-    #       com o ramo A.
-    #     - reset: 1 contato NC do K do PRÓXIMO átomo (módulo M -- fecha o
-    #       anel sem caso especial), depois do ponto onde ramo A e ramo B
-    #       convergem.
-    #   O átomo M-1 (último do ciclo) ganha um terceiro ramo em paralelo,
-    #   só com o ButtonSwitch de bootstrap.
+    #   Each atom gets exactly 1 RelayCoil (K_k, sensor "K{k+1}",
+    #   1-indexed) and a step of 3 RelaySwitch contact groups:
+    #     - ramo A (start): serial chain of NO contacts reading the
+    #       PREVIOUS atom's end-of-stroke sensors (1 contact per atom
+    #       event, in series -- same serial-confirmation technique
+    #       already used in pneumatic), followed by 1 NO contact of the
+    #       previous atom's K.
+    #     - ramo B (self-hold): 1 NO contact of K_k itself, in parallel
+    #       with ramo A.
+    #     - reset: 1 NC contact of the NEXT atom's K (modulo M -- closes
+    #       the ring with no special case), after the point where ramo A
+    #       and ramo B converge.
+    #   Atom M-1 (the cycle's last one) gets a third parallel branch,
+    #   with only the bootstrap ButtonSwitch.
     #
-    #   K_k é um relé de LÓGICA só -- não aciona nada pneumático
-    #   diretamente. A bobina de potência (Y, seção 6) é um componente
-    #   físico separado, acionado por um contato NO dedicado de K_k.
+    #   K_k is a LOGIC-only relay -- it doesn't drive anything pneumatic
+    #   directly. The power coil (Y, section 6) is a separate physical
+    #   component, driven by one of K_k's dedicated NO contacts.
 
     k_ids = [f"gen-coil-{k}" for k in range(n_atoms)]
     for k in range(n_atoms):
@@ -211,7 +211,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         next_k    = (k + 1) % n_atoms
         prev_atom = atoms[prev_k]
 
-        # Ramo A: cadeia serial de contatos de sensor + contato do K anterior.
+        # Ramo A: serial chain of sensor contacts + the previous K's contact.
         chain_prev_output: tuple[str, str] | None = None
         first_sensor_contact: str | None = None
         for i, (e_idx, letter, direction) in enumerate(prev_atom):
@@ -226,22 +226,22 @@ def generate(events: list[tuple[str, str]]) -> dict:
         ramo_a_prev_contact = contact(f"{k}-ramo_a_prev", "NO", f"K{prev_k + 1}")
         connect(chain_prev_output[0], chain_prev_output[1], ramo_a_prev_contact, "T")
 
-        # Ramo B: self-hold do próprio K_k.
+        # Ramo B: K_k's own self-hold.
         ramo_b_contact = contact(f"{k}-ramo_b_self", "NO", f"K{k + 1}")
 
-        # A fonte alimenta o início de cada ramo (2 taps em paralelo).
+        # The source feeds the start of each branch (2 parallel taps).
         connect("gen-vsource", next_bus_anchor("gen-vsource"), first_sensor_contact, "T")
         connect("gen-vsource", next_bus_anchor("gen-vsource"), ramo_b_contact, "T")
 
-        # Os dois ramos convergem no contato de reset (NC do próximo K).
+        # Both branches converge on the reset contact (NC of the next K).
         reset_contact = contact(f"{k}-reset_nc", "NC", f"K{next_k + 1}")
 
-        # Botão de início do ciclo: só o PRIMEIRO átomo, em série no fim do
-        # ramo A (depois do contato do K anterior, antes de convergir com o
-        # ramo B) -- K0 só energiza se sensor(es) + K_último + este botão
-        # estiverem todos fechados, dando controle manual exato de quando o
-        # ciclo começa (em vez de K0 disparar sozinho assim que sensor+K
-        # ficarem satisfeitos automaticamente).
+        # Cycle-start button: FIRST atom only, in series at the end of
+        # ramo A (after the previous K's contact, before converging with
+        # ramo B) -- K0 only energizes if the sensor(s) + last K + this
+        # button are all closed, giving exact manual control over when
+        # the cycle starts (instead of K0 firing on its own as soon as
+        # sensor+K are automatically satisfied).
         if k == 0:
             connect(ramo_a_prev_contact, "B", "gen-btn-start", "T")
             connect("gen-btn-start", "B", reset_contact, "T")
@@ -249,7 +249,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
             connect(ramo_a_prev_contact, "B", reset_contact, "T")
         connect(ramo_b_contact, "B", reset_contact, "T")
 
-        # Bootstrap: só o último átomo do ciclo ganha o ramo do botão.
+        # Bootstrap: only the cycle's last atom gets the button branch.
         if k == n_atoms - 1:
             connect("gen-vsource", next_bus_anchor("gen-vsource"), "gen-btn", "T")
             connect("gen-btn", "B", reset_contact, "T")
@@ -257,26 +257,26 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(reset_contact, "B", k_ids[k], "T")
         connect(k_ids[k], "B", "gen-ground", next_bus_anchor("gen-ground"))
 
-    # ── 5. Agrupamento por (cilindro, direção): quais átomos disparam
-    #      cada movimento -- mesmo mapa usado pelo pneumático/cascata pra
-    #      multi-ciclo, aqui vira a lista de contatos de potência em
-    #      paralelo de cada bobina Y ──────────────────────────────────────
+    # -- 5. Grouping by (cylinder, direction): which atoms trigger each
+    #      move -- same map used by pneumatic/cascade for multi-cycle,
+    #      here it becomes each Y coil's list of parallel power contacts --
 
     triggers_for_pilot: dict[tuple[str, str], list[int]] = {}
     for k, atom in enumerate(atoms):
         for e_idx, letter, direction in atom:
             triggers_for_pilot.setdefault((letter, direction), []).append(k)
 
-    # ── 6. Zona de potência: 1 bobina Y por (cilindro, direção) + 1
-    #      contato de potência NO dedicado por átomo que dispara aquele
-    #      movimento, todos em paralelo alimentando a mesma bobina ───────
+    # -- 6. Power zone: 1 Y coil per (cylinder, direction) + 1 dedicated
+    #      NO power contact per atom that triggers that move, all in
+    #      parallel feeding the same coil ------------------------------------
     #
-    #   Multi-ciclo (2+ átomos disparando o mesmo (letra, direção)) vira
-    #   só mais um contato em paralelo, sem nenhum componente de
-    #   convergência dedicado -- o barramento elétrico já suporta múltiplas
-    #   conexões no mesmo anchor (AnchorItem.connections é uma lista, não
-    #   um slot único). A 4/2 sempre pilota via atuador "solenoid" lendo o
-    #   Y correspondente -- nenhuma ramificação de caso único vs multi-ciclo.
+    #   Multi-cycle (2+ atoms triggering the same (letter, direction))
+    #   becomes just one more parallel contact, with no dedicated
+    #   convergence component -- the electric bus already supports
+    #   multiple connections on the same anchor (AnchorItem.connections
+    #   is a list, not a single slot). The 4/2 always pilots via the
+    #   "solenoid" actuator reading the matching Y -- no single-case vs.
+    #   multi-cycle branching.
 
     for (letter, direction), atom_indexes in triggers_for_pilot.items():
         pilot_anchor = "PL" if direction == "+" else "PR"

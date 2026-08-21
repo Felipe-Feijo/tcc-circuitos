@@ -1,4 +1,4 @@
-"""Nó gráfico de acumulador hidráulico a gás (lei de Boyle, bexiga)."""
+"""Gas-charged hydraulic accumulator graphics node (Boyle's law, bladder)."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
@@ -11,17 +11,17 @@ from ....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/accumulator"
 
-# Faixa de curso do marcador, no espaço do body (85x195px) -- parede reta
-# entre os dois arcos da cápsula. Ver docs/superpowers/specs/
-# 2026-07-19-accumulator-design.md para o levantamento de pixels.
+# Marker travel range, in the body's space (85x195px) -- the straight
+# wall between the capsule's two arcs. See docs/superpowers/specs/
+# 2026-07-19-accumulator-design.md for the pixel measurements.
 #
-# Leitura visual tipo "nível de tanque": o fluido entra por baixo, então o
-# marcador sobe (y menor) conforme Vf cresce -- Vf=0 fica no fundo (vazio,
-# leitura intuitiva de "tanque baixo"), Vf=V0 fica no topo (cheio).
-_TRAVEL_Y_TOP    = 39   # Vf=V0 -- marcador no topo da parede reta (cheio)
-_TRAVEL_Y_BOTTOM = 124  # Vf=0 -- marcador no fundo da parede reta (vazio)
-_LEVEL_LINE_Y    = 18   # y local em accumulator_level.png onde fica a linha de referência
-_LEVEL_OFFSET_X  = 6    # centraliza os 72px do marcador nos 85px do body
+# "Tank level" style visual reading: fluid enters from the bottom, so
+# the marker rises (smaller y) as Vf grows -- Vf=0 sits at the bottom
+# (empty, an intuitive "low tank" reading), Vf=V0 sits at the top (full).
+_TRAVEL_Y_TOP    = 39   # Vf=V0 -- marker at the top of the straight wall (full)
+_TRAVEL_Y_BOTTOM = 124  # Vf=0 -- marker at the bottom of the straight wall (empty)
+_LEVEL_LINE_Y    = 18   # local y in accumulator_level.png where the reference line sits
+_LEVEL_OFFSET_X  = 6    # centers the marker's 72px within the body's 85px
 
 
 class Accumulator(NodeItem):
@@ -44,7 +44,7 @@ class Accumulator(NodeItem):
 
         self.width  = self._body_pixmap.width()
         self.height = self._body_pixmap.height()
-        self._level = 0.0  # Vf/V0 -- espelha get_visual_state() do nó de domínio
+        self._level = 0.0  # Vf/V0 -- mirrors the domain node's get_visual_state()
 
         self.add_anchor(AnchorItem(
             "P",
@@ -55,10 +55,10 @@ class Accumulator(NodeItem):
         ))
 
     def apply_properties(self) -> None:
-        pass  # V0/P0 são propriedades runtime-only, nada pra reconstruir visualmente
+        pass  # V0/P0 are runtime-only properties, nothing to visually rebuild
 
     # ------------------------------------------------------------------
-    # Desenho
+    # Drawing
     # ------------------------------------------------------------------
 
     def _level_marker_y(self) -> float:
@@ -80,7 +80,7 @@ class Accumulator(NodeItem):
         painter.restore()
 
     # ------------------------------------------------------------------
-    # Simulação
+    # Simulation
     # ------------------------------------------------------------------
 
     def update_from_domain(self, domain_node) -> None:
@@ -94,7 +94,7 @@ class Accumulator(NodeItem):
         self.update()
 
     # ------------------------------------------------------------------
-    # Propriedades
+    # Properties
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self) -> PropertiesDialog:

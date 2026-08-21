@@ -1,4 +1,4 @@
-"""Nó de simulação de chave tipo botão."""
+"""Simulation node for the push-button switch."""
 
 from simulation.nodes.nodes import Node
 
@@ -7,11 +7,11 @@ class ButtonSwitch(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "button_switch", domain=domain, properties=properties)
 
-        self.state = 0  # 0 = repouso, 1 = acionado
+        self.state = 0  # 0 = at rest, 1 = actuated
         self.contact_type = self.properties.get("contact_type", "NO")
 
     # --------------------------
-    # Comandos vindos da UI
+    # Commands coming from the UI
     # --------------------------
     def handle_command(self, command: dict):
         """
@@ -29,20 +29,20 @@ class ButtonSwitch(Node):
         self.state = value
 
     # --------------------------
-    # Atualização lógica
+    # Logic update
     # --------------------------
     def update(self, outputs=None):
         """
-        Switch é puramente passivo — não depende de sensores.
+        Switch is purely passive -- doesn't depend on sensors.
         """
         pass
 
     # --------------------------
-    # Conexões internas
+    # Internal connections
     # --------------------------
     def get_internal_connections(self):
         """
-        Retorna pares de anchors conectados internamente.
+        Returns pairs of internally connected anchors.
         """
 
         contact_type = self.properties.get("contact_type", "NO")
@@ -58,7 +58,7 @@ class ButtonSwitch(Node):
         return []
 
     # --------------------------
-    # Persistência
+    # Persistence
     # --------------------------
     def get_state(self):
         state = super().get_state()

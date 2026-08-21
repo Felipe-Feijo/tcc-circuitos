@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula direcional 5/2 vias."""
+"""Simulation node for the 5/2-way directional valve."""
 
 import math
 
@@ -17,10 +17,10 @@ class Valve_5_2_Ways(DirectionalValve, HydraulicMixin):
             }
 
     def get_internal_connections(self):
-        """Retorna pares de anchors conectados internamente.
+        """Returns pairs of internally connected anchors.
 
-        Estado 0 (repouso): P→B, A→R1
-        Estado 1 (ativo):   P→A, B→R2
+        State 0 (rest):   P->B, A->R1
+        State 1 (active): P->A, B->R2
         """
         if self.body_state == 0:
             return [("P", "B"), ("A", "R1")]
@@ -28,11 +28,11 @@ class Valve_5_2_Ways(DirectionalValve, HydraulicMixin):
             return [("P", "A"), ("B", "R2")]
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
-    # Mesmo esquema da 4/2 vias: cinco portos sempre conectados aos pares
-    # (get_internal_connections()), cada par com sua própria conservação +
-    # orifício turbulento.
+    # Same scheme as the 4/2-way: five ports always connected in pairs
+    # (get_internal_connections()), each pair with its own conservation +
+    # turbulent orifice equation.
 
     @property
     def variables(self):

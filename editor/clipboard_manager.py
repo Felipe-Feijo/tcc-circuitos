@@ -1,4 +1,4 @@
-"""Gerencia copiar e colar de itens da cena via serialização JSON."""
+"""Manages copy and paste of scene items via JSON serialization."""
 
 import copy
 import uuid
@@ -53,14 +53,14 @@ class ClipboardManager:
         if not self._data:
             return
 
-        # Captura snapshot ANTES do paste para undo
+        # Captures snapshot BEFORE the paste, for undo
         from editor.undo import UndoStack
         before = UndoStack.snapshot(scene)
 
         data = copy.deepcopy(self._data)
         id_map = {}
 
-        # 1. novos IDs + offset
+        # 1. new IDs + offset
         for node in data["nodes"]:
             old_id = node["id"]
             new_id = str(uuid.uuid4())
@@ -71,21 +71,21 @@ class ClipboardManager:
             node["position"]["x"] += offset[0]
             node["position"]["y"] += offset[1]
 
-        # 2. atualizar conexões
+        # 2. update connections
         for conn in data["connections"]:
             conn["source"]["node"] = id_map[conn["source"]["node"]]
             conn["target"]["node"] = id_map[conn["target"]["node"]]
 
-        # 3. limpa nomes de sensores para evitar duplicatas no registry
+        # 3. clears sensor names to avoid duplicates in the registry
         _clear_sensor_names(data["nodes"])
 
-        # 4. desserializa
+        # 4. deserializes
         created_items = deserialize_scene(data, scene, editor_state, clear_scene=False)
 
-        # 5. seleção
+        # 5. selection
         scene.clearSelection()
         for item in created_items:
             item.setSelected(True)
 
-        # 6. empilha o command de undo APÓS o paste ser aplicado
+        # 6. pushes the undo command AFTER the paste is applied
         editor_state.undo_stack.push_snapshot(scene, editor_state, before, "Colar itens")

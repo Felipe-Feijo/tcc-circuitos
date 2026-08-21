@@ -1,4 +1,4 @@
-"""Nó de simulação de fonte de tensão elétrica."""
+"""Simulation node for the electrical voltage source."""
 
 from simulation.nodes.nodes import Node
 
@@ -7,13 +7,13 @@ class VoltageSource(Node):
         super().__init__(node_id, "voltage_source", domain=domain, properties=properties)
 
     def update(self, outputs=None):
-        # marca todas as anchors como voltage_source + electric
+        # marks all anchors as voltage_source + electric
         first_anchor = next(iter(self.anchors.values()))
         first_anchor.type = "source"
 
     def get_internal_connections(self):
         """
-        Conecta todas as anchors em série:
+        Connects all anchors in series:
         X1 -> X2 -> X3 -> ... -> Xn
         """
         names = list(self.anchors.keys())

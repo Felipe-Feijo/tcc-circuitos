@@ -1,4 +1,4 @@
-"""Nó gráfico de motor hidráulico de deslocamento fixo."""
+"""Fixed-displacement hydraulic motor graphics node."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF
@@ -30,16 +30,16 @@ class FixedDisplacementMotor(NodeItem):
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        # A (topo) -- entrada de referência, pra onde o triângulo do
-        # sprite aponta. B (base) -- saída de referência.
+        # A (top) -- reference input, where the sprite's triangle points.
+        # B (bottom) -- reference output.
         self.add_anchor(AnchorItem("A", QPointF(self.width*28/84, 0), node=self, domain=self.domain, exit_directions={"external": ["top", "right", "left"]}))
         self.add_anchor(AnchorItem("B", QPointF(self.width*28/84, self.height), node=self, domain=self.domain, exit_directions={"external": ["bottom", "right", "left"]}))
 
         self._init_output_label()
 
     # ------------------------------------------------------------------
-    # Label de saída (ω ou T, conforme control_mode -- mesmo esquema da
-    # velocidade do pistão em cylinder_item.py)
+    # Output label (omega or T, depending on control_mode -- same
+    # scheme as the piston velocity in cylinder_item.py)
     # ------------------------------------------------------------------
 
     def _init_output_label(self):
@@ -54,10 +54,10 @@ class FixedDisplacementMotor(NodeItem):
         self._label_output.setPos(QPointF(self.width / 2, -18))
 
     def _reset_output_label_for_mode(self) -> None:
-        """Mostra o rótulo certo (ω ou T) assim que o modo é confirmado
-        no diálogo (ou carregado de um circuito salvo) -- sem isso, o
-        texto só trocava quando a simulação rodava de fato, ficando
-        preso no rótulo do modo anterior até lá."""
+        """Shows the right label (omega or T) as soon as the mode is
+        confirmed in the dialog (or loaded from a saved circuit) --
+        without this, the text only switched once the simulation
+        actually ran, staying stuck on the previous mode's label until then."""
         if not hasattr(self, "_label_output"):
             return
         mode = self.properties.get("control_mode", "torque")
@@ -126,12 +126,13 @@ class FixedDisplacementMotor(NodeItem):
             "Modo de controle", ["torque", "speed"],
             current=self.properties.get("control_mode", "torque"),
         )
-        # required=False nos dois -- a obrigatoriedade real depende do
-        # control_mode (só um dos dois vale de cada vez), e o campo
-        # escondido pela visibilidade condicional continua contando pra
-        # validação do botão OK (que não olha linha visível/escondida),
-        # travando o OK se os dois fossem required=True. Mesmo padrão já
-        # usado pelos campos de timer condicionais em directional_valve_item.py.
+        # required=False on both -- whether it's actually required
+        # depends on control_mode (only one of the two applies at a
+        # time), and the field hidden by conditional visibility still
+        # counts toward the OK button's validation (which doesn't check
+        # visible/hidden rows), locking OK if both were required=True.
+        # Same pattern already used by the conditional timer fields in
+        # directional_valve_item.py.
         dialog._field_t = dialog.add_number_field(
             "Torque de carga T_load (N·m)", placeholder="ex: 50",
             value=self.properties.get("T_load"),
@@ -143,10 +144,10 @@ class FixedDisplacementMotor(NodeItem):
             required=False,
         )
 
-        # P_max/n_max são opcionais e independentes do control_mode --
-        # limites estruturais do motor (rolamento, vedação), não física
-        # de conversão. required=False -- ausência é uma escolha válida
-        # (sem checagem), não um erro de preenchimento.
+        # P_max/n_max are optional and independent of control_mode --
+        # structural motor limits (bearing, seal), not conversion
+        # physics. required=False -- absence is a valid choice (no
+        # check), not a fill-in error.
         dialog._field_p_max = dialog.add_number_field(
             "Limite P_max (Pa) — opcional", placeholder="ex: 1e7",
             value=self.properties.get("P_max"),

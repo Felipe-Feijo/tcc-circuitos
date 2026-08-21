@@ -1,4 +1,4 @@
-"""Nó de simulação de linha de pressão pneumática."""
+"""Simulation node for the pneumatic pressure line."""
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.anchor_chain import real_anchor_chain
@@ -10,8 +10,8 @@ class PressureLine(Node):
 
     def get_internal_connections(self):
         """
-        Conecta apenas os anchors reais (com conexão externa) em série,
-        sempre incluindo as duas pontas da linha:
+        Connects only the real anchors (with an external connection) in
+        series, always including both ends of the line:
         X1 -> X3 -> X40 -> ... -> Xn
         """
         names = list(self.anchors.keys())

@@ -1,17 +1,18 @@
 """
 simulation/hydraulic/node_protocol.py
 
-Contrato formal para nós do domínio hidráulico.
+Formal contract for hydraulic-domain nodes.
 
-Convenção de sinal (adotada em todo o domínio):
-  Q > 0  =>  fluido ENTRANDO no nó pela porta
-  Q < 0  =>  fluido SAINDO  do nó pela porta
+Sign convention (adopted throughout the domain):
+  Q > 0  =>  fluid ENTERING the node through the port
+  Q < 0  =>  fluid EXITING  the node through the port
 
-Todo nó hidráulico deve herdar de HydraulicMixin e implementar
-os métodos abstratos: variables, hydraulic_ports, equations.
+Every hydraulic node must inherit from HydraulicMixin and implement
+the abstract methods: variables, hydraulic_ports, equations.
 
-O HydraulicNode Protocol permite isinstance() check sem herança,
-mas a detecção real do engine usa HydraulicMixin como base.
+The HydraulicNode Protocol allows an isinstance() check without
+inheritance, but the engine's real detection uses HydraulicMixin as
+the base.
 """
 
 from __future__ import annotations
@@ -23,11 +24,11 @@ import numpy as np
 @runtime_checkable
 class HydraulicNode(Protocol):
     """
-    Protocol estrutural — permite isinstance(node, HydraulicNode).
-    Verificado em runtime pelo engine para coletar nós hidráulicos.
+    Structural protocol -- allows isinstance(node, HydraulicNode).
+    Checked at runtime by the engine to collect hydraulic nodes.
 
-    Implementação mínima: variables, hydraulic_ports, equations.
-    Defaults para o resto: use HydraulicMixin como base na sua classe.
+    Minimal implementation: variables, hydraulic_ports, equations.
+    Defaults for the rest: use HydraulicMixin as your class's base.
     """
 
     @property
@@ -48,51 +49,51 @@ class HydraulicNode(Protocol):
 
 class HydraulicMixin:
     """
-    Mixin com implementações default para membros opcionais do contrato.
+    Mixin with default implementations for the contract's optional members.
 
-    Uso:
-        class MinhaValvula(Node, HydraulicMixin):
-            ...  # só precisa implementar variables, hydraulic_ports, equations
+    Usage:
+        class MyValve(Node, HydraulicMixin):
+            ...  # only needs to implement variables, hydraulic_ports, equations
 
-    Membros com default (pode sobrescrever):
-        bounds        → {} (sem bounds)
-        set_scale     → armazena p_ref/q_ref em self.p_ref / self.q_ref
-        flow_hint     → 0.0
-        p_hint        → 0.0
-        initial_guess → {}
+    Members with a default (can override):
+        bounds        -> {} (no bounds)
+        set_scale     -> stores p_ref/q_ref in self.p_ref / self.q_ref
+        flow_hint     -> 0.0
+        p_hint        -> 0.0
+        initial_guess -> {}
 
-    Membros obrigatórios (deve implementar):
+    Required members (must implement):
         variables      (property)
-        hydraulic_ports (método)
-        equations       (método)
+        hydraulic_ports (method)
+        equations       (method)
     """
 
-    # Escala default para a faixa industrial (50–300 bar)
-    # Sobrescrito por set_scale() antes de cada solve
-    p_ref: float = 100 * 1e5   # Pa — 100 bar
-    q_ref: float = 20 / 60_000  # m³/s — 20 L/min
+    # Default scale for the industrial range (50-300 bar)
+    # Overwritten by set_scale() before each solve
+    p_ref: float = 100 * 1e5   # Pa -- 100 bar
+    q_ref: float = 20 / 60_000  # m3/s -- 20 L/min
 
     @property
     def bounds(self) -> dict[str, tuple[float | None, float | None]]:
-        """Sem bounds por padrão."""
+        """No bounds by default."""
         return {}
 
     def set_scale(self, p_ref: float, q_ref: float) -> None:
-        """Armazena p_ref e q_ref para uso em equations()."""
-        self.p_ref = max(p_ref, 1e5)    # mínimo 1 bar
+        """Stores p_ref and q_ref for use in equations()."""
+        self.p_ref = max(p_ref, 1e5)    # minimum 1 bar
         self.q_ref = max(q_ref, 1e-10)
 
     @property
     def flow_hint(self) -> float:
-        """Estimativa de vazão característica. Override para melhor scaling."""
+        """Characteristic flow estimate. Override for better scaling."""
         return 0.0
 
     @property
     def p_hint(self) -> float:
-        """Estimativa de pressão característica. Override para melhor scaling."""
+        """Characteristic pressure estimate. Override for better scaling."""
         return 0.0
 
     @property
     def initial_guess(self) -> dict[str, float]:
-        """Chute inicial vazio — solver usa Q_hint global."""
+        """Empty initial guess -- the solver uses the global Q_hint."""
         return {}

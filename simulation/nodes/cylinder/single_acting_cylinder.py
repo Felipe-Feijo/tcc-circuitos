@@ -1,4 +1,4 @@
-"""Nó de simulação de cilindro de simples ação."""
+"""Single-acting cylinder simulation node."""
 
 import math
 from simulation.nodes.nodes import Node
@@ -18,8 +18,8 @@ class SingleActingCylinder(Node, HydraulicMixin):
 
         self.outputs = {}
 
-        # Inicializa outputs dos sensores com base no default_state,
-        # para que o valor já seja correto antes do primeiro step de simulação.
+        # Initializes sensor outputs from default_state, so the value is
+        # already correct before the first simulation step.
         if self.sensors["retracted"]["type"]:
             name = self.sensors["retracted"]["name"]
             if name:
@@ -34,19 +34,19 @@ class SingleActingCylinder(Node, HydraulicMixin):
             for key in ("bore", "stroke", "spring_k"):
                 if self.properties.get(key) is None:
                     raise ValueError(
-                        f"SingleActingCylinder '{self.id}': propriedade obrigatória '{key}' não preenchida."
+                        f"SingleActingCylinder '{self.id}': required property '{key}' is not set."
                     )
             bore                 = float(self.properties["bore"])
             self.area            = math.pi * (bore / 2) ** 2
             self.stroke          = float(self.properties["stroke"])
             self.spring_k        = float(self.properties["spring_k"])
             self.external_force  = float(self.properties.get("external_force") or 0.0)
-            self.friction        = 1e-3   # oculto — valor mínimo para fechar a conta
+            self.friction        = 1e-3   # hidden -- minimum value to close the equation
             stroke_val = float(self.properties["stroke"])
             self.x = stroke_val if default == "extended" else 0.0
             self.flow_var        = f"Q_{self.id}"
 
-            # Batente spring-damper (parâmetros internos, não expostos)
+            # Spring-damper end stop (internal parameters, not exposed)
             F_worst = max(abs(self.external_force), self.spring_k * self.stroke, 1.0)
             self.k_end = max(
                 self.spring_k * 1e4,
@@ -56,24 +56,24 @@ class SingleActingCylinder(Node, HydraulicMixin):
             self.c_end = 2.0 * math.sqrt(self.k_end * self.area ** 2 / self.friction)
 
     # ------------------------------------------------------------------
-    # Helpers de batente
+    # End-stop helpers
     # ------------------------------------------------------------------
 
     def _contact_force(self, x, v) -> float:
-        """Força de contato nos batentes (sempre empurra de volta para o stroke)."""
-        pen_ret = max(0.0, -x)                    # penetração no batente retraído
-        pen_ext = max(0.0, x - self.stroke)       # penetração no batente estendido
+        """Contact force at the end stops (always pushes back toward the stroke)."""
+        pen_ret = max(0.0, -x)                    # penetration at the retracted stop
+        pen_ext = max(0.0, x - self.stroke)       # penetration at the extended stop
 
         F = 0.0
         if pen_ret > 0:
-            F += self.k_end * pen_ret - self.c_end * min(v, 0.0)   # v negativo = entrando
+            F += self.k_end * pen_ret - self.c_end * min(v, 0.0)   # v negative = moving in
         if pen_ext > 0:
-            F -= self.k_end * pen_ext - self.c_end * max(v, 0.0)   # v positivo = entrando
+            F -= self.k_end * pen_ext - self.c_end * max(v, 0.0)   # v positive = moving in
 
         return F
 
     # ------------------------------------------------------------------
-    # Contrato hidráulico
+    # Hydraulic contract
     # ------------------------------------------------------------------
 
     @property
@@ -86,13 +86,13 @@ class SingleActingCylinder(Node, HydraulicMixin):
 
     @property
     def is_flow_source(self) -> bool:
-        # Mola comprimida pode expulsar oleo — fonte de fluxo variavel.
+        # A compressed spring can expel oil -- a variable flow source.
         return self.x > 0.0
 
     @property
     def flow_hint(self) -> float:
-        # Cilindro nao e fonte de fluxo controlada — q_ref vem da bomba.
-        # A semantica de "pode expulsar oleo" e capturada por is_flow_source.
+        # The cylinder isn't a controlled flow source -- q_ref comes from the pump.
+        # The "can expel oil" semantics are captured by is_flow_source.
         return 0.0
 
     @property
@@ -107,25 +107,27 @@ class SingleActingCylinder(Node, HydraulicMixin):
         anchor = self.anchors["A"]
         EPS    = self.stroke * 1e-3
 
-        # No batente: o chute físico correto é Q=0, pois o pistão está parado.
-        # Usar anchor.pressure aqui é perigoso — quando o circuito troca de
-        # topologia (válvula comuta), anchor.pressure ainda carrega a pressão
-        # do regime anterior (ex: 1.6 MPa da relief), o que gera Q_eq na casa
-        # de +1000 m³/s, 8 ordens de grandeza acima de q_ref, no sinal errado
-        # para o bound (Q ≤ 0). O solver leva 30 s para escapar desse chute.
-        # Solução: nos batentes, chute direto em 0. Fora dos batentes, usa
-        # p_hint da mola (pressão de equilíbrio real), não anchor.pressure.
+        # At an end stop: the physically correct guess is Q=0, since the
+        # piston is stationary. Using anchor.pressure here is dangerous
+        # -- when the circuit switches topology (a valve commutates),
+        # anchor.pressure still carries the previous regime's pressure
+        # (e.g. 1.6 MPa from a relief valve), which produces a Q_eq
+        # around +1000 m3/s, 8 orders of magnitude above q_ref, with the
+        # wrong sign for the bound (Q <= 0). The solver takes 30s to
+        # escape that guess. Fix: at the end stops, guess 0 directly.
+        # Off the stops, use the spring's p_hint (the real equilibrium
+        # pressure), not anchor.pressure.
         if self.x <= EPS or self.x >= self.stroke - EPS:
             return {self.flow_var: 0.0}
 
-        # Zona livre: estima Q pelo equilíbrio de forças usando p_hint
-        # (pressão da mola), que é sempre fisicamente consistente — não
-        # depende do histórico do NodeContinuity.
-        P_eq   = self.p_hint   # F_mola / area — pressão de equilíbrio da mola
-        F_mola = self.spring_k * self.x
-        F_net  = P_eq * self.area - F_mola - self.external_force
-        Q_eq   = (F_net / max(self.friction, 1e-3)) * self.area
-        # clipa em ±q_ref para não explodir se F_net for grande por algum motivo
+        # Free zone: estimates Q from force equilibrium using p_hint (the
+        # spring's pressure), which is always physically consistent --
+        # doesn't depend on NodeContinuity's history.
+        P_eq      = self.p_hint   # F_spring / area -- the spring's equilibrium pressure
+        F_spring  = self.spring_k * self.x
+        F_net     = P_eq * self.area - F_spring - self.external_force
+        Q_eq      = (F_net / max(self.friction, 1e-3)) * self.area
+        # clips to +-q_ref so it doesn't blow up if F_net is large for some reason
         q_ref  = getattr(self, "q_ref", 1e-4)
         Q_eq   = max(-q_ref, min(q_ref, Q_eq))
         return {self.flow_var: Q_eq}
@@ -143,9 +145,9 @@ class SingleActingCylinder(Node, HydraulicMixin):
         EPS = self.stroke * 1e-3
 
         if self.x <= EPS:
-            return {self.flow_var: (0.0, None)}    # só avança
+            return {self.flow_var: (0.0, None)}    # can only extend
         elif self.x >= self.stroke - EPS:
-            return {self.flow_var: (None, 0.0)}    # só recua
+            return {self.flow_var: (None, 0.0)}    # can only retract
 
         return {}
 
@@ -158,25 +160,25 @@ class SingleActingCylinder(Node, HydraulicMixin):
         EPS = self.stroke * 1e-3
 
         if self.x >= self.stroke - EPS:
-            # Complementaridade: ou Q=0 (pistão parado) ou F_net=0 (pistão se move)
-            # P_A sempre ancorada pela equação — nunca fica livre no NodeContinuity
-            a = -Q / self.q_ref                    # ≥ 0 quando Q ≤ 0
-            b = (F_hidro - F_res) / max(F_res, 1)  # ≥ 0 quando pressão sustenta
+            # Complementarity: either Q=0 (piston stopped) or F_net=0 (piston moving)
+            # P_A is always anchored by the equation -- never left free in NodeContinuity
+            a = -Q / self.q_ref                    # >= 0 when Q <= 0
+            b = (F_hidro - F_res) / max(F_res, 1)  # >= 0 when pressure sustains it
             return [a + b - math.sqrt(a**2 + b**2)]
 
-        # no batente retraído com força empurrando para fora
+        # at the retracted stop with force pushing outward
         if self.x <= EPS and F_hidro <= F_res:
             F_scale = max(abs(F_res), 1.0)
-            return [Q / (self.area * F_scale)]  # força Q → 0
+            return [Q / (self.area * F_scale)]  # forces Q -> 0
 
-        # zona livre — equilíbrio de forças normal
+        # free zone -- normal force equilibrium
         F_contact = self._contact_force(self.x, v)
         F_net   = F_hidro - F_res - F_contact
         F_scale = max(abs(F_hidro), abs(F_res), 1.0)
         return [F_net / F_scale]
 
     # ------------------------------------------------------------------
-    # Update lógico
+    # Logical update
     # ------------------------------------------------------------------
 
     def update(self, outputs=None):
@@ -190,7 +192,7 @@ class SingleActingCylinder(Node, HydraulicMixin):
     def post_step_update(self, dt=None):
         super().post_step_update(dt=dt)
 
-        # sensores
+        # sensors
         if self.sensors["retracted"]["type"]:
             name = self.sensors["retracted"]["name"]
             self.outputs[name] = {"type": "signal", "value": self.position == 0}
@@ -208,7 +210,7 @@ class SingleActingCylinder(Node, HydraulicMixin):
                 elif self.x < 0:
                     self.x = 0
 
-                # position: 0 ou 1 com threshold de 1% do stroke
+                # position: 0 or 1 with a 1% of stroke threshold
                 if self.stroke > 0:
                     ratio = self.x / self.stroke
                     if ratio < 0.01:
@@ -220,7 +222,7 @@ class SingleActingCylinder(Node, HydraulicMixin):
 
 
     # ------------------------------------------------------------------
-    # Estado
+    # State
     # ------------------------------------------------------------------
 
     def get_visual_state(self):

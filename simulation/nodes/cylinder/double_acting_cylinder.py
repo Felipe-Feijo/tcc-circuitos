@@ -1,4 +1,4 @@
-"""Nó de simulação de cilindro de dupla ação."""
+"""Double-acting cylinder simulation node."""
 
 import math
 from simulation.nodes.nodes import Node
@@ -18,8 +18,8 @@ class DoubleActingCylinder(Node, HydraulicMixin):
 
         self.outputs = {}
 
-        # Inicializa outputs dos sensores com base no default_state,
-        # para que o valor já seja correto antes do primeiro step de simulação.
+        # Initializes sensor outputs from default_state, so the value is
+        # already correct before the first simulation step.
         if self.sensors["retracted"]["type"]:
             name = self.sensors["retracted"]["name"]
             if name:
@@ -34,7 +34,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             for key in ("bore", "rod_diameter", "stroke"):
                 if self.properties.get(key) is None:
                     raise ValueError(
-                        f"DoubleActingCylinder '{self.id}': propriedade obrigatória '{key}' não preenchida."
+                        f"DoubleActingCylinder '{self.id}': required property '{key}' is not set."
                     )
             bore     = float(self.properties["bore"])
             rod      = float(self.properties["rod_diameter"])
@@ -42,7 +42,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             self.area_b = self.area_a - math.pi * (rod / 2) ** 2
             self.stroke         = float(self.properties["stroke"])
             self.external_force = float(self.properties.get("external_force") or 0.0)
-            self.friction       = 1e-3   # oculto — valor mínimo para fechar a conta
+            self.friction       = 1e-3   # hidden -- minimum value to close the equation
             stroke = float(self.properties["stroke"])
             self.x = stroke if default == "extended" else 0.0
             self.locked_fwd     = False
@@ -51,7 +51,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             self.flow_var_b     = f"Q_{self.id}_b"
 
     # ------------------------------------------------------------------
-    # Contrato hidráulico
+    # Hydraulic contract
     # ------------------------------------------------------------------
 
     @property
@@ -135,23 +135,23 @@ class DoubleActingCylinder(Node, HydraulicMixin):
 
         EPS = self.stroke * 1e-4
 
-        # Conservação sempre vale
+        # Conservation always holds
         eq_conservation = Q_a + Q_b
 
         if self.x <= EPS:
-            # Proibido: Q_a < 0 (não pode recuar além do batente)
-            # φ(q, -f) = 0
+            # Forbidden: Q_a < 0 (can't retract past the end stop)
+            # phi(q, -f) = 0
             return [self._fb(q, -f), eq_conservation]
 
         if self.x >= self.stroke - EPS:
-            # Proibido: Q_a > 0 (não pode avançar além do batente)
-            # φ(-q, f) = 0
+            # Forbidden: Q_a > 0 (can't extend past the end stop)
+            # phi(-q, f) = 0
             return [self._fb(-q, f), eq_conservation]
 
         return [f, eq_conservation]
 
     # ------------------------------------------------------------------
-    # Update lógico
+    # Logical update
     # ------------------------------------------------------------------
 
     def update(self, outputs=None):
@@ -159,11 +159,11 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             a = self.anchors["A"].state
             b = self.anchors["B"].state
 
-            if a:                # 10 ou 11 — avança
+            if a:                # 10 or 11 -- extends
                 self.position = 1
-            elif b:              # 01 — recua
+            elif b:              # 01 -- retracts
                 self.position = 0
-            # 00 — mantém
+            # 00 -- unchanged
 
     # ------------------------------------------------------------------
     # Post step
@@ -190,7 +190,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
 
         Q_a = anchor_a.flow
 
-        # desbloqueia se o fluxo inverteu
+        # unlocks if the flow reversed
         if self.locked_fwd and Q_a < 0:
             self.locked_fwd = False
         if self.locked_bwd and Q_a > 0:
@@ -208,7 +208,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
                 self.locked_bwd = True
 
     # ------------------------------------------------------------------
-    # Estado
+    # State
     # ------------------------------------------------------------------
 
     def get_visual_state(self):

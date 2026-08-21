@@ -1,4 +1,4 @@
-"""Classe base para chaves elétricas (botão e contato de relé)."""
+"""Base class for electrical switches (push button and relay contact)."""
 
 from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
 from PyQt6.QtCore import QPointF, QRectF
@@ -42,7 +42,7 @@ class SwitchItem(NodeItem):
 
         self.update_body_visuals()
 
-        # dimensões base
+        # base dimensions
         self.width = self.body_sprite.width()
         self.height = self.body_sprite.height()
 
@@ -80,8 +80,8 @@ class SwitchItem(NodeItem):
 
     def extend_context_menu(self, menu: QMenu):
         if self.simulation_mode:
-            # Simulação rodando: tipo de contato muta self.properties --
-            # indisponível enquanto simulation_mode for True.
+            # Simulation running: contact type mutates self.properties --
+            # unavailable while simulation_mode is True.
             super().extend_context_menu(menu)
             return
         menu.addSeparator()
@@ -102,7 +102,7 @@ class SwitchItem(NodeItem):
 
         self.properties["contact_type"] = contact_type
 
-        # atualiza visual local imediatamente
+        # updates the local visual immediately
         self.update_body_visuals()
         self.update_connections()
         self.update()

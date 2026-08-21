@@ -1,4 +1,4 @@
-"""Nó gráfico de referência de terra elétrico."""
+"""Graphics node for the electrical ground reference."""
 
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta

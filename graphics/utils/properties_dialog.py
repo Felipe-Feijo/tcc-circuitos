@@ -1,4 +1,4 @@
-"""Diálogo genérico de edição de propriedades de componentes do diagrama."""
+"""Generic dialog for editing diagram components' properties."""
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
@@ -18,18 +18,18 @@ class PropertiesDialog(QDialog):
         self._main_layout.setSpacing(12)
         self._main_layout.setContentsMargins(16, 16, 16, 16)
 
-        # título interno
+        # internal title
         title_label = QLabel(title)
         title_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         self._main_layout.addWidget(title_label)
 
-        # separador
+        # separator
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
         self._main_layout.addWidget(line)
 
-        # área de campos (preenchida por add_field)
+        # field area (populated by add_field)
         self._form_layout = QFormLayout()
         self._form_layout.setSpacing(8)
         self._form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -37,7 +37,7 @@ class PropertiesDialog(QDialog):
 
         self._main_layout.addStretch()
 
-        # botões
+        # buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -52,8 +52,8 @@ class PropertiesDialog(QDialog):
         btn_layout.addWidget(self._ok_btn)
         self._main_layout.addLayout(btn_layout)
 
-        # Exposto para subclasses (ex.: DefectDialog) que precisam inserir
-        # botões extras entre Cancelar e OK/Aplicar.
+        # Exposed for subclasses (e.g. DefectDialog) that need to insert
+        # extra buttons between Cancel and OK/Apply.
         self._btn_layout = btn_layout
 
     def add_text_field(self, label: str, placeholder: str = "", value: str = "") -> QLineEdit:
@@ -81,7 +81,7 @@ class PropertiesDialog(QDialog):
         msg = QLabel("This node has no editable properties.")
         msg.setStyleSheet("color: gray; font-style: italic;")
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._main_layout.insertWidget(2, msg)  # após separador
+        self._main_layout.insertWidget(2, msg)  # after the separator
         self._ok_btn.setEnabled(False)
 
     def add_number_field(
@@ -109,14 +109,14 @@ class PropertiesDialog(QDialog):
         field.editingFinished.connect(on_edit_finished)
         self._form_layout.addRow(label, field)
 
-        # valida estado inicial (campo vazio obrigatório já começa com borda)
+        # validates initial state (a required empty field already starts with a border)
         self._validate_field(field)
         self._refresh_ok_button()
 
         return field
 
     def _validate_field(self, field: QLineEdit) -> bool:
-        """Valida um campo individualmente. Retorna True se ok."""
+        """Validates a single field. Returns True if ok."""
         text = field.text().strip()
         required = getattr(field, "_is_required", False)
 
@@ -142,7 +142,7 @@ class PropertiesDialog(QDialog):
         return True
 
     def _refresh_ok_button(self):
-        """Habilita OK só quando todos os campos obrigatórios estão preenchidos e válidos."""
+        """Enables OK only when every required field is filled and valid."""
         for i in range(self._form_layout.rowCount()):
             item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
             if not item:
@@ -158,7 +158,7 @@ class PropertiesDialog(QDialog):
         self._ok_btn.setEnabled(True)
 
     def _validate_and_accept(self):
-        # segunda linha de defesa: valida tudo antes de fechar
+        # second line of defense: validates everything before closing
         for i in range(self._form_layout.rowCount()):
             item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
             if not item:
@@ -166,5 +166,5 @@ class PropertiesDialog(QDialog):
             widget = item.widget()
             if isinstance(widget, QLineEdit) and getattr(widget, "_is_number_field", False):
                 if not self._validate_field(widget):
-                    return  # não fecha
+                    return  # doesn't close
         self.accept()

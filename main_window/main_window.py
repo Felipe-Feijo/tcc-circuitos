@@ -1,4 +1,4 @@
-"""Janela principal da aplicação: monta e conecta todos os subsistemas."""
+"""Main application window: assembles and wires together every subsystem."""
 
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsItem
@@ -71,12 +71,12 @@ class MainWindow(QMainWindow):
         create_menus(self, self.actions)
         create_toolbars(self, self.actions)
 
-        # Registra todas as ações na janela para que os atalhos
-        # ApplicationShortcut funcionem mesmo fora de menus (necessário no Windows)
+        # Registers every action on the window so ApplicationShortcut
+        # shortcuts work even outside menus (required on Windows)
         for action in self.actions.values():
             self.addAction(action)
 
-        # estado inicial explícito
+        # explicit initial state
         self.actions["mode_select"].setChecked(True)
 
     def _wire_state_callbacks(self):
@@ -102,14 +102,14 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def cancel_current_mode(self):
-        # 1. modo lógico
+        # 1. logical mode
         self.set_mode(EditorMode.SELECT)
         self.state.pending_node = None
 
-        # 2. sincroniza ações (UI)
+        # 2. syncs actions (UI)
         self.actions["mode_select"].setChecked(True)
 
-        # 3. fecha UI de adição
+        # 3. closes the add UI
         self.palette_dock.hide()
         self.actions["open_palette"].setChecked(False)
 
@@ -145,14 +145,14 @@ class MainWindow(QMainWindow):
         is_select_mode = (mode == EditorMode.SELECT)
 
         for item in self.scene.items():
-            # Tudo no diagrama pode ser selecionado
+            # Everything in the diagram can be selected
             if isinstance(item, DiagramItemBase):
                 item.setFlag(
                     QGraphicsItem.GraphicsItemFlag.ItemIsSelectable,
                     is_select_mode
                 )
 
-            # Só nós podem ser movidos
+            # Only nodes can be moved
             if isinstance(item, NodeItem):
                 item.setFlag(
                     QGraphicsItem.GraphicsItemFlag.ItemIsMovable,
@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
         if mode == EditorMode.SIMULATE:
             self.start_simulation()
             if not self.simulation.active:
-                # start falhou (props faltando) — volta para SELECT sem recursar
+                # start failed (missing props) -- reverts to SELECT without recursing
                 self.state.mode = EditorMode.SELECT
                 self._update_mode_actions(EditorMode.SELECT)
                 self.update_simulation_actions()
@@ -202,7 +202,7 @@ class MainWindow(QMainWindow):
         if not self.state.pending_node:
             return
 
-        # Captura snapshot ANTES de adicionar o nó
+        # Captures a snapshot BEFORE adding the node
         from editor.undo import UndoStack
         before = UndoStack.snapshot(self.scene)
 
@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.scene.addItem(item)
         self.update_scene_rect()
 
-        # Empilha o command de undo APÓS o nó ser adicionado
+        # Pushes the undo command AFTER the node is added
         self.state.undo_stack.push_snapshot(self.scene, self.state, before, "Adicionar nó")
 
         self.set_mode(EditorMode.SELECT)
@@ -230,26 +230,26 @@ class MainWindow(QMainWindow):
     def update_scene_rect(self):
         view = self.view
 
-        # Área visível atual (viewport → scene)
+        # Current visible area (viewport -> scene)
         visible_rect = view.mapToScene(
             view.viewport().rect()
         ).boundingRect()
 
-        # Área ocupada pelos itens
+        # Area occupied by the items
         items_rect = self.scene.itemsBoundingRect()
 
-        # Se não houver itens ainda
+        # If there are no items yet
         if items_rect.isNull():
             self.scene.setSceneRect(visible_rect)
             return
 
-        # Margem razoável (10% da maior dimensão visível)
+        # Reasonable margin (10% of the largest visible dimension)
         margin = max(
             80,
             max(visible_rect.width(), visible_rect.height()) * 0.1
         )
 
-        # União da área visível com os itens
+        # Union of the visible area with the items
         united = visible_rect.united(items_rect)
 
         self.scene.setSceneRect(
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QInputDialog
         value, ok = QInputDialog.getDouble(
             self, "Step size", "dt (s):",
-            self.simulation.dt,  # lê da session
+            self.simulation.dt,  # reads from the session
             0.001, 1.0, 3
         )
         if ok:
@@ -367,24 +367,25 @@ class MainWindow(QMainWindow):
         self.use_light_theme = enabled
         self.state.is_light_theme = enabled
 
-        # 🔹 tema da aplicação inteira (toolbar, menus, docks, diálogos)
+        # theme for the entire application (toolbar, menus, docks, dialogs)
         theme.apply_theme(QApplication.instance(), enabled)
 
-        # 🔹 muda fundo
-        # Espelhado também na scene (não só na view): o relatório de
-        # simulação renderiza frames direto da QGraphicsScene, sem passar
-        # pela view, então precisa que a cena carregue a cor do tema atual.
+        # updates the background
+        # Also mirrored on the scene (not just the view): the simulation
+        # report renders frames directly from the QGraphicsScene,
+        # bypassing the view, so the scene needs to carry the current
+        # theme's color too.
         if not enabled:
-            background = QBrush(QColor(30, 30, 30))  # cinza escuro
+            background = QBrush(QColor(30, 30, 30))  # dark gray
         else:
-            background = QBrush(QColor(255, 255, 255))  # branco
+            background = QBrush(QColor(255, 255, 255))  # white
         self.view.setBackgroundBrush(background)
         self.scene.setBackgroundBrush(background)
 
-        # 🔹 notifica nodes
+        # notifies nodes
         self.state.theme_changed.emit(enabled)
 
-        # 🔹 atualiza texto botão
+        # updates the button text
         self.actions["toggle_theme"].setText(
             "Light Theme" if enabled else "Dark Theme"
         )

@@ -1,4 +1,4 @@
-"""Ações de ajuda: sobre e documentação."""
+"""Help actions: about and documentation."""
 
 from PyQt6.QtGui import QAction
 

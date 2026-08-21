@@ -1,4 +1,4 @@
-"""Constrói a barra de menus da janela principal a partir das ações criadas."""
+"""Builds the main window menu bar from the created actions."""
 
 
 def create_menus(main_window, actions):

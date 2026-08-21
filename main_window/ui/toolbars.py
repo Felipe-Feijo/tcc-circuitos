@@ -1,4 +1,4 @@
-"""Constrói as barras de ferramentas da janela principal a partir das ações criadas."""
+"""Builds the main window toolbars from the created actions."""
 
 from PyQt6.QtWidgets import QToolBar
 

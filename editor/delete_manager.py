@@ -1,4 +1,4 @@
-"""Gerencia a remoção segura de nós, conexões e labels da cena gráfica."""
+"""Manages the safe removal of nodes, connections and labels from the graphics scene."""
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QGraphicsScene
@@ -9,33 +9,33 @@ from graphics.labels.label import LabelItem
 
 
 class DeleteManager:
-    """Remove itens da cena de forma segura, adiando a deleção para fora do ciclo de eventos Qt.
+    """Removes scene items safely, deferring deletion outside the Qt event cycle.
 
-    A deleção imediata durante o processamento de um evento pode causar
-    acesso a ponteiros inválidos. O uso de QTimer.singleShot(0, ...) garante
-    que a remoção ocorre apenas após o evento atual ser completamente processado.
+    Deleting immediately while processing an event can access invalid
+    pointers. Using QTimer.singleShot(0, ...) guarantees removal only
+    happens after the current event has been fully processed.
     """
 
     def __init__(self, scene):
         self.scene = scene
 
     def delete_selection(self, editor_state=None) -> bool:
-        """Remove os itens atualmente selecionados da cena.
+        """Removes the currently selected items from the scene.
 
-        Waypoints de conexão têm prioridade: se alguma conexão tiver um
-        waypoint selecionado, apenas esse waypoint é removido. Caso contrário,
-        remove todos os nós, conexões e labels selecionados, incluindo as
-        conexões transitivas dos nós selecionados.
+        Connection waypoints take priority: if any connection has a
+        selected waypoint, only that waypoint is removed. Otherwise,
+        removes every selected node, connection and label, including
+        the selected nodes' transitive connections.
 
         Args:
-            editor_state: EditorState opcional. Quando fornecido, a operação
-                é registrada na undo_stack para suporte a Ctrl+Z.
+            editor_state: Optional EditorState. When given, the
+                operation is recorded on the undo_stack for Ctrl+Z support.
 
         Returns:
-            True se algum item foi removido, False se não havia seleção.
+            True if any item was removed, False if there was no selection.
         """
-        # Waypoints têm prioridade: a conexão fica desselecionada ao clicar
-        # num waypoint, então varremos todos os itens da cena, não só os selecionados.
+        # Waypoints take priority: the connection gets deselected on
+        # clicking a waypoint, so we scan every scene item, not just the selected ones.
         for item in self.scene.items():
             if isinstance(item, ConnectionItem) and getattr(item, '_selected_wp', None) is not None:
                 item._delete_waypoint(item._selected_wp)
@@ -46,7 +46,7 @@ class DeleteManager:
         if not items:
             return False
 
-        # Captura snapshot ANTES da deleção para undo
+        # Captures a snapshot BEFORE deletion, for undo
         before = None
         if editor_state is not None:
             from editor.undo import UndoStack
@@ -56,14 +56,14 @@ class DeleteManager:
         nodes       = [i for i in items if isinstance(i, NodeItem)]
         labels      = [i for i in items if isinstance(i, LabelItem)]
 
-        # Inclui conexões dos nós selecionados (serão removidas junto)
+        # Includes the selected nodes' connections (they'll be removed too)
         for node in nodes:
             connections.update(getattr(node, "connections", []))
 
         connections = list(connections)
 
         def do_delete():
-            """Executa a remoção efetiva, adiada para fora do evento Qt."""
+            """Performs the actual removal, deferred outside the Qt event."""
             for label in labels:
                 parent = label.parentItem()
                 if parent and hasattr(parent, "labels"):
@@ -73,14 +73,14 @@ class DeleteManager:
                 if label.scene():
                     self.scene.removeItem(label)
 
-            # Fase 1: notifica cada item antes de remover (limpa referências internas)
+            # Phase 1: notifies each item before removal (clears internal references)
             for conn in connections:
                 conn.prepare_delete()
 
             for node in nodes:
                 node.prepare_delete()
 
-            # Fase 2: remove da cena
+            # Phase 2: removes from the scene
             for item in connections + nodes:
                 if item.scene():
                     self.scene.removeItem(item)
@@ -89,7 +89,7 @@ class DeleteManager:
             nodes.clear()
             items.clear()
 
-            # Força atualização visual completa da cena
+            # Forces a full visual update of the scene
             self.scene.invalidate(
                 self.scene.sceneRect(),
                 QGraphicsScene.SceneLayer.AllLayers
@@ -99,7 +99,7 @@ class DeleteManager:
             self.scene.setItemIndexMethod(current_index)
             self.scene.update()
 
-            # Empilha o command de undo APÓS a deleção ser aplicada
+            # Pushes the undo command AFTER the deletion is applied
             if editor_state is not None and before is not None:
                 editor_state.undo_stack.push_snapshot(
                     self.scene,

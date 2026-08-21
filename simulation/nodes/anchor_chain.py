@@ -1,23 +1,23 @@
-"""Cadeia de anchors reais — usado para podar anchors intermediários de
-PressureLine tanto no grafo de simulação quanto na criação de ConnectionItems.
+"""Chain of real anchors -- used to prune intermediate PressureLine
+anchors both in the simulation graph and when creating ConnectionItems.
 """
 
 from typing import Callable
 
 
 def real_anchor_chain(items: list, is_real: Callable[[object], bool]) -> list[tuple]:
-    """Retorna os pares consecutivos entre os itens "reais" de uma lista ordenada.
+    """Returns the consecutive pairs between the "real" items of an ordered list.
 
-    O primeiro e o último item da lista são sempre tratados como reais,
-    independente de `is_real`, para manter a cadeia estruturalmente íntegra.
+    The first and last items of the list are always treated as real,
+    regardless of `is_real`, to keep the chain structurally intact.
 
     Args:
-        items: sequência ordenada de anchors.
-        is_real: predicado item -> bool, avaliado nos itens do meio.
+        items: ordered sequence of anchors.
+        is_real: item -> bool predicate, evaluated on the middle items.
 
     Returns:
-        Lista de tuplas (item_a, item_b) entre reais consecutivos, na ordem
-        original. Lista vazia se items tiver menos de 2 elementos.
+        List of (item_a, item_b) tuples between consecutive real items, in
+        original order. Empty list if items has fewer than 2 elements.
     """
     if len(items) < 2:
         return []

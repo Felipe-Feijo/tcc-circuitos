@@ -1,4 +1,4 @@
-"""Item gráfico de conexão entre dois âncoras do diagrama."""
+"""Graphics item for a connection between two diagram anchors."""
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPainter, QPainterPathStroker, QPolygonF, QBrush, QAction
@@ -7,7 +7,7 @@ from graphics.items.base.diagram_item_base import DiagramItemBase
 from editor.mode import EditorMode
 from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
 
-# Vetores unitários por direção — compartilhado entre _apply_margin e _draw_arrow_at.
+# Unit vectors per direction -- shared between _apply_margin and _draw_arrow_at.
 _DIR_VEC = {"right": (1, 0), "left": (-1, 0), "bottom": (0, 1), "top": (0, -1)}
 
 
@@ -87,12 +87,13 @@ class ConnectionItem(DiagramItemBase):
 
     _ACTIVE_WIDTH   = 5
     _INACTIVE_WIDTH = 3
-    _OUTLINE_WIDTH  = 8     # levemente maior que _ACTIVE_WIDTH — sobra um contorno fino
+    _OUTLINE_WIDTH  = 8     # slightly larger than _ACTIVE_WIDTH -- leaves a thin outline
     _OUTLINE_ALPHA  = 140
 
     def _is_active(self) -> bool:
-        """Conexão carregando fluxo/sinal no momento — mesma condição que
-        `_get_pen` já usa para escolher a cor "ativa" de cada domínio."""
+        """Whether the connection is currently carrying flow/signal --
+        same condition `_get_pen` already uses to pick each domain's
+        "active" color."""
         if self.domain == "pneumatic":
             return self.state == 1
         if self.domain == "electric":
@@ -119,13 +120,15 @@ class ConnectionItem(DiagramItemBase):
                 self._draw_flow_arrows(painter, points, pen)
 
     def _draw_outline(self, painter: QPainter, points: list, pen: QPen):
-        """Contorno fino atrás da linha principal, mesma cor do pen, pra
-        reforçar visualmente que a conexão está ativa na simulação.
+        """Thin outline behind the main line, same color as the pen, to
+        visually reinforce that the connection is active in the
+        simulation.
 
-        Desenhado como um único QPainterPath (em vez de uma drawLine por
-        segmento) pra que cada canto tenha um join só — segmentos separados
-        com RoundCap se sobrepõem nas juntas e, por serem semi-transparentes,
-        empilham alpha e viram bolhas mais opacas exatamente nos waypoints.
+        Drawn as a single QPainterPath (instead of one drawLine per
+        segment) so each corner gets only one join -- separate
+        RoundCap segments overlap at the joints and, being
+        semi-transparent, stack alpha into more opaque blobs right at
+        the waypoints.
         """
         outline_color = QColor(pen.color())
         outline_color.setAlpha(self._OUTLINE_ALPHA)
@@ -187,9 +190,9 @@ class ConnectionItem(DiagramItemBase):
         base  = QPointF(point.x() - ux * size,      point.y() - uy * size)
         left  = QPointF(base.x() - uy * size * 0.6, base.y() + ux * size * 0.6)
         right = QPointF(base.x() + uy * size * 0.6, base.y() - ux * size * 0.6)
-        # Preto no tema claro, branco no escuro — contraste garantido contra
-        # qualquer cor de estado hidráulico (azul, ciano, laranja...),
-        # independente da cor da linha em si.
+        # Black in light theme, white in dark -- guaranteed contrast
+        # against any hydraulic state color (blue, cyan, orange...),
+        # independent of the line's own color.
         arrow_color = Qt.GlobalColor.black if self.use_light_theme else Qt.GlobalColor.white
         painter.setBrush(QBrush(arrow_color))
         painter.setPen(QPen(arrow_color, 1))
@@ -229,9 +232,9 @@ class ConnectionItem(DiagramItemBase):
             return [p1, p1_out, *middle, p2]
 
         target_dirs = target_anchor.exit_directions.get(exit_key, ["left"])
-        # entry_dir é sempre derivado dos exit_directions reais do anchor — nunca
-        # inferido a partir do vetor até o waypoint, pois isso falha com waypoints
-        # corrompidos ou com a margem diferente do A* (EXIT_PX=40px vs 6-18px do editor).
+        # entry_dir is always derived from the anchor's real exit_directions --
+        # never inferred from the vector to the waypoint, since that fails with
+        # corrupted waypoints or A*'s different margin (EXIT_PX=40px vs the editor's 6-18px).
         entry_dir   = self._choose_best_exit_direction(p2, p1, target_dirs)
         p2_in       = self._apply_margin(p2, entry_dir, target_margin)
 
@@ -267,12 +270,12 @@ class ConnectionItem(DiagramItemBase):
         return QPointF(point.x() + ux * margin, point.y() + uy * margin)
 
     def _get_exit_direction(self) -> str:
-        """Direção de saída do source anchor em direção ao target."""
+        """Exit direction of the source anchor toward the target."""
         _, _, _, _, exit_dir, _ = self._compute_exit_entry()
         return exit_dir
 
     def _compute_exit_entry(self):
-        """Retorna (p1, p2, p1_out, p2_in, exit_dir, entry_dir) para os anchors atuais."""
+        """Returns (p1, p2, p1_out, p2_in, exit_dir, entry_dir) for the current anchors."""
         p1, p2 = self.source_anchor.scenePos(), self.target_anchor.scenePos()
         is_internal = self.source_anchor.node == self.target_anchor.node
         exit_key    = "internal" if is_internal else "external"
@@ -285,17 +288,18 @@ class ConnectionItem(DiagramItemBase):
                self._apply_margin(p2, entry_dir, target_margin), exit_dir, entry_dir
 
     def _resolved_points(self, wps: list | None = None) -> tuple[list, frozenset]:
-        """Sequência completa de pontos pra cálculo de vizinhança/colinearidade,
-        incluindo os pontos de margem do anchor como entradas 'ancoradas'.
+        """Full point sequence for neighbor/collinearity calculations,
+        including the anchor's margin points as 'anchored' entries.
 
-        Ancorado = sempre recalculado a partir da posição atual do anchor (por
-        isso já acompanha o componente ao mover, de graça); nunca é alvo de
-        arrasto direto nem aparece como handle; nunca é deletável. Fonte única
-        de verdade sobre "quem é vizinho de quem" -- usada tanto pelo drag de
-        waypoint quanto pelo reajuste de borda após mover um nó.
+        Anchored = always recomputed from the anchor's current position
+        (so it tracks the component on move, for free); never a direct
+        drag target nor shown as a handle; never deletable. Single
+        source of truth for "who is whose neighbor" -- used by both
+        waypoint dragging and boundary repair after moving a node.
 
-        `wps` permite calcular contra uma lista de waypoints explícita (ex.
-        um snapshot congelado durante um drag) em vez de `self.waypoints`.
+        `wps` lets this be computed against an explicit waypoint list
+        (e.g. a snapshot frozen during a drag) instead of
+        `self.waypoints`.
         """
         if not self.target_anchor:
             return [], frozenset()
@@ -317,7 +321,7 @@ class ConnectionItem(DiagramItemBase):
         entry_conflict_v = (entry_dir == "top"    and dy < 0) or (entry_dir == "bottom" and dy > 0)
 
         def four_seg(p1, p2):
-            # Escolhe hvhv ou vhvh dependendo do quadrante relativo.
+            # Chooses hvhv or vhvh depending on the relative quadrant.
             return (self._hvhv if (dy > 0 or (dy == 0 and dx > 0)) else self._vhvh)(p1, p2)
 
         if is_exit_h:
@@ -333,16 +337,16 @@ class ConnectionItem(DiagramItemBase):
                 return four_seg(p1_out, p2_in) if entry_conflict_v else self._vhv(p1_out, p2_in)
             return self._vhv(p1_out, p2_in)
 
-    # Primitivas de roteamento ortogonal (nomes = sequência de segmentos H/V).
+    # Orthogonal routing primitives (names = sequence of H/V segments).
     def _vhv(self, p1, p2):
         if p1.x() == p2.x():
-            return []  # já alinhados no eixo x -- reta direta, sem "V" degenerado
+            return []  # already aligned on the x axis -- straight line, no degenerate "V"
         mid_y = (p1.y() + p2.y()) / 2
         return [QPointF(p1.x(), mid_y), QPointF(p2.x(), mid_y)]
 
     def _hvh(self, p1, p2):
         if p1.y() == p2.y():
-            return []  # já alinhados no eixo y -- reta direta, sem "V" degenerado
+            return []  # already aligned on the y axis -- straight line, no degenerate "V"
         mid_x = (p1.x() + p2.x()) / 2
         return [QPointF(mid_x, p1.y()), QPointF(mid_x, p2.y())]
 
@@ -369,26 +373,27 @@ class ConnectionItem(DiagramItemBase):
                 bool(self.source_anchor.scene() and self.target_anchor.scene()))
 
     def adjust_waypoints_for_node_move(self, moved_source: bool = True, moved_target: bool = True) -> None:
-        """Realinha o trecho de borda do lado que mudou de posição.
+        """Realigns the boundary segment on the side that moved.
 
-        Delega para `_adjust_boundary()`, que distingue um ponto solto
-        redundante (deve acompanhar a borda) de um canto deliberado do
-        usuário que só coincide de eixo com a borda por acaso (deve virar
-        uma ponte nova, preservando o resto do desvio intocado) -- ver
-        `_adjust_boundary` para os detalhes do algoritmo.
+        Delegates to `_adjust_boundary()`, which distinguishes a
+        redundant loose point (should follow the boundary) from a
+        deliberate user corner that only coincidentally shares an axis
+        with the boundary (should become a new bridge, leaving the rest
+        of the detour untouched) -- see `_adjust_boundary` for the
+        algorithm's details.
 
-        Caso especial: quando TODOS os waypoints são colineares entre si
-        no eixo compartilhado por exit_dir/entry_dir (ambos H ou ambos V —
-        um único waypoint compartilhando as duas bordas é o caso mais
-        comum, mas uma dobra deliberada de 2+ waypoints nesse mesmo eixo
-        cai na mesma armadilha), os dois deslocamentos abaixo reivindicam
-        o array inteiro e o segundo sobrescreve o primeiro por completo,
-        colapsando a dobra num único segmento diagonal (achado testando a
-        UI real com um Z horizontal-vertical-horizontal entre dois anchors
-        que saem na vertical — os 2 waypoints do meio, colineares em x,
-        eram "engolidos" pelo lado do source e depois pelo lado do
-        target). Nenhuma combinação de deslocamento individual resolve
-        isso; rerroteia esse trecho, como já fazíamos para n==1.
+        Special case: when ALL waypoints are collinear with each other
+        on the axis shared by exit_dir/entry_dir (both H or both V -- a
+        single waypoint sharing both boundaries is the most common case,
+        but a deliberate 2+ waypoint bend on that same axis falls into
+        the same trap), the two shifts below both claim the entire
+        array and the second one fully overwrites the first, collapsing
+        the bend into a single diagonal segment (found via live-UI
+        testing with a horizontal-vertical-horizontal Z between two
+        anchors exiting vertically -- the 2 middle waypoints, collinear
+        in x, were "swallowed" by the source side and then the target
+        side). No combination of individual shifts fixes this; reroutes
+        this segment instead, same as we already did for n==1.
         """
         if getattr(self, '_being_deleted', False) or not self._waypoints_initialized:
             return
@@ -400,16 +405,17 @@ class ConnectionItem(DiagramItemBase):
         wps = self.waypoints
         n   = len(wps)
 
-        # Rota reta (sem waypoint nenhum) -- o caso mais comum de todos
-        # (qualquer split feito exatamente sobre uma reta nasce assim).
-        # _adjust_boundary() abaixo não tem o que ajustar aqui (não há
-        # `w` nenhum pra tocar), então esse trecho ficava completamente
-        # desprotegido: se o lado que moveu tem anchor de direção livre
-        # (o "J" de uma JunctionNodeItem aceita as 4), o segmento
-        # p1_out->p2_in deixa de compartilhar eixo e vira uma diagonal
-        # reta -- reprodução real do usuário, fácil de disparar arrastando
-        # uma junção recém-criada por um split reto. Reroteia do zero
-        # nesse caso -- não há nada pra preservar num trecho sem waypoint.
+        # Straight route (no waypoints at all) -- the most common case
+        # of all (any split made right on a straight line starts this
+        # way). _adjust_boundary() below has nothing to adjust here (no
+        # `w` to touch), so this segment was completely unprotected: if
+        # the side that moved has a free-direction anchor (a
+        # JunctionNodeItem's "J" accepts all 4), the p1_out->p2_in
+        # segment stops sharing an axis and becomes a straight diagonal
+        # -- reproduced by a real user report, easy to trigger by
+        # dragging a freshly-created junction from a straight split.
+        # Reroutes from scratch in this case -- nothing to preserve in a
+        # waypoint-less segment.
         if n == 0:
             if moved_source or moved_target:
                 same_axis = (abs(p1_out.x() - p2_in.x()) < 0.5
@@ -418,18 +424,19 @@ class ConnectionItem(DiagramItemBase):
                     self._reroute_waypoints()
             return
 
-        # Rota ainda "intocada" (pristine): se os waypoints atuais batem
-        # exatamente com o que `_route_between_points` geraria a partir da
-        # última posição validada dos anchors (`_last_p1_out`/`_last_p2_in`
-        # + direções cacheadas), então ninguém nunca arrastou/inseriu/editou
-        # nada aqui -- é uma rota puramente automática (hvh/vhv/hvhv/vhvh).
-        # `_adjust_boundary` não tem como saber isso: seu único sinal é
-        # "`w` estava alinhado com o anchor" (`was_aligned`), o que é falso
-        # por construção pro ponto de offset intermediário de um hvhv/vhvh
-        # (ele fica no meio do caminho, nunca em cima do anchor) -- sem essa
-        # checagem, uma rota automática de 3 pontos ganha uma ponte espúria
-        # ao mover, em vez de simplesmente re-rotear (que é sempre seguro
-        # aqui, já que não existe desvio manual pra preservar).
+        # Still-"pristine" route: if the current waypoints match exactly
+        # what `_route_between_points` would generate from the anchors'
+        # last validated position (`_last_p1_out`/`_last_p2_in` + cached
+        # directions), then nobody ever dragged/inserted/edited anything
+        # here -- it's a purely automatic route (hvh/vhv/hvhv/vhvh).
+        # `_adjust_boundary` has no way to know this: its only signal is
+        # "`w` was aligned with the anchor" (`was_aligned`), which is
+        # false by construction for a hvhv/vhvh's intermediate offset
+        # point (it sits mid-path, never on top of the anchor) --
+        # without this check, an automatic 3-point route would gain a
+        # spurious bridge on move, instead of simply rerouting (which is
+        # always safe here, since there's no manual detour to
+        # preserve).
         if ((moved_source or moved_target) and wps and
                 self._last_p1_out is not None and self._last_p2_in is not None):
             pristine = self._route_between_points(self._last_p1_out, self._last_p2_in,
@@ -455,44 +462,45 @@ class ConnectionItem(DiagramItemBase):
             self._adjust_boundary(-1, p2_in, self._last_p2_in, entry_h)
             self._last_p2_in = QPointF(p2_in)
         if moved_source or moved_target:
-            # Mantém a checagem "pristine" acima válida em movimentos
-            # seguintes: sem isso, `_last_exit_dir`/`_last_entry_dir`
-            # ficariam presos na direção de antes do PRIMEIRO move desta
-            # conexão (só `get_path_points()`/`_reroute_waypoints()`
-            # atualizavam esses dois campos).
+            # Keeps the "pristine" check above valid on subsequent
+            # moves: without this, `_last_exit_dir`/`_last_entry_dir`
+            # would stay stuck at the direction from before this
+            # connection's FIRST move (only `get_path_points()`/
+            # `_reroute_waypoints()` updated these two fields).
             self._last_exit_dir  = exit_dir
             self._last_entry_dir = entry_dir
         self.update()
 
     def _adjust_boundary(self, step: int, anchor_pt: QPointF,
                           old_anchor_pt: 'QPointF | None', is_horizontal: bool) -> None:
-        """Realinha o(s) waypoint(s) perto da borda que se moveu.
+        """Realigns the waypoint(s) near the boundary that moved.
 
-        step: +1 para o lado source (caminha wps[0], wps[1], ...), -1 para
-        o lado target (caminha wps[-1], wps[-2], ...).
-        anchor_pt: posição atual (pós-movimento) do ponto de margem do anchor.
-        old_anchor_pt: cache da posição do anchor na última vez que a
-        geometria foi validada (None se nunca validada -- trata como "sem
-        histórico", nunca assume redundância).
-        is_horizontal: eixo travado é Y (True) ou X (False).
+        step: +1 for the source side (walks wps[0], wps[1], ...), -1 for
+        the target side (walks wps[-1], wps[-2], ...).
+        anchor_pt: the anchor's current (post-move) margin point.
+        old_anchor_pt: cached anchor position from the last time the
+        geometry was validated (None if never validated -- treated as
+        "no history", never assumes redundancy).
+        is_horizontal: whether the locked axis is Y (True) or X (False).
 
-        Caminha da borda pra dentro. Em cada waypoint `w`:
-          - Sem vizinho interno (fim da lista): gruda `w` no anchor, para.
-          - `w` não compartilha o eixo travado com o vizinho interno `w2`:
-            gruda só `w`, para (sem conflito -- caso comum de rota
-            automática, w2 e o resto ficam intocados).
-          - `w` compartilha o eixo travado com `w2` E `w` já estava
-            alinhado com `old_anchor_pt` nesse eixo (ponto solto
-            redundante, ex.: inserido por duplo-clique numa reta): gruda
-            `w`, continua para `w2` usando a posição ANTIGA de `w` como
-            nova referência (a reta continua).
-          - `w` compartilha o eixo travado com `w2` mas NÃO estava
-            alinhado com `old_anchor_pt` (canto deliberado do usuário --
-            ex.: um desvio manual que termina nesse eixo por coincidência):
-            não toca em `w` nem em nada depois dele. Insere um waypoint
-            "ponte" entre `w` e o anchor -- eixo travado batendo com o
-            anchor, outro eixo batendo com `w` -- exatamente o que um
-            usuário faria manualmente pra resolver esse conflito.
+        Walks from the boundary inward. At each waypoint `w`:
+          - No inward neighbor (end of the list): snaps `w` to the
+            anchor, stop.
+          - `w` doesn't share the locked axis with the inward neighbor
+            `w2`: snaps only `w`, stop (no conflict -- the common
+            automatic-route case, w2 and the rest stay untouched).
+          - `w` shares the locked axis with `w2` AND `w` was already
+            aligned with `old_anchor_pt` on that axis (a redundant loose
+            point, e.g. inserted by double-clicking a straight line):
+            snaps `w`, continues to `w2` using `w`'s OLD position as the
+            new reference (the line continues).
+          - `w` shares the locked axis with `w2` but was NOT aligned
+            with `old_anchor_pt` (a deliberate user corner -- e.g. a
+            manual detour that ends on this axis by coincidence):
+            doesn't touch `w` or anything after it. Inserts a "bridge"
+            waypoint between `w` and the anchor -- locked axis matching
+            the anchor, the other axis matching `w` -- exactly what a
+            user would do manually to resolve this conflict.
         """
         wps = self.waypoints
         n = len(wps)
@@ -542,7 +550,7 @@ class ConnectionItem(DiagramItemBase):
     _WP_HOVER_RANGE   = 20
     _SEG_HIT_DIST     = 8
     _WP_VISIBLE_RANGE = 40
-    _CLICK_EPSILON     = 2.0   # px -- abaixo disso, press+release conta como clique, não drag
+    _CLICK_EPSILON     = 2.0   # px -- below this, press+release counts as a click, not a drag
 
     # =========================================================================
     # Waypoints — hit detection
@@ -580,14 +588,14 @@ class ConnectionItem(DiagramItemBase):
         return result
 
     def compute_split_point(self, scene_pos: QPointF):
-        """Ponto mais próximo de `scene_pos` sobre a rota roteada (não a
-        reta ponto-a-ponto), pra criar uma junção ali.
+        """Point closest to `scene_pos` on the routed path (not the
+        straight point-to-point line), to create a junction there.
 
-        Retorna (ponto, waypoints_antes, waypoints_depois) -- as duas
-        listas já prontas pra virar `self.waypoints` das duas
-        ConnectionItem resultantes do split -- ou None se `scene_pos`
-        estiver longe demais de qualquer segmento (mesmo raio de
-        `_seg_hit_at`, usado também pelo duplo-clique que insere
+        Returns (point, waypoints_before, waypoints_after) -- the two
+        lists already ready to become `self.waypoints` for the two
+        ConnectionItems resulting from the split -- or None if
+        `scene_pos` is too far from any segment (same radius as
+        `_seg_hit_at`, also used by the double-click that inserts a
         waypoint).
         """
         hit = self._seg_hit_at(scene_pos)
@@ -613,7 +621,7 @@ class ConnectionItem(DiagramItemBase):
         hover_wp       = self._hovered_wp
         visible_range2 = self._WP_VISIBLE_RANGE ** 2
 
-        # Ponto de referência para o range de visibilidade dos handles.
+        # Reference point for the handles' visibility range.
         ref_pos: QPointF | None = None
         if hover_wp is not None and hover_wp < len(self.waypoints):
             ref_pos = self.waypoints[hover_wp]
@@ -648,29 +656,30 @@ class ConnectionItem(DiagramItemBase):
     # =========================================================================
 
     def reanchor_waypoints(self) -> None:
-        """Corrige a rota logo após construir uma ConnectionItem cujos
-        waypoints vieram de OUTRA conexão (split de linha em
-        GraphicsView.split_connection_at ou merge ao colapsar uma junção
-        em _merge_junction_if_collapsed) -- eles foram capturados sob as
-        margens/direção de saída da conexão de origem, que não são
-        necessariamente as mesmas que esta conexão nova calcula pra si.
+        """Fixes up the route right after building a ConnectionItem whose
+        waypoints came from ANOTHER connection (a line split in
+        GraphicsView.split_connection_at, or a merge when collapsing a
+        junction in _merge_junction_if_collapsed) -- they were captured
+        under the source connection's margins/exit direction, which
+        aren't necessarily the same ones this new connection computes
+        for itself.
 
-        O anchor "J" de uma JunctionNodeItem aceita as 4 direções (ver
-        JunctionNodeItem.setup), então a direção "ideal" escolhida por
-        _choose_best_exit_direction pode mudar em relação à conexão de
-        origem mesmo sem nenhum node ter se movido -- sem essa correção,
-        o primeiro/último segmento pode sair diagonal já na criação
-        (reprodução real: usuário reportou linhas perdendo ortogonalidade
-        ao criar/mover/deletar junções).
+        A JunctionNodeItem's "J" anchor accepts all 4 directions (see
+        JunctionNodeItem.setup), so the "ideal" direction
+        _choose_best_exit_direction picks can differ from the source
+        connection's even with no node having moved -- without this
+        fix, the first/last segment can come out diagonal right at
+        creation (reproduced for real: a user reported lines losing
+        orthogonality when creating/moving/deleting junctions).
 
-        Sem waypoints (rota reta): reroteia do zero -- nada a preservar.
-        Com waypoints: reaproveita adjust_waypoints_for_node_move() como
-        se fosse a primeira vez que os dois lados "se moveram" -- mesma
-        lógica de snap/bridge já usada (e correta por construção: cada
-        chamada a `snap()` só sobrescreve a coordenada do eixo que não é
-        compartilhado com o vizinho interno, então o eixo que já era
-        compartilhado nunca é tocado) quando um node existente é
-        arrastado.
+        No waypoints (straight route): reroutes from scratch -- nothing
+        to preserve. With waypoints: reuses
+        adjust_waypoints_for_node_move() as if this were the first time
+        both sides "moved" -- same snap/bridge logic already used (and
+        correct by construction: each `snap()` call only overwrites the
+        coordinate of the axis NOT shared with the inward neighbor, so
+        an axis that was already shared is never touched) when an
+        existing node is dragged.
         """
         if not self._anchors_in_scene():
             return
@@ -680,7 +689,7 @@ class ConnectionItem(DiagramItemBase):
         self.adjust_waypoints_for_node_move(moved_source=True, moved_target=True)
 
     def _reroute_waypoints(self):
-        """Descarta os waypoints atuais e recalcula a rota do zero."""
+        """Discards the current waypoints and recomputes the route from scratch."""
         if not self._anchors_in_scene():
             return
         _, _, p1_out, p2_in, exit_dir, entry_dir = self._compute_exit_entry()
@@ -706,7 +715,7 @@ class ConnectionItem(DiagramItemBase):
         self.update()
 
     def _insert_waypoint_at_segment(self, scene_pos: QPointF):
-        """Insere um waypoint no segmento mais próximo; retorna o índice ou None."""
+        """Inserts a waypoint on the nearest segment; returns its index or None."""
         hit = self._seg_hit_at(scene_pos)
         if hit is None:
             return None
@@ -794,21 +803,23 @@ class ConnectionItem(DiagramItemBase):
             if i is not None and 0 <= i < len(self._drag_original_wps):
                 orig_wps = self._drag_original_wps
                 full, _  = self._resolved_points(orig_wps)
-                fi   = i + 1  # desloca pro índice em `full`, que tem p1_out na ponta
+                fi   = i + 1  # shift to the index in `full`, which has p1_out at the front
                 orig = full[fi]
                 prev_h = abs(full[fi-1].y() - orig.y()) < 0.5
                 prev_v = abs(full[fi-1].x() - orig.x()) < 0.5
                 next_h = abs(full[fi+1].y() - orig.y()) < 0.5
                 next_v = abs(full[fi+1].x() - orig.x()) < 0.5
-                # full[0]/full[-1] são os pontos de margem do anchor (p1_out/p2_in),
-                # não waypoints -- eles nunca se movem pra acompanhar o arrasto. Por
-                # isso, quando o vizinho em questão É o anchor (fi-1 == 0 ou
-                # fi+1 == len(full)-1), um eixo "batendo" tem que TRAVAR esse eixo
-                # (senão o segmento até o anchor vira diagonal, já que não há como
-                # compensar movendo o outro lado). Quando o vizinho é um waypoint de
-                # verdade, o eixo batendo LIBERA o movimento nesse eixo, porque o
-                # bloco de escrita abaixo arrasta o vizinho junto pra manter o
-                # segmento ortogonal.
+                # full[0]/full[-1] are the anchor's margin points
+                # (p1_out/p2_in), not waypoints -- they never move to
+                # follow the drag. So when the neighbor in question IS
+                # the anchor (fi-1 == 0 or fi+1 == len(full)-1), a
+                # matching axis must LOCK that axis (otherwise the
+                # segment to the anchor becomes diagonal, since there's
+                # no way to compensate by moving the other side). When
+                # the neighbor is a real waypoint, a matching axis FREES
+                # movement on that axis, because the write block below
+                # drags the neighbor along to keep the segment
+                # orthogonal.
                 prev_is_anchor = fi - 1 == 0
                 next_is_anchor = fi + 1 == len(full) - 1
                 lock_y = (prev_h and prev_is_anchor) or (next_h and next_is_anchor)
@@ -871,7 +882,7 @@ class ConnectionItem(DiagramItemBase):
             self.setSelected(False)
 
     def _collapse_segment_corners(self):
-        """Remove waypoints redundantes após drag de segmento (3 pontos colineares)."""
+        """Removes redundant waypoints after a segment drag (3 collinear points)."""
         if not self.waypoints:
             return
         resolved = self._resolved_points()[0]
@@ -900,19 +911,21 @@ class ConnectionItem(DiagramItemBase):
                 else:
                     i += 1
         self.prepareGeometryChange()
-        # Não chama adjust_waypoints_for_node_move()/_adjust_boundary() aqui:
-        # um drag de segmento move as cópias inseridas de seg_a/seg_b juntas
-        # (mousePressEvent/mouseMoveEvent acima), preservando a ortogonalidade
-        # da borda por construção -- não há reparo de borda a fazer.
+        # Doesn't call adjust_waypoints_for_node_move()/_adjust_boundary()
+        # here: a segment drag moves the inserted seg_a/seg_b copies
+        # together (mousePressEvent/mouseMoveEvent above), preserving
+        # boundary orthogonality by construction -- no boundary repair
+        # needed.
         self.update()
 
     def _undo_segment_split(self):
-        """Desfaz o split temporário de segmento quando o press+release não
-        teve deslocamento real -- ou seja, foi um clique de seleção, não um
-        drag. Remove os 2 waypoints inseridos em mousePressEvent e pronto:
-        não passa por adjust_waypoints_for_node_move, então uma conexão com
-        rota não-trivial (ex. vinda de um gerador) não corre o risco de ser
-        substituída pelo roteamento heurístico padrão só por ter sido clicada.
+        """Undoes the temporary segment split when the press+release had
+        no real movement -- i.e. it was a selection click, not a drag.
+        Just removes the 2 waypoints inserted in mousePressEvent: this
+        never goes through adjust_waypoints_for_node_move, so a
+        connection with a non-trivial route (e.g. from a generator)
+        isn't at risk of being replaced by the default heuristic routing
+        just from being clicked.
         """
         i = self._drag_wp_index
         if i is not None and 0 <= i + 1 < len(self.waypoints):
@@ -922,7 +935,7 @@ class ConnectionItem(DiagramItemBase):
             self.update()
 
     def mouseDoubleClickEvent(self, event):
-        """Double-click num segmento insere um waypoint naquela posição."""
+        """Double-clicking a segment inserts a waypoint at that position."""
         if event.button() == Qt.MouseButton.LeftButton and \
                 self._insert_waypoint_at_segment(event.scenePos()) is not None:
             event.accept()
@@ -973,8 +986,9 @@ class ConnectionItem(DiagramItemBase):
                 except (TypeError, RuntimeError):
                     pass
                 self.editor.theme_changed.connect(self.on_theme_changed)
-                # Sincroniza com o tema atual: o item pode ter sido criado
-                # depois do último toggle, sem nunca ter recebido o sinal.
+                # Syncs with the current theme: the item may have been
+                # created after the last toggle, never having received
+                # the signal.
                 self.on_theme_changed(getattr(self.editor, "is_light_theme", False))
         return super().itemChange(change, value)
 
@@ -1004,27 +1018,26 @@ class ConnectionItem(DiagramItemBase):
 
     @staticmethod
     def _merge_junction_if_collapsed(anchor) -> None:
-        """Funde de volta as duas pernas remanescentes de uma
-        JunctionNodeItem que acabou de cair pra 2 conexões vivas -- ela
-        deixou de ser um T de verdade, então não faz mais sentido existir
-        como nó separado.
+        """Merges the two remaining legs of a JunctionNodeItem that just
+        dropped to 2 live connections back together -- it's no longer a
+        real T, so it no longer makes sense to exist as a separate node.
 
-        Mesmo padrão adiado de `_cleanup_orphan_junction`: cria a
-        ConnectionItem fundida e deleta as duas pernas antigas dentro de
-        um QTimer.singleShot(0, ...), porque prepare_delete() pode já
-        estar rodando dentro de outro adiamento (DeleteManager ou
-        split_connection_at) -- aninhar mais um compõe normalmente, do
-        jeito que o resto do codebase já faz.
+        Same deferred pattern as `_cleanup_orphan_junction`: creates the
+        merged ConnectionItem and deletes the two old legs inside a
+        QTimer.singleShot(0, ...), because prepare_delete() may already
+        be running inside another deferral (DeleteManager or
+        split_connection_at) -- nesting one more composes normally, the
+        way the rest of the codebase already does.
 
-        Remove o node da junção explicitamente aqui (não deixa pro
-        cascade genérico de `_cleanup_orphan_junction`, disparado quando
-        leg2.prepare_delete() zera a contagem do anchor): esse cascade
-        agendaria um SEGUNDO QTimer.singleShot(0, ...) aninhado, que só
-        assenta numa segunda volta do event loop -- exigindo dois
-        processEvents() em vez de um pra completar o merge inteiro. Fazer
-        a remoção aqui mesmo, dentro deste único nível de adiamento, é
-        seguro (mesma composição já estabelecida) e mantém o merge inteiro
-        assentando numa única volta do event loop.
+        Removes the junction's node explicitly here (doesn't leave it to
+        `_cleanup_orphan_junction`'s generic cascade, triggered when
+        leg2.prepare_delete() zeroes the anchor's count): that cascade
+        would schedule a SECOND, nested QTimer.singleShot(0, ...), which
+        only settles on a second event-loop turn -- requiring two
+        processEvents() instead of one to complete the whole merge.
+        Doing the removal right here, within this single level of
+        deferral, is safe (same composition already established) and
+        keeps the whole merge settling within a single event-loop turn.
         """
         node = anchor.node
         if not isinstance(node, JunctionNodeItem) or anchor.connection_count() != 2:
@@ -1033,32 +1046,32 @@ class ConnectionItem(DiagramItemBase):
         leg1, leg2 = node.connections[0], node.connections[1]
 
         def _waypoints_toward_junction(leg):
-            """Retorna (node_do_outro_lado, anchor_do_outro_lado,
-            waypoints_ordenados_do_outro_lado_ATÉ_a_junção) -- pra virar
-            a METADE ANTES do ponto de passagem no merge (wp1). Os
-            waypoints armazenados em `leg.waypoints` já estão na ordem
-            source->target; se a junção for o source (não o target), essa
-            ordem precisa ser invertida."""
+            """Returns (other_side_node, other_side_anchor,
+            waypoints_ordered_from_the_other_side_UP_TO_the_junction) --
+            to become the HALF BEFORE the merge's pass-through point
+            (wp1). The waypoints stored in `leg.waypoints` are already
+            in source->target order; if the junction is the source (not
+            the target), that order needs reversing."""
             if leg.target is node:
                 return leg.source, leg.source_anchor, list(leg.waypoints)
             return leg.target, leg.target_anchor, list(reversed(leg.waypoints))
 
         def _waypoints_away_from_junction(leg):
-            """Retorna (node_do_outro_lado, anchor_do_outro_lado,
-            waypoints_ordenados_DA_junção_até_o_outro_lado) -- pra virar a
-            METADE DEPOIS do ponto de passagem no merge (wp2). Direção
-            oposta de `_waypoints_toward_junction` -- reusar a mesma
-            função pras duas pernas inverteria a ordem de uma delas e
-            produzia um segmento diagonal (bug real encontrado testando o
-            merge de verdade: o ponto de passagem ficava ligado ao ponto
-            errado da segunda perna)."""
+            """Returns (other_side_node, other_side_anchor,
+            waypoints_ordered_FROM_the_junction_to_the_other_side) -- to
+            become the HALF AFTER the merge's pass-through point (wp2).
+            Opposite direction from `_waypoints_toward_junction` --
+            reusing the same function for both legs would reverse one
+            of their orders and produce a diagonal segment (a real bug
+            found while testing an actual merge: the pass-through point
+            ended up linked to the wrong point of the second leg)."""
             if leg.source is node:
                 return leg.target, leg.target_anchor, list(leg.waypoints)
             return leg.source, leg.source_anchor, list(reversed(leg.waypoints))
 
         def _merge():
             if not (leg1.scene() and leg2.scene()):
-                return  # já foi mexido por outro caminho nesse meio tempo
+                return  # already handled by another path in the meantime
 
             p1_node, p1_anchor, wp1 = _waypoints_toward_junction(leg1)
             p2_node, p2_anchor, wp2 = _waypoints_away_from_junction(leg2)
@@ -1083,17 +1096,17 @@ class ConnectionItem(DiagramItemBase):
             p1_node.connections.append(merged)
             p2_node.connections.append(merged)
 
-            # wp1/wp2 foram capturados sob as margens das pernas
-            # ANTIGAS (leg1/leg2, que apontavam pra o anchor "J" da
-            # junção) -- merged aponta direto pra p1_node/p2_node, cuja
-            # direção "ideal" pode diferir da que a junção tinha. Sem
-            # isso, o segmento perto do ponto de passagem pode sair
+            # wp1/wp2 were captured under the OLD legs' margins
+            # (leg1/leg2, which pointed at the junction's "J" anchor) --
+            # merged points directly at p1_node/p2_node, whose "ideal"
+            # direction can differ from the junction's. Without this,
+            # the segment near the pass-through point can come out
             # diagonal.
             merged.reanchor_waypoints()
 
-            # Descarta o ponto da junção (e qualquer outro) se virou
-            # redundante -- 3 pontos colineares -- preserva se for uma
-            # curva de verdade.
+            # Drops the junction's point (and any other) if it became
+            # redundant -- 3 collinear points -- preserves it if it's a
+            # real bend.
             merged._collapse_segment_corners()
 
             p1_anchor.refresh_junction_dot()
@@ -1103,19 +1116,20 @@ class ConnectionItem(DiagramItemBase):
 
     @staticmethod
     def _cleanup_orphan_junction(anchor) -> None:
-        """Remove a JunctionNodeItem dona de `anchor` se ela acabou de
-        ficar com 0 conexões vivas.
+        """Removes the JunctionNodeItem owning `anchor` if it just dropped
+        to 0 live connections.
 
-        Uma JunctionNodeItem tem boundingRect()/shape() 0x0 (sem corpo
-        visível por design) -- se ambos os ramos dela forem deletados um
-        de cada vez, ela vira um nó órfão inclicável/inselecionável/
-        indeletável pela UI normal, mas continua sendo serializado em
-        todo save futuro para sempre. Usa o MESMO padrão adiado de
-        split_connection_at/DeleteManager -- prepare_delete() pode já
-        estar rodando dentro de um QTimer.singleShot(0, ...) do
-        DeleteManager ou de split_connection_at; aninhar outro
-        singleShot(0, ...) aqui compõe normalmente com isso, do mesmo jeito
-        que NodeItem.remove_anchor já compõe com o DeleteManager."""
+        A JunctionNodeItem has a 0x0 boundingRect()/shape() (no visible
+        body by design) -- if both of its branches get deleted one at a
+        time, it becomes an orphan node that's unclickable/
+        unselectable/undeletable through normal UI, yet keeps getting
+        serialized into every future save forever. Uses the SAME
+        deferred pattern as split_connection_at/DeleteManager --
+        prepare_delete() may already be running inside a
+        QTimer.singleShot(0, ...) from DeleteManager or
+        split_connection_at; nesting another singleShot(0, ...) here
+        composes normally with that, the same way NodeItem.remove_anchor
+        already composes with DeleteManager."""
         node = anchor.node
         if not isinstance(node, JunctionNodeItem) or anchor.connection_count() != 0:
             return
@@ -1130,15 +1144,15 @@ class ConnectionItem(DiagramItemBase):
 
     @staticmethod
     def _rebuild_scene_index(scene) -> None:
-        """Força a reconstrução do índice espacial (BSP) da cena depois de
-        remover itens fora do ciclo síncrono normal de eventos Qt --
-        mesma dança usada por DeleteManager.do_delete() e
-        NodeItem.remove_anchor(). Sem isso, o índice fica com entradas
-        obsoletas que corrompem uma query espacial subsequente
-        (scene().items(pos), usada por GraphicsView._connection_at em
-        todo mouseMoveEvent em modo CONNECT) -- reprodução real: "Windows
-        fatal exception: access violation" minutos depois de uma
-        remoção adiada sem essa reconstrução."""
+        """Forces a rebuild of the scene's spatial index (BSP) after
+        removing items outside Qt's normal synchronous event cycle --
+        same dance used by DeleteManager.do_delete() and
+        NodeItem.remove_anchor(). Without this, the index keeps stale
+        entries that corrupt a later spatial query (scene().items(pos),
+        used by GraphicsView._connection_at on every mouseMoveEvent in
+        CONNECT mode) -- reproduced for real: a "Windows fatal
+        exception: access violation" minutes after a deferred removal
+        without this rebuild."""
         scene.invalidate(scene.sceneRect(), QGraphicsScene.SceneLayer.AllLayers)
         current_index = scene.itemIndexMethod()
         scene.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
@@ -1170,27 +1184,28 @@ class ConnectionItem(DiagramItemBase):
         conn._waypoints_initialized = True
         source_node.connections.append(conn)
         target_node.connections.append(conn)
-        # Sem isso, todo undo/redo (que reconstrói a cena inteira via
-        # _restore_snapshot -> deserialize_scene) apagava a bolinha de
-        # junção até o usuário re-passar o mouse sobre o anchor.
+        # Without this, every undo/redo (which rebuilds the whole scene
+        # via _restore_snapshot -> deserialize_scene) would erase the
+        # junction dot until the user moved the mouse over the anchor
+        # again.
         source_anchor.refresh_junction_dot()
         target_anchor.refresh_junction_dot()
-        # Semeia o cache de posição/direção dos anchors com os valores atuais
-        # (== os valores no momento do save, já que os anchors não se moveram
-        # desde então) ANTES da repara abaixo. Sem isso, `_last_p1_out`/
-        # `_last_p2_in`/`_last_exit_dir`/`_last_entry_dir` ficam nos defaults
-        # de `__init__` e a checagem "rota pristina" de
-        # `adjust_waypoints_for_node_move` nunca dispara aqui -- qualquer rota
-        # automática de 3+ pontos (hvhv/vhvh) carregada do arquivo ganha uma
-        # ponte espúria (zero-length, sentada em cima do próprio anchor) só
-        # por essa falta de histórico, e essa ponte é persistida de volta no
-        # próximo save.
+        # Seeds the anchors' position/direction cache with the current
+        # values (== the values at save time, since the anchors haven't
+        # moved since then) BEFORE the repair below. Without this,
+        # `_last_p1_out`/`_last_p2_in`/`_last_exit_dir`/`_last_entry_dir`
+        # stay at `__init__`'s defaults and
+        # `adjust_waypoints_for_node_move`'s "pristine route" check never
+        # fires here -- any automatic 3+ point route (hvhv/vhvh) loaded
+        # from the file gains a spurious bridge (zero-length, sitting
+        # right on top of the anchor) just from this missing history,
+        # and that bridge gets persisted back on the next save.
         if conn._anchors_in_scene():
             _, _, p1_out, p2_in, exit_dir, entry_dir = conn._compute_exit_entry()
             conn._last_p1_out, conn._last_p2_in = QPointF(p1_out), QPointF(p2_in)
             conn._last_exit_dir, conn._last_entry_dir = exit_dir, entry_dir
-        # Repara waypoints não-ortogonais salvos por versões antigas.
-        # Seguro para waypoints do A* pois o sanity check é apenas wp→wp.
+        # Repairs non-orthogonal waypoints saved by older versions.
+        # Safe for A* waypoints since the sanity check is only wp->wp.
         conn.adjust_waypoints_for_node_move()
         return conn
 

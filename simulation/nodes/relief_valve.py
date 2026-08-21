@@ -1,5 +1,5 @@
-"""Nó de simulação de válvula de alívio de ação direta (sequence valve
-quando pilotada — ver properties["piloted"])."""
+"""Direct-operated relief valve simulation node (a sequence valve when
+piloted -- see properties["piloted"])."""
 
 import math
 from simulation.nodes.nodes import Node
@@ -11,7 +11,7 @@ class ReliefValve(Node, HydraulicMixin):
         if self.domain == "hydraulic":
             p_set = self.properties.get("p_set")
             if p_set is None:
-                raise ValueError(f"ReliefValve '{self.id}': propriedade obrigatória 'p_set' não preenchida.")
+                raise ValueError(f"ReliefValve '{self.id}': required property 'p_set' is not set.")
             self.p_set        = float(p_set)
             self.flow_var_in  = f"Q_{self.id}_in"
             self.flow_var_out = f"Q_{self.id}_out"
@@ -39,8 +39,8 @@ class ReliefValve(Node, HydraulicMixin):
     @property
     def bounds(self):
         return {
-            self.flow_var_in: (0.0, None),   # Q_in nunca negativo
-            self.flow_var_out: (None, 0.0),  # Q_out nunca positivo
+            self.flow_var_in: (0.0, None),   # Q_in never negative
+            self.flow_var_out: (None, 0.0),  # Q_out never positive
         }
 
     def hydraulic_ports(self) -> dict:
@@ -66,21 +66,21 @@ class ReliefValve(Node, HydraulicMixin):
             y_anchor = self.anchors.get("Y")
             if y_anchor is None or not y_anchor.connections:
                 raise ValueError(
-                    f"ReliefValve '{self.id}': porta 'Y' pilotada mas não conectada a nada — "
-                    "conecte Y a uma referência de pressão ou desative a pilotagem."
+                    f"ReliefValve '{self.id}': piloted port 'Y' is not connected to anything -- "
+                    "connect Y to a pressure reference or disable piloting."
                 )
             P_y = x[idx[y_anchor.pressure_var]]
             effective_p_set = self.p_set + P_y
         else:
             effective_p_set = self.p_set
 
-        # regime passivo: só entra quando o lado T está genuinamente
-        # contrapressurizado acima do próprio limiar efetivo — não apenas
-        # acima de P_in. Sem o gate por effective_p_set, P_in e P_out
-        # perto de zero (ruído numérico logo após uma mudança de
-        # topologia) bastavam para disparar o branch, que não
-        # referencia o limiar, e a relief "abria" sem nunca ter atingido
-        # a pressão de ajuste.
+        # passive regime: only kicks in when the T side is genuinely
+        # backpressurized above its own effective threshold -- not just
+        # above P_in. Without the effective_p_set gate, P_in and P_out
+        # near zero (numerical noise right after a topology change) was
+        # enough to trigger this branch, which doesn't reference the
+        # threshold, and the relief valve would "open" without ever
+        # having reached the set pressure.
         if P_out > effective_p_set and P_out >= P_in and Q_in > 0:
             eq_fb = (P_in - P_out) / P_scale
         else:
@@ -91,7 +91,7 @@ class ReliefValve(Node, HydraulicMixin):
         eqs = [eq_conservation, eq_fb]
         if self.piloted:
             Q_y = x[idx[self.flow_var_y]]
-            eqs.append(Q_y / Q_scale)  # porta morta -- só sensoriamento
+            eqs.append(Q_y / Q_scale)  # dead port -- sensing only
         return eqs
 
     @property
@@ -109,7 +109,7 @@ class ReliefValve(Node, HydraulicMixin):
         }
 
     def update(self, outputs=None):
-        pass  # sem estado externo — tudo dentro do solver
+        pass  # no external state -- everything lives inside the solver
 
     def get_state(self):
         return super().get_state()
@@ -118,5 +118,5 @@ class ReliefValve(Node, HydraulicMixin):
         super().set_state(state)
 
     def set_scale(self, p_ref: float, q_ref: float) -> None:
-        self.p_ref = max(p_ref, 1e5)   # mínimo 1 bar — escala realista
+        self.p_ref = max(p_ref, 1e5)   # minimum 1 bar -- realistic scale
         self.q_ref = max(q_ref, 1e-10)

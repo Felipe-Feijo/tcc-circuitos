@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula lógica AND."""
+"""Simulation node for the AND logic valve."""
 
 from simulation.nodes.nodes import Node
 
@@ -6,19 +6,19 @@ class AndValve(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "and_valve", domain=domain, properties=properties)
 
-        # Estado interno (shuttle com memória)
-        self.active_input: str = "default"  # estado inicial
+        # Internal state (shuttle with memory)
+        self.active_input: str = "default"  # initial state
 
     def update(self, outputs=None):
         x = self.anchors["X"].state
         y = self.anchors["Y"].state
 
-        # Só muda se exatamente uma entrada estiver pressurizada
+        # Only changes if exactly one input is pressurized
         if x == y and x and y:
             self.active_input = "default"
         elif x != y:
             self.active_input = "X" if x else "Y"
-        # else: mantém o estado atual
+        # else: keeps the current state
 
     def get_internal_connections(self):
         if self.active_input == "default" and self.anchors["X"].state and self.anchors["Y"].state:
@@ -27,7 +27,7 @@ class AndValve(Node):
             return []
     
     def get_visual_state(self):
-        return self.active_input  # "X" ou "Y"
+        return self.active_input  # "X" or "Y"
     
 
     def get_state(self):

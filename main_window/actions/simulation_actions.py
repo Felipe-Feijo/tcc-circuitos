@@ -1,4 +1,4 @@
-"""Ações de simulação: play, pause, passo para frente/trás e controle de velocidade."""
+"""Simulation actions: play, pause, step forward/back and speed control."""
 
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout
@@ -14,7 +14,7 @@ def create_simulation_actions(main_window):
     actions["run"].triggered.connect(main_window.toggle_play)
 
     actions["step_back"] = QAction("Step Back", main_window)
-    # Ctrl+Z é reservado para Undo — step_back usa Ctrl+Left na simulação
+    # Ctrl+Z is reserved for Undo -- step_back uses Ctrl+Left in the simulation
     actions["step_back"].setShortcut("Ctrl+Left")
     actions["step_back"].setEnabled(False)
     actions["step_back"].triggered.connect(main_window.on_step_back)

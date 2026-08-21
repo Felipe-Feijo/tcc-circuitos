@@ -1,6 +1,6 @@
-"""Ponto de entrada da aplicação.
+"""Application entry point.
 
-Inicializa o QApplication, carrega o stylesheet global e exibe a janela principal.
+Initializes the QApplication, loads the global stylesheet and shows the main window.
 """
 
 import os
@@ -13,9 +13,9 @@ from paths import get_base_dir
 os.chdir(get_base_dir())
 
 if sys.stderr is None:
-    # Build "windowed" (sem console): sys.stdout/stderr vêm None, e
-    # faulthandler.enable() exige um stream real -- redireciona pra um
-    # arquivo de log ao lado do executável em vez de deixar crashar.
+    # Windowed build (no console): sys.stdout/stderr come back None, and
+    # faulthandler.enable() requires a real stream -- redirect to a log
+    # file next to the executable instead of letting it crash.
     log_path = Path(sys.executable).parent / "circuit_editor.log"
     sys.stdout = sys.stderr = open(log_path, "w", encoding="utf-8")
 

@@ -1,25 +1,24 @@
-"""Nó gráfico de válvula de alívio de ação direta (sequence valve quando
-pilotada).
+"""Graphics node for the direct-acting relief valve (sequence valve when
+piloted).
 
 Sprite layout
 -------------
 Width x Height: 200 x 162 px
-Anchor P (topo)  : (width*99/199, 0)          exit -> top
+Anchor P (top)   : (width*99/199, 0)          exit -> top
 Anchor T (base)  : (width*99/199, height)     exit -> bottom
-Anchor Y (piloto): (width, height*53.5/162)   exit -> right
-                   presente apenas quando properties["piloted"] é True.
-                   Altura medida no overlay relief_valve_pilot.png: a
-                   linha pontilhada toca a borda direita (x=199) entre
-                   y=51 e y=56 — 53.5 é o centro desse intervalo, não
-                   height/2 (que ficaria bem mais abaixo, na metade do
-                   corpo).
+Anchor Y (pilot) : (width, height*53.5/162)   exit -> right
+                   present only when properties["piloted"] is True.
+                   Height measured on the relief_valve_pilot.png overlay:
+                   the dotted line touches the right edge (x=199) between
+                   y=51 and y=56 -- 53.5 is the center of that interval,
+                   not height/2 (which would land much lower, at the
+                   middle of the body).
 
 Sprites
 -------
-relief_valve.png       -- corpo (sem seta de mola ajustável)
-relief_valve_pilot.png -- overlay de pilotagem externa (linha pontilhada
-                          + porta Y), desenhado por cima do corpo quando
-                          piloted=True.
+relief_valve.png       -- body (without adjustable spring arrow)
+relief_valve_pilot.png -- external pilot overlay (dotted line + Y port),
+                          drawn on top of the body when piloted=True.
 """
 
 from PyQt6.QtGui import QPixmap
@@ -60,9 +59,9 @@ class ReliefValve(NodeItem):
         self._update_pilot_anchor()
 
     def _update_pilot_anchor(self) -> None:
-        """Adiciona/remove a âncora Y e o overlay de pilotagem conforme
-        self.properties. Chamado em setup() e sempre que a propriedade
-        mudar (apply_properties / apply_properties_from_dialog)."""
+        """Adds/removes the Y anchor and the pilot overlay based on
+        self.properties. Called in setup() and whenever the property
+        changes (apply_properties / apply_properties_from_dialog)."""
         if self.properties.get("piloted"):
             self.add_anchor(AnchorItem(
                 "Y", QPointF(self.width, self.height * 53.5 / 162), node=self, domain=self.domain,

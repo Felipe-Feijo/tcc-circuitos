@@ -1,4 +1,4 @@
-"""Grava posição dos pistões e um snapshot visual do circuito a cada step."""
+"""Records piston positions and a visual snapshot of the circuit at each step."""
 
 import logging
 import os
@@ -16,7 +16,7 @@ PISTON_TYPES = ("single_acting_cylinder", "double_acting_cylinder")
 
 @dataclass
 class Frame:
-    """Um instante gravado da simulação."""
+    """One recorded instant of the simulation."""
     step_index: int
     sim_time: float
     piston_positions: dict
@@ -25,24 +25,24 @@ class Frame:
 
 @dataclass
 class ReportData:
-    """Dados coletados por um `FrameRecorder`, prontos para `report_builder`."""
+    """Data collected by a `FrameRecorder`, ready for `report_builder`."""
     frames: list = field(default_factory=list)
     temp_dir: str = ""
 
 
 class FrameRecorder:
-    """Grava o histórico de uma sessão de simulação para gerar um relatório.
+    """Records a simulation session's history to build a report.
 
-    Um `FrameRecorder` vive durante uma sessão de simulação ativa: é criado
-    em `SimulationSession.start()`, alimentado a cada
-    `SimulationController.state_changed` via `capture_step()`, e encerrado
-    em `SimulationSession.stop()` via `finalize()`.
+    A `FrameRecorder` lives for the duration of an active simulation
+    session: created in `SimulationSession.start()`, fed on each
+    `SimulationController.state_changed` via `capture_step()`, and
+    closed in `SimulationSession.stop()` via `finalize()`.
 
     Args:
-        engine: `SimulationEngine` da sessão ativa (fonte de `.nodes`).
-        scene: `QGraphicsScene` da cena, usada para renderizar cada frame.
-        dt: Intervalo de tempo simulado entre steps, usado para calcular
-            `sim_time` de cada frame.
+        engine: The active session's `SimulationEngine` (source of `.nodes`).
+        scene: The scene's `QGraphicsScene`, used to render each frame.
+        dt: Simulated time interval between steps, used to compute each
+            frame's `sim_time`.
     """
 
     def __init__(self, engine, scene, dt: float):
@@ -55,18 +55,19 @@ class FrameRecorder:
         self._step_index = 0
         self._finalized = False
 
-        # Dimensões dos frames fixadas na criação: `scene.sceneRect()` pode
-        # mudar durante a simulação (zoom/pan do usuário), e o encoder de
-        # vídeo rejeita frames com dimensões inconsistentes.
+        # Frame dimensions fixed at creation: `scene.sceneRect()` can
+        # change during simulation (user zoom/pan), and the video
+        # encoder rejects frames with inconsistent dimensions.
         rect = self.scene.sceneRect()
         self._frame_width = max(1, int(rect.width()))
         self._frame_height = max(1, int(rect.height()))
 
     def capture_step(self) -> None:
-        """Grava um frame com a posição atual dos pistões e um PNG da cena.
+        """Records a frame with the pistons' current position and a PNG of the scene.
 
-        Não faz nada se já foi finalizado. Falha ao renderizar a imagem é
-        logada e pula o frame — nunca derruba a simulação.
+        Does nothing if already finalized. A failure rendering the
+        image is logged and the frame is skipped -- it never crashes
+        the simulation.
         """
         if self._finalized:
             return
@@ -81,7 +82,7 @@ class FrameRecorder:
         try:
             self._render_frame(image_path)
         except Exception:
-            logger.exception("falha ao capturar frame %d do relatório", self._step_index)
+            logger.exception("failed to capture report frame %d", self._step_index)
             return
 
         self._frames.append(Frame(
@@ -93,20 +94,20 @@ class FrameRecorder:
         self._step_index += 1
 
     def finalize(self) -> ReportData:
-        """Encerra a gravação e devolve os frames coletados.
+        """Ends the recording and returns the collected frames.
 
-        Chamadas subsequentes a `capture_step()` são ignoradas.
+        Subsequent calls to `capture_step()` are ignored.
         """
         self._finalized = True
         return ReportData(frames=list(self._frames), temp_dir=self._temp_dir)
 
     def discard(self) -> None:
-        """Apaga o diretório temporário com todos os frames gravados."""
+        """Deletes the temp directory holding every recorded frame."""
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
     def set_dt(self, dt: float) -> None:
-        """Atualiza o `dt` usado no cálculo de `sim_time` dos próximos
-        frames capturados (ex: quando o usuário muda o dt em pleno run)."""
+        """Updates the `dt` used to compute `sim_time` for the next
+        captured frames (e.g. when the user changes dt mid-run)."""
         self.dt = dt
 
     def _render_frame(self, path: str) -> None:
@@ -122,14 +123,15 @@ class FrameRecorder:
         image.save(path)
 
     def _background_color(self):
-        """Cor de fundo do frame, espelhando o tema atual da cena.
+        """The frame's background color, mirroring the scene's current theme.
 
-        `scene.render()` bypassa a QGraphicsView (só ela tinha a cor do
-        tema antes desta correção), então o preenchimento inicial do
-        QImage precisa vir da própria cena — senão componentes desenhados
-        para o tema escuro ficam invisíveis contra um fundo branco fixo.
-        Cai para branco se a cena não tiver um `backgroundBrush` definido
-        (ex: cena de teste isolada, sem passar por `set_light_theme`).
+        `scene.render()` bypasses QGraphicsView (only it had the theme
+        color before this fix), so the QImage's initial fill needs to
+        come from the scene itself -- otherwise components drawn for
+        the dark theme become invisible against a fixed white
+        background. Falls back to white if the scene has no
+        `backgroundBrush` set (e.g. an isolated test scene, never
+        passed through `set_light_theme`).
         """
         brush = self.scene.backgroundBrush()
         if brush.style() == Qt.BrushStyle.NoBrush:

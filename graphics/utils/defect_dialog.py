@@ -1,10 +1,10 @@
-"""Diálogo de injeção/remoção de defeito num componente, durante a simulação.
+"""Dialog for injecting/removing a defect on a component, during simulation.
 
-Diferente de PropertiesDialog (que edita self.properties do NodeItem, uma
-configuração de projeto persistida no arquivo salvo), este diálogo nunca
-toca em self.properties -- ele só gera comandos enviados ao nó de domínio
-via NodeItem.command, e o defeito vive somente enquanto a simulação atual
-estiver rodando.
+Unlike PropertiesDialog (which edits the NodeItem's self.properties, a
+project configuration persisted to the saved file), this dialog never
+touches self.properties -- it only generates commands sent to the domain
+node via NodeItem.command, and the defect lives only as long as the
+current simulation is running.
 """
 
 from PyQt6.QtWidgets import QDialog, QPushButton
@@ -13,11 +13,11 @@ from graphics.utils.properties_dialog import PropertiesDialog
 
 
 class DefectDialog(PropertiesDialog):
-    """PropertiesDialog com um terceiro botão: Cancelar / Restaurar / Aplicar.
+    """PropertiesDialog with a third button: Cancel / Restore / Apply.
 
-    Restaurar fecha o diálogo e sinaliza restore_requested=True, contornando
-    a validação numérica normal (Restaurar sempre volta o componente à
-    condição padrão -- não há campo a validar).
+    Restore closes the dialog and signals restore_requested=True, bypassing
+    the normal numeric validation (Restore always returns the component to
+    its default condition -- there's no field to validate).
     """
 
     def __init__(self, title="Simular defeito", parent=None):
@@ -28,9 +28,9 @@ class DefectDialog(PropertiesDialog):
 
         self._restore_btn = QPushButton("Restaurar")
         self._restore_btn.clicked.connect(self._on_restore_clicked)
-        # btn_layout tem, antes desta inserção: [stretch(0), Cancelar(1), OK(2)].
-        # Inserir em 2 posiciona Restaurar entre Cancelar e Aplicar (empurra
-        # Aplicar para 3): [stretch, Cancelar, Restaurar, Aplicar].
+        # btn_layout, before this insertion: [stretch(0), Cancel(1), OK(2)].
+        # Inserting at 2 positions Restore between Cancel and Apply (pushes
+        # Apply to 3): [stretch, Cancel, Restore, Apply].
         self._btn_layout.insertWidget(2, self._restore_btn)
 
     def _on_restore_clicked(self) -> None:

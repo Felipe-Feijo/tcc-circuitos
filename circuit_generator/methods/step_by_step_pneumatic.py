@@ -1,32 +1,32 @@
 """
-Gerador de circuito pelo método passo a passo pneumático.
+Circuit generator for the step-by-step pneumatic method.
 
-Topologia gerada para uma sequência com M átomos (mesmo conceito de átomo
-usado em circuit_generator.methods.cascade: um evento sozinho, ou um bloco
-"(...)" inteiro de movimentos simultâneos):
-  - 1 button_switch (Valve_3_2_Ways com button + spring)
-  - Por cilindro: 1 double_acting_cylinder + 1 valve_4_2_ways (pilot+pilot)
-                  + 1 PressureSource dedicado (porta R) + 1 Exhaust dedicado (porta P)
-  - Por átomo: 1 PressureLine dedicada + 1 valve_3_2_ways de memória
-               biestável (pilot+pilot) com PressureSource dedicada (porta P)
-               e Exhaust dedicado (porta R)
-  - Por evento: 1 valve_3_2_ways de sinalização (limit_switch + spring)
-                + 1 Exhaust dedicado (porta R)
-  - Confirmação em série (sem AndValve) quando um átomo tem 2+ eventos
+Topology generated for a sequence with M atoms (same atom concept used
+in circuit_generator.methods.cascade: a single event, or a whole
+"(...)" block of simultaneous moves):
+  - 1 button_switch (Valve_3_2_Ways with button + spring)
+  - Per cylinder: 1 double_acting_cylinder + 1 valve_4_2_ways (pilot+pilot)
+                  + 1 dedicated PressureSource (port R) + 1 dedicated Exhaust (port P)
+  - Per atom: 1 dedicated PressureLine + 1 bistable valve_3_2_ways memory
+              (pilot+pilot) with a dedicated PressureSource (port P) and
+              a dedicated Exhaust (port R)
+  - Per event: 1 signaling valve_3_2_ways (limit_switch + spring)
+               + 1 dedicated Exhaust (port R)
+  - Serial confirmation (no AndValve) when an atom has 2+ events
 
-Diferente do cascata: não há grupos nem alternância de memória A/B -- cada
-átomo tem sua própria linha e memória dedicadas, nunca reaproveitadas.
-Ver docs/superpowers/specs/2026-07-10-step-by-step-pneumatic-design.md.
+Unlike cascade: no groups or A/B memory alternation -- each atom has its
+own dedicated line and memory, never reused.
+See docs/superpowers/specs/2026-07-10-step-by-step-pneumatic-design.md.
 
-Fluxo de pressão principal (anel):
-  MC_k.A → gen-pl-step{k}
-  gen-pl-step{k} → MC_{k-1 mod M}.PR     (reset em anel)
-  btn.A → MC_0.PL                        (única fonte de SET do átomo 0)
-  confirmação(átomo k-1) → MC_k.PL       (SET dos demais átomos)
-  confirmação(átomo M-1) → btn.P         (fechamento do ciclo)
+Main pressure flow (ring):
+  MC_k.A -> gen-pl-step{k}
+  gen-pl-step{k} -> MC_{k-1 mod M}.PR    (ring reset)
+  btn.A -> MC_0.PL                       (atom 0's only SET source)
+  confirmation(atom k-1) -> MC_k.PL      (SET for the other atoms)
+  confirmation(atom M-1) -> btn.P        (cycle closure)
 
-Pilots dos v42 (via linha do próprio átomo, sem duplicação):
-  gen-pl-step{k} → v42.PL/PR             (um tap por evento do átomo)
+v42 pilots (via the atom's own line, no duplication):
+  gen-pl-step{k} -> v42.PL/PR            (one tap per atom event)
 """
 
 import uuid
@@ -34,19 +34,19 @@ from circuit_generator.sequence_parser import extract_cylinders
 
 
 def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
-    """Agrupa os eventos da sequência inteira em átomos: eventos consecutivos
-    com o mesmo parallel_id (3º campo) formam um átomo; os demais viram
-    átomos de 1 evento. Cada evento é anotado com seu índice original na
-    sequência (flat_idx).
+    """Groups the whole sequence's events into atoms: consecutive events
+    sharing the same parallel_id (3rd field) form one atom; the rest
+    become single-event atoms. Each event is annotated with its
+    original index in the sequence (flat_idx).
 
-    Mesma lógica de circuit_generator.sequence_parser._atomize e de
-    circuit_generator.methods.cascade._atomize_group, reimplementada aqui
-    porque o passo a passo não tem camada de grupos -- é uma sequência
-    plana de átomos, sem o corte por repetição de letra que o cascata usa
-    para dividir grupos.
+    Same logic as circuit_generator.sequence_parser._atomize and
+    circuit_generator.methods.cascade._atomize_group, reimplemented here
+    because step-by-step has no group layer -- it's a flat sequence of
+    atoms, without the letter-repetition cut cascade uses to split
+    groups.
 
-    Aceita eventos de 2 ou 3 campos, (letra, direção) ou
-    (letra, direção, parallel_id).
+    Accepts 2- or 3-field events, (letter, direction) or
+    (letter, direction, parallel_id).
     """
     atoms: list[list[tuple[int, str, str]]] = []
     i, n = 0, len(events)
@@ -103,11 +103,11 @@ def generate(events: list[tuple[str, str]]) -> dict:
     def confirm_sensor(letter, direction):
         return f"{letter.lower()}{'1' if direction == '+' else '0'}"
 
-    # Estado inicial: se o primeiro movimento for "-", o cilindro começa estendido.
+    # Initial state: if the first move is "-", the cylinder starts extended.
     first_event     = {letter: direction for letter, direction, *_ in reversed(events)}
     starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
 
-    # ── 1. Cilindros ─────────────────────────────────────────────────────
+    # -- 1. Cylinders ---------------------------------------------------------
 
     for letter in cylinders:
         add_node(f"gen-cyl-{letter}", "DoubleActingCylinder", f"cylinder:{letter}",
@@ -119,7 +119,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
 
-    # ── 2. Válvulas 4/2 com PS e Exhaust dedicados ──────────────────────
+    # -- 2. 4/2 valves with dedicated PS and Exhaust -----------------------
 
     for letter in cylinders:
         add_node(f"gen-v42-{letter}", "Valve_4_2_Ways", f"main_valve:{letter}",
@@ -138,7 +138,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(exh_v42, "R", f"gen-v42-{letter}", "P")
         connect(ps_v42,  "P", f"gen-v42-{letter}", "R")
 
-    # ── 3. Botão de início ───────────────────────────────────────────────
+    # -- 3. Start button --------------------------------------------------
 
     add_node("gen-btn", "Valve_3_2_Ways", "button",
              properties={
@@ -149,16 +149,15 @@ def generate(events: list[tuple[str, str]]) -> dict:
              })
     connect(add_simple("Exhaust", "exhaust:btn-R"), "R", "gen-btn", "R")
 
-    # ── 4. Linhas de pressão e memórias por átomo ────────────────────────
+    # -- 4. Pressure lines and memories per atom ---------------------------
     #
-    #   Cada átomo (`_atomize`) ganha sua própria PressureLine dedicada e
-    #   sua própria válvula de memória biestável (Valve_3_2_Ways com dois
-    #   pilots pneumáticos) -- nunca compartilhadas entre átomos, ao
-    #   contrário do cascata. Reset em anel: MC_k.PR vem da linha do
-    #   PRÓXIMO átomo (módulo M), então o reset do último átomo vem da
-    #   linha do átomo 0, fechando o anel sem caso especial. Só o botão
-    #   seta MC_0 -- todas as outras memórias são setadas pela confirmação
-    #   do átomo anterior (Task 4).
+    #   Each atom (`_atomize`) gets its own dedicated PressureLine and its
+    #   own bistable memory valve (Valve_3_2_Ways with two pneumatic
+    #   pilots) -- never shared between atoms, unlike cascade. Ring
+    #   reset: MC_k.PR comes from the NEXT atom's line (modulo M), so the
+    #   last atom's reset comes from atom 0's line, closing the ring with
+    #   no special case. Only the button sets MC_0 -- every other memory
+    #   is set by the previous atom's confirmation (Task 4).
 
     atoms   = _atomize(events)
     n_atoms = len(atoms)
@@ -166,12 +165,12 @@ def generate(events: list[tuple[str, str]]) -> dict:
     pl_ids = [f"gen-pl-step{k}" for k in range(n_atoms)]
     mc_ids = [f"gen-mc-{k}" for k in range(n_atoms)]
 
-    # O gerador de topologia não tem nenhuma posição de tela real pra
-    # decidir quanto uma PressureLine precisa alcançar fisicamente -- só
-    # quem sabe isso é a etapa de layout (step_by_step_layout.py, via
-    # Grid.occupied_x_range). Aqui, cada PL nasce vazia e next_anchor()
-    # cresce a lista sob demanda: exatamente 1 anchor por conexão real,
-    # nunca mais, nunca menos, sem risco de esgotamento.
+    # The topology generator has no real screen position to decide how
+    # far a PressureLine physically needs to reach -- only the layout
+    # step (step_by_step_layout.py, via Grid.occupied_x_range) knows
+    # that. Here, each PL starts empty and next_anchor() grows the list
+    # on demand: exactly 1 anchor per real connection, never more, never
+    # less, with no risk of running out.
     pl_node_by_id: dict[str, dict] = {}
     for k, pl_id in enumerate(pl_ids):
         add_node(pl_id, "PressureLine", f"pressure_line_step:{k}",
@@ -202,36 +201,36 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(mc_ids[k], "R", exh_mc, "R")
         connect(mc_ids[k], "A", pl_ids[k], next_anchor(pl_ids[k]))
 
-    # Reset em anel: MC_k.PR ← linha do próximo átomo.
+    # Ring reset: MC_k.PR <- the next atom's line.
     for k in range(n_atoms):
         pr_source = pl_ids[(k + 1) % n_atoms]
         connect(pr_source, next_anchor(pr_source), mc_ids[k], "PR")
 
-    # Única fonte de SET do átomo 0: o botão.
+    # Atom 0's only SET source: the button.
     connect("gen-btn", "A", mc_ids[0], "PL")
 
-    # ── 5. Pilots das 4/2 alimentados pela(s) linha(s) do(s) átomo(s) ────
+    # -- 5. 4/2 pilots fed by the atom(s)' line(s) --------------------------
     #
-    #   Cada evento do átomo aciona o pilot correspondente da sua 4/2
-    #   direto da linha do átomo -- sem duplicação (um único tap por
-    #   evento), inclusive quando o átomo é um bloco "(...)" com 2+
-    #   eventos: a linha aceita quantos taps quiser, então alimentar 2+
-    #   pilots ao mesmo tempo não exige nenhuma válvula extra (ao contrário
-    #   do cascata, que precisa de fan_out/AndValve só pra isso).
+    #   Each atom event drives its 4/2's matching pilot directly from the
+    #   atom's line -- no duplication (a single tap per event), including
+    #   when the atom is a "(...)" block with 2+ events: the line accepts
+    #   as many taps as needed, so feeding 2+ pilots at once needs no
+    #   extra valve (unlike cascade, which needs fan_out/AndValve just
+    #   for this).
     #
-    #   Multi-ciclo (mesma letra+direção repetida em átomos não-adjacentes)
-    #   faz 2+ linhas independentes mirarem o MESMO pilot físico -- sem
-    #   convergência isso é fisicamente inválido (duas fontes de pressão na
-    #   mesma porta). Coleta em duas passadas (mesmo algoritmo usado em
-    #   cascade.py pro mesmo problema, ver docs/superpowers/specs/
-    #   2026-07-10-cascade-multi-cycle-or-valve-design.md): passada 1
-    #   acumula as fontes por pilot em vez de conectar na hora; passada 2
-    #   resolve -- 1 fonte conecta direto (idêntico ao código anterior,
-    #   mesma chamada na mesma ordem), 2+ fontes viram uma cadeia binária
-    #   de OrValve (só tem 2 entradas). _role de cada OrValve
-    #   (f"or_valve:{letra}:{pilot}:{i}") é o contrato lido por
-    #   step_by_step_layout.py pra saber quantas colunas reservar de cada
-    #   lado do cilindro.
+    #   Multi-cycle (the same letter+direction repeated across
+    #   non-adjacent atoms) makes 2+ independent lines target the SAME
+    #   physical pilot -- without convergence this is physically invalid
+    #   (two pressure sources on the same port). Collects in two passes
+    #   (same algorithm cascade.py uses for the same problem, see
+    #   docs/superpowers/specs/2026-07-10-cascade-multi-cycle-or-valve-design.md):
+    #   pass 1 accumulates sources per pilot instead of connecting right
+    #   away; pass 2 resolves -- 1 source connects directly (identical to
+    #   the previous code, same call in the same order), 2+ sources
+    #   become a binary OrValve chain (only has 2 inputs). Each OrValve's
+    #   _role (f"or_valve:{letter}:{pilot}:{i}") is the contract
+    #   step_by_step_layout.py reads to know how many columns to reserve
+    #   on each side of the cylinder.
 
     triggers_for_pilot: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for k, atom in enumerate(atoms):
@@ -247,17 +246,18 @@ def generate(events: list[tuple[str, str]]) -> dict:
             connect(src_id, src_anchor, f"gen-v42-{letter}", v42_pilot)
             continue
 
-        # X é a entrada ESQUERDA da OrValve, Y a DIREITA (anchor_local fixo,
-        # ver or_valve.py) -- e step_by_step_layout.py posiciona a cadeia
-        # crescendo pra ESQUERDA do cilindro no lado PL, mas pra DIREITA no
-        # lado PR (sign=-1/+1 em cyl_col +/- offset), com a OR anterior da
-        # cadeia (prev) sempre mais LONGE do cilindro que a nova. No lado
-        # PL isso já bate: prev fica à esquerda de cada nova OR, então
-        # prev->X (esquerda) é fisicamente correto. No lado PR o sentido
-        # inverte: prev fica à DIREITA de cada nova OR (mais longe do
-        # cilindro = mais pra direita nesse lado) -- por isso prev tem que
-        # ir em Y (direita) e a fonte nova em X (esquerda), senão o fio
-        # cruza por cima/baixo da própria OR pra alcançar o lado errado.
+        # X is the OrValve's LEFT input, Y the RIGHT one (anchor_local is
+        # fixed, see or_valve.py) -- and step_by_step_layout.py positions
+        # the chain growing LEFT of the cylinder on the PL side, but
+        # RIGHT on the PR side (sign=-1/+1 in cyl_col +/- offset), with
+        # the chain's previous OR (prev) always FARTHER from the
+        # cylinder than the new one. On the PL side this already lines
+        # up: prev sits to the left of each new OR, so prev->X (left) is
+        # physically correct. On the PR side the direction flips: prev
+        # sits to the RIGHT of each new OR (farther from the cylinder =
+        # further right on that side) -- so prev must go to Y (right)
+        # and the new source to X (left), otherwise the wire crosses
+        # over/under the OR itself to reach the wrong side.
         prev_anchor_name, new_anchor_name = ("X", "Y") if v42_pilot == "PL" else ("Y", "X")
 
         prev_id, prev_anchor = sources[0]
@@ -269,16 +269,16 @@ def generate(events: list[tuple[str, str]]) -> dict:
             prev_id, prev_anchor = or_id, "A"
         connect(prev_id, prev_anchor, f"gen-v42-{letter}", v42_pilot)
 
-    # ── 6. Confirmação por átomo ────────────────────────────────────────
+    # -- 6. Confirmation per atom --------------------------------------------
     #
-    #   Cada átomo produz uma confirmação única (nunca duplicada -- ao
-    #   contrário do cascata, aqui não existe fan_out: a sequência é plana,
-    #   então todo átomo tem exatamente um "próximo"). Um evento sozinho
-    #   usa uma única válvula de sinalização; um bloco de N>1 eventos usa N
-    #   válvulas encadeadas em série -- a 1ª puxa P da linha do átomo, as
-    #   demais puxam P da sig anterior (E lógico sem AndValve). A confirmação
-    #   do átomo k seta MC_{k+1}.PL; a confirmação do último átomo fecha o
-    #   ciclo alimentando btn.P (nunca MC_0.PL diretamente).
+    #   Each atom produces a single confirmation (never duplicated --
+    #   unlike cascade, there's no fan_out here: the sequence is flat, so
+    #   every atom has exactly one "next"). A lone event uses a single
+    #   signaling valve; an N>1-event block uses N valves chained in
+    #   series -- the 1st pulls P from the atom's line, the rest pull P
+    #   from the previous sig (logical AND without an AndValve). Atom k's
+    #   confirmation sets MC_{k+1}.PL; the last atom's confirmation
+    #   closes the cycle by feeding btn.P (never MC_0.PL directly).
 
     def build_confirmation(k: int, atom: list[tuple[int, str, str]]) -> tuple[str, str]:
         pl_id = pl_ids[k]

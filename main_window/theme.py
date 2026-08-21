@@ -1,13 +1,14 @@
-"""Tema global da aplicação (QPalette + QSS) para dark/light mode.
+"""Global application theme (QPalette + QSS) for dark/light mode.
 
-O toggle de tema historicamente só afetava o fundo do QGraphicsView e os
-itens da cena (nodes/connections/labels, via EditorState.theme_changed).
-Toolbar, menus, docks e diálogos ficavam de fora, herdando a QPalette
-padrão do SO/Qt -- por isso pareciam sempre "dark" e não reagiam ao toggle.
+The theme toggle used to only affect the QGraphicsView background and
+the scene items (nodes/connections/labels, via EditorState.theme_changed).
+Toolbar, menus, docks and dialogs were left out, inheriting the OS/Qt
+default QPalette -- which is why they always looked "dark" and didn't
+react to the toggle.
 
-Este módulo centraliza a definição das duas paletas e injeta o QSS
-correspondente, para que `set_light_theme()` consiga aplicar o tema na
-QApplication inteira, não só no canvas.
+This module centralizes the definition of both palettes and injects the
+corresponding QSS, so that `set_light_theme()` can apply the theme to
+the whole QApplication, not just the canvas.
 """
 
 from pathlib import Path
@@ -80,11 +81,11 @@ def _stylesheet_path(is_light: bool) -> Path:
 
 
 def apply_theme(app: QApplication, is_light: bool) -> None:
-    """Aplica paleta + stylesheet de tema na QApplication inteira.
+    """Applies the theme palette + stylesheet to the whole QApplication.
 
-    Cobre widgets nativos sem regra explícita no QSS (diálogos, docks,
-    menus) via QPalette, e os estilos customizados (hover/checked de
-    toolbar, sizeTierButton) via QSS.
+    Covers native widgets with no explicit QSS rule (dialogs, docks,
+    menus) via QPalette, and the custom styles (toolbar hover/checked,
+    sizeTierButton) via QSS.
     """
     app.setPalette(_light_palette() if is_light else _dark_palette())
     with open(_stylesheet_path(is_light), "r", encoding="utf-8") as f:

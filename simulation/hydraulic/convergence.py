@@ -1,10 +1,10 @@
 """
 simulation/hydraulic/convergence.py
 
-Monitor de convergência do domínio hidráulico.
+Convergence monitor for the hydraulic domain.
 
-Separado do SimulationEngine para permitir testes isolados e
-diagnóstico rico sem acoplamento com a lógica de orquestração.
+Separated from SimulationEngine to allow isolated tests and rich
+diagnostics without coupling to the orchestration logic.
 """
 
 from __future__ import annotations
@@ -13,19 +13,19 @@ from dataclasses import dataclass, field
 
 
 # ---------------------------------------------------------------------------
-# Resultado de convergência
+# Convergence result
 # ---------------------------------------------------------------------------
 
 @dataclass
 class ConvergenceResult:
     """
-    Resultado da verificação de conservação de vazão.
+    Result of the flow-conservation check.
 
-    Atributos
-    ---------
-    converged   : True se todos os nós de pressão estão conservados
-    imbalances  : {pressure_var: Q_imbalance em m³/s}
-    tol         : tolerância usada (m³/s)
+    Attributes
+    ----------
+    converged   : True if every pressure node is conserved
+    imbalances  : {pressure_var: Q_imbalance in m3/s}
+    tol         : the tolerance used (m3/s)
     """
     converged: bool
     imbalances: dict[str, float] = field(default_factory=dict)
@@ -33,30 +33,30 @@ class ConvergenceResult:
 
     @property
     def worst_pvar(self) -> str | None:
-        """Nó de pressão com maior desequilíbrio."""
+        """The pressure node with the largest imbalance."""
         if not self.imbalances:
             return None
         return max(self.imbalances, key=lambda k: abs(self.imbalances[k]))
 
     @property
     def worst_imbalance(self) -> float:
-        """Magnitude do maior desequilíbrio em m³/s."""
+        """Magnitude of the largest imbalance in m3/s."""
         if not self.imbalances:
             return 0.0
         return abs(self.imbalances[self.worst_pvar])
 
     def summary(self) -> str:
-        """Linha de resumo para logging."""
+        """Summary line for logging."""
         if self.converged:
             return f"converged (tol={self.tol:.2e} m³/s)"
         return (
-            f"NOT converged — worst: {self.worst_pvar} "
-            f"ΔQ={self.worst_imbalance:.2e} m³/s "
+            f"NOT converged -- worst: {self.worst_pvar} "
+            f"dQ={self.worst_imbalance:.2e} m³/s "
             f"(tol={self.tol:.2e})"
         )
 
     def detailed(self) -> str:
-        """Diagnóstico detalhado por nó de pressão."""
+        """Detailed diagnostic per pressure node."""
         if self.converged:
             return "  all pressure nodes conserved"
         lines = []
@@ -72,16 +72,16 @@ class ConvergenceResult:
 
 class ConvergenceMonitor:
     """
-    Verifica conservação de vazão em todos os nós de pressão.
+    Checks flow conservation at every pressure node.
 
-    A conservação é verificada nos anchors (resultados escritos após o
-    solve), não nas equações do solver — é uma verificação externa e
-    independente do NonlinearSystemSolver.
+    Conservation is checked on the anchors (results written after the
+    solve), not on the solver's equations -- it's an external check,
+    independent of the NonlinearSystemSolver.
 
-    Parâmetros
+    Parameters
     ----------
-    tol_factor : fração de q_ref usada como tolerância (default: 1e-4)
-                 Ex: q_ref=1e-3 m³/s → tol=1e-7 m³/s
+    tol_factor : fraction of q_ref used as the tolerance (default: 1e-4)
+                 E.g. q_ref=1e-3 m³/s -> tol=1e-7 m³/s
     """
 
     def __init__(self, tol_factor: float = 1e-4):
@@ -94,13 +94,13 @@ class ConvergenceMonitor:
         q_ref: float,
     ) -> ConvergenceResult:
         """
-        Verifica conservação de vazão e retorna ConvergenceResult.
+        Checks flow conservation and returns a ConvergenceResult.
 
-        Parâmetros
+        Parameters
         ----------
-        continuities          : dicionário de NodeContinuity por pvar
-        anchor_to_pressure_var: mapa anchor → pvar (do engine)
-        q_ref                 : vazão de referência do circuito
+        continuities          : dict of NodeContinuity per pvar
+        anchor_to_pressure_var: the engine's anchor -> pvar map
+        q_ref                 : the circuit's reference flow
         """
         tol = max(q_ref, 1e-12) * self.tol_factor
         imbalances: dict[str, float] = {}
@@ -123,8 +123,8 @@ class ConvergenceMonitor:
         anchor_to_pressure_var: dict,
     ) -> None:
         """
-        Atualiza anchor.pressurizing com base no resultado.
-        Separado de check() para manter check() puro (sem side effects).
+        Updates anchor.pressurizing based on the result.
+        Separated from check() to keep check() pure (no side effects).
         """
         for anchor, pvar in anchor_to_pressure_var.items():
             if anchor.domain != "hydraulic":

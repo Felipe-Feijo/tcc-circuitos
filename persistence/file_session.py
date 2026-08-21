@@ -1,25 +1,25 @@
-"""Gerencia a sessão de arquivo aberta: caminho atual, diálogos e título da janela."""
+"""Manages the open file session: current path, dialogs and window title."""
 
 from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 
 class SceneFileSession:
-    """Controla o ciclo de vida do arquivo de cena aberto.
+    """Controls the lifecycle of the open scene file.
 
-    Responsabilidades:
-    - Abrir um arquivo via diálogo e carregar a cena.
-    - Salvar no arquivo atual ou abrir diálogo de "salvar como".
-    - Atualizar o título da janela com o nome do arquivo.
+    Responsibilities:
+    - Open a file via dialog and load the scene.
+    - Save to the current file or open a "save as" dialog.
+    - Update the window title with the file name.
 
-    Ciente da UI (usa QFileDialog e QMessageBox), mas agnóstica ao formato
-    de persistência — delega a leitura/escrita ao módulo serializer.
+    UI-aware (uses QFileDialog and QMessageBox), but agnostic to the
+    persistence format -- delegates reading/writing to the serializer module.
 
     Args:
-        scene: QGraphicsScene gerenciada pela sessão.
-        parent_window: Janela principal usada como pai dos diálogos Qt.
-        editor_state: EditorState passado ao deserializador; se None,
-            tenta ler parent_window.state.
+        scene: QGraphicsScene managed by the session.
+        parent_window: Main window used as parent for the Qt dialogs.
+        editor_state: EditorState passed to the deserializer; if None,
+            tries to read parent_window.state.
     """
 
     def __init__(self, scene, parent_window, editor_state=None):
@@ -28,16 +28,16 @@ class SceneFileSession:
         self.editor_state = editor_state or getattr(parent_window, "state", None)
         self.current_file: str | None = None
 
-    # API pública
+    # Public API
 
     def save(self) -> None:
-        """Salva no arquivo atual, ou abre diálogo se nenhum arquivo estiver aberto."""
+        """Saves to the current file, or opens a dialog if no file is open."""
         if not self.current_file:
             return self.save_as()
         self._save_to_path(self.current_file)
 
     def save_as(self) -> None:
-        """Abre diálogo de "salvar como" e grava a cena no caminho escolhido."""
+        """Opens the "save as" dialog and writes the scene to the chosen path."""
         path, _ = QFileDialog.getSaveFileName(
             self.parent,
             "Salvar cena",
@@ -51,7 +51,7 @@ class SceneFileSession:
         self._save_to_path(path)
 
     def open(self) -> None:
-        """Abre diálogo de arquivo e carrega a cena a partir do JSON escolhido."""
+        """Opens the file dialog and loads the scene from the chosen JSON."""
         path, _ = QFileDialog.getOpenFileName(
             self.parent,
             "Abrir cena",
@@ -68,13 +68,13 @@ class SceneFileSession:
         except Exception as e:
             QMessageBox.critical(self.parent, "Erro ao abrir", str(e))
 
-    # Métodos internos
+    # Internal methods
 
     def _save_to_path(self, path: str) -> None:
-        """Grava a cena no caminho indicado e atualiza o título da janela.
+        """Writes the scene to the given path and updates the window title.
 
         Args:
-            path: Caminho absoluto do arquivo de destino.
+            path: Absolute path of the destination file.
         """
         try:
             from persistence.serializer import save_to_file
@@ -85,6 +85,6 @@ class SceneFileSession:
             QMessageBox.critical(self.parent, "Erro ao salvar", str(e))
 
     def _update_window_title(self) -> None:
-        """Atualiza o título da janela principal com o nome do arquivo atual."""
+        """Updates the main window title with the current file name."""
         name = Path(self.current_file).name
         self.parent.setWindowTitle(f"Simulador – {name}")

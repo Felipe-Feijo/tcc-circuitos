@@ -1,4 +1,4 @@
-"""Registro centralizado de sensores e atuadores da cena gráfica."""
+"""Centralized registry of the graphics scene's sensors and actuators."""
 
 from contextlib import contextmanager
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -7,12 +7,12 @@ from dataclasses import dataclass
 
 @dataclass
 class SensorInfo:
-    """Metadados de um sensor registrado.
+    """Metadata for a registered sensor.
 
     Attributes:
-        name: Nome único do sensor (ex: "A1", "B_ret").
-        sensor_type: Tipo do sensor (ex: "reed", "proximity", "coil").
-        owner: NodeItem proprietário do sensor.
+        name: The sensor's unique name (e.g. "A1", "B_ret").
+        sensor_type: The sensor's type (e.g. "reed", "proximity", "coil").
+        owner: The sensor's owning NodeItem.
     """
     name: str
     sensor_type: str
@@ -20,18 +20,18 @@ class SensorInfo:
 
 
 class SensorRegistry(QObject):
-    """Mapeia nomes de sensores a seus proprietários e emite sinais de atualização.
+    """Maps sensor names to their owners and emits update signals.
 
-    Usado pela UI de simulação para listar sensores disponíveis e pelo
-    CircuitGenerator para garantir nomes únicos entre cilindros e bobinas.
+    Used by the simulation UI to list available sensors and by
+    CircuitGenerator to guarantee unique names across cylinders and coils.
 
-    Durante o carregamento de arquivo (contexto loading()), os sinais são
-    suprimidos para evitar atualizações parciais da UI.
+    During file loading (the loading() context), signals are suppressed
+    to avoid partial UI updates.
 
     Signals:
-        sensor_added(name, info): Emitido ao registrar um sensor.
-        sensor_removed(name): Emitido ao remover um sensor.
-        sensor_renamed(old_name, new_name, info): Emitido ao renomear.
+        sensor_added(name, info): Emitted when a sensor is registered.
+        sensor_removed(name): Emitted when a sensor is removed.
+        sensor_renamed(old_name, new_name, info): Emitted on rename.
     """
 
     sensor_added   = pyqtSignal(str, object)
@@ -44,10 +44,10 @@ class SensorRegistry(QObject):
         self._load_depth = 0
 
     def register(self, name: str, sensor_type: str, node) -> bool:
-        """Registra um sensor se o nome ainda não estiver em uso.
+        """Registers a sensor if the name isn't already in use.
 
         Returns:
-            True se registrado com sucesso, False se o nome já existia.
+            True if registered successfully, False if the name already existed.
         """
         if name in self._map:
             return False
@@ -61,18 +61,18 @@ class SensorRegistry(QObject):
         return True
 
     def unregister(self, name: str) -> None:
-        """Remove um sensor do registro pelo nome."""
+        """Removes a sensor from the registry by name."""
         if name in self._map:
             self._map.pop(name)
             if not self.is_loading:
                 self.sensor_removed.emit(name)
 
     def rename(self, old_name: str, new_name: str, node) -> bool:
-        """Renomeia um sensor existente.
+        """Renames an existing sensor.
 
         Returns:
-            True se renomeado com sucesso, False se old_name não existe
-            ou new_name já está em uso.
+            True if renamed successfully, False if old_name doesn't
+            exist or new_name is already in use.
         """
         if old_name not in self._map:
             return False
@@ -90,7 +90,7 @@ class SensorRegistry(QObject):
         return True
 
     def list_names(self, sensor_type: str | None = None) -> list[str]:
-        """Retorna os nomes registrados, opcionalmente filtrados por tipo."""
+        """Returns the registered names, optionally filtered by type."""
         if sensor_type is None:
             return list(self._map.keys())
 
@@ -100,15 +100,15 @@ class SensorRegistry(QObject):
         ]
 
     def exists(self, name: str) -> bool:
-        """Retorna True se o nome já está registrado."""
+        """Returns True if the name is already registered."""
         return name in self._map
 
     def get(self, name: str) -> SensorInfo | None:
-        """Retorna o SensorInfo pelo nome, ou None se não encontrado."""
+        """Returns the SensorInfo by name, or None if not found."""
         return self._map.get(name)
 
     def next_available_name(self, prefix: str = "A") -> str:
-        """Retorna o próximo nome disponível com o prefixo dado (ex: A1, A2, ...)."""
+        """Returns the next available name with the given prefix (e.g. A1, A2, ...)."""
         i = 1
         while f"{prefix}{i}" in self._map:
             i += 1
@@ -116,7 +116,7 @@ class SensorRegistry(QObject):
 
     @contextmanager
     def loading(self):
-        """Contexto que suprime emissão de sinais durante carregamento em lote."""
+        """Context that suppresses signal emission during batch loading."""
         self._load_depth += 1
         try:
             yield
@@ -125,5 +125,5 @@ class SensorRegistry(QObject):
 
     @property
     def is_loading(self) -> bool:
-        """True se dentro de um contexto loading() ativo."""
+        """True if inside an active loading() context."""
         return self._load_depth > 0

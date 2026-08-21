@@ -1,4 +1,4 @@
-"""Monta os artefatos finais do relatório de simulação: gráficos, PDF, vídeo e HTML."""
+"""Builds the simulation report's final artifacts: charts, PDF, video and HTML."""
 
 import base64
 import io
@@ -15,15 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 def build_charts(frames: list) -> list:
-    """Monta um gráfico de posição × tempo por pistão presente nos frames.
+    """Builds a position-vs-time chart per piston present in the frames.
 
     Args:
-        frames: Lista de `Frame` (ver `frame_recorder.Frame`), em ordem
-            crescente de `sim_time`.
+        frames: List of `Frame` (see `frame_recorder.Frame`), in
+            increasing `sim_time` order.
 
     Returns:
-        Uma `matplotlib.figure.Figure` por `node_id` de pistão encontrado,
-        em ordem alfabética de id. Lista vazia se `frames` estiver vazia.
+        One `matplotlib.figure.Figure` per piston `node_id` found, in
+        alphabetical id order. Empty list if `frames` is empty.
     """
     series: dict[str, list[tuple[float, float]]] = {}
     for frame in frames:
@@ -50,14 +50,14 @@ def build_charts(frames: list) -> list:
 
 
 def save_pdf(figures: list, path: str) -> None:
-    """Escreve todas as figuras num único PDF, uma por página."""
+    """Writes every figure into a single PDF, one per page."""
     with PdfPages(path) as pdf:
         for fig in figures:
             pdf.savefig(fig)
 
 
 def save_chart_pngs(figures: list) -> list:
-    """Exporta cada figura como PNG em memória, para embutir no HTML."""
+    """Exports each figure as an in-memory PNG, to embed in the HTML."""
     pngs = []
     for fig in figures:
         buf = io.BytesIO()
@@ -67,19 +67,19 @@ def save_chart_pngs(figures: list) -> list:
 
 
 def build_video(frame_paths: list, path: str, fps: int = 10) -> bool:
-    """Monta um MP4 a partir de uma sequência de PNGs, um frame por step.
+    """Builds an MP4 from a sequence of PNGs, one frame per step.
 
     Args:
-        frame_paths: Caminhos dos PNGs em ordem cronológica.
-        path: Caminho de saída do arquivo .mp4.
-        fps: Quadros por segundo do vídeo gerado (independente do `dt` da
-            simulação — um `dt` muito pequeno geraria um vídeo
-            imperceptivelmente rápido se usado diretamente como fps).
+        frame_paths: PNG paths in chronological order.
+        path: Output path for the .mp4 file.
+        fps: Frames per second of the generated video (independent of
+            the simulation's `dt` -- a very small `dt` would produce an
+            imperceptibly fast video if used directly as fps).
 
     Returns:
-        True se o vídeo foi gerado com sucesso, False se `frame_paths`
-        estiver vazio ou se o encoder falhar (ex: binário ffmpeg
-        indisponível). Nunca lança exceção.
+        True if the video was generated successfully, False if
+        `frame_paths` is empty or the encoder fails (e.g. the ffmpeg
+        binary is unavailable). Never raises.
     """
     if not frame_paths:
         return False
@@ -90,17 +90,17 @@ def build_video(frame_paths: list, path: str, fps: int = 10) -> bool:
                 writer.append_data(imageio.v2.imread(frame_path))
         return True
     except Exception:
-        logger.exception("falha ao montar vídeo do relatório")
+        logger.exception("failed to build the report's video")
         return False
 
 
 def build_html(chart_pngs: list, has_video: bool) -> str:
-    """Monta o HTML autocontido do relatório.
+    """Builds the report's self-contained HTML.
 
     Args:
-        chart_pngs: PNGs dos gráficos de trajetória, embutidos em base64.
-        has_video: Se True, referencia `video.mp4` (arquivo ao lado do
-            HTML); se False, mostra uma mensagem no lugar do player.
+        chart_pngs: Trajectory chart PNGs, embedded in base64.
+        has_video: If True, references `video.mp4` (a file alongside
+            the HTML); if False, shows a message in place of the player.
     """
     charts_html = "".join(
         '<img src="data:image/png;base64,{}" alt="Gráfico de trajetória" '
@@ -133,9 +133,9 @@ def build_html(chart_pngs: list, has_video: bool) -> str:
 
 
 def _delete_frame_images(frames: list) -> None:
-    """Apaga os PNGs brutos de cada frame após o vídeo ter sido montado (ou
-    tentado). Eles não devem sobrar em `out_dir` junto com os artefatos
-    finais do relatório. Um arquivo já ausente não é um erro."""
+    """Deletes each frame's raw PNGs after the video has been built (or
+    attempted). They shouldn't be left over in `out_dir` alongside the
+    report's final artifacts. An already-missing file isn't an error."""
     for frame in frames:
         try:
             os.remove(frame.image_path)
@@ -144,15 +144,15 @@ def _delete_frame_images(frames: list) -> None:
 
 
 def build(frames: list, out_dir: str) -> None:
-    """Monta os 3 artefatos do relatório (`relatorio.html`, `graficos.pdf`,
-    `video.mp4`) em `out_dir`.
+    """Builds the report's 3 artifacts (`relatorio.html`, `graficos.pdf`,
+    `video.mp4`) in `out_dir`.
 
-    Falha ao montar o vídeo não impede a geração do HTML/PDF — o HTML
-    reflete a ausência do vídeo (ver `build_html`).
+    A failure building the video doesn't stop the HTML/PDF from being
+    generated -- the HTML reflects the video's absence (see `build_html`).
 
     Args:
-        frames: Frames gravados pelo `FrameRecorder` (pode ser vazio).
-        out_dir: Diretório onde os arquivos serão escritos (já deve existir).
+        frames: Frames recorded by the `FrameRecorder` (can be empty).
+        out_dir: Directory the files will be written to (must already exist).
     """
     figures = build_charts(frames)
     try:

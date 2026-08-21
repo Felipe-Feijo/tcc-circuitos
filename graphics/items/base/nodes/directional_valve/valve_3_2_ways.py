@@ -1,4 +1,4 @@
-"""Nó gráfico de válvula direcional 3/2 vias."""
+"""Graphics node for the 3/2-way directional valve."""
 
 from PyQt6.QtCore import QPointF
 from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways as Valve_3_2_WaysNode

@@ -1,4 +1,4 @@
-"""Estado mutável de interação do editor de diagramas."""
+"""Mutable interaction state of the diagram editor."""
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -6,26 +6,26 @@ from editor.undo import UndoStack
 
 
 class EditorState(QObject):
-    """Centraliza o estado de interação do editor.
+    """Centralizes the editor's interaction state.
 
-    Pertencente à MainWindow e passado para GraphicsView, DiagramItemBase
-    e AnchorItem, eliminando referências diretas à janela principal.
+    Owned by MainWindow and passed to GraphicsView, DiagramItemBase
+    and AnchorItem, eliminating direct references to the main window.
 
     Attributes:
-        mode: Modo atual do editor (enum EditorMode).
-        pending_node: NodeDescriptor selecionado na paleta (somente no modo ADD).
-        hover_anchor: AnchorItem sob o cursor (somente no modo CONNECT).
-        active_context_menu: QMenu aberto no momento, fechado ao deletar.
-        actions: Dicionário de QActions preenchido pela MainWindow após construção.
-        undo_stack: Pilha de undo/redo compartilhada por todo o editor.
-        is_light_theme: Tema atual, mantido em sincronia com MainWindow.set_light_theme.
-            Itens criados depois de um toggle (sem ouvir o sinal theme_changed)
-            leem esse valor pra nascer já na cor certa.
+        mode: Current editor mode (EditorMode enum).
+        pending_node: NodeDescriptor selected in the palette (ADD mode only).
+        hover_anchor: AnchorItem under the cursor (CONNECT mode only).
+        active_context_menu: Currently open QMenu, closed on delete.
+        actions: Dict of QActions filled in by MainWindow after construction.
+        undo_stack: Undo/redo stack shared across the whole editor.
+        is_light_theme: Current theme, kept in sync with MainWindow.set_light_theme.
+            Items created after a toggle (without listening to the theme_changed
+            signal) read this value to be born with the right color already.
 
     Signals:
-        add_node_requested(x, y): Usuário clicou para posicionar um nó.
-        scene_rect_update_requested: O retângulo da cena deve ser recalculado.
-        theme_changed(is_light): O tema da aplicação foi alterado.
+        add_node_requested(x, y): User clicked to place a node.
+        scene_rect_update_requested: The scene rect must be recomputed.
+        theme_changed(is_light): The application theme changed.
     """
 
     add_node_requested = pyqtSignal(float, float)
@@ -40,27 +40,27 @@ class EditorState(QObject):
         self.hover_anchor = None
         self.active_context_menu = None
 
-        # Estado de arrasto de conexão — lido por GraphicsView e AnchorItem
+        # Connection-drag state -- read by GraphicsView and AnchorItem
         self._connecting: bool = False
         self._conn_source_anchor = None
 
         self.actions: dict = {}
         self.is_light_theme: bool = False
 
-        # Pilha de undo/redo — usada por DeleteManager, ClipboardManager,
-        # GraphicsView e MainWindow
+        # Undo/redo stack -- used by DeleteManager, ClipboardManager,
+        # GraphicsView and MainWindow
         self.undo_stack = UndoStack()
         self.undo_stack.setUndoLimit(50)
 
     def add_node_at(self, x: float, y: float) -> None:
-        """Emite o sinal para posicionar um nó nas coordenadas da cena.
+        """Emits the signal to place a node at the scene coordinates.
 
         Args:
-            x: Coordenada horizontal na cena.
-            y: Coordenada vertical na cena.
+            x: Horizontal coordinate in the scene.
+            y: Vertical coordinate in the scene.
         """
         self.add_node_requested.emit(x, y)
 
     def update_scene_rect(self) -> None:
-        """Solicita recálculo do retângulo da cena."""
+        """Requests recomputation of the scene rect."""
         self.scene_rect_update_requested.emit()

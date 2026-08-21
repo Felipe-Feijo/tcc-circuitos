@@ -1,17 +1,17 @@
-"""Serialização e desserialização da cena gráfica em formato JSON v1.
+"""Serialization and deserialization of the graphics scene in JSON v1 format.
 
-Formato do arquivo:
+File format:
     {
         "version": 1,
         "nodes": [ <NodeItem.to_dict()>, ... ],
         "connections": [ <ConnectionItem.to_dict()>, ... ]
     }
 
-Funções públicas:
-    serialize_scene   — cena → dict
-    deserialize_scene — dict → itens na cena
-    save_to_file      — cena → arquivo .json
-    load_from_file    — arquivo .json → cena
+Public functions:
+    serialize_scene   -- scene -> dict
+    deserialize_scene -- dict -> items in the scene
+    save_to_file      -- scene -> .json file
+    load_from_file    -- .json file -> scene
 """
 
 import json
@@ -22,16 +22,16 @@ from graphics.items.base.connections.connection_item import ConnectionItem
 
 
 def serialize_scene(scene, *, nodes=None) -> dict:
-    """Converte a cena gráfica em um dicionário serializável.
+    """Converts the graphics scene into a serializable dict.
 
     Args:
-        scene: QGraphicsScene com os itens do diagrama.
-        nodes: Lista opcional de NodeItems a serializar. Se None, serializa
-            todos os NodeItems presentes na cena.
+        scene: QGraphicsScene holding the diagram's items.
+        nodes: Optional list of NodeItems to serialize. If None,
+            serializes every NodeItem present in the scene.
 
     Returns:
-        Dicionário no formato JSON v1 com chaves "version", "nodes"
-        e "connections".
+        Dict in JSON v1 format with "version", "nodes" and
+        "connections" keys.
     """
     if nodes is None:
         nodes = [item for item in scene.items() if isinstance(item, NodeItem)]
@@ -43,7 +43,7 @@ def serialize_scene(scene, *, nodes=None) -> dict:
     for item in scene.items():
         if not isinstance(item, ConnectionItem):
             continue
-        # Ignora conexões incompletas (sem âncora de origem ou destino)
+        # Skips incomplete connections (missing a source or target anchor)
         if not item.source_anchor or not item.target_anchor:
             continue
         if (
@@ -60,16 +60,16 @@ def serialize_scene(scene, *, nodes=None) -> dict:
 
 
 def deserialize_scene(data: dict, scene, editor, *, clear_scene=True) -> list:
-    """Reconstrói a cena a partir de um dicionário JSON v1.
+    """Rebuilds the scene from a JSON v1 dict.
 
     Args:
-        data: Dicionário no formato retornado por serialize_scene.
-        scene: QGraphicsScene de destino.
-        editor: EditorState passado aos itens criados.
-        clear_scene: Se True (padrão), limpa a cena antes de reconstruir.
+        data: Dict in the format returned by serialize_scene.
+        scene: Target QGraphicsScene.
+        editor: EditorState passed to the created items.
+        clear_scene: If True (default), clears the scene before rebuilding.
 
     Returns:
-        Lista de todos os itens criados (NodeItems e ConnectionItems).
+        List of every item created (NodeItems and ConnectionItems).
     """
     if clear_scene:
         scene.clear()
@@ -77,7 +77,7 @@ def deserialize_scene(data: dict, scene, editor, *, clear_scene=True) -> list:
     node_index = {}
     created_items = []
 
-    # Passo 1: cria os nós
+    # Step 1: creates the nodes
     for node_data in data["nodes"]:
         node = NodeItem.from_dict(
             node_data,
@@ -88,7 +88,7 @@ def deserialize_scene(data: dict, scene, editor, *, clear_scene=True) -> list:
         node_index[node.id] = node
         created_items.append(node)
 
-    # Passo 2: cria as conexões (dependem dos nós já existirem)
+    # Step 2: creates the connections (depend on the nodes already existing)
     for conn_data in data["connections"]:
         conn = ConnectionItem.from_dict(conn_data, node_index)
         conn.editor = editor
@@ -99,11 +99,11 @@ def deserialize_scene(data: dict, scene, editor, *, clear_scene=True) -> list:
 
 
 def save_to_file(scene, filepath: str) -> None:
-    """Serializa a cena e grava em um arquivo JSON.
+    """Serializes the scene and writes it to a JSON file.
 
     Args:
-        scene: QGraphicsScene com os itens do diagrama.
-        filepath: Caminho absoluto ou relativo do arquivo de destino.
+        scene: QGraphicsScene holding the diagram's items.
+        filepath: Absolute or relative path of the destination file.
     """
     data = serialize_scene(scene)
     path = Path(filepath)
@@ -112,19 +112,19 @@ def save_to_file(scene, filepath: str) -> None:
 
 
 def load_from_file(scene, filepath: str, editor) -> None:
-    """Carrega um arquivo JSON e reconstrói a cena.
+    """Loads a JSON file and rebuilds the scene.
 
-    Reinicia o SensorRegistry antes de carregar para garantir que
-    sensores de uma sessão anterior não contaminem a nova cena.
+    Resets the SensorRegistry before loading to guarantee sensors from
+    a previous session don't contaminate the new scene.
 
     Args:
-        scene: QGraphicsScene de destino.
-        filepath: Caminho do arquivo .json a carregar.
-        editor: EditorState passado aos itens recriados.
+        scene: Target QGraphicsScene.
+        filepath: Path of the .json file to load.
+        editor: EditorState passed to the recreated items.
     """
     from graphics.sensor_registry.sensor_registry import SensorRegistry
 
-    # Reinicia o registro de sensores antes de carregar nova cena
+    # Resets the sensor registry before loading the new scene
     scene.sensor_registry = SensorRegistry()
 
     path = Path(filepath)

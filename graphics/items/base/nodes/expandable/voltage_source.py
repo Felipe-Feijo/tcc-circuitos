@@ -1,4 +1,4 @@
-"""Nó gráfico de fonte de tensão elétrica."""
+"""Graphics node for the electrical voltage source."""
 
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta

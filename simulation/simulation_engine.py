@@ -1,9 +1,10 @@
-"""Motor principal de simulação: itera os três domínios até estabilização.
+"""Main simulation engine: iterates the three domains until stable.
 
-O SimulationEngine não conhece Qt nem itens gráficos. Recebe um grafo de
-nós e conexões de domínio e, a cada chamada de run_until_stable(), propaga
-estado pelos domínios pneumático, elétrico e hidráulico até que nenhuma
-âncora mude de valor — ou até atingir o limite de iterações.
+SimulationEngine knows nothing about Qt or graphics items. It receives a
+graph of domain nodes and connections and, on each run_until_stable()
+call, propagates state across the pneumatic, electric and hydraulic
+domains until no anchor changes value -- or until the iteration limit
+is reached.
 """
 
 import logging
@@ -24,17 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 class SimulationEngine:
-    """Motor de simulação multi-domínio baseado em ponto fixo.
+    """Multi-domain simulation engine based on fixed-point iteration.
 
-    Itera sobre os três domínios (pneumático, elétrico, hidráulico) em
-    sequência até que nenhum âncora mude de estado — indicando estabilização.
-    O domínio hidráulico usa um solver não-linear interno com detecção de
-    convergência e gerenciamento de escala.
+    Iterates over the three domains (pneumatic, electric, hydraulic) in
+    sequence until no anchor changes state -- indicating stabilization.
+    The hydraulic domain uses an internal nonlinear solver with
+    convergence detection and scale management.
 
     Args:
-        nodes: Dicionário {node_id: Node} construído pelo GraphBuilder.
-        connections: Dicionário {connection_id: Connection}.
-        max_iterations: Limite de iterações de ponto fixo antes de lançar RuntimeError.
+        nodes: {node_id: Node} dict built by the GraphBuilder.
+        connections: {connection_id: Connection} dict.
+        max_iterations: Fixed-point iteration limit before raising RuntimeError.
     """
     def __init__(self, nodes, connections, max_iterations=100):
         self.nodes = nodes
@@ -52,24 +53,25 @@ class SimulationEngine:
         self._conv_monitor  = ConvergenceMonitor()
 
     def run_until_stable(self, dt=0.1):
-        """Executa iterações de ponto fixo até estabilização dos três domínios.
+        """Runs fixed-point iterations until all three domains stabilize.
 
-        A cada iteração, chama node.update() em todos os nós e propaga estado
-        pelos domínios pneumático, elétrico e hidráulico. Para quando nenhum
-        domínio reporta mudança. Após estabilizar, chama compute_outputs().
+        On each iteration, calls node.update() on every node and
+        propagates state across the pneumatic, electric and hydraulic
+        domains. Stops when no domain reports a change. Once stable,
+        calls compute_outputs().
 
         Args:
-            dt: Intervalo de tempo em segundos para post_step_update.
+            dt: Time interval in seconds for post_step_update.
 
         Raises:
-            RuntimeError: Se o número de iterações exceder max_iterations.
+            RuntimeError: If the iteration count exceeds max_iterations.
         """
         iteration = 0
 
         if not self.outputs:
-            # Semeia engine.outputs com os outputs iniciais dos nós (ex: sensores
-            # de cilindro baseados no default_state) para que o primeiro update
-            # já receba valores corretos em vez de outputs={}.
+            # Seeds engine.outputs with the nodes' initial outputs (e.g.
+            # cylinder sensors based on default_state) so the first
+            # update already receives correct values instead of outputs={}.
             for node in self.nodes.values():
                 node_outputs = getattr(node, "outputs", None)
                 if node_outputs:
@@ -97,14 +99,14 @@ class SimulationEngine:
         self.compute_outputs(dt=dt)
 
     def compute_outputs(self, dt):
-        """Coleta os outputs de todos os nós após a estabilização.
+        """Collects every node's outputs after stabilization.
 
-        Chama post_step_update(dt) em cada nó e agrega os valores de
-        node.outputs no dicionário self.outputs, usado como entrada da
-        próxima iteração de run_until_stable.
+        Calls post_step_update(dt) on each node and aggregates
+        node.outputs values into self.outputs, used as input for the
+        next run_until_stable iteration.
 
         Args:
-            dt: Intervalo de tempo em segundos desde o último passo.
+            dt: Time interval in seconds since the last step.
         """
         self.outputs = {}
 
@@ -192,18 +194,20 @@ class SimulationEngine:
         return changed
 
     def _compute_valid_electric_anchors(self):
-        """Determina quais anchors elétricas estão em algum caminho fonte->terra.
+        """Determines which electric anchors sit on some source->ground path.
 
-        Um anchor está "energizado" se existe algum caminho simples de uma
-        anchor tipo "source" até uma anchor tipo "ground" passando por ele —
-        não basta estar no mesmo componente conexo (um ramo sem saída
-        pendurado no meio do caminho não conduz).
+        An anchor is "energized" if there's some simple path from a
+        "source"-type anchor to a "ground"-type anchor passing through
+        it -- being in the same connected component isn't enough (a
+        dead-end branch hanging off the middle of the path doesn't
+        conduct).
 
-        Calculado em O(V+E) via pontes (Tarjan): colapsa cada componente
-        2-aresta-conexo (ex: dois contatos em paralelo que se reconvergem)
-        num único nó, e resolve "está entre fonte e terra?" com uma única
-        passada de DP na árvore de pontes resultante — sem reexplorar a
-        mesma sub-região do grafo mais de uma vez.
+        Computed in O(V+E) via bridges (Tarjan): collapses each
+        2-edge-connected component (e.g. two parallel contacts that
+        reconverge) into a single node, and resolves "is it between a
+        source and a ground?" with a single DP pass over the resulting
+        bridge tree -- without re-exploring the same graph sub-region
+        more than once.
         """
         anchors = [
             a for node in self.nodes.values() for a in node.anchors.values()
@@ -249,7 +253,7 @@ class SimulationEngine:
         return adjacency
 
     def _find_bridges(self, anchors, adjacency):
-        """Tarjan: arestas cuja remoção desconecta o grafo (low-link)."""
+        """Tarjan: edges whose removal disconnects the graph (low-link)."""
         disc = {}
         low = {}
         bridges = set()
@@ -276,7 +280,7 @@ class SimulationEngine:
         return bridges
 
     def _electric_components(self, anchors, adjacency, bridges):
-        """Une anchors ligados por arestas que NÃO são pontes (union-find)."""
+        """Merges anchors linked by edges that are NOT bridges (union-find)."""
         parent = {a: a for a in anchors}
 
         def find(x):
@@ -299,7 +303,7 @@ class SimulationEngine:
         return {a: find(a) for a in anchors}
 
     def _valid_bridge_tree_components(self, anchors, adjacency, bridges, comp_of):
-        """Marca componentes que ficam entre uma fonte e uma terra na árvore de pontes."""
+        """Marks components sitting between a source and a ground in the bridge tree."""
         local_source = defaultdict(int)
         local_ground = defaultdict(int)
         for a in anchors:
@@ -333,9 +337,9 @@ class SimulationEngine:
         return valid_components
 
     def _process_bridge_tree(self, root, comp_adj, local_source, local_ground, visited_components, valid_components):
-        """DP numa árvore de pontes: soma fontes/terras por subárvore e decide,
-        por componente, se existem dois "braços" distintos (local ou vizinho)
-        que juntos cobrem uma fonte e uma terra."""
+        """DP over a bridge tree: sums sources/grounds per subtree and
+        decides, per component, whether two distinct "arms" (local or
+        neighboring) together cover a source and a ground."""
         parent = {root: None}
         parent_edge = {root: None}
         order = [root]
@@ -364,11 +368,12 @@ class SimulationEngine:
 
         for c in order:
             if local_source.get(c, 0) > 0 and local_ground.get(c, 0) > 0:
-                # Fonte e terra caem no mesmo bloco 2-aresta-conexo (ex: dois
-                # contatos independentes do mesmo relé fechados ao mesmo tempo,
-                # cada um completando um caminho fonte->terra por rota
-                # diferente) -- a corrente fecha dentro do próprio bloco, sem
-                # precisar de "braços" externos distintos.
+                # Source and ground fall in the same 2-edge-connected
+                # block (e.g. two independent contacts of the same relay
+                # closed at the same time, each completing a
+                # source->ground path via a different route) -- current
+                # closes within the block itself, no distinct external
+                # "arms" needed.
                 valid_components.add(c)
                 continue
 
@@ -402,7 +407,7 @@ class SimulationEngine:
         circuit_nodes: list,
         anchor_to_pressure_var: dict,
     ) -> bool:
-        """Delega verificação ao ConvergenceMonitor."""
+        """Delegates the check to the ConvergenceMonitor."""
         _, q_ref = self._scale_manager.estimate(circuit_nodes)
         result = self._conv_monitor.check(
             self._continuities, anchor_to_pressure_var, q_ref
@@ -451,7 +456,7 @@ class SimulationEngine:
         if self._hydraulic_iteration >= self._hydraulic_max_iterations:
             self._hydraulic_iteration = 0
             logger.warning(
-                "domínio hidráulico não convergiu após %d iterações.",
+                "hydraulic domain did not converge after %d iterations.",
                 self._hydraulic_max_iterations,
             )
             return False
@@ -495,12 +500,13 @@ class SimulationEngine:
                         pressure_var_to_nodes[pvar].add(node)
                         node_to_pressure_vars[node].add(pvar)
 
-            # Inclui todas as portas fisicas do no no grafo de conectividade
-            # (nao so as ativas). Uma valvula direcional tem portas bloqueadas
-            # que ainda estao ligadas por fios — sem isso, a bomba fica num
-            # circuito separado do cilindro quando a valvula comuta.
-            # Nota: isso so afeta a PARTICAO (quem esta no mesmo circuito),
-            # nao as equacoes — as portas bloqueadas nao entram no solve.
+            # Includes all of the node's physical ports in the
+            # connectivity graph (not just the active ones). A
+            # directional valve has blocked ports that are still wired
+            # up -- without this, the pump ends up in a separate circuit
+            # from the cylinder when the valve commutates.
+            # Note: this only affects the PARTITION (who's in the same
+            # circuit), not the equations -- blocked ports never enter the solve.
             for anchor_name, anchor in node.anchors.items():
                 if anchor.domain != "hydraulic":
                     continue
@@ -554,11 +560,11 @@ class SimulationEngine:
         circuit_list = list(circuit_nodes)
         new_nodes_set = set(circuit_list)
 
-        # circuito morto — nem chama o solver.
-        # Criterio: nenhum no tem is_flow_source=True, ou seja, nao ha
-        # fonte de fluxo ativa (bomba ligada, cilindro com mola comprimida).
-        # Desacoplado do flow_hint para que o ScaleManager possa usar
-        # flow_hint como pura ordem de grandeza sem carregar semantica de estado.
+        # dead circuit -- doesn't even call the solver.
+        # Criterion: no node has is_flow_source=True, i.e. there's no
+        # active flow source (pump running, cylinder with a compressed spring).
+        # Decoupled from flow_hint so the ScaleManager can use flow_hint
+        # as a pure order of magnitude without carrying state semantics.
         has_flow_source = any(
             getattr(n, "is_flow_source", False)
             for n in circuit_list
@@ -580,14 +586,16 @@ class SimulationEngine:
             self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
             return
 
-        # circuito ativo — verifica mudança de topologia
+        # active circuit -- checks for a topology change
         for pvar in circuit_pvars:
             prev_nodes = self._prev_circuit_map.get(pvar)
             if prev_nodes is not None and prev_nodes != new_nodes_set:
-                # Mudanca de topologia detectada (valvula comutou, cilindro travou, etc).
-                # Em vez de zerar p_previous (que jogaria o solver para o ponto trivial
-                # e causaria dezenas de iteracoes de least_squares ate o zc escalar),
-                # re-seed com p_ref — o mesmo chute usado na criacao do NodeContinuity.
+                # Topology change detected (a valve commutated, a
+                # cylinder hit an end stop, etc). Instead of zeroing
+                # p_previous (which would throw the solver to the
+                # trivial point and cause dozens of least_squares
+                # iterations until zc scales up), re-seeds with p_ref --
+                # the same guess used when the NodeContinuity was created.
                 cont = self._continuities.get(pvar)
                 if cont:
                     cont.p_previous = ctx.p_ref
@@ -607,15 +615,15 @@ class SimulationEngine:
             if pvar in circuit_pvars:
                 continuity.update_pressure(sol)
 
-        # Só atualiza a memória de escala se a solução é fisicamente válida.
-        # Uma solução espúria (balanço de vazão ruim) não deve "ensinar" o
-        # ScaleManager — caso contrário, um q_ref absurdo pode contaminar
-        # os solves seguintes via EMA.
+        # Only updates the scale memory if the solution is physically
+        # valid. A spurious solution (bad flow balance) shouldn't "teach"
+        # the ScaleManager -- otherwise an absurd q_ref could contaminate
+        # subsequent solves via the EMA.
         _, q_ref_check = self._scale_manager.estimate(circuit_list)
         sol_q_values = [abs(v) for k, v in sol.items()
                         if k.startswith("Q_") and isinstance(v, float)]
         max_q = max(sol_q_values) if sol_q_values else 0.0
-        q_is_sane = max_q < q_ref_check * 1e3   # no máximo 1000x o q_ref esperado
+        q_is_sane = max_q < q_ref_check * 1e3   # at most 1000x the expected q_ref
         p_values_sol = [v for k, v in sol.items()
                         if k.startswith("P_") and isinstance(v, float) and v >= 0]
         max_p = max(p_values_sol) if p_values_sol else 0.0
@@ -625,7 +633,7 @@ class SimulationEngine:
             self._scale_manager.update_from_solution(sol)
         else:
             logger.debug(
-                "solução rejeitada pelo ScaleManager: max_q=%.2e, max_p=%.2e",
+                "solution rejected by ScaleManager: max_q=%.2e, max_p=%.2e",
                 max_q, max_p,
             )
 
@@ -642,17 +650,18 @@ class SimulationEngine:
                 if pvar:
                     group_flows[pvar].append(flow_var)
 
-        # p_ref do circuito — usado para seed de novos NodeContinuity
+        # the circuit's p_ref -- used to seed new NodeContinuity instances
         circuit_p_ref = ctx.p_ref
 
         continuities = []
         for pvar, flow_vars in group_flows.items():
             if pvar not in self._continuities:
                 cont = NodeContinuity(pvar, flow_vars)
-                # Seed inicial: usa p_ref do circuito como chute de pressão.
-                # Sem isso, p_previous=0 faz o solver convergir para o ponto
-                # trivial (tudo a zero) em vez do estado estacionário real.
-                # O solver vai refinar a partir daqui — não é um valor fixado.
+                # Initial seed: uses the circuit's p_ref as the pressure
+                # guess. Without this, p_previous=0 makes the solver
+                # converge to the trivial point (everything at zero)
+                # instead of the real steady state. The solver refines
+                # from here -- it isn't a fixed value.
                 cont.p_previous = circuit_p_ref
                 self._continuities[pvar] = cont
             else:
@@ -731,19 +740,19 @@ class SimulationEngine:
 def _print_circuit_state(index, circuit_list, anchor_to_pressure_var, sol):
     SEP = "─" * 60
     print(f"\n{SEP}")
-    print(f"  CIRCUITO {index}")
+    print(f"  CIRCUIT {index}")
     print(SEP)
 
-    # pressões por nó de pressão
+    # pressures per pressure node
     pvars_seen = set()
-    print("\n  PRESSÕES:")
+    print("\n  PRESSURES:")
     for anchor, pvar in anchor_to_pressure_var.items():
         if pvar in sol and pvar not in pvars_seen:
             pvars_seen.add(pvar)
             print(f"    {pvar:45s} = {sol[pvar]:+.4e} Pa")
 
-    # vazões por componente
-    print("\n  VAZÕES:")
+    # flows per component
+    print("\n  FLOWS:")
     for node in circuit_list:
         ports = node.hydraulic_ports() if hasattr(node, 'hydraulic_ports') else {}
         if not ports:

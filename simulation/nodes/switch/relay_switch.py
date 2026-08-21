@@ -1,4 +1,4 @@
-"""Nó de simulação de contato de relé."""
+"""Simulation node for the relay contact."""
 
 from simulation.nodes.nodes import Node
 
@@ -7,11 +7,11 @@ class RelaySwitch(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "relay_switch", domain=domain, properties=properties)
 
-        self.state = 0  # 0 = repouso, 1 = acionado
+        self.state = 0  # 0 = at rest, 1 = actuated
         self.relay_sensor_name = self.properties.get("relay_sensor")
 
     # --------------------------
-    # Atualização lógica
+    # Logic update
     # --------------------------
     def update(self, outputs=None):
 
@@ -28,11 +28,11 @@ class RelaySwitch(Node):
         self.state = 1 if payload.get("value") else 0
 
     # --------------------------
-    # Conexões internas
+    # Internal connections
     # --------------------------
     def get_internal_connections(self):
         """
-        Retorna pares de anchors conectados internamente.
+        Returns pairs of internally connected anchors.
         """
 
         contact_type = self.properties.get("contact_type", "NO")
@@ -48,7 +48,7 @@ class RelaySwitch(Node):
         return []
 
     # --------------------------
-    # Persistência
+    # Persistence
     # --------------------------
     def get_state(self):
         state = super().get_state()

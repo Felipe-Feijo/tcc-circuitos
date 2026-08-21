@@ -1,31 +1,31 @@
-"""Armazena snapshots do estado de domínio para suportar step_backward."""
+"""Stores domain-state snapshots to support step_backward."""
 
 from collections import deque
 
 
 class HistoryManager:
-    """Mantém um histórico de snapshots do estado dos nós de domínio.
+    """Keeps a history of domain node state snapshots.
 
-    Cada snapshot é um dicionário {node_id: state_dict}, gerado via
-    Node.get_state() e restaurado via Node.set_state().
+    Each snapshot is a {node_id: state_dict} dict, generated via
+    Node.get_state() and restored via Node.set_state().
 
-    Snapshots idênticos ao anterior não são armazenados (sem mudança de estado).
+    Snapshots identical to the previous one aren't stored (no state change).
 
     Args:
-        max_history: Número máximo de snapshots mantidos em memória.
+        max_history: Maximum number of snapshots kept in memory.
     """
 
     def __init__(self, max_history: int = 5):
         self._history: deque = deque(maxlen=max_history)
 
     def push(self, nodes: dict) -> bool:
-        """Salva um snapshot do estado atual dos nós.
+        """Saves a snapshot of the nodes' current state.
 
         Args:
-            nodes: Dicionário {node_id: Node} do engine.
+            nodes: The engine's {node_id: Node} dict.
 
         Returns:
-            True se o snapshot foi salvo, False se idêntico ao anterior.
+            True if the snapshot was saved, False if identical to the previous one.
         """
         snap = {nid: node.get_state() for nid, node in nodes.items()}
         if self._history and snap == self._history[-1]:
@@ -34,13 +34,13 @@ class HistoryManager:
         return True
 
     def pop_and_restore(self, nodes: dict) -> bool:
-        """Remove o snapshot atual e restaura o anterior.
+        """Removes the current snapshot and restores the previous one.
 
         Args:
-            nodes: Dicionário {node_id: Node} do engine.
+            nodes: The engine's {node_id: Node} dict.
 
         Returns:
-            True se a restauração ocorreu, False se não há histórico suficiente.
+            True if the restore happened, False if there isn't enough history.
         """
         if len(self._history) <= 1:
             return False
@@ -52,11 +52,11 @@ class HistoryManager:
         return True
 
     def can_go_back(self) -> bool:
-        """Retorna True se há pelo menos dois snapshots (pode retroceder um passo)."""
+        """Returns True if there are at least two snapshots (can step back one)."""
         return len(self._history) > 1
 
     def clear(self) -> None:
-        """Remove todos os snapshots do histórico."""
+        """Removes every snapshot from the history."""
         self._history.clear()
 
     def __len__(self) -> int:

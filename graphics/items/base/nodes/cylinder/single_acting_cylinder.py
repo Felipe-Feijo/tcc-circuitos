@@ -1,4 +1,4 @@
-"""Nó gráfico de cilindro de simples ação."""
+"""Single-acting cylinder graphics node."""
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPixmap
@@ -9,17 +9,17 @@ from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinde
 
 _BASE_PATH = "resources/nodes/single_acting_cylinder"
 
-# Posições X da haste no espaço do body (em pixels)
+# Rod's X positions in the body's space (in pixels)
 _ROD_X_RETRACTED = 174
 _ROD_X_EXTENDED  = 46
 _ROD_DELTA       = _ROD_X_RETRACTED - _ROD_X_EXTENDED  # 128px
 
-# Dimensões da mola
-_SPRING_W_EXTENDED  = 209   # mola expandida  (haste retraída)
-_SPRING_W_RETRACTED = 78    # mola comprimida (haste estendida)
+# Spring dimensions
+_SPRING_W_EXTENDED  = 209   # expanded spring (rod retracted)
+_SPRING_W_RETRACTED = 78    # compressed spring (rod extended)
 _SPRING_W_DELTA     = _SPRING_W_EXTENDED - _SPRING_W_RETRACTED
 
-# Offsets relativos ao (0, 0) do body — TODO: ajustar após criar as sprites
+# Offsets relative to the body's (0, 0) -- TODO: adjust once the sprites exist
 _ROD_OFFSET    = QPointF(0, 0)
 _SPRING_OFFSET = QPointF(85, 0)
 
@@ -50,7 +50,7 @@ class SingleActingCylinder(CylinderItem):
     def setup(self) -> None:
         super().setup()
         if self.domain == "hydraulic":
-            # friction não aparece no dialog — fixo em 0 no nó de simulação
+            # friction doesn't appear in the dialog -- fixed at 0 in the simulation node
             self.properties.setdefault("external_force", 0.0)
             self._rod_pixmap    = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_rod.png")
             self._body_pixmap   = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_body.png")
@@ -65,7 +65,7 @@ class SingleActingCylinder(CylinderItem):
             exit_directions={"external": ["bottom"]}
         ))
 
-    # ── pintura ───────────────────────────────────────────────────────────────
+    # -- painting -----------------------------------------------------------------
 
     def update_body_visuals(self):
         if self.domain != "hydraulic":
@@ -77,20 +77,20 @@ class SingleActingCylinder(CylinderItem):
             super().paint_body(painter)
             return
 
-        t  = float(self.body_state)  # 0.0 → retraído, 1.0 → estendido
+        t  = float(self.body_state)  # 0.0 -> retracted, 1.0 -> extended
         ox = int(self.visual_offset.x())
         oy = int(self.visual_offset.y())
 
-        # 1. Carcaça (fixa)
+        # 1. Housing (fixed)
         painter.drawPixmap(ox, oy, self._body_pixmap)
 
-        # 2. Mola — escala horizontalmente (expandida quando retraído, comprimida quando estendido)
+        # 2. Spring -- scales horizontally (expanded when retracted, compressed when extended)
         spring_w = int(_SPRING_W_RETRACTED + (1.0 - t) * _SPRING_W_DELTA)
         spring_scaled = self._spring_pixmap.scaled(
             spring_w,
             self._spring_pixmap.height()
         )
-        # ancora na direita: desloca x conforme a mola encolhe
+        # anchors on the right: shifts x as the spring shrinks
         spring_x = int(_SPRING_OFFSET.x() + (_SPRING_W_EXTENDED - spring_w))
         painter.drawPixmap(
             ox + spring_x,
@@ -98,12 +98,12 @@ class SingleActingCylinder(CylinderItem):
             spring_scaled
         )
 
-        # 3. Haste — translada para a esquerda conforme t aumenta
+        # 3. Rod -- translates left as t increases
         rod_x = int(_ROD_OFFSET.x() + _ROD_X_RETRACTED - (1-t) * _ROD_DELTA)
         rod_y = int(_ROD_OFFSET.y())
         painter.drawPixmap(ox + rod_x, oy + rod_y, self._rod_pixmap)
 
-    # ── propriedades ──────────────────────────────────────────────────────────
+    # -- properties -----------------------------------------------------------------
 
     def build_properties_dialog(self):
         dialog = super().build_properties_dialog()

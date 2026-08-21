@@ -1,4 +1,4 @@
-"""Ação que abre o diálogo de geração automática de circuito."""
+"""Action that opens the automatic circuit generation dialog."""
 
 from PyQt6.QtGui import QAction
 from main_window.ui.circuit_generator_dialog import CircuitGeneratorDialog

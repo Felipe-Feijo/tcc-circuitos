@@ -1,1 +1,1 @@
-"""Geração de relatórios de simulação: gravação de frames e montagem de artefatos."""
+"""Simulation report generation: frame capture and artifact assembly."""

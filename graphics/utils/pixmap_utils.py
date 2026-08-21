@@ -1,15 +1,16 @@
-"""Utilitários para geração de pixmaps usados na paleta de nós."""
+"""Utilities for generating pixmaps used in the node palette."""
 
 from PyQt6.QtGui import QColor, QPainter, QPixmap
 from PyQt6.QtCore import Qt
 
 
 def recolor_pixmap_black(pixmap: QPixmap) -> QPixmap:
-    """Recolore o conteúdo opaco de um pixmap para preto sólido.
+    """Recolors the opaque content of a pixmap to solid black.
 
-    Os sprites dos nós são desenhados em tons claros (pensados pro fundo
-    dark do canvas). No tema light usamos essa recoloração pra manter o
-    contorno visível sobre fundo branco, preservando o alpha original.
+    Node sprites are drawn in light tones (designed for the canvas's
+    dark background). In the light theme we use this recoloring to keep
+    the outline visible against a white background, preserving the
+    original alpha.
     """
     if not pixmap or pixmap.isNull():
         return pixmap
@@ -27,18 +28,18 @@ def recolor_pixmap_black(pixmap: QPixmap) -> QPixmap:
 def generate_pixmap_for_palette(
     icon_path: str, w: int = 60, h: int = 40, use_light_theme: bool = False
 ) -> QPixmap:
-    """Gera um QPixmap redimensionado para exibição na paleta de nós.
+    """Generates a resized QPixmap for display in the node palette.
 
     Args:
-        icon_path: Caminho para o arquivo de imagem do ícone.
-        w: Largura máxima em pixels.
-        h: Altura máxima em pixels.
-        use_light_theme: Se True, recolore o ícone pra preto (mesma lógica
-            usada nos nós desenhados na cena) pra ficar visível sobre o
-            fundo claro da paleta.
+        icon_path: Path to the icon image file.
+        w: Maximum width in pixels.
+        h: Maximum height in pixels.
+        use_light_theme: If True, recolors the icon to black (same logic
+            used for nodes drawn on the scene) so it stays visible against
+            the palette's light background.
 
     Returns:
-        QPixmap redimensionado mantendo proporção, com transformação suave.
+        Resized QPixmap keeping aspect ratio, with smooth transformation.
     """
     pixmap = QPixmap(icon_path)
     scaled = pixmap.scaled(

@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula direcional 4/3 vias, centro fechado."""
+"""Simulation node for the 4/3-way directional valve, closed center."""
 
 import math
 
@@ -19,11 +19,11 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
             }
 
     def get_internal_connections(self):
-        """Retorna pares de anchors conectados internamente.
+        """Returns pairs of internally connected anchors.
 
-        Estado 0 (ativo-direita): P→A, B→R
-        Estado 1 (centro fechado): nenhum par -- todos os portos bloqueados
-        Estado 2 (ativo-esquerda): P→B, A→R
+        State 0 (active-right): P->A, B->R
+        State 1 (closed center): no pair -- all ports blocked
+        State 2 (active-left):  P->B, A->R
         """
         if self.body_state == 0:
             return [("P", "A"), ("B", "R")]
@@ -33,7 +33,7 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
             return []
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
 
     @property
@@ -74,8 +74,8 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
         pairs = self.get_internal_connections()
 
         if not pairs:
-            # Centro fechado: nenhum par conectado -- cada porto tem vazão
-            # forçada a zero para manter o sistema bem-posto.
+            # Closed center: no pair connected -- each port has its flow
+            # forced to zero to keep the system well-posed.
             return [
                 x[idx[self._flow_vars[port]]] / Q_scale
                 for port in ("P", "A", "B", "R")

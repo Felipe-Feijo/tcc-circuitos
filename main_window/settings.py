@@ -1,4 +1,4 @@
-"""Preferências de UI persistidas: tamanho de fonte e tier de tamanho da paleta."""
+"""Persisted UI preferences: font size and palette size tier."""
 
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication, QInputDialog
@@ -49,8 +49,8 @@ def apply_font_from_settings(app: QApplication, settings: QSettings | None = Non
 
 
 def prompt_and_apply_font_size(parent, settings: QSettings | None = None) -> bool:
-    """Abre um diálogo pedindo o tamanho de fonte (pt); aplica e persiste
-    se o usuário confirmar. Retorna True se algo foi alterado."""
+    """Opens a dialog asking for the font size (pt); applies and persists
+    it if the user confirms. Returns True if anything changed."""
     current = get_font_size(settings)
     value, ok = QInputDialog.getInt(
         parent, "Font Size", "Point size:", current, MIN_FONT_SIZE, MAX_FONT_SIZE

@@ -1,64 +1,64 @@
 """
-Gerador de circuito pelo método cascata (pneumático).
+Circuit generator for the cascade (pneumatic) method.
 
-Topologia gerada para N grupos:
-  - 1 pressure_source principal (alimenta memória e botão)
-  - 1 button_switch (Valve_3_2_Ways com button + spring)
-  - (N-1) válvulas de memória valve_5_2_ways encadeadas
-  - N pressure_lines de grupo (barramentos com anchors por atuador)
-  - Por cilindro: 1 double_acting_cylinder + 1 valve_4_2_ways (pilot+pilot)
-                  + 1 PressureSource dedicado (porta R) + 1 Exhaust dedicado (porta P)
-  - Por evento: 1 valve_3_2_ways de sinalização (limit_switch + spring)
-                + 1 Exhaust dedicado (porta R)
-  - Exhausts nas saídas R1, R2 de cada memória
-  - 1 Exhaust dedicado na porta R do botão
+Topology generated for N groups:
+  - 1 main pressure_source (feeds the memory and the button)
+  - 1 button_switch (Valve_3_2_Ways with button + spring)
+  - (N-1) chained valve_5_2_ways memory valves
+  - N group pressure_lines (buses with per-actuator anchors)
+  - Per cylinder: 1 double_acting_cylinder + 1 valve_4_2_ways (pilot+pilot)
+                  + 1 dedicated PressureSource (port R) + 1 dedicated Exhaust (port P)
+  - Per event: 1 signaling valve_3_2_ways (limit_switch + spring)
+               + 1 dedicated Exhaust (port R)
+  - Exhausts on each memory's R1, R2 outputs
+  - 1 dedicated Exhaust on the button's R port
 
-Linhas de pressão de grupo:
-  Cada PressureLine recebe (n_cyls * _ANCHORS_PER_ACTUATOR) anchors,
-  numerados X1, X2, X3, ... sem lógica de "ala" ou "cauda".
-  Um contador simples por pl_id fornece o próximo anchor livre em ordem crescente.
+Group pressure lines:
+  Each PressureLine gets (n_cyls * _ANCHORS_PER_ACTUATOR) anchors,
+  numbered X1, X2, X3, ... with no "wing" or "tail" logic.
+  A simple counter per pl_id hands out the next free anchor in ascending order.
 
-Fluxo de pressão principal:
-  gen-ps → mc[-1].P  (pressão da fonte vai direto à última memória)
-  mc.A → pl_grp[i]   (cada memória alimenta sua pl de grupo)
-  mc[0].B → pl_grp[-1]  (grupo de retorno/repouso)
+Main pressure flow:
+  gen-ps -> mc[-1].P  (the source's pressure goes straight to the last memory)
+  mc.A -> pl_grp[i]   (each memory feeds its group's pl)
+  mc[0].B -> pl_grp[-1]  (return/rest group)
 
-Sinalização:
-  pl_grp.Xi → sig.P  (grupo alimenta sig — anchor consumido em ordem)
-  sig.A → v42.PL/PR  (sinalização aciona cilindro)
-  sig_transição.A → mc[g].PR  (transição de grupo)
-  sig_fechamento.A → btn.P    (último sinal do ciclo → AND série com botão)
-  btn.A → mc[0].PL            (botão aciona memória de start)
+Signaling:
+  pl_grp.Xi -> sig.P  (group feeds sig -- anchor consumed in order)
+  sig.A -> v42.PL/PR  (signaling triggers the cylinder)
+  transition_sig.A -> mc[g].PR  (group transition)
+  closure_sig.A -> btn.P    (cycle's last signal -> serial AND with the button)
+  btn.A -> mc[0].PL          (button triggers the start memory)
 
-v42 pilots (via barramento):
-  pl_grp[g_ext].Xi → v42.PL   (extensão: barramento do grupo onde A+ está)
-  pl_grp[g_ret].Xi → v42.PR   (retração: barramento do grupo onde A- está)
+v42 pilots (via bus):
+  pl_grp[g_ext].Xi -> v42.PL   (extension: the bus of the group where A+ is)
+  pl_grp[g_ret].Xi -> v42.PR   (retraction: the bus of the group where A- is)
 """
 
 import uuid
 from collections import Counter
 from circuit_generator.sequence_parser import extract_cylinders, split_into_groups
 
-# Anchors reservados por evento (aparição na sequência) por cilindro.
-# 20 garante folga para sig.P, pilots e entrada de memória.
+# Anchors reserved per event (occurrence in the sequence) per cylinder.
+# 20 guarantees slack for sig.P, pilots and the memory entry.
 _ANCHORS_PER_EVENT = 20
 
 
 def _atomize_group(group: list[tuple]) -> list[list[tuple[int, str, str]]]:
     """
-    Agrupa os eventos de um grupo cascata em átomos: um evento sozinho vira
-    um átomo de tamanho 1; eventos consecutivos com o mesmo parallel_id
-    (bloco simultâneo) viram um átomo só. Cada evento é anotado com seu
-    e_idx original dentro do grupo (necessário para nomear _role de
-    válvulas de sinalização, que usa g_idx*100+e_idx).
+    Groups a cascade group's events into atoms: a lone event becomes a
+    size-1 atom; consecutive events sharing the same parallel_id
+    (simultaneous block) become a single atom. Each event is annotated
+    with its original e_idx within the group (needed to name signaling
+    valves' _role, which uses g_idx*100+e_idx).
 
-    Espelha sequence_parser._atomize (mesma lógica de agrupamento por
-    parallel_id), mas devolve e_idx junto — que sequence_parser não expõe
-    porque não precisa dele para decidir corte de grupo.
+    Mirrors sequence_parser._atomize (same parallel_id grouping logic),
+    but also returns e_idx -- which sequence_parser doesn't expose since
+    it doesn't need it to decide group cuts.
 
-    Aceita eventos de 2 ou 3 campos, (letra, direção) ou
-    (letra, direção, parallel_id) — mesma tolerância usada em todo o
-    módulo desde o sub-projeto 1.
+    Accepts 2- or 3-field events, (letter, direction) or
+    (letter, direction, parallel_id) -- same tolerance used throughout
+    this module since sub-project 1.
     """
     atoms: list[list[tuple[int, str, str]]] = []
     i, n = 0, len(group)
@@ -117,11 +117,11 @@ def generate(events: list[tuple[str, str]]) -> dict:
     def confirm_sensor(letter, direction):
         return f"{letter.lower()}{'1' if direction == '+' else '0'}"
 
-    # Estado inicial: se o primeiro movimento for "-", o cilindro começa estendido.
+    # Initial state: if the first move is "-", the cylinder starts extended.
     first_event     = {letter: direction for letter, direction, *_ in reversed(events)}
     starts_extended = {letter: first_event[letter] == "-" for letter in cylinders}
 
-    # ── 1. Cilindros ──────────────────────────────────────────────────────────
+    # -- 1. Cylinders ------------------------------------------------------------
 
     for letter in cylinders:
         add_node(f"gen-cyl-{letter}", "DoubleActingCylinder", f"cylinder:{letter}",
@@ -133,7 +133,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
                      "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
 
-    # ── 2. Válvulas 4/2 com PS e Exhaust dedicados ───────────────────────────
+    # -- 2. 4/2 valves with dedicated PS and Exhaust -----------------------------
 
     for letter in cylinders:
         add_node(f"gen-v42-{letter}", "Valve_4_2_Ways", f"main_valve:{letter}",
@@ -152,7 +152,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(exh_v42, "R", f"gen-v42-{letter}", "P")
         connect(ps_v42,  "P", f"gen-v42-{letter}", "R")
 
-    # ── 3. Botão de início ───────────────────────────────────────────────────
+    # -- 3. Start button ----------------------------------------------------------
 
     add_node("gen-btn", "Valve_3_2_Ways", "button",
              properties={
@@ -163,8 +163,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
              })
     connect(add_simple("Exhaust", "exhaust:btn-R"), "R", "gen-btn", "R")
 
-    # ── 4. Memórias (valve_5_2_ways) ─────────────────────────────────────────
-    # mem_ids[i] = mc[i]; mc[0] recebe btn, mc[N-2] é o mais alto.
+    # -- 4. Memories (valve_5_2_ways) --------------------------------------------
+    # mem_ids[i] = mc[i]; mc[0] receives btn, mc[N-2] is the topmost.
 
     mem_ids = [f"gen-mc-{i}" for i in range(n_groups - 1)]
     n_mc    = len(mem_ids)
@@ -184,7 +184,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         connect(mem_id, "R1", exh1, "R")
         connect(mem_id, "R2", exh2, "R")
 
-    # ── 5. Linhas de pressão de grupo ────────────────────────────────────────
+    # -- 5. Group pressure lines --------------------------------------------------
 
     events_per_cyl = Counter(letter for letter, _, *__ in events)
     n_pl_anchors   = sum(events_per_cyl[c] * _ANCHORS_PER_EVENT for c in cylinders)
@@ -205,17 +205,17 @@ def generate(events: list[tuple[str, str]]) -> dict:
         _pl_counter[pl_id] = idx + 1
         if idx > n_pl_anchors:
             raise RuntimeError(
-                f"PressureLine {pl_id} esgotou todos os {n_pl_anchors} anchors. "
-                f"Aumente _ANCHORS_PER_EVENT (atual={_ANCHORS_PER_EVENT})."
+                f"PressureLine {pl_id} ran out of all {n_pl_anchors} anchors. "
+                f"Increase _ANCHORS_PER_EVENT (current={_ANCHORS_PER_EVENT})."
             )
         return f"X{idx}"
 
-    # ── 5b. Encadeamento de pressão ───────────────────────────────────────────
+    # -- 5b. Pressure chaining -----------------------------------------------------
     #
-    #   btn.A    → mc[0].P
-    #   mc[i].A  → mc[i+1].P          para i = 0..N-3
-    #   mc[N-2].A → pl[0]             (mais alto alimenta primeira pl)
-    #   mc[i].B  → pl[N-1-i]          mc[0].B→pl[N-1], mc[1].B→pl[N-2], ...
+    #   btn.A    -> mc[0].P
+    #   mc[i].A  -> mc[i+1].P         for i = 0..N-3
+    #   mc[N-2].A -> pl[0]            (topmost feeds the first pl)
+    #   mc[i].B  -> pl[N-1-i]         mc[0].B->pl[N-1], mc[1].B->pl[N-2], ...
 
     if mem_ids:
         connect(add_simple("PressureSource", "pressure_source:mc0"), "P", mem_ids[0], "P")
@@ -226,37 +226,37 @@ def generate(events: list[tuple[str, str]]) -> dict:
             pl_idx = n_groups - 1 - i
             connect(mem_id, "B", pl_grp_ids[pl_idx], next_anchor(pl_grp_ids[pl_idx]))
     else:
-        # 1 grupo: btn alimenta pl[0] direto
+        # 1 group: btn feeds pl[0] directly
         connect("gen-btn", "A", pl_grp_ids[0], next_anchor(pl_grp_ids[0]))
 
-    # ── 6. Disparo e confirmação por átomo ───────────────────────────────────
+    # -- 6. Trigger and confirmation per atom --------------------------------------
     #
-    #   Cada grupo cascata é dividido em "átomos" (_atomize_group): um
-    #   evento sozinho, ou um bloco "(...)" inteiro (eventos com o mesmo
-    #   parallel_id). Um átomo dispara cada um dos seus eventos exatamente
-    #   uma vez (uma fonte dedicada por evento — nunca duplicada) e produz
-    #   `fan_out` conjuntos de confirmação independentes: um por evento do
-    #   PRÓXIMO átomo, ou 1 se for o último átomo do grupo (alimenta
-    #   mc.PR/btn.P). Cada conjunto de confirmação é um grupo dedicado de
-    #   válvulas de sinalização (mesmo sensor, mesmo P do barramento),
-    #   encadeadas em série se o átomo tem mais de um evento -- a 1ª sig
-    #   puxa P do barramento, as demais puxam P da saída (A) da sig
-    #   anterior (E lógico sem nenhuma AndValve; ver spec
-    #   docs/superpowers/specs/2026-07-11-serial-confirmation-no-andvalve-design.md).
+    #   Each cascade group is split into "atoms" (_atomize_group): a lone
+    #   event, or a whole "(...)" block (events sharing a parallel_id).
+    #   An atom fires each of its events exactly once (one dedicated
+    #   source per event -- never duplicated) and produces `fan_out`
+    #   independent confirmation sets: one per event of the NEXT atom, or
+    #   1 if it's the group's last atom (feeds mc.PR/btn.P). Each
+    #   confirmation set is a dedicated group of signaling valves (same
+    #   sensor, same bus P), chained in series if the atom has more than
+    #   one event -- the 1st sig pulls P from the bus, the rest pull P
+    #   from the previous sig's output (A) (logical AND with no AndValve;
+    #   see spec docs/superpowers/specs/
+    #   2026-07-11-serial-confirmation-no-andvalve-design.md).
     #
-    #   fan_out é sempre uma consulta LOCAL ao próximo átomo apenas — nunca
-    #   se acumula por trás de múltiplos átomos (só o disparo do átomo
-    #   imediatamente anterior a um bloco precisa duplicar; o resto da
-    #   cadeia serial antes dele permanece com um único conjunto).
+    #   fan_out is always a LOCAL lookup at just the next atom -- it never
+    #   accumulates across multiple atoms (only the trigger of the atom
+    #   immediately before a block needs duplicating; the rest of the
+    #   serial chain before it keeps a single set).
     #
-    #   Sem blocos "(...)", todo átomo tem tamanho 1 e fan_out=1 em todo
-    #   lugar — o algoritmo colapsa exatamente na fiação evento-a-evento de
-    #   antes deste sub-projeto.
+    #   With no "(...)" blocks, every atom has size 1 and fan_out=1
+    #   everywhere -- the algorithm collapses exactly to the
+    #   event-by-event wiring from before this sub-project.
     #
-    #   Multi-ciclo (sub-projeto 2): quando o mesmo pilot de uma 4/2 recebe
-    #   mais de uma fonte de disparo, as fontes são acumuladas em
-    #   `triggers_for_pilot` e resolvidas na passada 2 (abaixo, inalterada)
-    #   — 1 fonte conecta direto; 2+ fontes convergem via OrValve.
+    #   Multi-cycle (sub-project 2): when the same 4/2 pilot receives more
+    #   than one trigger source, the sources are accumulated in
+    #   `triggers_for_pilot` and resolved in pass 2 (below, unchanged) --
+    #   1 source connects directly; 2+ sources converge via OrValve.
 
     triggers_for_pilot: dict[tuple[str, str], list[tuple[str, str]]] = {}
 
@@ -273,7 +273,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
         atoms         = _atomize_group(group)
         n_atoms       = len(atoms)
 
-        entry_sources: list[tuple[str, str]] | None = None  # 1:1 com os eventos do átomo atual
+        entry_sources: list[tuple[str, str]] | None = None  # 1:1 with the current atom's events
 
         for atom_idx, atom in enumerate(atoms):
             is_last_atom = (atom_idx == n_atoms - 1)
@@ -282,13 +282,13 @@ def generate(events: list[tuple[str, str]]) -> dict:
             if entry_sources is None:
                 entry_sources = [(pl_current, next_anchor(pl_current)) for _ in atom]
 
-            # Dispara cada evento do átomo uma única vez.
+            # Fires each of the atom's events exactly once.
             for slot_idx, (e_idx, letter, direction) in enumerate(atom):
                 v42_pilot = "PL" if direction == "+" else "PR"
                 triggers_for_pilot.setdefault((letter, v42_pilot), []).append(
                     entry_sources[slot_idx])
 
-            # Produz `fan_out` conjuntos de confirmação independentes.
+            # Produces `fan_out` independent confirmation sets.
             group_outputs: list[tuple[str, str]] = []
             for conf_idx in range(fan_out):
                 prev_output: tuple[str, str] | None = None
@@ -330,25 +330,25 @@ def generate(events: list[tuple[str, str]]) -> dict:
             else:
                 entry_sources = group_outputs
 
-    # ── 6b. Resolve as fontes de disparo acumuladas por pilot ────────────────
+    # -- 6b. Resolves the trigger sources accumulated per pilot --------------------
     #
-    #   1 fonte  -> conecta direto no pilot, na mesma ordem de chamada de
-    #               connect() usada antes deste sub-projeto (preserva a
-    #               topologia exata para sequências de 1 ciclo por cilindro).
-    #   2+ fontes -> cadeia binária de OrValve: a saída de cada OR alimenta
-    #               a entrada livre da próxima, até a última OR alimentar o
-    #               pilot da 4/2.
+    #   1 source  -> connects directly to the pilot, in the same connect()
+    #               call order used before this sub-project (preserves
+    #               the exact topology for 1-cycle-per-cylinder sequences).
+    #   2+ sources -> binary OrValve chain: each OR's output feeds the
+    #               next one's free input, until the last OR feeds the
+    #               4/2's pilot.
 
     for (letter, pilot_side), sources in triggers_for_pilot.items():
         if len(sources) == 1:
             src_id, src_anchor = sources[0]
             if src_anchor == "A":
-                # fonte encadeada (sig.A) -> pilot da 4/2
+                # chained source (sig.A) -> the 4/2's pilot
                 connect(src_id, src_anchor, f"gen-v42-{letter}", pilot_side)
             else:
-                # fonte direta do barramento -> pilot da 4/2 (a 4/2 é o
-                # "source" da chamada, o barramento é o "target" — mesma
-                # ordem usada antes deste sub-projeto)
+                # direct source from the bus -> the 4/2's pilot (the 4/2
+                # is the call's "source", the bus is the "target" -- same
+                # order used before this sub-project)
                 connect(f"gen-v42-{letter}", pilot_side, src_id, src_anchor)
         else:
             current = sources[0]
@@ -359,10 +359,10 @@ def generate(events: list[tuple[str, str]]) -> dict:
                 current = (or_id, "A")
             connect(current[0], current[1], f"gen-v42-{letter}", pilot_side)
 
-    # ── 7. Pilots PL das memórias via PressureLines ──────────────────────────
+    # -- 7. Memory PL pilots via PressureLines --------------------------------------
     #
-    #   mc[0].PL ← btn.A
-    #   mc[i].PL ← pl[n_mc-i+1]   para i > 0
+    #   mc[0].PL <- btn.A
+    #   mc[i].PL <- pl[n_mc-i+1]  for i > 0
 
     if mem_ids:
         connect("gen-btn", "A", mem_ids[0], "PL")

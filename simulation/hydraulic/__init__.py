@@ -1,19 +1,19 @@
 """
 simulation/hydraulic/
 
-Domínio hidráulico da simulação.
+Hydraulic domain of the simulation.
 
-Exports principais
-------------------
-HydraulicNode     : Protocol que todo nó hidráulico deve satisfazer
-HydraulicMixin    : Mixin com defaults para membros opcionais
-ScaleContext      : contexto de escala imutável por solve
-ScaleManager      : estima p_ref e q_ref a partir dos nós
-ZcScheduler       : calcula zc em função da iteração
-NodeContinuity    : capacitor virtual de pressurização
-NonlinearSystemSolver : resolve o sistema de equações
-ConvergenceMonitor    : verifica conservação de vazão
-ConvergenceResult     : resultado da verificação
+Main exports
+------------
+HydraulicNode     : Protocol every hydraulic node must satisfy
+HydraulicMixin    : Mixin with defaults for optional members
+ScaleContext      : immutable scale context per solve
+ScaleManager      : estimates p_ref and q_ref from the nodes
+ZcScheduler       : computes zc as a function of the iteration
+NodeContinuity    : virtual pressurization capacitor
+NonlinearSystemSolver : solves the equation system
+ConvergenceMonitor    : checks flow conservation
+ConvergenceResult     : verification result
 """
 
 from simulation.hydraulic.node_protocol import HydraulicNode, HydraulicMixin

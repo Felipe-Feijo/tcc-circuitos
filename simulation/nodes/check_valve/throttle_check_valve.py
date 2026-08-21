@@ -24,53 +24,53 @@ Visual state (latched in post_step_update):
     Default: "open"
 
 `delay_steps` is read from ``properties["delay_steps"]`` (default: 3).
-`delay_steps` só é usado no domínio pneumático.
+`delay_steps` is only used in the pneumatic domain.
 
 Behaviour (hydraulic)
 -----------------------
-Um "one-way flow control valve" de verdade: caminho de retenção livre em
-paralelo com um orifício fixo -- diferente da válvula de retenção pura
-(simulation/nodes/check_valve/check_valve.py), o sentido restrito NUNCA
-bloqueia, só resiste. É por isso que o pneumático usa um atraso
-(`delay_steps`) em vez de bloquear: o atraso aproxima, no domínio
-booleano, o tempo que um fluxo resistido levaria pra pressurizar o lado
-de baixo -- no hidráulico não precisa de atraso nenhum, a equação de
-orifício já dá a relação contínua ΔP–Q direto.
+A real "one-way flow control valve": a free check path in parallel with
+a fixed orifice -- unlike a pure check valve
+(simulation/nodes/check_valve/check_valve.py), the restricted direction
+NEVER blocks, it only resists. That's why the pneumatic side uses a
+delay (`delay_steps`) instead of blocking: the delay approximates, in
+the boolean domain, the time a resisted flow would take to pressurize
+the downstream side -- the hydraulic side needs no delay at all, the
+orifice equation already gives the continuous dP-Q relation directly.
 
     b = P_X - P_Y
 
-    Q_Y >= 0  (Y empurra, sentido favorável):
-        resistência zero -- P_X = P_Y, igual ao ramo aberto da retenção
-        pura (check_valve.py).
+    Q_Y >= 0  (Y pushes, favorable direction):
+        zero resistance -- P_X = P_Y, same as the pure check valve's
+        open branch (check_valve.py).
 
-    Q_Y < 0  (sentido restrito):
-        NÃO bloqueia -- passa pelo orifício fixo (condutância `k`):
-        b = copysign((Q_Y / k)², -Q_Y)
-        (mesma equação de orifício turbulento que Valve_3_2_Ways usa;
-        o sinal amarrado a -Q_Y garante que o fluxo seja negativo em Y
-        -- saindo por Y, entrando por X -- nesse ramo).
+    Q_Y < 0  (restricted direction):
+        does NOT block -- passes through the fixed orifice (conductance `k`):
+        b = copysign((Q_Y / k)^2, -Q_Y)
+        (same turbulent-orifice equation Valve_3_2_Ways uses; tying the
+        sign to -Q_Y guarantees the flow is negative in Y -- exiting
+        through Y, entering through X -- on this branch).
 
-A ramificação usa o sinal de Q_Y -- não o de P_X-P_Y -- de propósito:
-P_X/P_Y são as próprias incógnitas deste solve, então ramificar por elas
-é circular. O ramo favorável não menciona Q_Y em nenhuma equação, então
-se a ramificação fosse por pressão, P_X=P_Y=0 satisfaria o ramo
-"favorável" mesmo com um Q_Y claramente do sentido restrito (imposto de
-fora, por uma bomba de vazão fixa por exemplo) -- uma raiz espúria onde
-a pressão nunca sobe pra vencer o orifício. Q_Y já vem determinado pela
-conservação + o que estiver ligado à válvula, então ramificar por ele
-elimina essa ambiguidade.
+The branch uses Q_Y's sign -- not P_X-P_Y's -- on purpose: P_X/P_Y are
+this solve's own unknowns, so branching on them is circular. The
+favorable branch mentions Q_Y in no equation, so if the branch were
+chosen by pressure, P_X=P_Y=0 would satisfy the "favorable" branch even
+with a Q_Y clearly in the restricted direction (imposed externally, by
+a fixed-flow pump for example) -- a spurious root where the pressure
+never rises to overcome the orifice. Q_Y is already determined by
+conservation + whatever is connected to the valve, so branching on it
+eliminates that ambiguity.
 
-Diferente da retenção pura, isso NÃO é complementaridade (nunca força
-vazão ou pressão exatamente a zero) -- é uma resistência que muda de
-valor conforme o sentido, então usa uma ramificação dura (if/else, igual
-ao já usado em ReliefValve) em vez de Fischer-Burmeister.
+Unlike the pure check valve, this is NOT complementarity (never forces
+flow or pressure exactly to zero) -- it's a resistance that changes
+value depending on direction, so it uses a hard branch (if/else, same
+as ReliefValve already uses) instead of Fischer-Burmeister.
 
-`k` é obrigatório no domínio hidráulico (mesmo padrão de Valve_3_2_Ways).
-Mais a conservação de vazão: Q_X + Q_Y = 0.
+`k` is required in the hydraulic domain (same pattern as Valve_3_2_Ways).
+Plus flow conservation: Q_X + Q_Y = 0.
 
-Visual state (ver get_visual_state):
-    "open"   -- b <= 0 (sentido favorável, sem resistência)
-    "closed" -- b > 0 (sentido restrito, passando pelo orifício)
+Visual state (see get_visual_state):
+    "open"   -- b <= 0 (favorable direction, no resistance)
+    "closed" -- b > 0 (restricted direction, passing through the orifice)
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ class ThrottleCheckValve(Node, HydraulicMixin):
             k = self.properties.get("k")
             if k is None:
                 raise ValueError(
-                    f"ThrottleCheckValve '{self.id}': propriedade obrigatória 'k' não preenchida."
+                    f"ThrottleCheckValve '{self.id}': required property 'k' is not set."
                 )
             self.k = float(k)
             self.flow_var_x = f"Q_{self.id}_X"
@@ -109,11 +109,11 @@ class ThrottleCheckValve(Node, HydraulicMixin):
             # Whether the valve is open (X ↔ Y connected).
             self._open: bool = False
 
-            # Latched sprite — only updated in post_step_update on stabilised states.
+            # Latched sprite -- only updated in post_step_update on stabilised states.
             self._sprite: str = "open"
 
     # ------------------------------------------------------------------
-    # Domínio pneumático
+    # Pneumatic domain
     # ------------------------------------------------------------------
 
     def update(self, outputs=None):
@@ -175,8 +175,8 @@ class ThrottleCheckValve(Node, HydraulicMixin):
         return self._sprite
 
     # ------------------------------------------------------------------
-    # Undo / history (pneumático apenas -- hidráulico não tem estado
-    # próprio, tudo decidido a cada solve pelas equações)
+    # Undo / history (pneumatic only -- hydraulic has no state of its
+    # own, everything decided each solve by the equations)
     # ------------------------------------------------------------------
 
     def get_state(self) -> dict:
@@ -199,7 +199,7 @@ class ThrottleCheckValve(Node, HydraulicMixin):
         )
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
 
     @property
@@ -235,23 +235,23 @@ class ThrottleCheckValve(Node, HydraulicMixin):
 
         eq_conservation = (Q_x + Q_y) / Q_scale
 
-        # A ramificação usa o sinal de Q_y -- imposto de fora pelo resto do
-        # circuito (ex: uma bomba de vazão fixa) -- e não o de P_X - P_Y.
-        # Ramificar por pressão seria circular: P_X/P_Y são as próprias
-        # incógnitas que este solve está resolvendo, então o ramo "favorável"
-        # (que não menciona Q_y) pode ser satisfeito por P_X=P_Y=0 mesmo
-        # quando Q_y é claramente o do sentido restrito (forçado de fora),
-        # já que nada naquele ramo valida a direção real do fluxo -- uma
-        # raiz espúria. Ramificando por Q_y (que já vem determinado pela
-        # conservação + o que estiver ligado à válvula) elimina essa
-        # ambiguidade.
+        # The branch uses Q_y's sign -- imposed externally by the rest of
+        # the circuit (e.g. a fixed-flow pump) -- not P_X - P_Y's.
+        # Branching by pressure would be circular: P_X/P_Y are this
+        # solve's own unknowns, so the "favorable" branch (which
+        # mentions no Q_y) could be satisfied by P_X=P_Y=0 even when Q_y
+        # is clearly in the restricted direction (forced externally),
+        # since nothing in that branch validates the flow's real
+        # direction -- a spurious root. Branching by Q_y (already
+        # determined by conservation + whatever is connected to the
+        # valve) eliminates that ambiguity.
         b = P_x - P_y
         if Q_y >= 0:
-            # Sentido favorável -- resistência zero, mesmo ramo da
-            # retenção pura quando aberta.
+            # Favorable direction -- zero resistance, same branch as the
+            # pure check valve when open.
             eq_valve = (P_x - P_y) / P_scale
         else:
-            # Sentido restrito -- não bloqueia, passa pelo orifício fixo.
+            # Restricted direction -- doesn't block, passes through the fixed orifice.
             eq_valve = (b - math.copysign((Q_y / self.k) ** 2, -Q_y)) / P_scale
 
         return [eq_conservation, eq_valve]

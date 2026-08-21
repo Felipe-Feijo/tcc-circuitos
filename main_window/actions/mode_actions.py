@@ -1,4 +1,4 @@
-"""Ações de modo do editor com QActionGroup exclusivo."""
+"""Editor mode actions with an exclusive QActionGroup."""
 
 from PyQt6.QtGui import QAction, QActionGroup
 from editor.mode import EditorMode

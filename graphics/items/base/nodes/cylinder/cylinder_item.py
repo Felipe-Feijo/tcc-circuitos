@@ -1,4 +1,4 @@
-"""Classe base para cilindros pneumáticos e hidráulicos."""
+"""Base class for pneumatic and hydraulic cylinders."""
 
 from PyQt6.QtGui import QPixmap, QPainterPath, QAction
 from PyQt6.QtCore import QRectF, QPointF, Qt
@@ -18,11 +18,11 @@ SENSOR_DICT = {
 }
 class CylinderItem(NodeItem):
     """
-    Classe base para todos os pistões.
-    A subclasse deve definir BODY_VISUALS.
+    Base class for all pistons.
+    The subclass must define BODY_VISUALS.
     """
 
-    BODY_VISUALS = {}  # definido pela subclasse
+    BODY_VISUALS = {}  # defined by the subclass
 
     def setup(self) -> None:
         self.properties = {
@@ -47,7 +47,7 @@ class CylinderItem(NodeItem):
                 self._register_sensor(pos)
 
     # --------------------------
-    # Inicialização
+    # Initialization
     # --------------------------
     def initialize_body_visuals(self):
         self.body_visuals = {
@@ -58,7 +58,7 @@ class CylinderItem(NodeItem):
             for state, desc in self.BODY_VISUALS.items()
         }
 
-        # estado inicial respeitando default_state
+        # initial state respecting default_state
         default = self.properties.get("default_state", "retracted")
         self.body_state = 1 if default == "extended" else 0
         visual = self.body_visuals[self.body_state]
@@ -100,7 +100,7 @@ class CylinderItem(NodeItem):
         pass
 
     # --------------------------
-    # Geometria
+    # Geometry
     # --------------------------
     @property
     def body_rect(self):
@@ -123,7 +123,7 @@ class CylinderItem(NodeItem):
 
         for value in self.sensor_rects.values():
             if isinstance(value, QRectF):
-                # caso ainda tenha algum rect
+                # in case there's still a rect
                 path.addRect(value.translated(self.visual_offset))
             else:
                 # assume tuple (x1, y1, x2, y2)
@@ -136,7 +136,7 @@ class CylinderItem(NodeItem):
         return path
 
     # --------------------------
-    # Desenho
+    # Drawing
     # --------------------------
     def paint(self, painter, option, widget=None):
         self.paint_body(painter)
@@ -161,7 +161,7 @@ class CylinderItem(NodeItem):
         self.draw_pixmap(painter, QPointF(int(self.visual_offset.x()), int(self.visual_offset.y()),), self.body_sprite)
 
     # --------------------------
-    # Label de velocidade (hidráulico)
+    # Velocity label (hydraulic)
     # --------------------------
     def _init_velocity_label(self):
         self._label_velocity = LabelItem(properties={
@@ -172,7 +172,7 @@ class CylinderItem(NodeItem):
             "font_delta": -1,
         })
         self._label_velocity.setParentItem(self)
-        # Posiciona acima do centro do corpo
+        # Positions above the center of the body
         cx = self.width / 2
         self._label_velocity.setPos(QPointF(cx, -18))
 
@@ -182,19 +182,19 @@ class CylinderItem(NodeItem):
         if isinstance(velocity, str):
             self._label_velocity.set_text("v: ERR")
             return
-        # Reutiliza o mesmo formatador dos anchors hidráulicos
+        # Reuses the same formatter as the hydraulic anchors
         from graphics.anchors.anchor import AnchorItem
         v_str = AnchorItem.format_hydraulic_value(None, abs(velocity), "m/s")
         sign = "-" if velocity < -1e-10 else ""
         self._label_velocity.set_text(f"v: {sign}{v_str}")
 
     # --------------------------
-    # Atualização de estado
+    # State update
     # --------------------------
     def update_from_domain(self, domain_node):
         """
-        Espera-se que o domain_node exponha
-        um estado visual inteiro (ex: 0 ou 1).
+        The domain_node is expected to expose
+        an integer visual state (e.g. 0 or 1).
         """
         super().update_from_domain(domain_node)
         new_state = domain_node.get_visual_state()
@@ -212,7 +212,7 @@ class CylinderItem(NodeItem):
         self.update()
 
     def _update_velocity_from_domain(self, domain_node):
-        """Calcula a velocidade do pistao a partir do fluxo e area do no de dominio."""
+        """Computes piston velocity from the domain node's flow and area."""
         try:
             anchor = domain_node.anchors.get("A")
             if anchor is None or isinstance(getattr(anchor, "flow", None), str):
@@ -220,7 +220,7 @@ class CylinderItem(NodeItem):
 
             flow = anchor.flow  # m^3/s
 
-            # single acting usa `area`, double acting usa `area_a`
+            # single acting uses `area`, double acting uses `area_a`
             area = getattr(domain_node, "area", None) or getattr(domain_node, "area_a", None)
             if not area:
                 return
@@ -262,7 +262,7 @@ class CylinderItem(NodeItem):
         margin = 4
         line_length = 20
 
-        # Mapeia posição → índice do body_visuals
+        # Maps position -> body_visuals index
         pos_to_index = {"retracted": 0, "extended": 1}
 
         for pos in ["retracted", "extended"]:
@@ -274,7 +274,7 @@ class CylinderItem(NodeItem):
                 sprite = visual["sprite"]
                 offset = visual["offset"]
 
-                # Cria o label editável
+                # Creates the editable label
                 label = LabelItem(
                     properties={
                         "text": sensor.get("name", ""),
@@ -291,7 +291,7 @@ class CylinderItem(NodeItem):
                 label.setPos(label_x, label_y)
                 self.add_label(label_name, label, special=True)
 
-                # Cria a linha vertical abaixo do label
+                # Creates the vertical line below the label
                 line_x = label_x + label.boundingRect().width() / 2
                 line_y1 = label_y + label.boundingRect().height()
                 line_y2 = line_y1 + line_length
@@ -310,29 +310,29 @@ class CylinderItem(NodeItem):
 
         ok = self.sensor_registry.rename(old_name, new_name, self)
 
-        # acessa a label correspondente
+        # accesses the corresponding label
         label_name = f"sensor_{position}"
         label = self.special_labels.get(label_name)
         
         if not ok:
-            # volta ao antigo nome
+            # reverts to the old name
             sensor["name"] = old_name
             if label:
-                label.set_text(old_name)  # atualiza visual
+                label.set_text(old_name)  # updates the visual
             QMessageBox.warning(None, "Erro ao renomear sensor",
                                 f"Já existe um sensor com o nome '{new_name}'.")
             return
 
-        # renomeação ok
+        # rename ok
         sensor["name"] = new_name
         if label:
-            label.set_text(new_name)  # atualiza visual
+            label.set_text(new_name)  # updates the visual
 
     def extend_context_menu(self, menu):
         super().extend_context_menu(menu)
         if self.simulation_mode:
-            # Simulação rodando: sensores/estado inicial mutam self.properties
-            # -- indisponíveis enquanto simulation_mode for True.
+            # Simulation running: sensors/initial state mutate self.properties
+            # -- unavailable while simulation_mode is True.
             return
         menu.addSeparator()
 
@@ -389,13 +389,13 @@ class CylinderItem(NodeItem):
         if sensor["type"] == sensor_type:
             return
 
-        # 🔻 se estava ativo, remove da registry
+        # if it was active, unregisters it
         if sensor["type"] is not None:
             self._unregister_sensor(position)
 
         sensor["type"] = sensor_type
 
-        # 🔺 se passou a existir, registra
+        # if it now exists, registers it
         if sensor_type is not None:
             self._register_sensor(position)
         else:

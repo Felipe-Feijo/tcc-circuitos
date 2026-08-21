@@ -1,4 +1,4 @@
-"""Classe base para válvulas direcionais com suporte a atuadores configuráveis."""
+"""Base class for directional valves with configurable actuator support."""
 
 from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
 from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -70,7 +70,7 @@ ACTUATOR_DICT = {
     }
 }
 
-SPRING_SCALE = 0.5  # redução de ~50% em relação ao sprite normal do atuador "spring"
+SPRING_SCALE = 0.5  # ~50% reduction relative to the "spring" actuator's normal sprite
 
 class DirectionalValveItem(NodeItem):
 
@@ -83,7 +83,7 @@ class DirectionalValveItem(NodeItem):
             # "right"/"center"/"left" = body_state 0/1/2 (3-position)
             "default_side": "center" if self.THREE_POSITION else "right",
         }
-        # k não tem default — obrigatório se domínio hidráulico
+        # k has no default -- required if the domain is hydraulic
 
         self.actuators = {}
         self.actuator_visuals = {}
@@ -113,14 +113,14 @@ class DirectionalValveItem(NodeItem):
         )
 
     # --------------------------
-    # Retângulo delimitador
+    # Bounding rectangle
     # --------------------------
     def boundingRect(self) -> QRectF:
-        """Retângulo total incluindo body, atuadores e deslocamento máximo."""
+        """Total rectangle including the body, actuators and maximum shift."""
         margin = 10
         body_w, body_h = self.width, self.height
 
-        # se os rects ainda não existirem, usamos tamanho padrão do body ou 0
+        # if the rects don't exist yet, use the body's default size or 0
         left_w = left_h = right_w = right_h = 0
 
         left_rect = self.actuator_rects.get("left")
@@ -130,16 +130,16 @@ class DirectionalValveItem(NodeItem):
         if right_rect:
             right_w, right_h = right_rect.width(), right_rect.height()
 
-        # Alguns estados (ex.: Valve_4_3_Ways, offset relativo ao centro) têm
-        # offset negativo -- o body é pintado à esquerda de x=0 nesses casos,
-        # então o retângulo precisa se estender até lá também.
+        # Some states (e.g. Valve_4_3_Ways, offset relative to the center)
+        # have a negative offset -- the body is painted left of x=0 in
+        # those cases, so the rectangle needs to extend that far too.
         min_offset_x = min(0, getattr(self, "min_offset_x", 0))
         leftmost_x = min_offset_x - left_w - margin
         total_width = body_w + left_w + right_w + getattr(self, "max_offset_x", 0) - min_offset_x + 2*margin
 
-        # Molas de centralização podem se estender acima do topo do body --
-        # o bounding rect precisa cobrir essa extensão, senão o Qt deixa
-        # rastros de repintura fora da área declarada.
+        # Centering springs can extend above the body's top -- the
+        # bounding rect needs to cover that extension, otherwise Qt
+        # leaves repaint artifacts outside the declared area.
         spring_top_extent = 0.0
         for rect in self.spring_rects.values():
             spring_top_extent = max(spring_top_extent, -rect.top())
@@ -169,7 +169,7 @@ class DirectionalValveItem(NodeItem):
 
             self.draw_pixmap(painter, QPointF(int(rect.x() + self.visual_offset.x()), int(rect.y() + self.visual_offset.y()),), sprite)
 
-        # desenha molas de centralização (sempre presentes em válvulas 3-posições)
+        # draws centering springs (always present on 3-position valves)
         for side, rect in self.spring_rects.items():
             sprite = self._spring_pixmap_for(side)
             if sprite is None:
@@ -191,10 +191,10 @@ class DirectionalValveItem(NodeItem):
         if self.simulation_mode:
             for side, rect in self.actuator_rects.items():
                 if rect.translated(self.visual_offset).contains(pos):
-                    # ✅ CORRIGIDO: verificar o tipo do atuador
+                    # checks the actuator's type
                     actuator = self.actuators.get(side)
                     if not actuator or actuator.get("type") != "button":
-                        continue  # só responde a botões
+                        continue  # only responds to buttons
                     
                     # inverte o bit do atuador
                     self.command.emit(self.id, {
@@ -302,7 +302,7 @@ class DirectionalValveItem(NodeItem):
         self.body_sprite = self.body_visuals[self.body_state]["sprite"]
         self.visual_offset = self.body_visuals[self.body_state]["offset"]
 
-        # Dimensões do body
+        # Body dimensions
         self.width = self.body_sprite.width()
         self.height = self.body_sprite.height()
 
@@ -311,8 +311,8 @@ class DirectionalValveItem(NodeItem):
 
     def initialize_actuators(self):
         """
-        Reconfigura completamente os atuadores da válvula.
-        Pode ser chamado múltiplas vezes.
+        Fully reconfigures the valve's actuators.
+        Can be called multiple times.
         """
 
         self.actuator_visuals.clear()
@@ -373,19 +373,19 @@ class DirectionalValveItem(NodeItem):
                     anchor_domain = self.domain
                 self.add_anchor(AnchorItem(anchor_name, QPointF(x, self.height*0.6222), node=self, domain=anchor_domain, exit_directions={"external": ["left"] if side == "left" else ["right"]})) 
             else:
-                # se não é pilot/timer, garante que não exista
+                # if it's not a pilot/timer, make sure it doesn't exist
                 self.remove_anchor(anchor_name)
 
             label_name = f"actuator_label_{side}"
 
-            # remove label antiga por segurança
+            # removes any old label, just in case
             self.remove_label(label_name, special=True)
 
             if actuator_name in ["limit_switch", "solenoid"] and sensor_name:
                 rect = self.actuator_rects[side]
                 
 
-                # posição relativa ao sprite
+                # position relative to the sprite
                 label_x = rect.x() +  rect.width() * (0.42 if side == "left" else 0.18)
                 label_y = rect.y() + rect.height() * 0.25
 
@@ -410,8 +410,8 @@ class DirectionalValveItem(NodeItem):
         self._initialize_spring_visuals(body)
 
     def _initialize_spring_visuals(self, body: QRectF) -> None:
-        """Mola de centralização: sempre presente nos dois lados de uma
-        válvula 3-posições, nunca um atuador selecionável de verdade."""
+        """Centering spring: always present on both sides of a
+        3-position valve, never a real selectable actuator."""
         self.spring_visuals.clear()
         self.spring_rects.clear()
 
@@ -443,7 +443,7 @@ class DirectionalValveItem(NodeItem):
 
             w, h = active.width(), active.height()
             x = body.left() - w if side == "left" else body.right()
-            y = body.top() - h / 3  # sobreposta à parte superior do body, no canto superior da câmara
+            y = body.top() - h / 3  # overlaps the body's top edge, in the chamber's upper corner
 
             self.spring_rects[side] = QRectF(x, y, w, h)
 
@@ -462,10 +462,10 @@ class DirectionalValveItem(NodeItem):
     def extend_context_menu(self, menu: QMenu):
         super().extend_context_menu(menu)
         if self.simulation_mode:
-            # Simulação rodando: atuadores/posição padrão mutam
-            # self.properties -- indisponíveis enquanto simulation_mode
-            # for True (a válvula 4/2 hidráulica ganha "Simular defeito..."
-            # via NodeItem.extend_context_menu, chamado acima).
+            # Simulation running: actuators/default position mutate
+            # self.properties -- unavailable while simulation_mode is
+            # True (the hydraulic 4/2 valve gets "Simular defeito..." via
+            # NodeItem.extend_context_menu, called above).
             return
         menu.addSeparator()
 
@@ -493,7 +493,7 @@ class DirectionalValveItem(NodeItem):
         current = self.actuators.get(side)
 
         # -----------------------
-        # Opção "Nenhum"
+        # "None" option
         # -----------------------
         action_none = QAction("None", menu, checkable=True)
         action_none.setChecked(current is None)
@@ -504,7 +504,7 @@ class DirectionalValveItem(NodeItem):
         menu.addSeparator()
 
         # -----------------------
-        # Atuadores do ACTUATOR_DICT
+        # ACTUATOR_DICT actuators
         # -----------------------
         for name, desc in ACTUATOR_DICT.items():
             if not desc.get("menu", True):
@@ -519,7 +519,7 @@ class DirectionalValveItem(NodeItem):
             menu.addAction(action)
 
         # -----------------------
-        # Sensores de cilindro (limit_switch)
+        # Cylinder sensors (limit_switch)
         # -----------------------
         if self.sensor_registry:
             cylinder_signals = self.sensor_registry.list_names(sensor_type="cylinder_end")
@@ -539,14 +539,14 @@ class DirectionalValveItem(NodeItem):
                     menu.addAction(action)
 
             # -----------------------
-            # Sensores elétricos (solenoid)
+            # Electric sensors (solenoid)
             # -----------------------
             electric_signals = self.sensor_registry.list_names(sensor_type="solenoid_coil")
             if electric_signals:
                 menu.addSeparator()
                 for sensor_name in electric_signals:
                     action = QAction(sensor_name, menu, checkable=True)
-                    # marca como selecionado se este sensor for do tipo solenoid
+                    # marks it selected if this sensor is of type solenoid
                     is_checked = (
                         current is not None
                         and current.get("type") == "solenoid"
@@ -611,9 +611,9 @@ class DirectionalValveItem(NodeItem):
         if not new_name or new_name == old_name:
             return
 
-        # valida existência no registry
+        # validates it exists in the registry
         if self.sensor_registry and not self.sensor_registry.exists(new_name):
-            # volta ao antigo
+            # reverts to the old one
             label = self.special_labels.get(f"actuator_label_{side}")
             if label:
                 label.set_text(old_name or "")
@@ -688,7 +688,7 @@ class DirectionalValveItem(NodeItem):
             options += self.sensor_registry.list_names(sensor_type="cylinder_end")
             options += self.sensor_registry.list_names(sensor_type="solenoid_coil")
 
-        # determina seleção atual
+        # determines the current selection
         def current_label(side):
             a = self.properties["actuators"].get(side)
             if not a:
@@ -788,13 +788,13 @@ class DirectionalValveItem(NodeItem):
             self.update_connections()
             self.update()
 
-    # ── Simular defeito (compartilhado por todas as válvulas direcionais) ──
-    # Promovido pra cá (em vez de duplicado por subtipo) porque as 5
-    # válvulas direcionais hidráulicas (2/2, 3/2, 4/2, 4/3, 5/2) usam
-    # exatamente o mesmo protocolo -- só o k (condutância) e a flag
-    # "travada" mudam de sentido físico entre elas, nunca a mecânica do
-    # diálogo/comando. Cada subtipo já expõe seu nome via palette_meta(),
-    # reaproveitado aqui como título.
+    # -- Simulate defect (shared by all directional valves) ----------------
+    # Promoted up here (instead of duplicated per subtype) because the 5
+    # hydraulic directional valves (2/2, 3/2, 4/2, 4/3, 5/2) use exactly
+    # the same protocol -- only k (conductance) and the "stuck" flag
+    # change physical meaning between them, never the dialog/command
+    # mechanics. Each subtype already exposes its name via
+    # palette_meta(), reused here as the title.
 
     def build_defect_dialog(self):
         if self.domain != "hydraulic":
@@ -805,10 +805,11 @@ class DirectionalValveItem(NodeItem):
         current_stuck = bool(getattr(domain_node, "_stuck_defect", False)) if domain_node is not None else False
 
         meta = type(self).palette_meta()
-        # meta pode ser None (default de NodeItem.palette_meta() pra classes
-        # abstratas) e meta.name pode ser None (PaletteMeta documenta "usa
-        # cls.__name__" nesse caso, convenção já seguida por node_registry.py)
-        # -- mesmo fallback aqui, pra nunca quebrar o menu de contexto.
+        # meta can be None (NodeItem.palette_meta()'s default for
+        # abstract classes) and meta.name can be None (PaletteMeta
+        # documents "uses cls.__name__" in that case, a convention
+        # node_registry.py already follows) -- same fallback here, so
+        # the context menu never breaks.
         label = (meta.name if meta else None) or type(self).__name__
         dialog = DefectDialog(title=f"Simular defeito — {label}")
         dialog._field_k = dialog.add_number_field(

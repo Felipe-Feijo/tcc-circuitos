@@ -1,4 +1,4 @@
-"""Nó gráfico de bomba centrífuga."""
+"""Graphics node for the centrifugal pump."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF

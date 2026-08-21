@@ -1,4 +1,4 @@
-"""Nó gráfico de linha de pressão pneumática expansível."""
+"""Graphics node for the expandable pneumatic pressure line."""
 
 from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta

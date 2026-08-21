@@ -1,4 +1,4 @@
-"""Diálogo modal para configuração e disparo do gerador automático de circuitos."""
+"""Modal dialog for configuring and triggering the automatic circuit generator."""
 
 import re
 from circuit_generator.sequence_parser import parse as _parse_sequence, validate_cylinder_states
@@ -13,10 +13,10 @@ _SEQUENCE_RE = re.compile(r'^([A-Z][a-z]*)([+-])([A-Z][a-z]*[+-])*$')
 
 class CircuitGeneratorDialog(QDialog):
     """
-    Dialog modal para configuração do gerador de circuitos.
+    Modal dialog for configuring the circuit generator.
 
-    Atributos públicos após exec() == QDialog.Accepted:
-        sequence : str        ex: "A+B+A-B-"
+    Public attributes after exec() == QDialog.Accepted:
+        sequence : str        e.g. "A+B+A-B-"
         method   : str        "cascade" | "step_by_step"
         sub_type : str | None "pneumatic" | "electric" | None
     """
@@ -41,7 +41,7 @@ class CircuitGeneratorDialog(QDialog):
         root = QVBoxLayout(self)
         root.setSpacing(16)
 
-        # — Sequência —
+        # -- Sequence --
         seq_box = QGroupBox("Sequência")
         seq_layout = QVBoxLayout(seq_box)
 
@@ -62,7 +62,7 @@ class CircuitGeneratorDialog(QDialog):
 
         root.addWidget(seq_box)
 
-        # — Método —
+        # -- Method --
         method_box = QGroupBox("Método")
         method_layout = QVBoxLayout(method_box)
 
@@ -78,7 +78,7 @@ class CircuitGeneratorDialog(QDialog):
         method_layout.addWidget(self._rb_cascade)
         method_layout.addWidget(self._rb_step)
 
-        # Sub-tipo (só visível para Passo a Passo)
+        # Sub-type (visible only for Step by Step)
         self._subtype_widget = QWidget()
         sub_layout = QHBoxLayout(self._subtype_widget)
         sub_layout.setContentsMargins(20, 0, 0, 0)
@@ -100,7 +100,7 @@ class CircuitGeneratorDialog(QDialog):
         method_layout.addWidget(self._subtype_widget)
         root.addWidget(method_box)
 
-        # — Botões —
+        # -- Buttons --
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
@@ -116,7 +116,7 @@ class CircuitGeneratorDialog(QDialog):
         root.addLayout(btn_row)
 
     # ------------------------------------------------------------------
-    # Lógica de estado
+    # State logic
     # ------------------------------------------------------------------
 
     def _on_sequence_changed(self, text: str):
@@ -129,15 +129,15 @@ class CircuitGeneratorDialog(QDialog):
         text = self._seq_edit.text().strip()
         is_step = self._rb_step.isChecked()
 
-        # Visibilidade do sub-tipo
+        # Sub-type visibility
         self._subtype_widget.setVisible(is_step)
 
-        # Validação da sequência
+        # Sequence validation
         error_msg = self._validate_sequence(text)
         valid = error_msg is None
         self._btn_generate.setEnabled(valid)
 
-        # Borda vermelha/normal no campo
+        # Red/normal border on the field
         if text and not valid:
             self._seq_edit.setStyleSheet("border: 1px solid red;")
             self._seq_error.setText(error_msg)
@@ -146,7 +146,7 @@ class CircuitGeneratorDialog(QDialog):
             self._seq_error.setText("")
 
     def _validate_sequence(self, text: str) -> "str | None":
-        """Retorna None se válido, ou a mensagem de erro."""
+        """Returns None if valid, or the error message."""
         if not text:
             return "Digite uma sequência."
         try:

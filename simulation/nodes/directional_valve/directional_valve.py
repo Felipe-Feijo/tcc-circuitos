@@ -1,4 +1,4 @@
-"""Classe base de simulação para válvulas direcionais."""
+"""Base simulation class for directional valves."""
 
 from simulation.nodes.nodes import Node
 
@@ -8,14 +8,14 @@ class DirectionalValve(Node):
     def __init__(self, node_id: str, node_type: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, node_type, domain=domain, properties=properties)
 
-        # Bits do item gráfico
+        # Graphics item bits
         self.bits = {"left": 0, "right": 0}
 
-        # Nova estrutura: {"left": {"type": "pilot"}, "right": None}
+        # New structure: {"left": {"type": "pilot"}, "right": None}
         self.actuators = self.properties.get("actuators", {"left": None, "right": None})
 
         if self.THREE_POSITION:
-            self.body_state = 1  # repouso é sempre o centro -- default_side não se aplica
+            self.body_state = 1  # rest is always the center -- default_side doesn't apply
         else:
             default_side = self.properties.get("default_side", "right")
             self.body_state = 1 if default_side == "left" else 0
@@ -23,32 +23,32 @@ class DirectionalValve(Node):
         # Timer actuator state: steps remaining per side (0 = idle)
         self._timer_steps: dict[str, int] = {"left": 0, "right": 0}
 
-        # Defeito injetado durante a simulação (nunca persistido em
-        # self.properties -- vive só nesta instância de domínio).
+        # Defect injected during simulation (never persisted to
+        # self.properties -- lives only in this domain instance).
         self._stuck_defect = False
 
     def _init_hydraulic_k(self, k) -> None:
-        """Valida e armazena a condutância hidráulica k.
+        """Validates and stores the hydraulic conductance k.
 
-        Chame de dentro do __init__ de cada subclasse hidráulica, dentro do
-        guard `if self.domain == "hydraulic":`, com k = self.properties.get("k"):
+        Call from inside each hydraulic subclass's __init__, inside the
+        `if self.domain == "hydraulic":` guard, with k = self.properties.get("k"):
 
             if self.domain == "hydraulic":
                 self._init_hydraulic_k(self.properties.get("k"))
-                self._flow_vars = {...}  # resto específico da subclasse
+                self._flow_vars = {...}  # subclass-specific rest
 
-        Além de validar (obrigatório, deve ser numérico) e setar self.k,
-        captura o valor original em self._k_default -- usado por
-        defect_active/_clear_defect (definidos abaixo, nesta classe base)
-        para restaurar/detectar um k desviado por "Simular defeito...".
-        Sem essa captura, defect_active e _clear_defect silenciosamente
-        não funcionam para a subclasse (já aconteceu com três das cinco
-        válvulas -- 2/2, 4/3 e 5/2 -- antes desta extração, por setarem
-        self.k direto sem chamar isto).
+        Besides validating (required, must be numeric) and setting
+        self.k, captures the original value in self._k_default -- used
+        by defect_active/_clear_defect (defined below, in this base
+        class) to restore/detect a k deviated by "Simular defeito...".
+        Without this capture, defect_active and _clear_defect silently
+        don't work for the subclass (already happened with three of the
+        five valves -- 2/2, 4/3 and 5/2 -- before this extraction, from
+        setting self.k directly without calling this).
         """
         if k is None:
             raise ValueError(
-                f"{type(self).__name__} '{self.id}': propriedade obrigatória 'k' não preenchida."
+                f"{type(self).__name__} '{self.id}': required property 'k' is not set."
             )
         self.k = float(k)
         self._k_default = self.k
@@ -60,14 +60,14 @@ class DirectionalValve(Node):
         side: "left" | "right"
         value: 0 | 1
 
-        Ou, para simulação de defeito:
+        Or, for defect simulation:
         action: "set_defect"
-        k: float      (novo coeficiente de vazão; só tem efeito em nós que
-                        definem self.k -- domínio hidráulico)
-        stuck: bool   (True trava o corpo da válvula na posição atual)
+        k: float      (new flow coefficient; only affects nodes that
+                        define self.k -- hydraulic domain)
+        stuck: bool   (True locks the valve's body at its current position)
 
         action: "clear_defect"
-        (sem outros campos -- restaura k original e destrava)
+        (no other fields -- restores the original k and unlocks)
         """
         action = command.get("action")
         if action == "set_defect":
@@ -92,11 +92,11 @@ class DirectionalValve(Node):
         self.bits[side] = value
 
     def _apply_defect_command(self, command: dict) -> None:
-        """Aplica um defeito injetado durante a simulação.
+        """Applies a defect injected during simulation.
 
-        k só tem efeito em nós hidráulicos (que definem self.k no __init__);
-        em domínio pneumático, ou se self.k nunca foi definido, o campo é
-        ignorado silenciosamente.
+        k only affects hydraulic nodes (which define self.k in __init__);
+        in the pneumatic domain, or if self.k was never defined, the
+        field is silently ignored.
         """
         if hasattr(self, "k"):
             k = command.get("k")
@@ -105,14 +105,14 @@ class DirectionalValve(Node):
         self._stuck_defect = bool(command.get("stuck", False))
 
     def _clear_defect(self) -> None:
-        """Remove qualquer defeito ativo, restaurando o k original."""
+        """Clears any active defect, restoring the original k."""
         if hasattr(self, "_k_default"):
             self.k = self._k_default
         self._stuck_defect = False
 
     @property
     def defect_active(self) -> bool:
-        """True se algum defeito estiver ativo (k desviado do original ou travada)."""
+        """True if any defect is active (k deviated from the original, or locked)."""
         k_default = getattr(self, "_k_default", None)
         k_changed = k_default is not None and getattr(self, "k", k_default) != k_default
         return bool(self._stuck_defect or k_changed)
@@ -138,13 +138,13 @@ class DirectionalValve(Node):
             other = "right" if side == "left" else "left"
             other_actuator = self.actuators.get(other)
 
-            # só atua se o outro lado não estiver forçando
+            # only acts if the other side isn't forcing
             if not other_actuator or other_actuator.get("type") != "spring":
                 self.bits[side] = 0 if self.bits[other] else 1
 
     def _update_sensor_actuators(self, outputs):
         """
-        Atualiza bits baseado em sensores ligados aos atuadores.
+        Updates bits based on sensors wired to the actuators.
         outputs: dict[name, payload]
         """
         for side in ("left", "right"):
@@ -152,8 +152,8 @@ class DirectionalValve(Node):
             if not actuator:
                 continue
 
-            # por enquanto só existe limit_switch,
-            # mas já fica pronto para outros sensores no futuro
+            # for now only limit_switch exists,
+            # but this is already ready for other sensors in the future
             if actuator.get("type") not in ["limit_switch", "solenoid"]:
                 continue
 
@@ -170,7 +170,7 @@ class DirectionalValve(Node):
 
     def _compute_body_state(self):
         if self._stuck_defect:
-            return  # defeito "válvula travada" -- corpo não reage mais a bits
+            return  # "stuck valve" defect -- body no longer reacts to bits
 
         left = self.bits["left"]
         right = self.bits["right"]
@@ -181,7 +181,7 @@ class DirectionalValve(Node):
             elif right and not left:
                 self.body_state = 0
             else:
-                # 00 (repouso) e 11 (pilotos se anulam) -- só a mola atua -> centro
+                # 00 (rest) and 11 (pilots cancel out) -- only the spring acts -> center
                 self.body_state = 1
             return
 
@@ -189,7 +189,7 @@ class DirectionalValve(Node):
             self.body_state = 1
         elif right and not left:
             self.body_state = 0
-        # 00 e 11 → mantém
+        # 00 and 11 -> unchanged
 
     def _update_timers(self):
         """Reset timer counter if the pilot anchor loses pressure."""
@@ -229,7 +229,7 @@ class DirectionalValve(Node):
 
     def update(self, outputs=None):
         """
-        sensors: dicionário opcional {sensor_name: bool} com estado dos sensores
+        sensors: optional {sensor_name: bool} dict with sensor states
         """
         self._update_pilots()
         self._update_timers()

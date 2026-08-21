@@ -1,14 +1,14 @@
 """
 simulation/hydraulic/solver.py
 
-Solver não-linear para circuitos hidráulicos.
+Nonlinear solver for hydraulic circuits.
 
-Conteúdo
+Contents
 --------
-NodeContinuity        : equação de acumulância por nó de pressão
-NonlinearSystemSolver : monta e resolve o sistema de equações
+NodeContinuity        : accumulation equation per pressure node
+NonlinearSystemSolver : builds and solves the equation system
 
-Este módulo substitui simulation/hydraulic_solver.py (removido).
+This module replaces simulation/hydraulic_solver.py (removed).
 """
 
 from __future__ import annotations
@@ -21,36 +21,37 @@ from simulation.hydraulic.scale_context import ScaleContext
 
 
 # ---------------------------------------------------------------------------
-# NodeContinuity — capacitor virtual de pressurização
+# NodeContinuity -- virtual pressurization capacitor
 # ---------------------------------------------------------------------------
 
 class NodeContinuity:
     """
-    Equação de acumulância para um nó de pressão.
+    Accumulation equation for a pressure node.
 
-    Modela um capacitor hidráulico virtual que equilibra desequilíbrios
-    de vazão acumulando pressão. Serve dois propósitos:
+    Models a virtual hydraulic capacitor that balances flow imbalances
+    by accumulating pressure. Serves two purposes:
 
-      1. Numérico: fecha o sistema de equações (um nó de pressão não
-         conectado a um source precisaria de uma equação extra).
+      1. Numerical: closes the equation system (a pressure node not
+         connected to a source would need an extra equation).
 
-      2. Pressurização: se o circuito não converge (ex: relief fechada
-         mas deveria abrir), o zc crescente força a pressão a subir
-         até que a topologia mude — veja ZcScheduler.
+      2. Pressurization: if the circuit doesn't converge (e.g. a relief
+         valve stuck closed when it should open), the growing zc forces
+         the pressure to rise until the topology changes -- see
+         ZcScheduler.
 
-    Equação:
+    Equation:
         Q_sum - (P - P_prev) / zc = 0
 
-    Onde:
-        Q_sum  = soma algébrica das vazões no nó (positivo = entrando)
-        P      = pressão atual no nó
-        P_prev = pressão da iteração anterior (memória)
-        zc     = impedância do capacitor [Pa·s/m³]
+    Where:
+        Q_sum  = algebraic sum of flows at the node (positive = inflow)
+        P      = current pressure at the node
+        P_prev = pressure from the previous iteration (memory)
+        zc     = capacitor impedance [Pa*s/m3]
 
-    Parâmetros
+    Parameters
     ----------
-    pressure_var : nome da variável de pressão do nó
-    flow_vars    : lista de nomes das variáveis de vazão conectadas
+    pressure_var : the node's pressure variable name
+    flow_vars    : list of connected flow variable names
     """
 
     def __init__(self, pressure_var: str, flow_vars: list[str]):
@@ -66,23 +67,23 @@ class NodeContinuity:
 
     @property
     def bounds(self) -> dict[str, tuple[float | None, float | None]]:
-        return {self.pressure_var: (0.0, None)}  # pressão nunca negativa
+        return {self.pressure_var: (0.0, None)}  # pressure is never negative
 
     def apply_context(self, ctx: ScaleContext) -> None:
-        """Recebe o ScaleContext antes de cada solve."""
+        """Receives the ScaleContext before each solve."""
         self._ctx = ctx
 
     def equations(self, x: np.ndarray, idx: dict[str, int]) -> list[float]:
-        assert self._ctx is not None, "apply_context() não foi chamado antes de equations()"
+        assert self._ctx is not None, "apply_context() was not called before equations()"
         P     = x[idx[self.pressure_var]]
         Q_sum = -sum(x[idx[q]] for q in self.flow_vars if q in idx)
-        # normalizado por q_ref para manter equação adimensional
+        # normalized by q_ref to keep the equation dimensionless
         return [(Q_sum - (P - self.p_previous) / self._ctx.zc) / self._ctx.q_ref]
 
     def update_pressure(self, sol: dict[str, float]) -> None:
         """
-        Atualiza P_prev após um solve bem-sucedido.
-        Valores de ruído numérico são descartados.
+        Updates P_prev after a successful solve.
+        Numerical-noise values are discarded.
         """
         if self.pressure_var not in sol:
             return
@@ -92,7 +93,7 @@ class NodeContinuity:
         self.p_previous = 0.0 if new_p < noise_threshold else new_p
 
     def reset(self) -> None:
-        """Zera a memória de pressão (mudança de topologia)."""
+        """Resets the pressure memory (topology change)."""
         self.p_previous = 0.0
 
 
@@ -102,18 +103,18 @@ class NodeContinuity:
 
 class NonlinearSystemSolver:
     """
-    Monta e resolve o sistema de equações não-lineares do circuito.
+    Builds and solves the circuit's nonlinear equation system.
 
-    Estratégia dual:
-      1. Tentativa rápida com fsolve (Newton-Raphson) — sem bounds.
-         Aceito se: convergiu + residual ok + dentro dos bounds + sem explosão.
-      2. Fallback robusto com least_squares (TRF) — respeita bounds.
-         Usa como warm start o melhor resultado do fsolve (se razoável).
+    Dual strategy:
+      1. Fast attempt with fsolve (Newton-Raphson) -- no bounds.
+         Accepted if: converged + residual ok + within bounds + no blow-up.
+      2. Robust fallback with least_squares (TRF) -- respects bounds.
+         Uses fsolve's best result as a warm start (if reasonable).
 
-    Parâmetros
+    Parameters
     ----------
-    components : lista de objetos com interface {variables, equations, bounds}
-                 (HydraulicNode + NodeContinuity)
+    components : list of objects with a {variables, equations, bounds}
+                 interface (HydraulicNode + NodeContinuity)
     """
 
     def __init__(self, components: list):
@@ -160,12 +161,12 @@ class NonlinearSystemSolver:
         ctx: ScaleContext,
     ) -> dict[str, float]:
         """
-        Resolve o sistema e retorna {variavel: valor}.
+        Solves the system and returns {variable: value}.
 
-        Parâmetros
+        Parameters
         ----------
-        x0_dict : chute inicial por nome de variável
-        ctx     : ScaleContext do circuito atual
+        x0_dict : initial guess per variable name
+        ctx     : the current circuit's ScaleContext
         """
         self.register_variables()
 
@@ -180,20 +181,21 @@ class NonlinearSystemSolver:
         system = self.build_system()
         q_ref_safe = max(ctx.q_ref, 1e-12)
 
-        # Escala de normalização mista para o critério de aceitação do fsolve.
-        # O sistema tem duas classes de equações com unidades distintas:
-        #   - equações de vazão (NodeContinuity, conservação): resíduo em m³/s
-        #   - equações de pressão (ΔP–Q das válvulas, etc.): resíduo em Pa
-        # Usar apenas q_ref como threshold aceita soluções onde as equações
-        # de pressão têm resíduo enorme (ex: 1e5 Pa) sem perceber.
-        # A escala mista normaliza ambas as classes para ordem 1.
+        # Mixed normalization scale for fsolve's acceptance criterion.
+        # The system has two equation classes with different units:
+        #   - flow equations (NodeContinuity, conservation): residual in m3/s
+        #   - pressure equations (valve dP-Q, etc.): residual in Pa
+        # Using only q_ref as the threshold would silently accept
+        # solutions where the pressure equations have a huge residual
+        # (e.g. 1e5 Pa). The mixed scale normalizes both classes to
+        # order 1.
         _mixed_scale = q_ref_safe + ctx.p_ref / max(ctx.zc, 1.0)
 
         # ------------------------------------------------------------------ #
-        # Tentativa rápida — fsolve (Newton-Raphson)                          #
+        # Fast attempt -- fsolve (Newton-Raphson)                              #
         # ------------------------------------------------------------------ #
         x_for_ls = x0.copy()
-        fsolve_best: np.ndarray | None = None   # melhor solucao do fsolve, mesmo fora de bounds
+        fsolve_best: np.ndarray | None = None   # fsolve's best solution, even outside bounds
         fsolve_best_residual = np.inf
 
         try:
@@ -206,34 +208,35 @@ class NonlinearSystemSolver:
             )
             sane = np.all(np.abs(x_fast) < 1e12)
 
-            # Critério normalizado: residual adimensional < 1e-6.
+            # Normalized criterion: dimensionless residual < 1e-6.
             residual_norm = residual_fast / _mixed_scale
             if ier == 1 and residual_norm < 1e-6 and within_bounds and sane:
-                print(f"  fsolve: convergiu | residual_norm={residual_norm:.2e} (raw={residual_fast:.2e})")
+                print(f"  fsolve: converged | residual_norm={residual_norm:.2e} (raw={residual_fast:.2e})")
                 return {var: x_fast[i] for var, i in self.var_index.items()}
 
             if sane:
-                x_for_ls = x_fast  # warm start para least_squares
-                # Guarda como candidato de fallback mesmo fora de bounds —
-                # se o least_squares falhar, esta solucao pode ser melhor que nada.
+                x_for_ls = x_fast  # warm start for least_squares
+                # Keeps this as a fallback candidate even outside bounds --
+                # if least_squares fails, this solution may be better than nothing.
                 if ier == 1 and residual_norm < 1e-4:
                     fsolve_best = np.clip(x_fast, lower, upper)
                     fsolve_best_residual = residual_fast
 
         except Exception as e:
-            print(f"  fsolve: excecao — {e}")
+            print(f"  fsolve: exception -- {e}")
 
         # ------------------------------------------------------------------ #
-        # Fallback robusto — least_squares (TRF)                              #
+        # Robust fallback -- least_squares (TRF)                              #
         # ------------------------------------------------------------------ #
         x_for_ls = np.clip(x_for_ls, lower, upper)
 
-        # Escala explícita por tipo de variável: P-vars em Pa, Q-vars em m³/s.
-        # Substituímos x_scale="jac" porque o Jacobiano de circuitos hidráulicos
-        # é frequentemente mal-condicionado (razão P/Q ~ 1e8 em 100 bar / 20 L/min),
-        # e o escalonamento via Jacobiano herda esse mal-condicionamento em vez
-        # de corrigi-lo. Com escala física explícita, TRF opera em variáveis
-        # adimensionais de ordem 1, convergindo mais rápido e de forma mais robusta.
+        # Explicit per-variable-type scale: P-vars in Pa, Q-vars in m3/s.
+        # We avoid x_scale="jac" because a hydraulic circuit's Jacobian is
+        # often ill-conditioned (P/Q ratio ~1e8 at 100 bar / 20 L/min),
+        # and Jacobian-based scaling inherits that ill-conditioning
+        # instead of fixing it. With an explicit physical scale, TRF
+        # operates on dimensionless order-1 variables, converging faster
+        # and more robustly.
         x_scale_arr = np.array([
             ctx.p_ref if var.startswith("P_") else ctx.q_ref
             for var in self.index_var
@@ -260,13 +263,14 @@ class NonlinearSystemSolver:
             f"zc={ctx.zc:.2e}"
         )
 
-        # Se o least_squares nao convergiu bem mas o fsolve tinha uma solucao
-        # razoavel (mesmo fora de bounds por causa dos batentes), prefere o fsolve.
-        # Isso evita que o engine receba uma solucao garbage do TRF e marque ERR.
+        # If least_squares didn't converge well but fsolve had a
+        # reasonable solution (even outside bounds because of the stops),
+        # prefer fsolve. This keeps the engine from receiving a garbage
+        # TRF solution and flagging ERR.
         ls_residual_norm = residual / _mixed_scale
         if ls_residual_norm > 1e-4 and fsolve_best is not None:
             if fsolve_best_residual / _mixed_scale < ls_residual_norm:
-                print(f"  least_squares: usando fallback do fsolve (residual menor)")
+                print(f"  least_squares: falling back to fsolve (lower residual)")
                 return {var: fsolve_best[i] for var, i in self.var_index.items()}
 
         return {var: result.x[i] for var, i in self.var_index.items()}
@@ -277,9 +281,9 @@ class NonlinearSystemSolver:
         ctx: ScaleContext,
     ) -> dict[str, float]:
         """
-        Monta o chute inicial combinando:
-          - initial_guess dos nós (tem precedência)
-          - Q_hint global para variáveis de vazão sem guess
+        Builds the initial guess by combining:
+          - the nodes' initial_guess (takes precedence)
+          - the global Q_hint for flow variables with no guess
         """
         x0: dict[str, float] = {
             var: 0.0
@@ -294,7 +298,7 @@ class NonlinearSystemSolver:
                 x0.update(guess)
                 guessed_vars.update(guess.keys())
 
-        # escala os sentinelas de sinal (±1.0) para Q_hint
+        # scales the sign sentinels (+-1.0) to Q_hint
         for var in x0:
             if not var.startswith("Q_"):
                 continue

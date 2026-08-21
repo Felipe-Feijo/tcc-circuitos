@@ -1,4 +1,4 @@
-"""Classe base para nós de linha contínua expansível (pressão, terra, tensão)."""
+"""Base class for expandable continuous-line nodes (pressure, ground, voltage)."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
@@ -58,24 +58,24 @@ class ExpandableItem(NodeItem):
         if len(self.anchor_list) <= self.MIN_ANCHORS:
             return
 
-        # remove da lista lógica primeiro
+        # remove from the logical list first
         if side == "left":
             removed = self.anchor_list.pop(0)
             self.setX(self.x() + self.spacing)
         else:
             removed = self.anchor_list.pop()
 
-        # 👉 REBIND ANTES DE DESTRUIR
+        # REBIND BEFORE DESTROYING
         self.update_internal_connections()
 
-        # agora é seguro remover fisicamente
+        # now it's safe to physically remove it
         self.remove_anchor(removed.name)
 
-        # propriedades
+        # properties
         if removed.name in self.properties["anchors"]:
             self.properties["anchors"].remove(removed.name)
 
-        # layout e conexões
+        # layout and connections
         self.update_layout()
         self.update_connections()
 
@@ -105,8 +105,8 @@ class ExpandableItem(NodeItem):
     
     def extend_context_menu(self, menu: QMenu):
         if self.simulation_mode:
-            # Simulação rodando: adicionar/remover âncoras muda a topologia
-            # do nó -- indisponível enquanto simulation_mode for True.
+            # Simulation running: adding/removing anchors changes the
+            # node's topology -- unavailable while simulation_mode is True.
             return
         menu.addSeparator()
 
@@ -120,12 +120,12 @@ class ExpandableItem(NodeItem):
 
 
     def update_internal_connections(self):
-        # Só é chamado a partir de edições de layout (update_layout,
-        # remove_anchor_side) — criar/remover uma conexão externa em runtime
-        # não re-dispara isto. É seguro porque os anchors são colineares
-        # (um segmento único e uma cadeia dividida são visualmente idênticos)
-        # e a simulação é reconstruída do zero a cada rodada, então o
-        # agrupamento real nunca fica desatualizado ali.
+        # Only called from layout edits (update_layout,
+        # remove_anchor_side) -- creating/removing an external connection
+        # at runtime doesn't re-trigger this. Safe because the anchors
+        # are collinear (a single segment and a split chain are visually
+        # identical) and the simulation is rebuilt from scratch every
+        # run, so the real grouping never goes stale there.
         if getattr(self, "is_preview", False):
             return
 
@@ -147,13 +147,13 @@ class ExpandableItem(NodeItem):
         desired_pairs = real_anchor_chain(anchors, is_real)
         desired_keys = {frozenset((a, b)) for a, b in desired_pairs}
 
-        # remove conexões internas que não fazem mais parte do conjunto desejado
+        # removes internal connections no longer part of the desired set
         for conn in self.internal_connections[:]:
             key = frozenset((conn.source_anchor, conn.target_anchor))
             if key not in desired_keys:
                 self._remove_internal_connection(conn)
 
-        # garante que existe uma conexão para cada par desejado
+        # ensures a connection exists for every desired pair
         for a1, a2 in desired_pairs:
             if not self._has_internal_connection(a1, a2):
                 conn = self._create_internal_connection(a1, a2)
@@ -233,7 +233,7 @@ class ExpandableItem(NodeItem):
             self.pix_h = 0
 
     def rebuild_exit_rules(self):
-        # Obtém o dicionário de regras da subclasse
+        # Gets the subclass's rules dict
         anchor_rules = getattr(self, "ANCHOR_DIRECTIONS", None)
         if not anchor_rules:
             return
@@ -241,13 +241,13 @@ class ExpandableItem(NodeItem):
         anchors = self.anchor_list
         total_anchors = len(anchors)
 
-        # Caso haja apenas uma anchor, aplicamos as regras de "single"
+        # If there's only one anchor, apply the "single" rules
         if total_anchors == 1:
             single_rules = anchor_rules.get("single", {})
             anchors[0].set_exit_directions(single_rules)
             return
 
-        # Para múltiplas anchors, aplicamos first / middle / last
+        # For multiple anchors, apply first / middle / last
         for index, anchor in enumerate(anchors):
             if index == 0:
                 rules_to_apply = anchor_rules.get("first", {})
@@ -297,8 +297,8 @@ class ExpandableItem(NodeItem):
         row_left, btn_minus_left, val_left, btn_plus_left = make_counter_row("left")
         row_right, btn_minus_right, val_right, btn_plus_right = make_counter_row("right")
 
-        # insere as rows no form layout (via addRow com widget container)
-        # como são QHBoxLayout, embrulhamos num QFrame
+        # inserts the rows into the form layout (via addRow with a widget container)
+        # since they're QHBoxLayout, wrap them in a QFrame
         def wrap_layout(layout):
             frame = QFrame()
             frame.setLayout(layout)
@@ -312,12 +312,12 @@ class ExpandableItem(NodeItem):
             dr = deltas["right"]
             total_delta = dl + dr
 
-            # se algum é positivo, bloqueia negativos
+            # if either is positive, blocks negatives
             any_positive = dl > 0 or dr > 0
-            # se algum é negativo, bloqueia positivos
+            # if either is negative, blocks positives
             any_negative = dl < 0 or dr < 0
 
-            # remoção máxima respeitando MIN_ANCHORS
+            # maximum removal respecting MIN_ANCHORS
             max_removable = current_total - min_anchors
 
             btn_plus_left.setEnabled(not any_negative)
@@ -348,7 +348,7 @@ class ExpandableItem(NodeItem):
 
         update_buttons()
 
-        # expõe deltas para apply_properties_from_dialog
+        # exposes deltas for apply_properties_from_dialog
         dialog._deltas = deltas
 
         return dialog

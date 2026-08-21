@@ -1,21 +1,21 @@
-"""Gerencia a fila de passos e o timer de play/pause da simulação."""
+"""Manages the step queue and the simulation's play/pause timer."""
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 
 class StepScheduler(QObject):
-    """Controla o enfileiramento e o disparo dos passos de simulação.
+    """Controls the queueing and firing of simulation steps.
 
-    Responsabilidades:
-    - Enfileirar requisições de passo (request_step).
-    - Conduzir o timer de play/pause.
-    - Emitir step_requested quando um passo deve ser executado.
+    Responsibilities:
+    - Queue step requests (request_step).
+    - Drive the play/pause timer.
+    - Emit step_requested when a step should run.
 
-    Garante que apenas um passo seja executado por vez: um novo disparo
-    só ocorre após mark_step_done() ser chamado pelo controller.
+    Guarantees that only one step runs at a time: a new trigger only
+    happens after mark_step_done() is called by the controller.
 
     Signals:
-        step_requested: Emitido quando um passo deve ser executado.
+        step_requested: Emitted when a step should run.
     """
 
     step_requested = pyqtSignal()
@@ -30,27 +30,27 @@ class StepScheduler(QObject):
         self._timer = QTimer()
         self._timer.timeout.connect(self._on_tick)
 
-    # API pública
+    # Public API
 
     def play(self) -> None:
-        """Inicia a execução contínua por timer."""
+        """Starts continuous execution via timer."""
         if self.playing:
             return
         self.playing = True
         self._timer.start(self.timer_interval)
 
     def pause(self) -> None:
-        """Pausa a execução contínua."""
+        """Pauses continuous execution."""
         self.playing = False
         self._timer.stop()
 
     def request_step(self, n: int = 1, reset_timer: bool = False) -> None:
-        """Enfileira n passos e tenta disparar imediatamente.
+        """Queues n steps and tries to fire immediately.
 
         Args:
-            n: Número de passos a enfileirar.
-            reset_timer: Se True e em play, reinicia o timer para evitar
-                disparo duplo após um comando manual.
+            n: Number of steps to queue.
+            reset_timer: If True and playing, restarts the timer to avoid
+                a double trigger after a manual command.
         """
         self.pending_steps += n
         if reset_timer and self.playing:
@@ -59,10 +59,10 @@ class StepScheduler(QObject):
         self._try_emit()
 
     def set_timer_interval(self, ms: int) -> None:
-        """Atualiza o intervalo do timer; reinicia se estiver em play.
+        """Updates the timer interval; restarts it if playing.
 
         Args:
-            ms: Novo intervalo em milissegundos.
+            ms: New interval in milliseconds.
         """
         self.timer_interval = ms
         if self.playing:
@@ -70,22 +70,22 @@ class StepScheduler(QObject):
             self._timer.start(ms)
 
     def mark_step_started(self) -> None:
-        """Registra que um passo foi iniciado (bloqueia novos disparos)."""
+        """Records that a step has started (blocks new triggers)."""
         self.step_in_progress = True
 
     def mark_step_done(self) -> None:
-        """Registra que o passo atual terminou e tenta disparar o próximo."""
+        """Records that the current step finished and tries to fire the next one."""
         self.step_in_progress = False
         self._try_emit()
 
-    # Métodos internos
+    # Internal methods
 
     def _on_tick(self) -> None:
-        """Callback do timer: enfileira um passo a cada tick."""
+        """Timer callback: queues a step on every tick."""
         self.request_step(1)
 
     def _try_emit(self) -> None:
-        """Emite step_requested se não há passo em andamento e há passos pendentes."""
+        """Emits step_requested if no step is in progress and steps are pending."""
         if self.step_in_progress or self.pending_steps <= 0:
             return
         self.pending_steps -= 1

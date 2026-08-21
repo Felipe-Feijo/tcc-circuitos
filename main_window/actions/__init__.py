@@ -1,4 +1,4 @@
-"""Agrega e exporta a função de criação de todas as ações da janela principal."""
+"""Aggregates and exports the factory function for all main window actions."""
 
 from .file_actions import create_file_actions
 from .view_actions import create_view_actions

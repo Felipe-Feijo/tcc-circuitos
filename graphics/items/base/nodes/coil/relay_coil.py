@@ -1,4 +1,4 @@
-"""Nó gráfico de bobina de relé."""
+"""Graphics node for the relay coil."""
 
 from graphics.items.base.nodes.coil.coil_item import CoilItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta

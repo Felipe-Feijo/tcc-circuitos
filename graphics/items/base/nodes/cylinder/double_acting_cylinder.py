@@ -1,4 +1,4 @@
-"""Nó gráfico de cilindro de dupla ação."""
+"""Double-acting cylinder graphics node."""
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPixmap
@@ -9,12 +9,12 @@ from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinde
 
 _BASE_PATH = "resources/nodes/double_acting_cylinder"
 
-# Posições X da haste no espaço do body (em pixels)
+# Rod's X positions in the body's space (in pixels)
 _ROD_X_RETRACTED = 28
 _ROD_X_EXTENDED  = 284
 _ROD_DELTA       = _ROD_X_EXTENDED - _ROD_X_RETRACTED  # 256px
 
-# Offsets relativos ao (0, 0) do body — ajustar após verificar sprites
+# Offsets relative to the body's (0, 0) -- adjust after checking the sprites
 _ROD_OFFSET = QPointF(0, 0)
 
 
@@ -44,7 +44,7 @@ class DoubleActingCylinder(CylinderItem):
     def setup(self) -> None:
         super().setup()
         if self.domain == "hydraulic":
-            # friction não aparece no dialog — fixo em 0 no nó de simulação
+            # friction doesn't appear in the dialog -- fixed at 0 in the simulation node
             self.properties.setdefault("external_force", 0.0)
             self._rod_pixmap  = QPixmap(f"{_BASE_PATH}/double_acting_cylinder_rod.png")
             self._body_pixmap = QPixmap(f"{_BASE_PATH}/double_acting_cylinder_body.png")
@@ -65,7 +65,7 @@ class DoubleActingCylinder(CylinderItem):
             exit_directions={"external": ["bottom"]}
         ))
 
-    # ── pintura ───────────────────────────────────────────────────────────────
+    # -- painting -----------------------------------------------------------------
 
     def update_body_visuals(self):
         if self.domain != "hydraulic":
@@ -76,19 +76,19 @@ class DoubleActingCylinder(CylinderItem):
             super().paint_body(painter)
             return
 
-        t  = float(self.body_state)  # 0.0 → retraído, 1.0 → estendido
+        t  = float(self.body_state)  # 0.0 -> retracted, 1.0 -> extended
         ox = int(self.visual_offset.x())
         oy = int(self.visual_offset.y())
 
-        # 1. Carcaça (fixa)
+        # 1. Housing (fixed)
         self.draw_pixmap(painter, QPointF(ox, oy), self._body_pixmap)
 
-        # 2. Haste — translada para a direita conforme t aumenta
+        # 2. Rod -- translates right as t increases
         rod_x = int(_ROD_OFFSET.x() + _ROD_X_RETRACTED + t * _ROD_DELTA)
         rod_y = int(_ROD_OFFSET.y())
         self.draw_pixmap(painter, QPointF(ox + rod_x, oy + rod_y), self._rod_pixmap)
 
-    # ── propriedades ──────────────────────────────────────────────────────────
+    # -- properties -----------------------------------------------------------------
 
     def build_properties_dialog(self):
         dialog = super().build_properties_dialog()

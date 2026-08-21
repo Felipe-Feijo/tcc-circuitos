@@ -1,8 +1,8 @@
-"""Parse e validação de sequências de atuação de cilindros pneumáticos.
+"""Parsing and validation of pneumatic cylinder actuation sequences.
 
-Converte strings como "A+B-A-B+" em listas de tuplas
-(cilindro, direção, parallel_id) e valida regras de alternância, fechamento
-de ciclo e grupos simultâneos entre parênteses.
+Converts strings like "A+B-A-B+" into lists of
+(cylinder, direction, parallel_id) tuples and validates alternation
+rules, cycle closure and simultaneous groups within parentheses.
 """
 
 import re
@@ -15,14 +15,14 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
     "A+B+A-B-" -> [("A","+",None), ("B","+",None), ("A","-",None), ("B","-",None)]
     "(A+B+)C-" -> [("A","+",0), ("B","+",0), ("C","-",None)]
 
-    `parallel_id` é None para eventos sequenciais, ou um inteiro
-    compartilhado por todos os eventos de um mesmo bloco "(...)" (movimentos
-    simultâneos). Um bloco com um único evento, ex. "(A+)", é equivalente a
-    "A+" sem parênteses (parallel_id=None).
+    `parallel_id` is None for sequential events, or an integer shared by
+    every event of the same "(...)" block (simultaneous moves). A block
+    with a single event, e.g. "(A+)", is equivalent to "A+" without
+    parentheses (parallel_id=None).
 
-    Lança ValueError se a string não contiver nenhum token válido, se os
-    parênteses estiverem desbalanceados ou aninhados, se um bloco repetir
-    cilindro, ou se os cilindros violarem as regras de alternância de estado.
+    Raises ValueError if the string contains no valid token, if the
+    parentheses are unbalanced or nested, if a block repeats a
+    cylinder, or if the cylinders violate the state-alternation rules.
     """
     text = sequence.replace(" ", "")
     if not text:
@@ -95,19 +95,19 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
 
 def validate_cylinder_states(events: list[tuple]) -> None:
     """
-    Valida que cada cilindro:
-      1. Nunca repete a mesma direção consecutivamente (ex: A+...A+ sem A- no meio).
-      2. Fecha o ciclo: termina no estado oposto ao primeiro movimento
-         (o primeiro movimento sai de um estado e o último deve retornar a ele).
+    Validates that each cylinder:
+      1. Never repeats the same direction consecutively (e.g. A+...A+ with no A- in between).
+      2. Closes the cycle: ends in the opposite state from its first move
+         (the first move leaves one state and the last one must return to it).
 
-    Aceita eventos de 2 ou 3 campos — (letra, direção) ou
-    (letra, direção, parallel_id); o parallel_id é ignorado aqui.
+    Accepts 2- or 3-field events -- (letter, direction) or
+    (letter, direction, parallel_id); parallel_id is ignored here.
 
-    Lança ValueError com mensagem descritiva se alguma regra for violada.
-    Não assume estado inicial — o cilindro pode começar retraído ou avançado.
+    Raises ValueError with a descriptive message if any rule is violated.
+    Assumes no initial state -- the cylinder can start either retracted or extended.
     """
-    first_move: dict[str, str] = {}   # direção do primeiro evento de cada cilindro
-    last_move:  dict[str, str] = {}   # direção do último evento de cada cilindro
+    first_move: dict[str, str] = {}   # each cylinder's first event's direction
+    last_move:  dict[str, str] = {}   # each cylinder's last event's direction
 
     for letter, direction, *_ in events:
         if letter not in first_move:
@@ -122,8 +122,8 @@ def validate_cylinder_states(events: list[tuple]) -> None:
                 )
         last_move[letter] = direction
 
-    # Para fechar o ciclo, o último movimento deve ser o oposto do primeiro.
-    # Ex: primeiro="+", último deve ser "-" (voltou ao estado de origem).
+    # To close the cycle, the last move must be the opposite of the first.
+    # E.g. first="+", last must be "-" (returned to the starting state).
     opposite = {"+": "-", "-": "+"}
     for letter in first_move:
         if last_move[letter] != opposite[first_move[letter]]:
@@ -135,9 +135,9 @@ def validate_cylinder_states(events: list[tuple]) -> None:
 
 
 def extract_cylinders(events: list[tuple]) -> list[str]:
-    """Retorna letras únicas na ordem de primeira aparição.
+    """Returns unique letters in order of first appearance.
 
-    Aceita eventos de 2 ou 3 campos (ver `validate_cylinder_states`).
+    Accepts 2- or 3-field events (see `validate_cylinder_states`).
     """
     seen: dict[str, bool] = {}
     for letter, *_ in events:
@@ -147,14 +147,15 @@ def extract_cylinders(events: list[tuple]) -> list[str]:
 
 def split_into_groups(events: list[tuple]) -> list[list[tuple]]:
     """
-    Divide a sequência em grupos onde nenhuma letra se repete.
-    Ex: [A+, B+, A-, B-] -> [[A+, B+], [A-, B-]]
-    Usado pelo método cascata.
+    Splits the sequence into groups where no letter repeats.
+    E.g. [A+, B+, A-, B-] -> [[A+, B+], [A-, B-]]
+    Used by the cascade method.
 
-    Eventos com o mesmo `parallel_id` (3º campo, quando presente) formam um
-    bloco atômico: se qualquer letra do bloco já apareceu no grupo corrente,
-    o corte de grupo acontece antes do bloco inteiro, nunca no meio dele.
-    Eventos de 2 campos (sem parallel_id) são tratados como blocos de 1.
+    Events sharing the same `parallel_id` (3rd field, when present) form
+    an atomic block: if any letter in the block has already appeared in
+    the current group, the group cut happens before the whole block,
+    never in the middle of it. 2-field events (no parallel_id) are
+    treated as blocks of 1.
     """
     groups: list[list] = []
     current: list = []
@@ -175,9 +176,9 @@ def split_into_groups(events: list[tuple]) -> list[list[tuple]]:
 
 
 def _atomize(events: list[tuple]) -> list[list[tuple]]:
-    """Agrupa eventos consecutivos que compartilham o mesmo parallel_id
-    (3º campo) em blocos atômicos. Eventos sem parallel_id (2 campos, ou
-    3º campo None) viram blocos de 1 evento."""
+    """Groups consecutive events sharing the same parallel_id (3rd
+    field) into atomic blocks. Events with no parallel_id (2 fields, or
+    a None 3rd field) become 1-event blocks."""
     atoms: list[list[tuple]] = []
     i, n = 0, len(events)
     while i < n:

@@ -1,4 +1,4 @@
-"""Nó gráfico de bobina de solenóide."""
+"""Graphics node for the solenoid coil."""
 
 from graphics.items.base.nodes.coil.coil_item import CoilItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta

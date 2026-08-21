@@ -1,33 +1,33 @@
-"""Item de texto editável usado como rótulo sobre componentes do diagrama."""
+"""Editable text item used as a label over diagram components."""
 
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QFont, QPainter, QPen
 
-# Delta aplicado sobre a fonte da aplicação (main_window.settings) quando
-# "font_size" não é explicitamente informado -- mantém os labels do
-# diagrama acompanhando o ajuste global de fonte (View > Font Size...) em
-# vez de um tamanho fixo. Com a fonte padrão do app em 11pt, isso dá 14pt.
+# Delta applied over the app's font (main_window.settings) when
+# "font_size" isn't explicitly given -- keeps diagram labels tracking
+# the global font setting (View > Font Size...) instead of a fixed
+# size. With the app's default font at 11pt, this gives 14pt.
 DEFAULT_FONT_DELTA = 3
 
 
 class LabelItem(QGraphicsTextItem):
-    """QGraphicsTextItem configurável para rótulos de nós e âncoras.
+    """Configurable QGraphicsTextItem for node and anchor labels.
 
-    Suporta edição inline (duplo clique), arrasto e renderização com borda
-    opcional. Todas as propriedades visuais são controladas pelo dicionário
-    `properties`, mesclado com DEFAULT_PROPERTIES no construtor.
+    Supports inline editing (double-click), dragging and rendering with
+    an optional border. All visual properties are controlled by the
+    `properties` dict, merged with DEFAULT_PROPERTIES in the constructor.
 
-    O tamanho de fonte é dinâmico por padrão: se "font_size" não for
-    informado (fica None), o label acompanha a fonte global da aplicação
-    (deslocada por "font_delta") e se atualiza via refresh_default_font_size()
-    quando o usuário muda a fonte em View > Font Size... Um "font_size"
-    explícito (ex: vindo de um arquivo salvo antigo) fixa o tamanho e o
-    label deixa de acompanhar mudanças futuras.
+    Font size is dynamic by default: if "font_size" isn't given (stays
+    None), the label tracks the app's global font (offset by
+    "font_delta") and updates via refresh_default_font_size() when the
+    user changes the font in View > Font Size... An explicit "font_size"
+    (e.g. loaded from an old saved file) fixes the size and the label
+    stops tracking future changes.
 
     Attributes:
-        DEFAULT_PROPERTIES: Valores padrão para todas as propriedades visuais.
-        properties: Dicionário de configuração desta instância.
+        DEFAULT_PROPERTIES: Default values for every visual property.
+        properties: This instance's configuration dict.
     """
 
     DEFAULT_PROPERTIES = {
@@ -46,7 +46,7 @@ class LabelItem(QGraphicsTextItem):
     }
 
     def __init__(self, properties: dict | None = None):
-        # Mescla defaults com propriedades passadas
+        # Merges defaults with the passed-in properties
         label_properties = dict(self.DEFAULT_PROPERTIES)
         if properties:
             label_properties.update(properties)
@@ -63,14 +63,15 @@ class LabelItem(QGraphicsTextItem):
         self.movable = self.properties["movable"]
         self.setFlag(self.GraphicsItemFlag.ItemIsMovable, self.movable)
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, self.editable or self.movable)
-        # A orientação do texto é mantida reta pelo NodeItem, que
-        # contra-rotaciona cada label (label.setRotation(-node.rotation()))
-        # sempre que o componente gira -- ver NodeItem._counter_rotate_labels().
-        # Deliberadamente NÃO usamos ItemIgnoresTransformations aqui: essa
-        # flag ignora QUALQUER transformação herdada, não só rotação --
-        # inclusive o zoom da view, fazendo o label parar de escalar com
-        # o zoom. Contra-rotacionar cancela só a rotação, preservando o
-        # resto da cadeia de transformação (zoom) normalmente.
+        # Text orientation is kept upright by NodeItem, which
+        # counter-rotates each label (label.setRotation(-node.rotation()))
+        # whenever the component rotates -- see
+        # NodeItem._counter_rotate_labels(). Deliberately NOT using
+        # ItemIgnoresTransformations here: that flag ignores ANY
+        # inherited transformation, not just rotation -- including the
+        # view's zoom, which would stop the label from scaling with it.
+        # Counter-rotating cancels only the rotation, leaving the rest of
+        # the transformation chain (zoom) working normally.
 
         self._apply_font()
 
@@ -81,11 +82,11 @@ class LabelItem(QGraphicsTextItem):
         self.setAcceptHoverEvents(True)
 
     # =========================
-    # Edição
+    # Editing
     # =========================
 
     def mouseDoubleClickEvent(self, event):
-        """Inicia edição inline se o label for editável."""
+        """Starts inline editing if the label is editable."""
         if not self.editable:
             event.ignore()
             return
@@ -137,7 +138,7 @@ class LabelItem(QGraphicsTextItem):
             self.setPlainText(text)
 
         if not text:
-            # remove automaticamente se ficou vazia
+            # removes automatically if it ended up empty
             if self.parentItem() and hasattr(self.parentItem(), "labels"):
                 node = self.parentItem()
                 key = next((k for k, v in node.labels.items() if v is self), None)
@@ -151,12 +152,12 @@ class LabelItem(QGraphicsTextItem):
         self.update()
 
     # =========================
-    # Fonte
+    # Font
     # =========================
 
     def _apply_font(self) -> None:
-        """(Re)calcula e aplica o QFont a partir de properties["font_size"]
-        (se explícito) ou da fonte da aplicação + properties["font_delta"]."""
+        """(Re)computes and applies the QFont from properties["font_size"]
+        (if explicit) or from the app's font + properties["font_delta"]."""
         size = self.properties.get("font_size")
         if size is None:
             size = QApplication.instance().font().pointSize() + self.properties["font_delta"]
@@ -167,9 +168,10 @@ class LabelItem(QGraphicsTextItem):
         self.setFont(font)
 
     def apply_theme(self, is_light: bool) -> None:
-        """Ajusta cor do texto e da borda pro tema atual — preto no claro,
-        branco no escuro. Não existe UI hoje pra customizar a cor de um
-        label individualmente, então é seguro sempre seguir o tema."""
+        """Adjusts the text and border color to the current theme --
+        black in light, white in dark. There's no UI today to customize
+        a label's color individually, so it's safe to always follow the
+        theme."""
         color = Qt.GlobalColor.black if is_light else Qt.GlobalColor.white
         self.properties["color"] = color
         self.properties["border_color"] = color
@@ -177,31 +179,31 @@ class LabelItem(QGraphicsTextItem):
         self.update()
 
     def refresh_default_font_size(self) -> None:
-        """Reaplica o tamanho de fonte a partir da fonte atual da aplicação.
+        """Reapplies the font size from the app's current font.
 
-        No-op se este label tiver um "font_size" explícito (ex: carregado
-        de um arquivo salvo antigo) -- só labels em modo dinâmico (o
-        padrão) acompanham mudanças posteriores da fonte global.
+        No-op if this label has an explicit "font_size" (e.g. loaded
+        from an old saved file) -- only labels in dynamic mode (the
+        default) track later changes to the global font.
         """
         if self.properties.get("font_size") is None:
             self._apply_font()
 
     # =========================
-    # API externa
+    # External API
     # =========================
 
     def set_text(self, text: str) -> None:
-        """Define o texto do label e atualiza o dict de propriedades.
+        """Sets the label's text and updates the properties dict.
 
         Args:
-            text: Novo conteúdo textual do label.
+            text: The label's new text content.
         """
         self.properties["text"] = text
         if self.toPlainText() != text:
             self.setPlainText(text)
 
     # =========================
-    # Desenho com borda
+    # Drawing with a border
     # =========================
 
     def paint(self, painter: QPainter, option, widget=None):

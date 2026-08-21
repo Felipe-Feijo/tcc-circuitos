@@ -1,4 +1,4 @@
-"""Widget da paleta de nós com scroll, seletor de tamanho e organização em seções."""
+"""Node palette widget with scrolling, size selector and section organization."""
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QPushButton, QButtonGroup
@@ -29,7 +29,7 @@ class NodePalette(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title)
 
-        # seletor de tamanho (Pequeno / Médio / Grande)
+        # size selector (Small / Medium / Large)
         tier_row = QHBoxLayout()
         tier_row.addStretch()
         self.tier_buttons: dict[str, QPushButton] = {}
@@ -47,7 +47,7 @@ class NodePalette(QWidget):
         tier_row.addStretch()
         main_layout.addLayout(tier_row)
 
-        # área scrollável
+        # scrollable area
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         main_layout.addWidget(self.scroll)

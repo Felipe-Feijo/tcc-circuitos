@@ -52,60 +52,59 @@ pilot is currently forcing the valve open:
    side (a source, an exhaust, or none) decide the merged group's state
    exactly like any other passive two-port component.
 
-Free-flow (Y=1, independente de X, sem pilotagem forçando): latches X to
-True (modo 1).
-Blocked (Y=0, sem pilotagem forçando): não faz nada -- X mantém o que já
-tinha (pressão retida, não recua).
-Pilotagem (Z=1, só quando properties["piloted"] é True): une X e Y
-simetricamente (modo 2) -- deixa de ser um diodo, vira passagem aberta.
+Free-flow (Y=1, regardless of X, with no pilot forcing): latches X to
+True (mode 1).
+Blocked (Y=0, with no pilot forcing): does nothing -- X keeps whatever
+it already had (trapped pressure, doesn't retreat).
+Piloting (Z=1, only when properties["piloted"] is True): unites X and Y
+symmetrically (mode 2) -- stops being a diode, becomes an open passage.
 
 Behaviour (hydraulic)
 -----------------------
-Mais simples que o pneumático: nenhum estado próprio, tudo decidido a
-cada solve pelas equações. Modela a válvula via complementaridade
-suavizada (Fischer-Burmeister), o mesmo mecanismo já usado por
-ReliefValve (simulation/nodes/relief_valve.py) para
-alternar entre dois regimes sem uma transição abrupta que quebre a
-convergência do solver:
+Simpler than pneumatic: no state of its own, everything decided each
+solve by the equations. Models the valve via smoothed complementarity
+(Fischer-Burmeister), the same mechanism ReliefValve
+(simulation/nodes/relief_valve.py) already uses to switch between two
+regimes without an abrupt transition that would break the solver's
+convergence:
 
-    a = Q_Y / Q_scale                (quer a >= 0)
-    b = (P_X - P_Y) / P_scale        (quer b >= 0)
-    eq_fb = a + b - sqrt(a² + b²)    (== 0  =>  a>=0, b>=0, a*b=0)
+    a = Q_Y / Q_scale                (wants a >= 0)
+    b = (P_X - P_Y) / P_scale        (wants b >= 0)
+    eq_fb = a + b - sqrt(a^2 + b^2)    (== 0  =>  a>=0, b>=0, a*b=0)
 
-`b = P_X - P_Y` é a "contrapressão de vedação": quando X (a jusante) está
-mais pressurizado que Y (a montante), b>=0 e a esfera é empurrada contra
-o assento -- bloqueada (a=0, Q_Y=0), mas P_X pode exceder P_Y à vontade
-(selada). Quando Y consegue empurrar a esfera (fluxo favorável), b=0
-(sem queda de pressão, P_X=P_Y) e a=Q_Y>=0 fica livre.
+`b = P_X - P_Y` is the "sealing backpressure": when X (downstream) is
+more pressurized than Y (upstream), b>=0 and the ball is pushed against
+the seat -- blocked (a=0, Q_Y=0), but P_X can exceed P_Y freely
+(sealed). When Y can push the ball (favorable flow), b=0 (no pressure
+drop, P_X=P_Y) and a=Q_Y>=0 is free.
 
-Ou seja: OU a válvula está fechada (Q_Y = 0, com P_X podendo ficar acima
-de P_Y à vontade -- selada), OU está aberta com queda de pressão zero
-(P_Y = P_X, Q_Y >= 0 livre) -- nunca as duas coisas ao mesmo tempo.
-Mais a conservação de vazão (sem acúmulo interno):
+In other words: EITHER the valve is closed (Q_Y = 0, with P_X free to
+sit above P_Y -- sealed), OR it's open with zero pressure drop (P_Y =
+P_X, Q_Y >= 0 free) -- never both at once. Plus flow conservation (no
+internal accumulation):
 
     Q_X + Q_Y = 0
 
-Pilotagem (properties["piloted"] é True e a pressão em Z >= 1 bar):
-substitui a complementaridade por uma equação de queda de pressão zero
-incondicional (P_X = P_Y) -- o piloto mecanicamente afasta a esfera do
-assento, e a válvula vira uma passagem aberta nos dois sentidos, sem
-nenhuma restrição de sentido. Abaixo de 1 bar no piloto, comporta-se
-exatamente como a versão não pilotada.
+Piloting (properties["piloted"] is True and the pressure at Z >= 1 bar):
+replaces the complementarity with an unconditional zero-pressure-drop
+equation (P_X = P_Y) -- the pilot mechanically pushes the ball off its
+seat, and the valve becomes an open passage in both directions, with no
+direction restriction at all. Below 1 bar at the pilot, behaves exactly
+like the non-piloted version.
 
-A âncora Z, quando presente, é modelada como uma porta "morta": vazão
-sempre zero (Q_Z = 0, um sensor de pressão, não uma porta de fluxo real)
--- ela só precisa de uma equação própria pra fechar o sistema (dar ao
-solver uma equação para a variável Q_Z que só esta válvula usa); a
-pressão em Z continua livre, determinada pelo resto do circuito ligado
-a ela por fio.
+The Z anchor, when present, is modeled as a "dead" port: flow always
+zero (Q_Z = 0, a pressure sensor, not a real flow port) -- it only
+needs its own equation to close the system (give the solver an
+equation for the Q_Z variable that only this valve uses); the pressure
+at Z stays free, determined by the rest of the circuit wired to it.
 
-Ao contrário das válvulas direcionais hidráulicas (Valve_3_2_Ways), não
-há nenhuma propriedade obrigatória tipo "k" -- a retenção não modela
-nenhuma resistência/orifício, só a restrição de sentido.
+Unlike hydraulic directional valves (Valve_3_2_Ways), there's no
+required property like "k" -- the check valve models no
+resistance/orifice, only the direction restriction.
 
-Visual state (ver get_visual_state):
-    "open"   -- Y=1/Q_Y>0 ou pilotagem forçando
-    "closed" -- caso contrário
+Visual state (see get_visual_state):
+    "open"   -- Y=1/Q_Y>0 or the pilot forcing it open
+    "closed" -- otherwise
 """
 
 from __future__ import annotations
@@ -115,7 +114,7 @@ import math
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
 
-_PILOT_PRESSURE_THRESHOLD = 1e5  # 1 bar, em Pa
+_PILOT_PRESSURE_THRESHOLD = 1e5  # 1 bar, in Pa
 
 
 class CheckValve(Node, HydraulicMixin):
@@ -130,7 +129,7 @@ class CheckValve(Node, HydraulicMixin):
                 self.flow_var_z = f"Q_{self.id}_Z"
 
     # ------------------------------------------------------------------
-    # Domínio pneumático
+    # Pneumatic domain
     # ------------------------------------------------------------------
 
     def _piloted_open(self) -> bool:
@@ -144,10 +143,11 @@ class CheckValve(Node, HydraulicMixin):
         x_anchor = self.anchors["X"]
 
         if self._piloted_open():
-            # Passagem aberta simétrica -- get_internal_connections() é
-            # quem une X e Y agora; X não deve fingir ser driver aqui,
-            # senão contamina o grupo com um valor artificial em vez de
-            # deixar os drivers reais (dos dois lados) decidirem.
+            # Symmetric open passage -- get_internal_connections() is
+            # what unites X and Y now; X shouldn't pretend to be a
+            # driver here, or it contaminates the group with an
+            # artificial value instead of letting the real drivers (on
+            # either side) decide.
             x_anchor.is_driver = False
             return
 
@@ -172,7 +172,7 @@ class CheckValve(Node, HydraulicMixin):
         return "open" if (y or self._piloted_open()) else "closed"
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
 
     def _piloted_open_hydraulic(self) -> bool:
@@ -205,15 +205,15 @@ class CheckValve(Node, HydraulicMixin):
     @property
     def bounds(self):
         if self.domain != "hydraulic" or self._piloted_hydraulic:
-            # Pilotada: pode operar em modo retenção OU passagem livre
-            # (nos dois sentidos) dependendo da pressão do piloto,
-            # avaliada dentro de equations() -- travar Q_Y/Q_X num
-            # sentido só quebraria o modo livre. Sem bounds aqui, quem
-            # decide é a própria equação.
+            # Piloted: can operate in either check mode OR free passage
+            # (both directions) depending on the pilot pressure,
+            # evaluated inside equations() -- locking Q_Y/Q_X to one
+            # direction would break the free mode. No bounds here, the
+            # equation itself decides.
             return {}
         return {
-            self.flow_var_y: (0.0, None),   # Q_Y nunca negativo
-            self.flow_var_x: (None, 0.0),   # Q_X nunca positivo
+            self.flow_var_y: (0.0, None),   # Q_Y never negative
+            self.flow_var_x: (None, 0.0),   # Q_X never positive
         }
 
     @property
@@ -243,7 +243,7 @@ class CheckValve(Node, HydraulicMixin):
         eqs_extra = []
         if self._piloted_hydraulic:
             Q_z = x[idx[self.flow_var_z]]
-            eqs_extra.append(Q_z / Q_scale)  # porta morta -- só sensoriamento
+            eqs_extra.append(Q_z / Q_scale)  # dead port -- sensing only
 
             P_z = x[idx[self.anchors["Z"].pressure_var]]
             piloted_open = P_z >= _PILOT_PRESSURE_THRESHOLD

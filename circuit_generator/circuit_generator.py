@@ -1,8 +1,8 @@
-"""Orquestra a geração automática de circuitos pneumáticos.
+"""Orchestrates the automatic generation of pneumatic circuits.
 
-Ponto de entrada principal do gerador: faz o parse da sequência,
-seleciona o método de geração, aplica o layout espacial e carrega
-o resultado na cena gráfica.
+Main entry point of the generator: parses the sequence, selects the
+generation method, applies the spatial layout and loads the result
+into the graphics scene.
 """
 
 from circuit_generator.sequence_parser import parse
@@ -26,33 +26,33 @@ LAYOUT_MAP = {
 
 
 def generate_and_load(sequence: str, method: str, sub_type: str | None, scene, editor) -> None:
-    """Gera um circuito a partir da sequência e carrega na cena gráfica.
+    """Generates a circuit from the sequence and loads it into the graphics scene.
 
     Args:
-        sequence: Sequência de atuação dos cilindros (ex: "A+B-A-B+").
-        method: Método de geração — "cascade" ou "step_by_step".
-        sub_type: Subtipo do método — "pneumatic", "electric" ou None.
-        scene: QGraphicsScene de destino.
-        editor: EditorState passado aos itens criados.
+        sequence: Cylinder actuation sequence (e.g. "A+B-A-B+").
+        method: Generation method -- "cascade" or "step_by_step".
+        sub_type: Method sub-type -- "pneumatic", "electric" or None.
+        scene: Destination QGraphicsScene.
+        editor: EditorState passed to the created items.
 
     Raises:
-        ValueError: Se a sequência for inválida ou o método não for reconhecido.
+        ValueError: If the sequence is invalid or the method isn't recognized.
     """
     events = parse(sequence)
 
     generator = METHOD_MAP.get((method, sub_type))
     if generator is None:
-        raise ValueError(f"Método desconhecido: method={method!r}, sub_type={sub_type!r}")
+        raise ValueError(f"Unknown method: method={method!r}, sub_type={sub_type!r}")
 
-    data = generator(events)   # retorna dict com _role nos nós
+    data = generator(events)   # returns dict with _role on the nodes
 
     apply_layout = LAYOUT_MAP.get((method, sub_type))
     if apply_layout is None:
         raise ValueError(
-            f"Posicionamento não implementado para method={method!r}, "
+            f"Layout not implemented for method={method!r}, "
             f"sub_type={sub_type!r}"
         )
-    apply_layout(data)         # preenche position.x/y e remove _role
+    apply_layout(data)         # fills in position.x/y and removes _role
 
     scene.sensor_registry = SensorRegistry()
     with scene.sensor_registry.loading():

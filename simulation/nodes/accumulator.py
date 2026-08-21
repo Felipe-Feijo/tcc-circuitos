@@ -1,4 +1,4 @@
-"""Nó de simulação de acumulador hidráulico a gás (lei de Boyle, bexiga)."""
+"""Gas-charged hydraulic accumulator simulation node (Boyle's law, bladder)."""
 
 import math
 
@@ -13,7 +13,7 @@ class Accumulator(Node, HydraulicMixin):
         for key in ("V0", "P0"):
             if self.properties.get(key) is None:
                 raise ValueError(
-                    f"Accumulator '{self.id}': propriedade obrigatória '{key}' não preenchida."
+                    f"Accumulator '{self.id}': required property '{key}' is not set."
                 )
         self.V0 = float(self.properties["V0"])
         self.P0 = float(self.properties["P0"])
@@ -22,22 +22,22 @@ class Accumulator(Node, HydraulicMixin):
 
     @property
     def _eps(self) -> float:
-        """Margem de segurança nos dois batentes (vazio e cheio), como fração de V0."""
+        """Safety margin at both end stops (empty and full), as a fraction of V0."""
         return self.V0 * 1e-3
 
     def _p_gas(self, Vf: float) -> float:
-        """Lei de Boyle isotérmica (n=1): P0*V0/(V0-Vf).
+        """Isothermal Boyle's law (n=1): P0*V0/(V0-Vf).
 
-        Vf é limitado a V0-EPS antes da divisão -- não é física (a
-        equação nunca converge pedindo Vf>=V0-EPS, já que P diverge
-        antes), é só para nunca cair em divisão por zero/negativo se Vf
-        chegar exatamente em V0 pelo clip de post_step_update.
+        Vf is clamped to V0-EPS before the division -- not physical (the
+        equation never converges asking for Vf>=V0-EPS, since P diverges
+        first), it's just to never hit a division by zero/negative if Vf
+        reaches exactly V0 via post_step_update's clip.
         """
         Vf = min(Vf, self.V0 - self._eps)
         return self.P0 * self.V0 / (self.V0 - Vf)
 
     # ------------------------------------------------------------------
-    # Contrato hidráulico
+    # Hydraulic contract
     # ------------------------------------------------------------------
 
     @property
@@ -70,25 +70,25 @@ class Accumulator(Node, HydraulicMixin):
         EPS = self._eps
 
         if self.Vf <= EPS:
-            # Batente vazio: complementaridade suave (Fischer-Burmeister),
-            # igual ao padrão de single_acting_cylinder.py -- ou o
-            # acumulador não recebe fluido (Q=0, pressão do resto do
-            # circuito livre para ficar abaixo de P0) ou a pressão do
-            # circuito atinge P0 e o fluido começa a entrar (P=P0). Sem
-            # isso, P=P_gas(Vf) incondicional travava o solver sempre que
-            # o resto do circuito não sustentava P0 (ex: acumulador
-            # ocioso ligado só a um reservatório em P=0).
+            # Empty end stop: smooth complementarity (Fischer-Burmeister),
+            # same pattern as single_acting_cylinder.py -- either the
+            # accumulator receives no fluid (Q=0, the rest of the circuit's
+            # pressure is free to stay below P0) or the circuit's
+            # pressure reaches P0 and fluid starts entering (P=P0).
+            # Without this, an unconditional P=P_gas(Vf) locked up the
+            # solver whenever the rest of the circuit couldn't sustain P0
+            # (e.g. an idle accumulator connected only to a reservoir at P=0).
             a = Q / self.q_ref
             b = (P_gas - P) / P_scale
             return [a + b - math.sqrt(a * a + b * b)]
 
         if self.Vf >= self.V0 - EPS:
-            # Batente cheio, espelhado: ou o acumulador para de receber
-            # fluido (Q<=0, podendo devolver) ou a pressão do circuito
-            # alcança o P_gas (já enorme, travado no clamp de _p_gas).
-            # Sem isso, perto do cheio a equação exigia uma pressão que o
-            # resto do circuito não sustentava -- sintoma real: Vf
-            # oscilando entre cheio e quase-vazio de um passo pro outro.
+            # Full end stop, mirrored: either the accumulator stops
+            # receiving fluid (Q<=0, can give it back) or the circuit's
+            # pressure reaches P_gas (already huge, clamped by _p_gas).
+            # Without this, near full the equation demanded a pressure
+            # the rest of the circuit couldn't sustain -- real symptom:
+            # Vf oscillating between full and nearly-empty from one step to the next.
             a = -Q / self.q_ref
             b = (P_gas - P) / P_scale
             return [a + b - math.sqrt(a * a + b * b)]
@@ -109,7 +109,7 @@ class Accumulator(Node, HydraulicMixin):
             self.Vf = max(0.0, min(self.V0, self.Vf))
 
     # ------------------------------------------------------------------
-    # Estado
+    # State
     # ------------------------------------------------------------------
 
     def get_visual_state(self):

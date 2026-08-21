@@ -1,4 +1,4 @@
-"""Item gráfico de âncora — ponto de conexão visível nos nós do diagrama."""
+"""Anchor graphics item -- visible connection point on diagram nodes."""
 
 from PyQt6.QtWidgets import QGraphicsEllipseItem
 from PyQt6.QtCore import Qt, QPointF, QRectF
@@ -9,20 +9,20 @@ from editor.mode import EditorMode
 
 
 class AnchorItem(QGraphicsEllipseItem):
-    """Representa visualmente um ponto de conexão de um NodeItem.
+    """Visually represents a NodeItem's connection point.
 
-    Detecta hover do cursor no modo CONNECT e exibe/oculta conforme o contexto.
-    Para âncoras hidráulicas, mantém labels de pressão e vazão atualizados
-    pelo ViewSync após cada passo de simulação.
+    Detects cursor hover in CONNECT mode and shows/hides based on
+    context. For hydraulic anchors, keeps pressure and flow labels
+    updated by ViewSync after each simulation step.
 
     Args:
-        name: Identificador da âncora (ex: "P", "A", "X1").
-        pos: Posição relativa ao nó pai.
-        radius: Raio visual da elipse.
-        node: NodeItem proprietário.
-        domain: Domínio da âncora ("pneumatic", "electric" ou "hydraulic").
-        exit_directions: Direções de saída permitidas para o roteador A*.
-        margin: Margem adicional para detecção de colisão no roteador.
+        name: The anchor's identifier (e.g. "P", "A", "X1").
+        pos: Position relative to the parent node.
+        radius: The ellipse's visual radius.
+        node: The owning NodeItem.
+        domain: The anchor's domain ("pneumatic", "electric" or "hydraulic").
+        exit_directions: Exit directions allowed for the A* router.
+        margin: Extra margin for the router's collision detection.
     """
 
     def __init__(self, name: str, pos: QPointF, radius: float = 6,
@@ -35,7 +35,7 @@ class AnchorItem(QGraphicsEllipseItem):
         self.domain = domain
         self.hit_radius = radius * 4
 
-        # Direções de saída para o roteador A* (ex: {"external": ["left", "right"]})
+        # Exit directions for the A* router (e.g. {"external": ["left", "right"]})
         self.exit_directions = exit_directions
         self.margin = margin
 
@@ -47,7 +47,7 @@ class AnchorItem(QGraphicsEllipseItem):
             self.flow: float = 0.0
             self._init_hydraulic_labels()
 
-        # Aparência inicial: invisível até hover ou simulação
+        # Initial appearance: invisible until hover or simulation
         self.setBrush(Qt.GlobalColor.transparent)
         self.setPen(QPen(Qt.PenStyle.NoPen))
 
@@ -56,7 +56,7 @@ class AnchorItem(QGraphicsEllipseItem):
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
 
     def shape(self) -> QPainterPath:
-        """Retorna área de detecção expandida para facilitar o clique."""
+        """Returns an expanded hit-detection area to make clicking easier."""
         path = QPainterPath()
         r = self.hit_radius
         path.addEllipse(-r, -r, 2 * r, 2 * r)
@@ -67,7 +67,7 @@ class AnchorItem(QGraphicsEllipseItem):
         return QRectF(-r, -r, 2 * r, 2 * r)
 
     def hoverEnterEvent(self, event):
-        """Destaca a âncora ao entrar com o cursor no modo CONNECT."""
+        """Highlights the anchor when the cursor enters it in CONNECT mode."""
         if not self.node.editor:
             return
 
@@ -79,7 +79,7 @@ class AnchorItem(QGraphicsEllipseItem):
         if self.node.editor.mode == EditorMode.CONNECT and not is_source_anchor:
             source = self.node.editor._conn_source_anchor
 
-            # Impede conexão entre âncoras de domínios diferentes
+            # Prevents connecting anchors from different domains
             if source and source.domain != self.domain:
                 return
 
@@ -88,7 +88,7 @@ class AnchorItem(QGraphicsEllipseItem):
             self.update()
 
     def hoverLeaveEvent(self, event):
-        """Restaura aparência e limpa hover_anchor ao sair com o cursor."""
+        """Restores appearance and clears hover_anchor when the cursor leaves."""
         if not self.node.editor:
             return
 
@@ -104,18 +104,18 @@ class AnchorItem(QGraphicsEllipseItem):
             self.refresh_junction_dot()
 
     def set_exit_directions(self, directions) -> None:
-        """Define as direções de saída permitidas para o roteador A*.
+        """Sets the exit directions allowed for the A* router.
 
         Args:
-            directions: Valor aceito por exit_directions (ex: dict ou lista).
+            directions: A value accepted by exit_directions (e.g. dict or list).
         """
         self.exit_directions = directions
 
     def connection_count(self) -> int:
-        """Quantas ConnectionItem vivas têm este anchor como endpoint --
-        conta só as deste anchor específico, não todas as do node (um node
-        multi-anchor não deve ganhar bolinha num anchor com 1 conexão só
-        porque outro anchor seu tem 3)."""
+        """How many live ConnectionItems have this anchor as an endpoint
+        -- counts only this specific anchor's, not all of the node's (a
+        multi-anchor node shouldn't get a dot on an anchor with just 1
+        connection because one of its other anchors has 3)."""
         node = self.node
         if not node:
             return 0
@@ -125,10 +125,10 @@ class AnchorItem(QGraphicsEllipseItem):
         )
 
     def refresh_junction_dot(self) -> None:
-        """Mostra uma bolinha permanente quando este anchor vira uma junção
-        real (3+ conexões) -- T-fitting hidráulico/pneumático ou nó
-        elétrico de 3+ condutores. Chamado sempre que uma conexão é
-        criada/removida deste anchor (GraphicsView.create_connection,
+        """Shows a permanent dot when this anchor becomes a real junction
+        (3+ connections) -- a hydraulic/pneumatic T-fitting or a 3+-
+        conductor electric node. Called whenever a connection is
+        created/removed on this anchor (GraphicsView.create_connection,
         GraphicsView.split_connection_at, ConnectionItem.prepare_delete)."""
         if self.connection_count() >= 3:
             self.setBrush(Qt.GlobalColor.lightGray)
@@ -139,21 +139,22 @@ class AnchorItem(QGraphicsEllipseItem):
         self.update()
 
     def reposition_hydraulic_label(self) -> None:
-        """Recalcula e aplica o offset do label hidráulico.
+        """Recomputes and applies the hydraulic label's offset.
 
-        Chamado por NodeItem.rotate() depois de cada rotação, pra manter
-        o label crescendo pro lado de fora certo (ver _default_label_offset).
+        Called by NodeItem.rotate() after each rotation, to keep the
+        label growing toward the correct outward side (see
+        _default_label_offset).
         """
         if hasattr(self, "_label_hydraulic"):
             self._label_hydraulic.setPos(self._default_label_offset())
 
     def set_hydraulic_labels_visible(self, visible: bool):
-        """Mostra ou oculta os labels hidráulicos."""
+        """Shows or hides the hydraulic labels."""
         if hasattr(self, "_label_hydraulic"):
             self._label_hydraulic.setVisible(visible)
 
     def _init_hydraulic_labels(self):
-        """Cria os labels de pressão e vazão para âncoras hidráulicas."""
+        """Creates the pressure and flow labels for hydraulic anchors."""
         self._label_hydraulic = LabelItem(properties={
             "text": "0.0 Pa | 0.0 m³/s",
             "editable": False,
@@ -162,29 +163,30 @@ class AnchorItem(QGraphicsEllipseItem):
             "font_delta": -1,
         })
         self._label_hydraulic.setParentItem(self)
-        # Se a âncora nascer depois do node já ter girado (ex: anchor Z
-        # de pilotagem adicionada em runtime), o label precisa da
-        # contra-rotação certa desde já, não só na próxima vez que o
-        # node girar.
+        # If the anchor is born after the node has already rotated (e.g.
+        # a pilot anchor Z added at runtime), the label needs the
+        # correct counter-rotation right away, not only the next time
+        # the node rotates.
         self._label_hydraulic.setRotation(-self.node.rotation())
         self._label_hydraulic.setPos(self._default_label_offset())
 
     def _default_label_offset(self) -> QPointF:
-        """Calcula um offset que empurra o label para fora do componente.
+        """Computes an offset that pushes the label out and away from the component.
 
-        Classifica a borda (topo/base/esquerda/direita) em coordenadas de
-        CENA -- não locais -- porque o label é filho da âncora (que gira
-        junto com o node) mas tem ItemIgnoresTransformations (ver
-        LabelItem): sua ORIENTAÇÃO fica sempre reta, mas sua POSIÇÃO
-        continua sendo mapeada pela transformação herdada. Se a borda
-        fosse classificada em coordenadas locais (pré-rotação), o offset
-        cresceria sempre na mesma direção "de fábrica" mesmo depois do
-        componente girar -- fazendo o label crescer pro lado errado
-        (sobrepondo o sprite) assim que o node é rotacionado.
+        Classifies the edge (top/bottom/left/right) in SCENE coordinates
+        -- not local -- because the label is the anchor's child (which
+        rotates along with the node) but has ItemIgnoresTransformations
+        (see LabelItem): its ORIENTATION always stays upright, but its
+        POSITION is still mapped through the inherited transform. If the
+        edge were classified in local (pre-rotation) coordinates, the
+        offset would always grow in the same "factory" direction even
+        after the component rotates -- making the label grow on the
+        wrong side (overlapping the sprite) as soon as the node is
+        rotated.
 
-        Reutilizável a qualquer momento (não só na criação da âncora) --
-        NodeItem.rotate() chama de novo depois de cada rotação, pra manter
-        o label no lado de fora certo.
+        Reusable at any time (not just when the anchor is created) --
+        NodeItem.rotate() calls it again after each rotation, to keep
+        the label on the correct outward side.
         """
         margin = 4
         rect = self._label_hydraulic.boundingRect()
@@ -208,17 +210,18 @@ class AnchorItem(QGraphicsEllipseItem):
         elif on_right:
             scene_offset = QPointF(margin, -h / 2)
         else:
-            # Âncora interna (não está em nenhuma borda): mantém o padrão antigo.
+            # Interior anchor (not on any edge): keeps the old default.
             scene_offset = QPointF(margin, -h - margin)
 
-        # scene_offset está em coordenadas de cena (já reta); converte pra
-        # coordenada LOCAL da âncora, que é o que setPos() espera -- o Qt
-        # vai remapear pra cena aplicando a rotação de novo, cancelando
-        # essa conversão e deixando o label exatamente onde calculamos.
+        # scene_offset is in scene coordinates (already upright);
+        # converts to the anchor's LOCAL coordinate, which is what
+        # setPos() expects -- Qt will remap it back to the scene by
+        # applying the rotation again, canceling out this conversion and
+        # leaving the label exactly where we computed.
         return self.mapFromScene(anchor_scene_pos + scene_offset)
 
     def update_hydraulic_labels(self):
-        """Atualiza o texto dos labels de pressão e vazão com os valores atuais."""
+        """Updates the pressure and flow labels' text with the current values."""
         if not hasattr(self, "_label_hydraulic"):
             return
 

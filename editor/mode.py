@@ -1,16 +1,16 @@
-"""Define os modos de interação do editor de diagramas."""
+"""Defines the interaction modes of the diagram editor."""
 
 from enum import Enum
 
 
 class EditorMode(Enum):
-    """Modos de interação disponíveis no editor.
+    """Interaction modes available in the editor.
 
     Attributes:
-        SELECT:   Seleção e movimentação de itens.
-        ADD:      Posicionamento de novo nó a partir da paleta.
-        CONNECT:  Criação de conexão entre dois âncoras.
-        SIMULATE: Execução da simulação; edição desabilitada.
+        SELECT:   Selecting and moving items.
+        ADD:      Placing a new node from the palette.
+        CONNECT:  Creating a connection between two anchors.
+        SIMULATE: Running the simulation; editing disabled.
     """
 
     SELECT = None

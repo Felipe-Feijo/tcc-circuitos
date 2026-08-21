@@ -1,4 +1,4 @@
-"""Ações de visualização: zoom in/out e ajustar à tela."""
+"""View actions: zoom in/out and fit to screen."""
 
 from PyQt6.QtGui import QAction
 

@@ -1,8 +1,8 @@
-"""Resolução do diretório base do projeto.
+"""Resolution of the project's base directory.
 
-Funciona tanto rodando via `python app.py` quanto em um build congelado
-pelo PyInstaller (onde `__file__` de módulos compilados não aponta para
-um arquivo .py real em disco).
+Works both when running via `python app.py` and in a build frozen by
+PyInstaller (where `__file__` of compiled modules doesn't point to a
+real .py file on disk).
 """
 
 import sys
@@ -10,8 +10,8 @@ from pathlib import Path
 
 
 def get_base_dir() -> Path:
-    # `_MEIPASS` é definido pelo PyInstaller tanto em builds onefile quanto
-    # onedir, apontando para onde os dados (--add-data) foram extraídos.
+    # `_MEIPASS` is set by PyInstaller in both onefile and onedir builds,
+    # pointing to where the data (--add-data) was extracted.
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         return Path(meipass)

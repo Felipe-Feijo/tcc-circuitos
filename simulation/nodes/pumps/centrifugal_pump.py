@@ -1,29 +1,30 @@
-"""Nó de simulação de bomba centrífuga (domínio hidráulico).
+"""Centrifugal pump simulation node (hydraulic domain).
 
-Diferente da bomba de deslocamento fixo (vazão sempre travada em Q_set),
-a centrífuga segue uma curva característica contínua relacionando queda
-de pressão e vazão -- sem ramificação nenhuma, é uma única equação válida
-em qualquer ponto:
+Unlike the fixed-displacement pump (flow always locked at Q_set), the
+centrifugal pump follows a continuous characteristic curve relating
+pressure drop and flow -- no branching at all, it's a single equation
+valid at any point:
 
-    Δp = P_no_P - P_no_S
-    Δp = H_shutoff * (1 - (Q_S / Q_max)²)
+    dp = P_at_P - P_at_S
+    dp = H_shutoff * (1 - (Q_S / Q_max)^2)
 
-Em Q_S=0 (bomba afogada, sem vazão): Δp = H_shutoff (pressão de shutoff).
-Em Q_S=Q_max (vazão livre, sem carga): Δp = 0.
+At Q_S=0 (deadheaded, no flow): dp = H_shutoff (shutoff pressure).
+At Q_S=Q_max (free flow, no load): dp = 0.
 
-A parábola só tem solução real pra Δp <= H_shutoff (o máximo, em Q_S=0) --
-`bounds` trava Q_S em [0, Q_max] pra que uma contrapressão além do shutoff
-resulte em vazão zero (o ponto mais próximo alcançável), não numa vazão
-negativa espúria (não haveria raiz real pra encontrar sem esse limite).
+The parabola only has a real solution for dp <= H_shutoff (its maximum,
+at Q_S=0) -- `bounds` locks Q_S to [0, Q_max] so a backpressure beyond
+shutoff results in zero flow (the nearest reachable point), not a
+spurious negative flow (there'd be no real root to find without this limit).
 
-Convenção de sinal (node_protocol.py: Q>0 = entrando no componente): S
-(sucção, embaixo do sprite) é positivo -- fluido entra ali; P (descarga,
-topo) é negativo -- fluido sai ali. Mesma convenção, mesmas portas e
-mesmo sprite (só o desenho do círculo muda) da FixedDisplacementPump.
+Sign convention (node_protocol.py: Q>0 = entering the component): S
+(suction, bottom of the sprite) is positive -- fluid enters there; P
+(discharge, top) is negative -- fluid exits there. Same convention, same
+ports and same sprite (only the circle's drawing differs) as
+FixedDisplacementPump.
 
-Ao contrário de lá, os nomes das variáveis aqui já nascem ligados
-diretamente ao nome da porta (flow_var_p, flow_var_s) -- não "in"/"out",
-que só causou confusão sem necessidade no irmão desta classe.
+Unlike that one, the variable names here are already tied directly to
+the port name (flow_var_p, flow_var_s) -- not "in"/"out", which just
+caused needless confusion in this class's sibling.
 """
 
 from simulation.nodes.nodes import Node
@@ -38,12 +39,12 @@ class CentrifugalPump(Node, HydraulicMixin):
             h_shutoff = self.properties.get("H_shutoff")
             if h_shutoff is None:
                 raise ValueError(
-                    f"CentrifugalPump '{self.id}': propriedade obrigatória 'H_shutoff' não preenchida."
+                    f"CentrifugalPump '{self.id}': required property 'H_shutoff' is not set."
                 )
             q_max = self.properties.get("Q_max")
             if q_max is None:
                 raise ValueError(
-                    f"CentrifugalPump '{self.id}': propriedade obrigatória 'Q_max' não preenchida."
+                    f"CentrifugalPump '{self.id}': required property 'Q_max' is not set."
                 )
             self.H_shutoff = float(h_shutoff)
             self.Q_max = float(q_max)
@@ -68,15 +69,16 @@ class CentrifugalPump(Node, HydraulicMixin):
 
     @property
     def bounds(self):
-        # A curva Δp=H_shutoff*(1-(Q_S/Q_max)²) só tem solução real pra
-        # Δp <= H_shutoff (o máximo da parábola, em Q_S=0) -- sem limites,
-        # uma contrapressão além do shutoff não tem raiz nenhuma, e o
-        # solver pode escorregar pra vazão negativa tentando achar uma.
-        # Limitando ao envelope de operação válido (0 <= Q_S <= Q_max), o
-        # ponto mais próximo alcançável quando a contrapressão excede o
-        # shutoff fica em Q_S=0 -- vazão trava em zero, que é o
-        # comportamento físico esperado (a bomba não vence a
-        # contrapressão, não passa a girar em reverso sozinha).
+        # The curve dp=H_shutoff*(1-(Q_S/Q_max)^2) only has a real
+        # solution for dp <= H_shutoff (the parabola's maximum, at
+        # Q_S=0) -- without limits, a backpressure beyond shutoff has no
+        # root at all, and the solver can slip into a negative flow
+        # trying to find one. Limiting to the valid operating envelope
+        # (0 <= Q_S <= Q_max), the nearest reachable point when
+        # backpressure exceeds shutoff lands at Q_S=0 -- flow locks at
+        # zero, the expected physical behavior (the pump doesn't
+        # overcome the backpressure, it doesn't start spinning in
+        # reverse on its own).
         return {
             self.flow_var_s: (0.0, self.Q_max),
             self.flow_var_p: (-self.Q_max, 0.0),

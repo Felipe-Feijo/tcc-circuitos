@@ -1,4 +1,4 @@
-"""Descritor imutável de um tipo de nó disponível na paleta."""
+"""Immutable descriptor for a node type available in the palette."""
 
 from dataclasses import dataclass, field
 from typing import Type
@@ -6,13 +6,13 @@ from typing import Type
 
 @dataclass(frozen=True)
 class NodeDescriptor:
-    """Metadados de um tipo de nó para uso na paleta e no modo ADD.
+    """Metadata for a node type, used by the palette and ADD mode.
 
-    Imutável (frozen=True) — nunca alterado após criação.
+    Immutable (frozen=True) -- never changed after creation.
 
     Attributes:
-        cls: Classe concreta do NodeItem a ser instanciada.
-        domain: Domínio do nó ("pneumatic", "electric" ou "hydraulic").
+        cls: The concrete NodeItem class to instantiate.
+        domain: The node's domain ("pneumatic", "electric" or "hydraulic").
     """
     cls: Type
     domain: str
@@ -20,17 +20,17 @@ class NodeDescriptor:
 
 @dataclass(frozen=True)
 class PaletteMeta:
-    """Metadados de paleta declarados diretamente na classe do nó.
+    """Palette metadata declared directly on the node's class.
 
-    Retornado pelo classmethod ``palette_meta()`` de cada NodeItem concreto.
-    Classes base (abstratas) retornam ``None`` — não aparecem na paleta.
+    Returned by each concrete NodeItem's ``palette_meta()`` classmethod.
+    Base (abstract) classes return ``None`` -- they don't appear in the palette.
 
     Attributes:
-        domains: Lista de domínios em que o nó deve aparecer
-                 (ex: ["pneumatic", "hydraulic"]).
-        sprite:  Caminho para a imagem usada no ícone da paleta.
-        name:    Nome exibido na paleta. Se None, usa ``cls.__name__``.
-                 A ordem dentro de cada seção é sempre alfabética por ``name``.
+        domains: List of domains the node should appear in
+                 (e.g. ["pneumatic", "hydraulic"]).
+        sprite:  Path to the image used for the palette icon.
+        name:    Name shown in the palette. If None, uses ``cls.__name__``.
+                 Order within each section is always alphabetical by ``name``.
     """
     domains: tuple[str, ...]
     sprite: str

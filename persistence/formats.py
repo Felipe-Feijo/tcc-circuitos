@@ -1,5 +1,5 @@
-"""Formatos de arquivo suportados pelo sistema de persistência.
+"""File formats supported by the persistence system.
 
-TODO: definir enum ou constantes para os formatos ao implementar
-suporte a múltiplas versões de serialização ou exportação (ex: SVG, PDF).
+TODO: define an enum or constants for the formats when implementing
+support for multiple serialization or export versions (e.g. SVG, PDF).
 """

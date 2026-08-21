@@ -1,4 +1,4 @@
-"""Nó de simulação de válvula direcional 3/2 vias."""
+"""Simulation node for the 3/2-way directional valve."""
 
 import math
 from simulation.nodes.directional_valve.directional_valve import DirectionalValve
@@ -20,7 +20,7 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
             return [("P", "A")]
 
     # ------------------------------------------------------------------
-    # Domínio hidráulico
+    # Hydraulic domain
     # ------------------------------------------------------------------
 
     @property
@@ -36,8 +36,8 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
-        # sentinelas — serão escalados pelo flow_hint da bomba
-        # sinal oposto garante Q_in + Q_out = 0 desde o início
+        # sentinels -- will be scaled by the pump's flow_hint
+        # opposite sign guarantees Q_in + Q_out = 0 from the start
         return {
             self.flow_var_in:   1.0,
             self.flow_var_out: -1.0,
@@ -69,19 +69,19 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
 
         delta_p = P_in - P_out
 
-        # ---- escalas globais (mesma lógica do resto do sistema)
+        # ---- global scales (same logic as the rest of the system)
         Q_scale = max(self.q_ref, 1e-12)
         P_scale = max(self.p_ref, 1e-3)
 
-        # ---- equação 1: conservação de vazão (AGORA FORTE)
+        # ---- equation 1: flow conservation (now STRONG)
         eq_flow = (Q_in + Q_out) / Q_scale
 
-        # ---- equação 2: relação ΔP–Q (normalizada)
+        # ---- equation 2: dP-Q relation (normalized)
         eq_dp = (delta_p - math.copysign((Q_in / self.k) ** 2, Q_in)) / P_scale
 
         return [eq_flow, eq_dp]
 
 
     def set_scale(self, p_ref: float, q_ref: float) -> None:
-        self.p_ref = max(p_ref, 1e5)   # mínimo 1 bar
+        self.p_ref = max(p_ref, 1e5)   # minimum 1 bar
         self.q_ref = max(q_ref, 1e-10)

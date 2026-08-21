@@ -1,14 +1,14 @@
-"""Sincroniza o estado de domínio de volta aos itens gráficos após cada passo."""
+"""Syncs domain state back to the graphics items after each step."""
 
 
 class ViewSync:
-    """Empurra o estado de domínio para os itens gráficos após cada passo.
+    """Pushes domain state to the graphics items after each step.
 
-    Desacoplado de QObject — não usa sinais, apenas chamadas diretas de método.
+    Decoupled from QObject -- uses no signals, just direct method calls.
 
     Attributes:
-        node_map: Mapeamento de NodeItem para o nó de domínio correspondente.
-        connection_map: Mapeamento de ConnectionItem para a conexão de domínio.
+        node_map: Mapping of NodeItem to its corresponding domain node.
+        connection_map: Mapping of ConnectionItem to its domain connection.
     """
 
     def __init__(self):
@@ -16,9 +16,9 @@ class ViewSync:
         self.connection_map: dict = {}
 
     def sync(self) -> None:
-        """Atualiza visualmente todos os itens gráficos com o estado de domínio atual.
+        """Visually updates all graphics items with the current domain state.
 
-        Chama update_from_domain em cada NodeItem e set_state em cada ConnectionItem.
+        Calls update_from_domain on each NodeItem and set_state on each ConnectionItem.
         """
         for node_item, domain_node in self.node_map.items():
             node_item.update_from_domain(domain_node)

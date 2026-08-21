@@ -1,15 +1,15 @@
-"""Registro automático de todos os tipos de nó disponíveis na paleta.
+"""Automatic registry of every node type available in the palette.
 
-Em vez de listar cada nó manualmente, este módulo percorre o pacote
-``graphics.items.base.nodes`` e coleta todas as classes que declaram
-``palette_meta()`` retornando uma instância de ``PaletteMeta``.
+Instead of listing each node manually, this module walks the
+``graphics.items.base.nodes`` package and collects every class that
+declares ``palette_meta()`` returning a ``PaletteMeta`` instance.
 
-Para adicionar um novo nó à paleta basta:
-    1. Criar a classe em ``graphics/items/base/nodes/``.
-    2. Declarar o classmethod ``palette_meta()`` retornando um ``PaletteMeta``
-       com os domínios, sprite e nome desejados.
+To add a new node to the palette, just:
+    1. Create the class under ``graphics/items/base/nodes/``.
+    2. Declare the ``palette_meta()`` classmethod returning a
+       ``PaletteMeta`` with the desired domains, sprite and name.
 
-Nenhuma alteração neste arquivo é necessária.
+No change to this file is needed.
 """
 
 from __future__ import annotations
@@ -28,22 +28,23 @@ from paths import get_base_dir
 # ---------------------------------------------------------------------------
 
 def _discover_palette_nodes() -> list[type]:
-    """Retorna todas as classes concretas de NodeItem com ``palette_meta()`` definido.
+    """Returns every concrete NodeItem class with ``palette_meta()`` defined.
 
-    Percorre recursivamente todos os arquivos ``.py`` sob o diretório do pacote
-    ``graphics.items.base.nodes``, importa cada módulo e coleta as subclasses de
-    ``NodeItem`` que retornam um ``PaletteMeta`` não-nulo.
+    Recursively walks every ``.py`` file under the
+    ``graphics.items.base.nodes`` package directory, imports each
+    module and collects the ``NodeItem`` subclasses that return a
+    non-null ``PaletteMeta``.
 
-    Usa ``os.walk`` em vez de ``pkgutil.walk_packages`` porque os subdiretórios
-    não possuem ``__init__.py`` e portanto não são reconhecidos como subpacotes
-    pelo sistema de importação padrão.
+    Uses ``os.walk`` instead of ``pkgutil.walk_packages`` because the
+    subdirectories have no ``__init__.py`` and therefore aren't
+    recognized as subpackages by the standard import system.
     """
     import os
 
-    # `graphics.items.base.nodes.__file__` não aponta para um caminho real
-    # em builds congelados (PyInstaller) -- usa o mesmo diretório base
-    # resolvido para todo o resto (dev: raiz do projeto; congelado: onde
-    # os dados de --add-data foram extraídos).
+    # `graphics.items.base.nodes.__file__` doesn't point to a real path
+    # in frozen builds (PyInstaller) -- uses the same base directory
+    # resolved for everything else (dev: project root; frozen: where
+    # the --add-data payload was extracted).
     project_root = get_base_dir()
     pkg_dir = project_root / "graphics" / "items" / "base" / "nodes"
 
@@ -56,7 +57,7 @@ def _discover_palette_nodes() -> list[type]:
                 continue
 
             abs_path = Path(dirpath) / filename
-            # converte caminho de arquivo em nome de módulo
+            # converts a file path into a module name
             rel = abs_path.relative_to(project_root).with_suffix("")
             module_name = ".".join(rel.parts)
 
@@ -83,17 +84,17 @@ def _discover_palette_nodes() -> list[type]:
 # ---------------------------------------------------------------------------
 
 def register_nodes(palette, on_add_node) -> None:
-    """Popula a paleta com todos os nós descobertos automaticamente.
+    """Populates the palette with every automatically discovered node.
 
-    Os nós são agrupados por domínio (seção da paleta) e ordenados
-    alfabeticamente pelo nome exibido dentro de cada seção.
+    Nodes are grouped by domain (palette section) and sorted
+    alphabetically by display name within each section.
 
     Args:
-        palette:      Objeto de paleta com ``palette.sections[domain]``.
-        on_add_node:  Callback chamado ao clicar num nó; recebe um
+        palette:      Palette object with ``palette.sections[domain]``.
+        on_add_node:  Callback invoked on clicking a node; receives a
                       ``NodeDescriptor``.
     """
-    # Agrupa por domínio para poder ordenar alfabeticamente dentro de cada seção.
+    # Groups by domain so each section can be sorted alphabetically.
     by_domain: dict[str, list[tuple[type, PaletteMeta]]] = {}
 
     for cls in _discover_palette_nodes():
@@ -105,11 +106,11 @@ def register_nodes(palette, on_add_node) -> None:
             by_domain.setdefault(section_key, []).append((cls, meta))
 
     for section_key, entries in by_domain.items():
-        entries.sort(key=lambda t: (t[1].name or t[0].__name__).lower())  # ordem alfabética
+        entries.sort(key=lambda t: (t[1].name or t[0].__name__).lower())  # alphabetical order
         section = palette.sections[section_key]
         for cls, meta in entries:
             display_name = meta.name or cls.__name__
-            # captura de variáveis por default-argument evita o late-binding clássico
+            # capturing variables via default arguments avoids the classic late-binding trap
             section.add_node(
                 name=display_name,
                 icon_path=meta.sprite,

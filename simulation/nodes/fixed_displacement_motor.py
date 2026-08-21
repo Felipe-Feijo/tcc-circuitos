@@ -1,54 +1,54 @@
-"""Nó de simulação de motor hidráulico de deslocamento fixo.
+"""Simulation node for the fixed-displacement hydraulic motor.
 
-Inverso mecânico da FixedDisplacementPump: em vez de converter rotação em
-vazão/pressão, converte vazão/pressão recebidas em rotação/torque no eixo.
+Mechanical inverse of FixedDisplacementPump: instead of converting
+rotation into flow/pressure, it converts received flow/pressure into
+shaft rotation/torque.
 
-    Q = D · ω      (vazão proporcional à velocidade angular)
-    T = D · Δp     (torque proporcional à queda de pressão)
+    Q = D * omega  (flow proportional to angular speed)
+    T = D * dp     (torque proportional to pressure drop)
 
-Sentido de projeto: A (topo, pra onde o triângulo do sprite aponta) é a
-entrada de referência; B (base) é a saída de referência. Δp = P_A - P_B.
-Positivo em Q_A e em Δp = operação no sentido de projeto (bate com a seta
-do sprite).
+Design direction: A (top, where the sprite triangle points) is the
+reference input; B (base) is the reference output. dp = P_A - P_B.
+Positive Q_A and dp = operation in the design direction (matches the
+sprite arrow).
 
-Reversão de sentido não precisa de tratamento especial nenhum: a equação
-do motor nunca depende do SINAL de Q_A, só o resto do circuito
-(conservação) decide -- se o circuito empurrar vazão ao contrário, Q_A
-(e portanto ω=Q_A/D) sai negativo naturalmente, sem ramificação nem
-risco de raiz espúria (mesmo cuidado que levou à correção da válvula
-estranguladora).
+Direction reversal needs no special handling: the motor equation never
+depends on the SIGN of Q_A, only the rest of the circuit (conservation)
+decides -- if the circuit pushes flow the other way, Q_A (and hence
+omega=Q_A/D) comes out negative naturally, with no branching and no
+risk of a spurious root (same care applied to the throttle valve fix).
 
-Dois modos de operação (properties["control_mode"]), mutuamente
-exclusivos -- cada um define qual das duas propriedades (T_load ou
-omega_target) é obrigatória:
+Two mutually exclusive operating modes (properties["control_mode"]),
+each defining which of the two properties (T_load or omega_target) is
+required:
 
-    "torque": properties["T_load"] (N·m) -- carga de torque CONSTANTE,
-        imposta independente do sentido de rotação (não é atrito -- um
-        atrito de verdade sempre se opõe ao sentido de ω, o que exigiria
-        sinal(Q) e reintroduziria o mesmo tipo de ramificação evitado
-        aqui). Equação: Δp = T_load / D.
-        ω = Q_A/D sai derivado (calculado no lado gráfico a partir do
-        fluxo resolvido, mesmo esquema da velocidade do pistão).
+    "torque": properties["T_load"] (N*m) -- CONSTANT torque load,
+        imposed regardless of rotation direction (not friction -- real
+        friction always opposes the direction of omega, which would
+        require sign(Q) and reintroduce the same kind of branching
+        avoided here). Equation: dp = T_load / D.
+        omega = Q_A/D is derived (computed on the graphics side from
+        the resolved flow, same scheme as piston speed).
 
-    "speed": properties["omega_target"] (rad/s) -- velocidade alvo
-        imposta, como um servo. Equação: Q_A = D · omega_target (vazão
-        travada, mesma ideia da FixedDisplacementPump).
-        T = Δp · D sai derivado (calculado no lado gráfico a partir da
-        pressão resolvida).
+    "speed": properties["omega_target"] (rad/s) -- imposed target
+        speed, like a servo. Equation: Q_A = D * omega_target (flow
+        locked, same idea as FixedDisplacementPump).
+        T = dp * D is derived (computed on the graphics side from the
+        resolved pressure).
 
-`D` é sempre obrigatório. Só um dos dois campos (T_load / omega_target)
-é obrigatório, conforme control_mode.
+`D` is always required. Only one of the two fields (T_load /
+omega_target) is required, depending on control_mode.
 
-`P_max` (Pa) e `n_max` (rad/s) são OPCIONAIS -- limites estruturais do
-motor real (rolamento, vedação, cavitação), não física de conversão de
-energia (ao contrário da curva da bomba centrífuga, a relação T=D·Δp /
-Q=D·ω continua linear em toda a faixa; os limites só travam onde ela
-para de ser válida). Só dá pra validar na CONSTRUÇÃO o lado que é
-determinístico em cada modo: T_load implica Δp direto (checa contra
-P_max no modo torque); omega_target implica Q=D·ω direto (checa contra
-n_max no modo speed). O lado oposto em cada modo (ω no modo torque, Δp
-no modo speed) só emerge depois do solve com o resto do circuito -- não
-validado aqui.
+`P_max` (Pa) and `n_max` (rad/s) are OPTIONAL -- structural limits of
+the real motor (bearing, seal, cavitation), not energy-conversion
+physics (unlike the centrifugal pump curve, the T=D*dp / Q=D*omega
+relation stays linear across the whole range; the limits only clamp
+where it stops being valid). Only the deterministic side of each mode
+can be validated at CONSTRUCTION time: T_load implies dp directly
+(checked against P_max in torque mode); omega_target implies Q=D*omega
+directly (checked against n_max in speed mode). The opposite side in
+each mode (omega in torque mode, dp in speed mode) only emerges after
+solving with the rest of the circuit -- not validated here.
 """
 
 from simulation.nodes.nodes import Node
@@ -63,7 +63,7 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
             d = self.properties.get("D")
             if d is None:
                 raise ValueError(
-                    f"FixedDisplacementMotor '{self.id}': propriedade obrigatória 'D' não preenchida."
+                    f"FixedDisplacementMotor '{self.id}': required property 'D' is not set."
                 )
             self.D = float(d)
 
@@ -75,16 +75,16 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
             self.control_mode = self.properties.get("control_mode", "torque")
             if self.control_mode not in ("torque", "speed"):
                 raise ValueError(
-                    f"FixedDisplacementMotor '{self.id}': 'control_mode' deve ser 'torque' ou 'speed', "
-                    f"recebeu {self.control_mode!r}."
+                    f"FixedDisplacementMotor '{self.id}': 'control_mode' must be 'torque' or 'speed', "
+                    f"got {self.control_mode!r}."
                 )
 
             if self.control_mode == "torque":
                 t_load = self.properties.get("T_load")
                 if t_load is None:
                     raise ValueError(
-                        f"FixedDisplacementMotor '{self.id}': propriedade obrigatória 'T_load' "
-                        "não preenchida (control_mode='torque')."
+                        f"FixedDisplacementMotor '{self.id}': required property 'T_load' "
+                        "is not set (control_mode='torque')."
                     )
                 self.T_load = float(t_load)
 
@@ -92,22 +92,22 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
                     implied_delta_p = abs(self.T_load / self.D)
                     if implied_delta_p > self.P_max:
                         raise ValueError(
-                            f"FixedDisplacementMotor '{self.id}': T_load={self.T_load:.3g} N·m implica "
-                            f"Δp={implied_delta_p:.3g} Pa, acima do limite P_max={self.P_max:.3g} Pa."
+                            f"FixedDisplacementMotor '{self.id}': T_load={self.T_load:.3g} N*m implies "
+                            f"dp={implied_delta_p:.3g} Pa, above limit P_max={self.P_max:.3g} Pa."
                         )
             else:
                 omega_target = self.properties.get("omega_target")
                 if omega_target is None:
                     raise ValueError(
-                        f"FixedDisplacementMotor '{self.id}': propriedade obrigatória 'omega_target' "
-                        "não preenchida (control_mode='speed')."
+                        f"FixedDisplacementMotor '{self.id}': required property 'omega_target' "
+                        "is not set (control_mode='speed')."
                     )
                 self.omega_target = float(omega_target)
 
                 if self.n_max is not None and abs(self.omega_target) > self.n_max:
                     raise ValueError(
                         f"FixedDisplacementMotor '{self.id}': omega_target={self.omega_target:.3g} rad/s "
-                        f"acima do limite n_max={self.n_max:.3g} rad/s."
+                        f"above limit n_max={self.n_max:.3g} rad/s."
                     )
 
             self.flow_var_a = f"Q_{self.id}_A"

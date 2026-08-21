@@ -1,21 +1,21 @@
 """
 sprite_metrics.py
 -----------------
-Fonte única de verdade para dimensões de sprites e constantes de layout
-derivadas do código gráfico.
+Single source of truth for sprite dimensions and layout constants
+derived from the graphics code.
 
-Tudo aqui é lido automaticamente:
-  - Dimensões de sprites  → PIL (leitura dos PNGs em resources/)
-  - PL spacing            → parse do expandable_item.py (self.spacing = <N>)
-  - Anchor ratios         → hardcoded como frações (ex: 254/300), mas calculados
-                            sobre a largura real do sprite, então mudar o PNG
-                            atualiza o valor automaticamente.
+Everything here is read automatically:
+  - Sprite dimensions -> PIL (reads the PNGs under resources/)
+  - PL spacing        -> parsed from expandable_item.py (self.spacing = <N>)
+  - Anchor ratios     -> hardcoded as fractions (e.g. 254/300), but computed
+                         against the sprite's real width, so changing the
+                         PNG updates the value automatically.
 
-Uso:
+Usage:
     from circuit_generator.sprite_metrics import METRICS
-    pl_pix_w   = METRICS.pl_pix_w       # largura do terminal da PressureLine
-    pl_spacing = METRICS.pl_spacing      # espaçamento entre anchors
-    cyl_width  = METRICS.cyl_width       # largura do DoubleActingCylinder
+    pl_pix_w   = METRICS.pl_pix_w       # PressureLine terminal width
+    pl_spacing = METRICS.pl_spacing      # spacing between anchors
+    cyl_width  = METRICS.cyl_width       # DoubleActingCylinder width
     ...
 """
 
@@ -26,54 +26,55 @@ from pathlib import Path
 
 from paths import get_base_dir
 
-_ROOT = get_base_dir()  # raiz do projeto
+_ROOT = get_base_dir()  # project root
 
 
-# ── Leitura de sprite ─────────────────────────────────────────────────────────
+# -- Sprite reading -------------------------------------------------------------
 
 def _sprite_size(relative_path: str) -> tuple[int, int]:
-    """Retorna (width, height) do PNG, sem depender de PyQt."""
+    """Returns the PNG's (width, height), without depending on PyQt."""
     from PIL import Image
     path = _ROOT / relative_path
     with Image.open(path) as img:
         return img.width, img.height
 
 
-# ── Leitura do spacing do expandable_item.py ─────────────────────────────────
+# -- Reading the spacing from expandable_item.py --------------------------------
 
 def _read_expandable_spacing() -> int:
     """
-    Faz parse de 'self.spacing = <N>' no expandable_item.py.
-    Lança ValueError se não encontrar.
+    Parses 'self.spacing = <N>' from expandable_item.py.
+    Raises ValueError if not found.
     """
     src = _ROOT / "graphics/items/base/nodes/expandable/expandable_item.py"
     text = src.read_text(encoding="utf-8")
     m = re.search(r"self\.spacing\s*=\s*(\d+)", text)
     if not m:
-        raise ValueError(f"Não foi possível ler 'self.spacing' em {src}")
+        raise ValueError(f"Could not read 'self.spacing' in {src}")
     return int(m.group(1))
 
 
 def _read_body_state1_offset_x(src_path: str) -> float:
     """
-    Lê o x de BODY_VISUALS[1]["offset"] = QPointF(<N>, 0) -- o deslocamento
-    visual do corpo da válvula direcional no estado comutado ("ativo").
+    Reads the x from BODY_VISUALS[1]["offset"] = QPointF(<N>, 0) -- the
+    directional valve body's visual shift in the commutated ("active")
+    state.
     """
     src = Path(_ROOT / src_path).read_text(encoding="utf-8")
     m = re.search(r'1:\s*\{.*?"offset":\s*QPointF\(([\d.]+)\s*,', src, re.DOTALL)
     if not m:
-        raise ValueError(f"Não foi possível ler BODY_VISUALS[1]['offset'] em {src_path}")
+        raise ValueError(f"Could not read BODY_VISUALS[1]['offset'] in {src_path}")
     return float(m.group(1))
 
 
-# ── Dataclass com todas as métricas ──────────────────────────────────────────
+# -- Dataclass holding all the metrics -------------------------------------------
 
 @dataclass(frozen=True)
 class SpriteMetrics:
     # PressureLine
-    pl_pix_w:   int    # largura do terminal sprite
-    pl_pix_h:   int    # altura do terminal sprite
-    pl_spacing: int    # espaçamento entre anchors (expandable_item.py)
+    pl_pix_w:   int    # terminal sprite width
+    pl_pix_h:   int    # terminal sprite height
+    pl_spacing: int    # spacing between anchors (expandable_item.py)
 
     # DoubleActingCylinder
     cyl_width:  int
@@ -92,10 +93,10 @@ class SpriteMetrics:
     v32_height: int
 
     # Pilot actuator
-    pilot_w:    int  # largura do sprite de pilot (usado nos anchors PL/PR)
+    pilot_w:    int  # pilot sprite width (used for the PL/PR anchors)
 
-    # Atuadores das sigs do cascata (limit_switch à esquerda, spring à
-    # direita -- ver Valve_3_2_Ways.actuators em cascade.py)
+    # Cascade sigs' actuators (limit_switch on the left, spring on the
+    # right -- see Valve_3_2_Ways.actuators in cascade.py)
     limit_switch_w: int
     spring_w:       int
 
@@ -127,57 +128,58 @@ class SpriteMetrics:
     button_switch_width:  int
     button_switch_height: int
 
-    # VoltageSource / Ground (barras expansíveis -- NÃO entram em anchor_local,
-    # mesmo tratamento que PressureLine)
+    # VoltageSource / Ground (expandable bars -- do NOT go into
+    # anchor_local, same treatment as PressureLine)
     vsource_pix_w: int
     vsource_pix_h: int
     ground_pix_w:  int
     ground_pix_h:  int
 
-    # Anchors locais calculados a partir das dimensões reais dos sprites.
-    # Cada entrada: tipo → { porta → (local_x, local_y) }
+    # Local anchors computed from the sprites' real dimensions.
+    # Each entry: type -> { port -> (local_x, local_y) }
     anchor_local: dict = field(default_factory=dict)
 
-    # Derivados da PressureLine (calculados no __post_init__)
+    # Derived from the PressureLine (computed in __post_init__)
     v52_sprite_cx: float = field(init=False)
     mc_chain_offset: float = field(init=False)  # V52_A_X - V52_P_X
-    mc_x_step: int = field(init=False)           # A.x - P.x (alinha A[i+1] com P[i])
+    mc_x_step: int = field(init=False)           # A.x - P.x (aligns A[i+1] with P[i])
 
-    # Espaçamento mínimo entre anchors A de duas válvulas 3/2 adjacentes.
+    # Minimum spacing between two adjacent 3/2 valves' A anchors.
     #
-    # As sigs que pilotam uma 4/2 são organizadas em uma grid 2D relativa ao pilot:
+    # The sigs piloting a 4/2 valve are arranged in a 2D grid relative to the pilot:
     #
-    #   Colunas = sinais em paralelo (OR - condições alternativas que ativam o
-    #             mesmo pilot). Espaçadas por sig_spacing em X.
-    #   Linhas  = sinais em série dentro de uma coluna (AND - condições conjuntas).
-    #             Empilhadas verticalmente na mesma coluna.
+    #   Columns = parallel signals (OR -- alternative conditions triggering
+    #             the same pilot). Spaced by sig_spacing in X.
+    #   Rows    = signals in series within a column (AND -- joint
+    #             conditions). Stacked vertically in the same column.
     #
-    #   Ordem: colunas mais próximas da 4/2 = acionamentos mais tardios na
-    #   sequência; colunas externas = acionamentos mais antecipados.
+    #   Order: columns closer to the 4/2 = later triggers in the sequence;
+    #   outer columns = earlier triggers.
     #
-    # sig_spacing garante não-sobreposição entre colunas adjacentes:
-    #   fp_left  = A_x + pilot_w              (sprite + atuador esquerdo)
+    # sig_spacing guarantees no overlap between adjacent columns:
+    #   fp_left  = A_x + pilot_w              (sprite + left actuator)
     #   fp_right = (v32_w - A_x) + pilot_w + comutation_shift
     #
-    sig_fp_left:  int = field(init=False)  # px a esquerda do anchor A
-    sig_fp_right: int = field(init=False)  # px a direita do anchor A (com shift)
+    sig_fp_left:  int = field(init=False)  # px to the left of anchor A
+    sig_fp_right: int = field(init=False)  # px to the right of anchor A (with shift)
     sig_spacing:  int = field(init=False)  # sig_fp_left + sig_fp_right
 
-    # Pitch mínimo de coluna pra colocar duas sigs do cascata (limit_switch
-    # + corpo + spring) lado a lado sem sobrepor, no pior caso em que a da
-    # esquerda está comutada (corpo inteiro deslocado +pilot_side_offset_x
-    # pra direita, ver BODY_VISUALS[1]) e a da direita não. Ao contrário de
-    # sig_fp_right acima (que usa pilot_w como aproximação genérica pro
-    # atuador direito), usa a largura REAL do sprite de spring -- achado
-    # testando a UI real: sig_spacing (647px) ficava 36px curto do pitch
-    # de fato necessário (683px), exatamente a diferença entre spring_w
-    # (136px) e pilot_w (100px).
+    # Minimum column pitch to place two cascade sigs (limit_switch + body +
+    # spring) side by side without overlapping, in the worst case where
+    # the left one is commutated (whole body shifted
+    # +pilot_side_offset_x to the right, see BODY_VISUALS[1]) and the
+    # right one isn't. Unlike sig_fp_right above (which uses pilot_w as
+    # a generic approximation for the right actuator), uses the spring
+    # sprite's REAL width -- found via live-UI testing: sig_spacing
+    # (647px) came up 36px short of the pitch actually needed (683px),
+    # exactly the difference between spring_w (136px) and pilot_w
+    # (100px).
     sig_col_pitch: int = field(init=False)
 
-    # Deslocamento horizontal do corpo/pilots no estado comutado ("ativo")
-    # de cada válvula direcional -- lido de BODY_VISUALS[1]["offset"] em
-    # cada arquivo gráfico. Chave = node_type. É sempre >= 0 (comutar só
-    # empurra o pilot PR pra direita, nunca pra esquerda) -- ver
+    # Each directional valve's horizontal body/pilot shift in the
+    # commutated ("active") state -- read from BODY_VISUALS[1]["offset"]
+    # in each graphics file. Key = node_type. Always >= 0 (commutating
+    # only pushes the PR pilot to the right, never left) -- see
     # docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
     pilot_side_offset_x: dict[str, float] = field(default_factory=dict)
 
@@ -203,11 +205,11 @@ class SpriteMetrics:
 
 def _ratio_from_expr(expr: str, axis: str) -> float:
     """
-    Extrai a fração de 'self.<axis>' numa expressão de coordenada de anchor.
-    Cobre os três formatos usados nos componentes gráficos:
+    Extracts the 'self.<axis>' fraction from an anchor coordinate
+    expression. Covers the three formats used across graphics components:
       "self.<axis>"                -> 1.0
-      "self.<axis>*NUM/DEN" / "*F" -> NUM/DEN ou F
-      literal (ex: "0")            -> 0.0
+      "self.<axis>*NUM/DEN" / "*F" -> NUM/DEN or F
+      literal (e.g. "0")           -> 0.0
     """
     expr = expr.strip()
     if expr == f"self.{axis}":
@@ -220,11 +222,11 @@ def _ratio_from_expr(expr: str, axis: str) -> float:
 
 def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:
     """
-    Extrai frações de anchor do initialize_anchors() de um arquivo fonte.
-    Lê expressões do tipo:
+    Extracts anchor fractions from a source file's initialize_anchors().
+    Reads expressions like:
       AnchorItem("NAME", QPointF(self.width*NUM/DEN, self.height_or_0), ...)
-    Retorna { name: (x_ratio, y_ratio) } — frações de width/height. Cobre
-    "self.<eixo>" (1.0), "self.<eixo>*fração" e literal (0.0).
+    Returns { name: (x_ratio, y_ratio) } -- width/height fractions. Covers
+    "self.<axis>" (1.0), "self.<axis>*fraction" and literal (0.0).
     """
     src = Path(_ROOT / src_path).read_text(encoding="utf-8")
     pat = re.compile(
@@ -241,26 +243,26 @@ def _parse_anchor_ratios(src_path: str) -> dict[str, tuple[float, float]]:
 
 
 def _read_pilot_y_ratio() -> float:
-    """Lê self.height * <ratio> do directional_valve_item.py."""
+    """Reads self.height * <ratio> from directional_valve_item.py."""
     import re
     src = Path(_ROOT / "graphics/items/base/nodes/directional_valve/directional_valve_item.py").read_text(encoding="utf-8")
     m = re.search(r'self\.height\s*\*\s*([\d.]+)\s*[,)]', src)
     if not m:
-        raise ValueError("Não foi possível ler pilot_y_ratio em directional_valve_item.py")
+        raise ValueError("Could not read pilot_y_ratio in directional_valve_item.py")
     return float(m.group(1))
 
 
 def _build_anchor_local(m: "SpriteMetrics") -> dict:
     """
-    Calcula _ANCHOR_LOCAL parseando as frações diretamente dos arquivos fonte
-    de cada componente gráfico — sem hardcode de frações aqui.
+    Computes _ANCHOR_LOCAL by parsing the fractions directly from each
+    graphics component's source file -- no hardcoded fractions here.
     """
     pilot_y = _read_pilot_y_ratio()
     pilot_w = m.pilot_w
 
     def _resolve(ratios: dict, width: int, height: int,
                  extra: dict | None = None) -> dict:
-        """Converte { name: (x_ratio, y_ratio) } em { name: (x, y) }."""
+        """Converts { name: (x_ratio, y_ratio) } into { name: (x, y) }."""
         result = {}
         for name, (xr, yr) in ratios.items():
             result[name] = (width * xr, height * yr)
@@ -359,59 +361,61 @@ def _load() -> SpriteMetrics:
         anchor_local={},
         pilot_side_offset_x=pilot_side_offset_x,
     )
-    # anchor_local é frozen, então populamos via object.__setattr__
+    # anchor_local is frozen, so we populate it via object.__setattr__
     object.__setattr__(m, "anchor_local", _build_anchor_local(m))
     return m
 
 
-# Singleton — carregado uma vez na importação
+# Singleton -- loaded once at import time
 METRICS: SpriteMetrics = _load()
 
 
 def anchor_local_for_routing(node_type: str, anchor_name: str,
                              peer_type: str | None = None) -> tuple[float, float] | None:
     """
-    Como METRICS.anchor_local[node_type][anchor_name], mas para PR soma
-    sempre o deslocamento de comutação -- o pior caso (mais à direita)
-    que o pilot pode ocupar em QUALQUER estado, já que comutar só empurra
-    pra direita, nunca pra esquerda. PL não precisa de ajuste (seu pior
-    caso, mais à esquerda, já é o valor sem deslocamento). Ver
+    Like METRICS.anchor_local[node_type][anchor_name], but for PR always
+    adds the commutation shift -- the worst case (furthest right) the
+    pilot can occupy in ANY state, since commutating only pushes right,
+    never left. PL needs no adjustment (its worst case, furthest left,
+    is already the value with no shift). See
     docs/superpowers/specs/2026-07-11-directional-valve-pilot-anchor-offset-design.md.
 
-    Valve_3_2_Ways.P recebe o MESMO ajuste, mas só quando `peer_type` é
-    `None` (chamador não sabe/não importa quem alimenta o P -- ex.: cálculo
-    de espaço reservado no pior caso) ou é explicitamente `"PressureLine"`
-    -- é ela quem alimenta esse P nas válvulas de sinalização de
-    confirmação (cascata e passo a passo), e o offset compensa o
-    deslocamento visual de BODY_VISUALS[1] (comutado) que o anchor local
-    (uma fração fixa de self.width) não embute sozinho.
+    Valve_3_2_Ways.P gets the SAME adjustment, but only when `peer_type`
+    is `None` (the caller doesn't know/care who feeds P -- e.g. computing
+    worst-case reserved space) or is explicitly `"PressureLine"` -- that's
+    what feeds this P on confirmation signaling valves (cascade and
+    step-by-step), and the offset compensates for the visual shift of
+    BODY_VISUALS[1] (commutated) that the local anchor (a fixed fraction
+    of self.width) doesn't bake in on its own.
 
-    Importante: o anchor P em si NUNCA se move com body_state (só PL/PR
-    seguem o corpo comutado -- ver directional_valve_item.py) -- o offset
-    no caso PressureLine não descreve onde o anchor é desenhado, é mantido
-    por compatibilidade com a escolha de coluna do anchor da PL (ver
-    _target_x em step_by_step_layout.py e os testes de
-    tests/test_cascade_layout.py que dependem dessa aproximação pela
-    direita pra desviar da mola). Corrigir isso de verdade (fazer o ponto
-    final da rota pousar na posição real do anchor, mantendo a aproximação
-    pela direita como regra de roteamento explícita em vez de embutida na
-    coordenada) é um problema maior, separado, fora do escopo deste fix.
+    Important: the P anchor itself NEVER moves with body_state (only
+    PL/PR follow the commutated body -- see directional_valve_item.py) --
+    the offset in the PressureLine case doesn't describe where the
+    anchor is drawn, it's kept for compatibility with the PL's anchor
+    column choice (see _target_x in step_by_step_layout.py and the
+    tests in tests/test_cascade_layout.py that depend on this
+    right-side approximation to steer clear of the spring). Properly
+    fixing this (making the route's final point land on the anchor's
+    real position, keeping the right-side approximation as an explicit
+    routing rule instead of baked into the coordinate) is a bigger,
+    separate problem, out of scope for this fix.
 
-    Quando `peer_type` é passado e NÃO é `"PressureLine"` (ex.: outra
-    válvula de sinalização alimentando este P via elo de cadeia
-    sig.A -> sig.P), o offset NÃO se aplica -- P não está recebendo de uma
-    PressureLine, então o deslocamento de comutação é irrelevante ali.
-    Sem essa distinção, o roteador mirava 147px à direita da posição real
-    do anchor nesses elos, produzindo um pequeno loop espúrio quando o
-    editor reparava o waypoint desalinhado ao carregar o circuito (achado
-    testando um circuito com C+(A+B+)C-A-B-, cadeia de sigs empilhados na
-    mesma coluna -- ver docs/superpowers/specs/
+    When `peer_type` is passed and is NOT `"PressureLine"` (e.g. another
+    signaling valve feeding this P via a sig.A -> sig.P chain link), the
+    offset does NOT apply -- P isn't receiving from a PressureLine, so
+    the commutation shift is irrelevant there. Without this distinction,
+    the router aimed 147px to the right of the anchor's real position on
+    these links, producing a small spurious loop when the editor
+    repaired the misaligned waypoint on loading the circuit (found while
+    testing a circuit with C+(A+B+)C-A-B-, a chain of sigs stacked in
+    the same column -- see docs/superpowers/specs/
     2026-08-12-sig-chain-p-anchor-offset-design.md).
 
-    Não estende pra Valve_4_2_Ways.P/Valve_5_2_Ways.P: nesses tipos, P
-    nunca é alimentado por uma PressureLine (vem de um Exhaust/
-    PressureSource dedicado -- ver circuit_generator/methods/cascade.py),
-    então o deslocamento nunca importa ali.
+    Doesn't extend to Valve_4_2_Ways.P/Valve_5_2_Ways.P: on those types,
+    P is never fed by a PressureLine (it comes from a dedicated
+    Exhaust/PressureSource -- see
+    circuit_generator/methods/cascade.py), so the shift never matters
+    there.
     """
     base = METRICS.anchor_local.get(node_type, {}).get(anchor_name)
     if base is None:

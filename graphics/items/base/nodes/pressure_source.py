@@ -1,4 +1,4 @@
-"""Nó gráfico de fonte de pressão pneumática."""
+"""Graphics node for the pneumatic pressure source."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF

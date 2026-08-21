@@ -1,4 +1,4 @@
-"""Nó gráfico de bomba de deslocamento fixo."""
+"""Graphics node for the fixed-displacement pump."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF

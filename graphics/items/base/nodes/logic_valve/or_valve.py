@@ -1,4 +1,4 @@
-"""Nó gráfico de válvula lógica OR (seletor de circuito)."""
+"""Graphics node for the OR logic valve (circuit selector)."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF, QRectF
@@ -29,11 +29,11 @@ class OrValve(NodeItem):
         self.width  = self.pixmap.width()
         self.height = self.pixmap.height()
 
-        # Mesma proporção da AndValve (graphics/items/base/nodes/
-        # logic_valve/and_valve.py) -- o sprite da OrValve passou a usar a
-        # mesma base/tamanho da AndValve, então os anchors seguem as
-        # mesmas frações de width/height (X/Y a 90/165 da altura, A
-        # centralizado no topo).
+        # Same proportion as AndValve (graphics/items/base/nodes/
+        # logic_valve/and_valve.py) -- the OrValve sprite now uses the
+        # same base/size as AndValve, so the anchors follow the same
+        # width/height fractions (X/Y at 90/165 of the height, A
+        # centered at the top).
         self.add_anchor(AnchorItem("X", QPointF(0, self.height * 90/165), node=self, domain=self.domain, exit_directions={"external": ["left"]}))
         self.add_anchor(AnchorItem("Y", QPointF(self.width, self.height * 90/165), node=self, domain=self.domain, exit_directions={"external": ["right"]}))
         self.add_anchor(AnchorItem("A", QPointF(self.width * 0.5, 0), node=self, domain=self.domain, exit_directions={"external": ["top"]}))

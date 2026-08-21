@@ -1,8 +1,8 @@
-"""Classes base do domínio de simulação: Node, Anchor e nós primitivos.
+"""Base classes for the simulation domain: Node, Anchor and primitive nodes.
 
-Define o contrato que todos os nós de simulação devem seguir e fornece
-os dois nós mais simples do domínio pneumático — PressureSource e Exhaust —
-que não justificam arquivos próprios pela trivialidade da implementação.
+Defines the contract every simulation node must follow and provides the
+two simplest pneumatic-domain nodes -- PressureSource and Exhaust --
+which don't justify their own files given how trivial they are.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ class Anchor:
         self.flow: float = 0.0
         self.pressure_var: str | None = None
         self.fault = False
-        self.pressurizing = False  # conservação de vazão ainda não atingida
+        self.pressurizing = False  # flow conservation not yet reached
 
     def connect(self, connection: "Connection"):
         if connection not in self.connections:
@@ -32,17 +32,17 @@ class Anchor:
 
 
 class Node:
-    """Classe base para todos os nós do domínio de simulação.
+    """Base class for every simulation-domain node.
 
-    Subclasses declaram o atributo de classe `node_type` e chamam
-    `super().__init__` antes de acessar `self.properties`.
+    Subclasses declare the `node_type` class attribute and call
+    `super().__init__` before accessing `self.properties`.
 
-    Contrato de simulação:
-        update(outputs):          chamado a cada iteração até estabilizar.
-        post_step_update(dt):     chamado uma vez após a convergência.
-        handle_command(cmd):      recebe dicionário do sinal NodeItem.command.
-        get_state() / set_state(): usados pelo HistoryManager (step_backward).
-        get_internal_connections(): retorna [(anchor_a, anchor_b), ...].
+    Simulation contract:
+        update(outputs):          called every iteration until stable.
+        post_step_update(dt):     called once after convergence.
+        handle_command(cmd):      receives the NodeItem.command signal's dict.
+        get_state() / set_state(): used by HistoryManager (step_backward).
+        get_internal_connections(): returns [(anchor_a, anchor_b), ...].
     """
 
     def __init__(self, node_id: str, node_type: str, *,
@@ -64,11 +64,11 @@ class Node:
         return self.anchors[name]
 
     def get_state(self) -> dict:
-        """Serializa o estado atual de todos os âncoras para snapshot.
+        """Serializes the current state of every anchor for a snapshot.
 
         Returns:
-            Dicionário com o estado de cada âncora, incluindo pressão e
-            vazão para âncoras do domínio hidráulico.
+            Dict with each anchor's state, including pressure and flow
+            for hydraulic-domain anchors.
         """
         anchors_state = {}
         for name, anchor in self.anchors.items():
@@ -82,10 +82,10 @@ class Node:
         return {"anchors": anchors_state}
 
     def set_state(self, state: dict):
-        """Restaura o estado dos âncoras a partir de um snapshot.
+        """Restores anchor state from a snapshot.
 
         Args:
-            state: Dicionário no formato retornado por get_state().
+            state: Dict in the format returned by get_state().
         """
         for name, anchor_data in state.get("anchors", {}).items():
             anchor = self.anchors.get(name)
@@ -98,32 +98,33 @@ class Node:
                 anchor.fault    = anchor_data.get("fault", False)
 
     def handle_command(self, command: str):
-        """Recebe um comando externo (UI, teste ou debug). No-op por padrão."""
+        """Receives an external command (UI, test or debug). No-op by default."""
         pass
 
     def update(self, outputs=None):
-        """Atualiza o estado interno do nó com base nas saídas da iteração anterior.
+        """Updates the node's internal state from the previous iteration's outputs.
 
-        Chamado pelo SimulationEngine a cada iteração até estabilização.
-        Nós sem dinâmica própria não precisam sobrescrever este método.
+        Called by the SimulationEngine every iteration until
+        stabilization. Nodes with no dynamics of their own don't need
+        to override this method.
         """
         pass
 
     def post_step_update(self, dt):
-        """Executado uma única vez após a estabilização do passo.
+        """Run once after the step stabilizes.
 
-        Utilizado para sensores, delays e commits de estado físico.
+        Used for sensors, delays and physical-state commits.
 
         Args:
-            dt: Intervalo de tempo em segundos desde o último passo.
+            dt: Time interval in seconds since the last step.
         """
         pass
 
     def get_internal_connections(self):
-        """Retorna as conexões internas do nó entre seus próprios âncoras.
+        """Returns the node's internal connections between its own anchors.
 
         Returns:
-            Lista de tuplas (anchor_a, anchor_b). Retorna lista vazia por padrão.
+            List of (anchor_a, anchor_b) tuples. Returns an empty list by default.
         """
         return []
 
@@ -150,12 +151,14 @@ class Exhaust(Node):
 
 
 class Junction(Node):
-    """Nó de junção: ponto de derivação num fio/tubo, sem dinâmica própria.
+    """Junction node: a branch point on a wire/pipe, with no dynamics of
+    its own.
 
-    Único anchor, nome "J". O fan-out elétrico/hidráulico/pneumático
-    acontece de graça -- `Anchor.connections` já é uma lista, então basta
-    ligar 3+ Connections ao mesmo Anchor. Sem overrides: `update()` e
-    `get_internal_connections()` herdados de Node já são no-op/[]."""
+    Single anchor, named "J". Electric/hydraulic/pneumatic fan-out
+    happens for free -- `Anchor.connections` is already a list, so
+    linking 3+ Connections to the same Anchor is enough. No overrides
+    needed: `update()` and `get_internal_connections()` inherited from
+    Node are already no-op/[]."""
 
     def __init__(self, node_id, **kwargs):
         super().__init__(node_id=node_id, node_type="junction", **kwargs)

@@ -1,4 +1,4 @@
-"""Gerencia o ciclo de vida de uma sessão de simulação."""
+"""Manages a simulation session's lifecycle."""
 
 import logging
 from dataclasses import dataclass
@@ -16,22 +16,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ReportResult:
-    """Resultado de `SimulationSession.stop()`: onde o relatório foi
-    montado, pronto para `resolve_report()` decidir o destino."""
+    """Result of `SimulationSession.stop()`: where the report was
+    built, ready for `resolve_report()` to decide its destination."""
     report_dir: str
 
 
 class SimulationSession:
-    """Controla o ciclo de vida completo de uma simulação.
+    """Controls a simulation's full lifecycle.
 
-    Responsabilidades:
-    - Construir o grafo de domínio a partir da cena gráfica atual.
-    - Criar e possuir SimulationEngine e SimulationController.
-    - Ligar e desligar os itens gráficos à simulação.
-    - Expor play/pause/toggle para a UI sem expor os detalhes internos.
+    Responsibilities:
+    - Building the domain graph from the current graphics scene.
+    - Creating and owning the SimulationEngine and SimulationController.
+    - Wiring and unwiring graphics items to/from the simulation.
+    - Exposing play/pause/toggle to the UI without exposing internal details.
 
-    Configurações de dt, timer_interval e speed_index persistem entre
-    sessões (início/parada) e são restauradas a cada novo start().
+    The dt, timer_interval and speed_index settings persist across
+    sessions (start/stop) and are restored on each new start().
     """
 
     def __init__(self, scene):
@@ -41,30 +41,30 @@ class SimulationSession:
         self.active = False
         self._recorder: FrameRecorder | None = None
 
-        # Configurações persistentes entre sessões
+        # Settings persistent across sessions
         self.dt = 0.1
         self.timer_interval = 1000
         self.speed_index = 0
 
     def start(self) -> str | None:
-        """Inicia a simulação a partir do estado atual da cena.
+        """Starts the simulation from the scene's current state.
 
-        Constrói o grafo de domínio, instancia o engine e o controller,
-        vincula os itens gráficos e executa o primeiro passo.
+        Builds the domain graph, instantiates the engine and
+        controller, wires the graphics items and runs the first step.
 
         Returns:
-            None se iniciado com sucesso, ou uma string de erro se algum
-            componente tiver propriedades obrigatórias não preenchidas.
-            O chamador é responsável por exibir a mensagem ao usuário.
+            None if started successfully, or an error string if some
+            component has a required property left unset. The caller
+            is responsible for showing the message to the user.
         """
         if self.active:
             return None
 
-        # Passo 1: constrói o grafo de domínio
+        # Step 1: builds the domain graph
         editor = EditorController(self.scene)
         builder = editor.build_graph()
 
-        # Passo 2: cria o engine — lança ValueError se props obrigatórias faltam
+        # Step 2: creates the engine -- raises ValueError if required props are missing
         try:
             builder.raise_if_errors()
             self.engine = SimulationEngine(
@@ -78,7 +78,7 @@ class SimulationSession:
         self.controller.on_update_node = builder.node_map
         self.controller.on_update_connection = builder.connection_map
 
-        # Restaura configurações persistentes
+        # Restores persistent settings
         self.controller.set_dt(self.dt)
         self.controller.timer_interval = self.timer_interval
 
@@ -87,21 +87,21 @@ class SimulationSession:
         self._recorder = FrameRecorder(self.engine, self.scene, self.dt)
         self.controller.state_changed.connect(self._recorder.capture_step)
 
-        # Passo 3: ativa os itens gráficos no modo simulação
+        # Step 3: activates the graphics items in simulation mode
         self._activate_node_items()
 
-        # Passo 4: executa o primeiro passo para semear o estado visual
+        # Step 4: runs the first step to seed the visual state
         self.controller.request_step(1)
         return None
 
     def stop(self) -> ReportResult | None:
-        """Para a simulação, restaura o estado visual e monta o relatório.
+        """Stops the simulation, restores the visual state and builds the report.
 
         Returns:
-            `ReportResult` apontando para o diretório temporário com o
-            relatório montado, ou None se a sessão não estava ativa, ou se
-            a montagem do relatório falhou (ex: erro de I/O) — nesse caso o
-            diretório pode estar incompleto e não deve ser usado.
+            `ReportResult` pointing at the temp directory holding the
+            built report, or None if the session wasn't active, or if
+            building the report failed (e.g. an I/O error) -- in that
+            case the directory may be incomplete and shouldn't be used.
         """
         if not self.active:
             return None
@@ -115,7 +115,7 @@ class SimulationSession:
                 report_builder.build(data.frames, data.temp_dir)
                 result = ReportResult(report_dir=data.temp_dir)
         except Exception:
-            logger.exception("falha ao montar o relatório de simulação")
+            logger.exception("failed to build the simulation report")
             result = None
         finally:
             self._recorder = None
@@ -126,19 +126,19 @@ class SimulationSession:
         return result
 
     def play(self):
-        """Inicia a execução contínua por timer."""
+        """Starts continuous timer-driven execution."""
         if not self.active:
             return
         self.controller.play()
 
     def pause(self):
-        """Pausa a execução contínua."""
+        """Pauses continuous execution."""
         if not self.active:
             return
         self.controller.pause()
 
     def toggle_play(self):
-        """Alterna entre play e pause."""
+        """Toggles between play and pause."""
         if not self.active:
             return
         if self.controller.playing:
@@ -147,22 +147,22 @@ class SimulationSession:
             self.controller.play()
 
     def is_playing(self) -> bool:
-        """Retorna True se a simulação estiver rodando continuamente."""
+        """Returns True if the simulation is running continuously."""
         return bool(self.active and self.controller and self.controller.playing)
 
     def set_dt(self, value: float) -> None:
-        """Atualiza o `dt` da sessão, do controller (se ativo) e do
-        recorder de relatório (se ativo), mantendo os três em sincronia."""
+        """Updates the session's `dt`, the controller's (if active) and
+        the report recorder's (if active), keeping all three in sync."""
         self.dt = value
         if self.controller is not None:
             self.controller.set_dt(value)
         if self._recorder is not None:
             self._recorder.set_dt(value)
 
-    # Métodos internos
+    # Internal methods
 
     def _activate_node_items(self):
-        """Coloca todos os NodeItems da cena em modo simulação."""
+        """Puts every NodeItem in the scene into simulation mode."""
         for item in self.scene.items():
             if not isinstance(item, NodeItem):
                 continue
@@ -171,13 +171,13 @@ class SimulationSession:
             item.command.connect(self.controller.command)
 
     def _deactivate_node_items(self):
-        """Restaura o estado visual dos itens e desconecta sinais de comando."""
+        """Restores the items' visual state and disconnects command signals."""
         for item in self.scene.items():
             if isinstance(item, NodeItem):
                 item.reset_visual_state()
                 try:
                     item.command.disconnect(self.controller.command)
                 except TypeError:
-                    pass  # sinal já desconectado ou nunca conectado
+                    pass  # signal already disconnected or never connected
             elif isinstance(item, ConnectionItem):
                 item.reset_visual_state()

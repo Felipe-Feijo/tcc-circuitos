@@ -1,8 +1,8 @@
-"""Nó de junção: ponto de derivação criado ao ligar uma conexão no meio de
-outra já existente. Quase invisível -- não desenha corpo próprio, só
-hospeda o anchor "J" onde 3+ conexões se encontram. A bolinha em si é
-desenhada pelo próprio AnchorItem (ver AnchorItem.refresh_junction_dot),
-não por este nó."""
+"""Junction node: a branch point created by attaching a connection to
+the middle of an already-existing one. Nearly invisible -- draws no
+body of its own, just hosts the "J" anchor where 3+ connections meet.
+The dot itself is drawn by AnchorItem (see
+AnchorItem.refresh_junction_dot), not by this node."""
 
 from PyQt6.QtCore import QPointF, QRectF
 
@@ -17,10 +17,10 @@ class JunctionNodeItem(NodeItem):
     node_type = "junction"
     simulation_cls = Junction
 
-    # Raio da área de clique/arrasto ao redor do anchor "J" -- sem corpo
-    # visível próprio, mas precisa de geometria não-nula pro Qt aceitar
-    # seleção/drag (ItemIsMovable já vem True de NodeItem.__init__, mas
-    # não tem efeito nenhum sem hit test).
+    # Radius of the click/drag area around the "J" anchor -- with no
+    # visible body of its own, it still needs non-null geometry for Qt
+    # to accept selection/drag (ItemIsMovable already comes True from
+    # NodeItem.__init__, but has no effect at all without a hit test).
     _HIT_RADIUS = 10
 
     def setup(self) -> None:
@@ -38,10 +38,10 @@ class JunctionNodeItem(NodeItem):
         ))
 
     def boundingRect(self) -> QRectF:
-        """Centrado na origem local (onde o anchor "J" está), não no
-        canto como NodeItem.boundingRect() (QRectF(0,0,width,height))
-        faria -- assim node.pos() continua sendo exatamente a posição do
-        anchor, sem exigir nenhuma mudança em split_connection_at's
+        """Centered on the local origin (where the "J" anchor sits), not
+        on the corner like NodeItem.boundingRect() (QRectF(0,0,width,height))
+        would do -- this way node.pos() stays exactly at the anchor's
+        position, requiring no change to split_connection_at's
         setPos(point)."""
         r = self._HIT_RADIUS
         return QRectF(-r, -r, 2 * r, 2 * r)

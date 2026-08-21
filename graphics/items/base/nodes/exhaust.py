@@ -1,4 +1,4 @@
-"""Nó gráfico de escape pneumático (saída de pressão para a atmosfera)."""
+"""Graphics node for the pneumatic exhaust (pressure outlet to atmosphere)."""
 
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import QPointF

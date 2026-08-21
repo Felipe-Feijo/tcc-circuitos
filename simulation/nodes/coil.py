@@ -1,4 +1,4 @@
-"""Nó de simulação de bobina elétrica."""
+"""Simulation node for the electrical coil."""
 
 from simulation.nodes.nodes import Node
 
@@ -6,24 +6,24 @@ class Coil(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "coil", domain=domain, properties=properties)
 
-        # Estado interno: 0 = desligado, 1 = energizado
+        # Internal state: 0 = off, 1 = energized
         self.energized = 0
 
-        # Sensor salvo em properties
+        # Sensor stored in properties
         self.sensor = self.properties.get("sensor", {}).get("coil", {})
 
-        # Dicionário de outputs
+        # Outputs dict
         self.outputs = {}
 
     def update(self, outputs=None):
         """
-        Atualiza estado interno com base na lógica AND das anchors T e B
+        Updates internal state based on the AND logic of anchors T and B
         """
         self.energized = 1 if (self.anchors["T"].state and self.anchors["B"].state) else 0
 
     def post_step_update(self, dt):
         """
-        Atualiza o sinal de saída do solenoide
+        Updates the solenoid's output signal
         """
         if self.sensor.get("name"):
             name = self.sensor["name"]

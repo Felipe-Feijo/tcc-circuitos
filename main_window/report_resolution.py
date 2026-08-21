@@ -1,4 +1,4 @@
-"""Resolve o destino final do relatório de simulação: mantém, move ou descarta."""
+"""Resolves the final destination of the simulation report: keep, move or discard."""
 
 import shutil
 from datetime import datetime
@@ -8,18 +8,18 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 
 def resolve_report(parent, report_dir: str, circuit_name: str) -> None:
-    """Decide o destino de um relatório já montado num diretório temporário.
+    """Decides the fate of a report already assembled in a temporary directory.
 
-    Pergunta ao usuário via popup se deseja manter o relatório. Se a
-    resposta for manter, abre um diálogo para escolher a pasta de destino
-    e move os arquivos para lá. Em qualquer outro caso (usuário recusa o
-    popup, ou cancela o diálogo de pasta), apaga o diretório temporário.
+    Asks the user via a popup whether to keep the report. If the answer
+    is to keep it, opens a dialog to choose the destination folder and
+    moves the files there. In any other case (user declines the popup,
+    or cancels the folder dialog), deletes the temporary directory.
 
     Args:
-        parent: Widget pai para os diálogos Qt (pode ser None em testes).
-        report_dir: Diretório temporário com relatorio.html, graficos.pdf
-            e, se gerado, video.mp4.
-        circuit_name: Usado para sugerir o nome da pasta de destino.
+        parent: Parent widget for the Qt dialogs (can be None in tests).
+        report_dir: Temporary directory with relatorio.html, graficos.pdf
+            and, if generated, video.mp4.
+        circuit_name: Used to suggest the destination folder name.
     """
     answer = QMessageBox.question(
         parent,

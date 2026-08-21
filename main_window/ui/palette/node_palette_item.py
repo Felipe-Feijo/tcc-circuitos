@@ -1,4 +1,4 @@
-"""Item individual da paleta: ícone e nome do componente, arrastável para a cena."""
+"""Individual palette item: component icon and name, draggable onto the scene."""
 
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt

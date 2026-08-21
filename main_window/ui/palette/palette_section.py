@@ -1,4 +1,4 @@
-"""Seção agrupadora da paleta (ex: "Pneumático", "Elétrico")."""
+"""Palette grouping section (e.g. "Pneumatic", "Electric")."""
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
 from PyQt6.QtCore import Qt
@@ -19,7 +19,7 @@ class PaletteSection(QWidget):
         self.main_layout.setSpacing(20)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Header clicável
+        # Clickable header
         self.header = QLabel(f"▾ {title}")
         self.header.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header.setStyleSheet("font-weight: bold;")

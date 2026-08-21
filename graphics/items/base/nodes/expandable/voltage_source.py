@@ -1,11 +1,18 @@
-"""Graphics node for the electrical voltage source."""
+"""Graphics node for the electrical voltage source symbol."""
 
-from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
-from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPixmap
+
+from graphics.anchors.anchor import AnchorItem
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
+from graphics.items.base.nodes.paired_terminal_item import PairedTerminalItem
 from simulation.nodes.voltage_source import VoltageSource as VoltageSourceNode
 
-class VoltageSource(ExpandableItem):
+_SPRITE = "resources/nodes/voltage_source/voltage_source_terminal.png"
+
+
+class VoltageSource(PairedTerminalItem):
     node_type = "voltage_source"
     simulation_cls = VoltageSourceNode
 
@@ -13,46 +20,19 @@ class VoltageSource(ExpandableItem):
     def palette_meta(cls):
         return PaletteMeta(
             domains=("electric",),
-            sprite="resources/nodes/voltage_source/voltage_source_terminal.png",
+            sprite=_SPRITE,
             name="Voltage Source",
         )
-    TERMINAL_VISUALS = {
-        "left":  "resources/nodes/voltage_source/voltage_source_terminal.png",
-    }
-    DEFAULT_ANCHORS = ["X1"]
-    ANCHOR_DIRECTIONS = {
-        "single": {
-            "external": ["left", "bottom", "top"],
-        },
-        "first": {
-            "external": ["bottom", "top"], 
-            "internal": ["right"]
-        },
-        "middle": {
-            "external": ["top", "bottom"], 
-            "internal": ["left", "right"]
-        },
-        "last": {
-            "external": ["right", "top", "bottom"], 
-            "internal": ["left"]
-        }
-    }
-    def paint_symbol(self, painter):
-        if not self.pixmap_left:
-            return
 
-        self.draw_pixmap(painter, QPointF(0, 0), self.pixmap_left)
+    def initialize_own_anchor(self) -> None:
+        self.pixmap = QPixmap(_SPRITE)
+        self.width = self.pixmap.width()
+        self.height = self.pixmap.height()
+        self.add_anchor(AnchorItem(
+            "X1", QPointF(self.width, self.height * 0.69),
+            node=self, domain=self.domain,
+            exit_directions={"external": ["left", "bottom", "top"]},
+        ))
 
-    def layout_anchors(self):
-        x0 = self.pix_w
-        y0 = self.pix_h * 69/100
-
-        for i, anchor in enumerate(self.anchor_list):
-            br = anchor.boundingRect()
-            cx = x0 + i * self.spacing
-            cy = y0
-
-            anchor.setPos(
-                cx - br.center().x(),
-                cy - br.center().y()
-            )
+    def create_far_end(self):
+        return JunctionNodeItem(domain=self.domain)

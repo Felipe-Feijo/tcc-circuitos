@@ -512,11 +512,6 @@ class NodeItem(DiagramItemBase):
                 scene.setItemIndexMethod(current_index)
                 scene.update()
 
-        if hasattr(self, "internal_connections"):
-            for conn in self.internal_connections[:]:
-                if conn.source_anchor == anchor or conn.target_anchor == anchor:
-                    self.internal_connections.remove(conn)
-
         QTimer.singleShot(0, _do_remove)
 
     def add_label(self, key: str, label: LabelItem, special: bool = False) -> None:

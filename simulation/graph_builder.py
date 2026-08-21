@@ -51,13 +51,7 @@ class GraphBuilder:
             self._errors.append(str(e))
             return None
 
-        anchor_items = (
-            node_item.anchor_list
-            if hasattr(node_item, "anchor_list")
-            else node_item.anchors.values()
-        )
-
-        for anchor_item in anchor_items:
+        for anchor_item in node_item.anchors.values():
             node.add_anchor(name=anchor_item.name, domain=anchor_item.domain)
 
         self.nodes[node.id] = node

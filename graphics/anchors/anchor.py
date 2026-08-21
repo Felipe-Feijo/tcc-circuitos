@@ -42,6 +42,12 @@ class AnchorItem(QGraphicsEllipseItem):
         self.setPos(pos)
         self._active = False
 
+        # Escape hatch from the generic "dot only at 3+ connections" rule
+        # (see refresh_junction_dot) -- for an anchor that must read as a
+        # terminal even with a single connection, e.g. Ground/VoltageSource's
+        # far end (a bare JunctionNodeItem with no sprite of its own).
+        self.always_visible = False
+
         if domain == "hydraulic":
             self.pressure: float = 0.0
             self.flow: float = 0.0
@@ -130,7 +136,7 @@ class AnchorItem(QGraphicsEllipseItem):
         conductor electric node. Called whenever a connection is
         created/removed on this anchor (GraphicsView.create_connection,
         GraphicsView.split_connection_at, ConnectionItem.prepare_delete)."""
-        if self.connection_count() >= 3:
+        if self.always_visible or self.connection_count() >= 3:
             self.setBrush(Qt.GlobalColor.lightGray)
             self.setPen(QPen(Qt.GlobalColor.white, 1))
         else:

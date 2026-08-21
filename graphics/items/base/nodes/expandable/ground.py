@@ -35,4 +35,8 @@ class Ground(PairedTerminalItem):
         ))
 
     def create_far_end(self):
-        return JunctionNodeItem(domain=self.domain)
+        # No sprite of its own -- force the junction dot on even at 1
+        # connection, or the rail would visually end at nothing.
+        junction = JunctionNodeItem(domain=self.domain)
+        junction.anchors["J"].always_visible = True
+        return junction

@@ -115,7 +115,8 @@ class NodeItem(DiagramItemBase):
 
     # ── Infrastructure init (do not override) ────────────────────────────────
     def __init__(self, *args, domain: str | None = None,
-                 sensor_registry: SensorRegistry | None = None, **kwargs):
+                 sensor_registry: SensorRegistry | None = None,
+                 _loading: bool = False, **kwargs):
         DiagramItemBase.__init__(self)
 
         # Identity & topology
@@ -145,6 +146,10 @@ class NodeItem(DiagramItemBase):
 
         # Flags
         self.is_preview: bool = False
+        # True only when reconstructed via from_dict (file load, undo/redo
+        # restore, clipboard paste) -- PairedTerminalItem uses this to skip
+        # spawning its paired far end on those paths.
+        self._loading: bool = _loading
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -335,7 +340,7 @@ class NodeItem(DiagramItemBase):
     def from_dict(cls, data: dict, *, keep_id: bool = True,
                   sensor_registry: SensorRegistry | None = None) -> "NodeItem":
         node_cls = cls.class_registry[data["type"]]
-        node = node_cls(domain=data["domain"], sensor_registry=sensor_registry)
+        node = node_cls(domain=data["domain"], sensor_registry=sensor_registry, _loading=True)
 
         if keep_id:
             node.id = data["id"]

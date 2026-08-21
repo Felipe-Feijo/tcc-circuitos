@@ -1,12 +1,18 @@
-"""Graphics node for the electrical ground reference."""
+"""Graphics node for the electrical ground reference symbol."""
 
-from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
-from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPixmap
+
+from graphics.anchors.anchor import AnchorItem
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
+from graphics.items.base.nodes.paired_terminal_item import PairedTerminalItem
 from simulation.nodes.ground import Ground as GroundNode
 
+_SPRITE = "resources/nodes/ground/ground_terminal.png"
 
-class Ground(ExpandableItem):
+
+class Ground(PairedTerminalItem):
     node_type = "ground"
     simulation_cls = GroundNode
 
@@ -14,45 +20,19 @@ class Ground(ExpandableItem):
     def palette_meta(cls):
         return PaletteMeta(
             domains=("electric",),
-            sprite="resources/nodes/ground/ground_terminal.png",
+            sprite=_SPRITE,
             name="Ground",
         )
-    TERMINAL_VISUALS = {
-        "left":  "resources/nodes/ground/ground_terminal.png",
-    }
-    DEFAULT_ANCHORS = ["X1"]
-    ANCHOR_DIRECTIONS = {
-        "single": {
-            "external": ["left", "right", "top"],
-        },
-        "first": {
-            "external": ["left", "top"], 
-            "internal": ["right"]
-        },
-        "middle": {
-            "external": ["top", "bottom"], 
-            "internal": ["left", "right"]
-        },
-        "last": {
-            "external": ["right", "top", "bottom"], 
-            "internal": ["left"]
-        }
-    }
-    def paint_symbol(self, painter):
-        if not self.pixmap_left:
-            return
-        self.draw_pixmap(painter, QPointF(0, 0), self.pixmap_left)
 
-    def layout_anchors(self):
-        x0 = self.pix_w * 0.5
-        y0 = 0
+    def initialize_own_anchor(self) -> None:
+        self.pixmap = QPixmap(_SPRITE)
+        self.width = self.pixmap.width()
+        self.height = self.pixmap.height()
+        self.add_anchor(AnchorItem(
+            "X1", QPointF(self.width / 2, 0),
+            node=self, domain=self.domain,
+            exit_directions={"external": ["left", "right", "top"]},
+        ))
 
-        for i, anchor in enumerate(self.anchor_list):
-            br = anchor.boundingRect()
-            cx = x0 + i * self.spacing
-            cy = y0
-
-            anchor.setPos(
-                cx - br.center().x(),
-                cy - br.center().y()
-            )
+    def create_far_end(self):
+        return JunctionNodeItem(domain=self.domain)

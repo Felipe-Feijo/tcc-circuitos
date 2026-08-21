@@ -1,4 +1,3 @@
-import pytest
 from circuit_generator.rail import RailPlanner, Tap
 
 
@@ -104,3 +103,22 @@ def test_ground_bus_uses_junction_node_item_for_node_b_not_pressure_line_termina
     # single tap sits exactly at x_min == x_max -> attaches to node_a directly
     assert conn["target"] == {"node": "gnd1", "anchor": "X1"}
     assert any(n["type"] == "JunctionNodeItem" and n["id"] != "gnd1" for n in data["nodes"])
+
+
+def test_zero_taps_positions_node_b_at_x_min_plus_min_spacing():
+    node = _bus_node()
+    node_by_id = {"pl1": node}
+    node_pos = {"pl1": (0.0, 500.0)}
+    data = {"nodes": [node], "connections": []}
+
+    min_spacing = 60.0
+    x_min = 100.0
+    x_max = 400.0
+    planner = RailPlanner(min_spacing=min_spacing)
+    planner.register_bus("pl1", "PressureLineTerminal", y=500.0, x_min=x_min, x_max=x_max)
+    # No taps registered
+    planner.materialize(data, node_by_id, node_pos)
+
+    # node_b should be at x_min + min_spacing, not at x_max
+    node_b = next(n for n in data["nodes"] if n["type"] == "PressureLineTerminal" and n["id"] != "pl1")
+    assert node_b["position"]["x"] == x_min + min_spacing

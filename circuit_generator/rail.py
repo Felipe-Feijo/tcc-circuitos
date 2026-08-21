@@ -57,14 +57,17 @@ class RailPlanner:
         node_pos[bus_id] = (bus.x_min, bus.y)
         domain = node_a["domain"]
 
+        # When bus has zero taps, node_b is at x_min + min_spacing; otherwise at x_max
+        node_b_x = bus.x_min + self.min_spacing if not bus.taps else bus.x_max
+
         node_b_id = f"{bus_id}-b-{uuid.uuid4().hex[:8]}"
         node_b = {
             "id": node_b_id, "type": bus.node_b_type, "domain": domain,
-            "position": {"x": bus.x_max, "y": bus.y},
+            "position": {"x": node_b_x, "y": bus.y},
             "properties": {},
         }
         node_by_id[node_b_id] = node_b
-        node_pos[node_b_id] = (bus.x_max, bus.y)
+        node_pos[node_b_id] = (node_b_x, bus.y)
         data["nodes"].append(node_b)
         node_b_anchor = "X1" if bus.node_b_type == "PressureLineTerminal" else "J"
 
@@ -89,7 +92,7 @@ class RailPlanner:
             tap.conn_ref[tap.side]["node"] = target[0]
             tap.conn_ref[tap.side]["anchor"] = target[1]
 
-        chain.append((node_b_id, node_b_anchor, bus.x_max))
+        chain.append((node_b_id, node_b_anchor, node_b_x))
         chain.sort(key=lambda c: c[2])
         seen_ids = set()
         ordered = []

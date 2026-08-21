@@ -141,10 +141,10 @@ def test_request_tap_colliding_same_side_pushes_the_loser():
     # both owners above the bus (owner_y < bus_y=500) -> same side, real collision
     planner.request_tap("pl1", "a", owner_y=0.0, desired_x=300.0, conn_ref=c1, side="source")
     planner.request_tap("pl1", "b", owner_y=0.0, desired_x=300.0, conn_ref=c2, side="source")
-    xs = sorted(t.x for t in planner._buses["pl1"].taps)
-    assert xs[0] == 300.0
-    assert xs[1] != 300.0
-    assert abs(xs[1] - xs[0]) >= 60.0
+    by_owner = {t.owner_id: t.x for t in planner._buses["pl1"].taps}
+    assert by_owner["a"] == 300.0  # first-registered ("a") wins the requested slot
+    assert by_owner["b"] != 300.0  # second-registered ("b") gets pushed away
+    assert abs(by_owner["b"] - by_owner["a"]) >= 60.0
 
 
 def test_request_tap_opposite_sides_consistent_order_no_push():
@@ -165,11 +165,13 @@ def test_request_tap_avoid_global_x_pushes_across_different_buses():
     planner.register_bus("pl1", "PressureLineTerminal", y=200.0, x_min=0.0, x_max=1000.0)
     planner.register_bus("pl2", "PressureLineTerminal", y=800.0, x_min=0.0, x_max=1000.0)
     c1, c2 = ({"target": {}}, {"target": {}})
-    # owner above pl1 (y=0 < 200) and owner below pl2 (y=1000 > 800): order INVERTS
-    # relative to the buses' own y order (pl1's y=200 < pl2's y=800) -> real crossing
-    planner.request_tap("pl1", "o1", owner_y=0.0, desired_x=300.0, conn_ref=c1, side="target",
+    # o1 just above pl1 (owner_y=190 < bus_y=200); o2 far above pl2 (owner_y=10 < bus_y=800).
+    # Both owners are "above" their own bus, but o2 (owner_y=10) is PHYSICALLY ABOVE o1
+    # (owner_y=190) while o2's bus (pl2, y=800) is BELOW pl1's bus (y=200) -- the relative
+    # order inverts, a real crossing if both land in the same x column.
+    planner.request_tap("pl1", "o1", owner_y=190.0, desired_x=300.0, conn_ref=c1, side="target",
                          avoid_global_x=True)
-    planner.request_tap("pl2", "o2", owner_y=1000.0, desired_x=300.0, conn_ref=c2, side="target",
+    planner.request_tap("pl2", "o2", owner_y=10.0, desired_x=300.0, conn_ref=c2, side="target",
                          avoid_global_x=True)
     x1 = planner._buses["pl1"].taps[0].x
     x2 = planner._buses["pl2"].taps[0].x

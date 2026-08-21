@@ -1,64 +1,65 @@
-"""Graphics node for the expandable pneumatic pressure line."""
+"""Graphics nodes for the pneumatic pressure line: two terminal-sprite
+endpoints joined by an ordinary connection (the "rail"). Extra taps are
+junctions on that connection, not more anchors -- see
+docs/superpowers/specs/2026-08-21-expandable-items-junction-redesign-design.md.
 
-from graphics.items.base.nodes.expandable.expandable_item import ExpandableItem
-from graphics.items.base.nodes.node_descriptor import PaletteMeta
+Both endpoints use Junction as their simulation_cls: a dedicated
+PressureLine domain node would be pure pass-through, identical to
+Junction, so it isn't reintroduced.
+"""
+
 from PyQt6.QtCore import QPointF
-from simulation.nodes.pressure_line import PressureLine as PressureLineNode
+from PyQt6.QtGui import QPixmap
+
+from graphics.anchors.anchor import AnchorItem
+from graphics.items.base.nodes.node_descriptor import PaletteMeta
+from graphics.items.base.nodes.node_item import NodeItem
+from graphics.items.base.nodes.paired_terminal_item import PairedTerminalItem
+from simulation.nodes.nodes import Junction
+
+_SPRITE = "resources/nodes/pressure_line/pressure_line_terminal.png"
 
 
-class PressureLine(ExpandableItem):
+class PressureLineTerminal(NodeItem):
+    """The right-hand end of a PressureLine. Plain NodeItem on purpose
+    (not PairedTerminalItem) -- it must NOT spawn a pair of its own.
+    Never placed from the palette directly; PressureLine.create_far_end()
+    is the only place that instantiates it."""
+    node_type = "pressure_line_terminal"
+    simulation_cls = Junction
+
+    def setup(self) -> None:
+        self.pixmap = QPixmap(_SPRITE)
+        self.width = self.pixmap.width()
+        self.height = self.pixmap.height()
+        self.add_anchor(AnchorItem(
+            "X1", QPointF(self.width / 2, self.height),
+            node=self, domain=self.domain,
+            exit_directions={"external": ["right", "bottom"]},
+        ))
+
+
+class PressureLine(PairedTerminalItem):
     node_type = "pressure_line"
-    simulation_cls = PressureLineNode
+    simulation_cls = Junction
 
     @classmethod
     def palette_meta(cls):
         return PaletteMeta(
             domains=("pneumatic",),
-            sprite="resources/nodes/pressure_line/pressure_line_terminal.png",
+            sprite=_SPRITE,
             name="Pressure Line",
         )
-    TERMINAL_VISUALS = {
-        "left":  "resources/nodes/pressure_line/pressure_line_terminal.png",
-        "right": "resources/nodes/pressure_line/pressure_line_terminal.png"
-    }
-    DEFAULT_ANCHORS = ["X1", "X2"]
-    ANCHOR_DIRECTIONS = {
-        "first": {
-            "external": ["left", "bottom"], 
-            "internal": ["right"]
-        },
-        "middle": {
-            "external": ["top", "bottom"], 
-            "internal": ["left", "right"]
-        },
-        "last": {
-            "external": ["right", "bottom"], 
-            "internal": ["left"]
-        }
-    }
-    def paint_symbol(self, painter):
-        if not self.pixmap_left:
-            return
 
-        self.draw_pixmap(painter, QPointF(0, 0), self.pixmap_left)
+    def initialize_own_anchor(self) -> None:
+        self.pixmap = QPixmap(_SPRITE)
+        self.width = self.pixmap.width()
+        self.height = self.pixmap.height()
+        self.add_anchor(AnchorItem(
+            "X1", QPointF(self.width / 2, self.height),
+            node=self, domain=self.domain,
+            exit_directions={"external": ["left", "bottom"]},
+        ))
 
-        if self.pixmap_right:
-            n = len(self.anchor_list)
-            last_anchor_center = self.pix_w * 0.5 + (n - 1) * self.spacing
-            pixmap_right_x = last_anchor_center - self.pix_w * 0.5
-
-            self.draw_pixmap(painter, QPointF(int(pixmap_right_x), 0), self.pixmap_right)
-
-    def layout_anchors(self):
-        x0 = self.pix_w * 0.5
-        y0 = self.pix_h
-
-        for i, anchor in enumerate(self.anchor_list):
-            br = anchor.boundingRect()
-            cx = x0 + i * self.spacing
-            cy = y0
-
-            anchor.setPos(
-                cx - br.center().x(),
-                cy - br.center().y()
-            )
+    def create_far_end(self):
+        return PressureLineTerminal(domain=self.domain)

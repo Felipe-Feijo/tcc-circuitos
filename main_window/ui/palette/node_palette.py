@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QPushButton, QButtonGroup
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from main_window.ui.palette.node_palette_item import NodePaletteItem
 from main_window.ui.palette.palette_section import PaletteSection
 from main_window import settings
@@ -64,6 +64,7 @@ class NodePalette(QWidget):
 
         self.selected_item: NodePaletteItem | None = None
         self.use_light_theme = False
+        self._columns_recompute_pending = False
 
         self.current_tier = settings.get_palette_tier(self._settings_obj)
         if self.current_tier not in self.SIZE_TIERS:
@@ -122,6 +123,17 @@ class NodePalette(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # Deferred: at this point self.scroll's own child layout (which
+        # resizes its viewport) has not necessarily run yet, so
+        # viewport().width() can still report a stale value from before
+        # this resize (e.g. right after the dock goes from hidden to
+        # visible). Scheduling on the event queue lets that settle first.
+        if not self._columns_recompute_pending:
+            self._columns_recompute_pending = True
+            QTimer.singleShot(0, self._recompute_columns_deferred)
+
+    def _recompute_columns_deferred(self):
+        self._columns_recompute_pending = False
         self._recompute_columns()
 
     def _recompute_columns(self):

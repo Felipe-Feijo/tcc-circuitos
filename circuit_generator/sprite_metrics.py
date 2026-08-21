@@ -6,7 +6,7 @@ derived from the graphics code.
 
 Everything here is read automatically:
   - Sprite dimensions -> PIL (reads the PNGs under resources/)
-  - PL spacing        -> parsed from expandable_item.py (self.spacing = <N>)
+  - PL spacing        -> hardcoded constant (60 pixels, from ExpandableItem)
   - Anchor ratios     -> hardcoded as fractions (e.g. 254/300), but computed
                          against the sprite's real width, so changing the
                          PNG updates the value automatically.
@@ -39,19 +39,16 @@ def _sprite_size(relative_path: str) -> tuple[int, int]:
         return img.width, img.height
 
 
-# -- Reading the spacing from expandable_item.py --------------------------------
+# -- PressureLine spacing constant -----------------------------------------------
+# Previously read dynamically from expandable_item.py, now hardcoded after
+# ExpandableItem was replaced by PairedTerminalItem (Task 6).
 
 def _read_expandable_spacing() -> int:
     """
-    Parses 'self.spacing = <N>' from expandable_item.py.
-    Raises ValueError if not found.
+    Returns the PressureLine spacing constant (60 pixels).
+    Hardcoded after ExpandableItem was replaced by PairedTerminalItem.
     """
-    src = _ROOT / "graphics/items/base/nodes/expandable/expandable_item.py"
-    text = src.read_text(encoding="utf-8")
-    m = re.search(r"self\.spacing\s*=\s*(\d+)", text)
-    if not m:
-        raise ValueError(f"Could not read 'self.spacing' in {src}")
-    return int(m.group(1))
+    return 60
 
 
 def _read_body_state1_offset_x(src_path: str) -> float:
@@ -74,7 +71,7 @@ class SpriteMetrics:
     # PressureLine
     pl_pix_w:   int    # terminal sprite width
     pl_pix_h:   int    # terminal sprite height
-    pl_spacing: int    # spacing between anchors (expandable_item.py)
+    pl_spacing: int    # spacing between anchors (60 pixels)
 
     # DoubleActingCylinder
     cyl_width:  int

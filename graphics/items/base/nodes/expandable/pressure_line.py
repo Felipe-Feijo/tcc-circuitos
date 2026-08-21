@@ -35,7 +35,7 @@ class PressureLineTerminal(NodeItem):
         self.add_anchor(AnchorItem(
             "X1", QPointF(self.width / 2, self.height),
             node=self, domain=self.domain,
-            exit_directions={"external": ["right", "bottom"]},
+            exit_directions={"external": ["right", "bottom", "left"]},
         ))
 
 
@@ -58,7 +58,7 @@ class PressureLine(PairedTerminalItem):
         self.add_anchor(AnchorItem(
             "X1", QPointF(self.width / 2, self.height),
             node=self, domain=self.domain,
-            exit_directions={"external": ["left", "bottom"]},
+            exit_directions={"external": ["left", "bottom", "right"]},
         ))
 
     def create_far_end(self):

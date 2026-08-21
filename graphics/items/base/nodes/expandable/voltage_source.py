@@ -31,7 +31,7 @@ class VoltageSource(PairedTerminalItem):
         self.add_anchor(AnchorItem(
             "X1", QPointF(self.width, self.height * 0.69),
             node=self, domain=self.domain,
-            exit_directions={"external": ["left", "bottom", "top"]},
+            exit_directions={"external": ["left", "bottom", "top", "right"]},
         ))
 
     def create_far_end(self):

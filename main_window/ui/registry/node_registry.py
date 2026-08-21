@@ -111,9 +111,14 @@ def register_nodes(palette, on_add_node) -> None:
         for cls, meta in entries:
             display_name = meta.name or cls.__name__
             # capturing variables via default arguments avoids the classic late-binding trap
-            section.add_node(
+            callback = lambda c=cls, d=section_key.lower(): on_add_node(NodeDescriptor(c, domain=d))
+            item = section.add_node(
                 name=display_name,
                 icon_path=meta.sprite,
-                callback=lambda c=cls, d=section_key.lower():
-                    on_add_node(NodeDescriptor(c, domain=d)),
+                callback=callback,
             )
+            # route the click through NodePalette.select_item() too, so the
+            # clicked item gets the blue "selected" outline while its node
+            # is pending placement (ADD mode) -- add_node() alone only
+            # wires the callback.
+            palette.register_item(item, callback)

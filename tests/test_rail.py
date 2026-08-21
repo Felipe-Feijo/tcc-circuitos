@@ -122,3 +122,55 @@ def test_zero_taps_positions_node_b_at_x_min_plus_min_spacing():
     # node_b should be at x_min + min_spacing, not at x_max
     node_b = next(n for n in data["nodes"] if n["type"] == "PressureLineTerminal" and n["id"] != "pl1")
     assert node_b["position"]["x"] == x_min + min_spacing
+
+
+def test_request_tap_two_taps_far_apart_keep_their_desired_x():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("pl1", "PressureLineTerminal", y=500.0, x_min=0.0, x_max=1000.0)
+    c1, c2 = ({"source": {}}, {"source": {}})
+    planner.request_tap("pl1", "a", owner_y=0.0, desired_x=100.0, conn_ref=c1, side="source")
+    planner.request_tap("pl1", "b", owner_y=0.0, desired_x=800.0, conn_ref=c2, side="source")
+    xs = sorted(t.x for t in planner._buses["pl1"].taps)
+    assert xs == [100.0, 800.0]
+
+
+def test_request_tap_colliding_same_side_pushes_the_loser():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("pl1", "PressureLineTerminal", y=500.0, x_min=0.0, x_max=1000.0)
+    c1, c2 = ({"source": {}}, {"source": {}})
+    # both owners above the bus (owner_y < bus_y=500) -> same side, real collision
+    planner.request_tap("pl1", "a", owner_y=0.0, desired_x=300.0, conn_ref=c1, side="source")
+    planner.request_tap("pl1", "b", owner_y=0.0, desired_x=300.0, conn_ref=c2, side="source")
+    xs = sorted(t.x for t in planner._buses["pl1"].taps)
+    assert xs[0] == 300.0
+    assert xs[1] != 300.0
+    assert abs(xs[1] - xs[0]) >= 60.0
+
+
+def test_request_tap_opposite_sides_consistent_order_no_push():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("pl1", "PressureLineTerminal", y=500.0, x_min=0.0, x_max=1000.0)
+    c1, c2 = ({"source": {}}, {"source": {}})
+    # owner "above" (y=0 < bus_y=500) registers first at x=300
+    planner.request_tap("pl1", "above", owner_y=0.0, desired_x=300.0, conn_ref=c1, side="source")
+    # owner "below" (y=900 > bus_y=500), same x -> opposite sides, no real crossing
+    planner.request_tap("pl1", "below", owner_y=900.0, desired_x=300.0, conn_ref=c2, side="source")
+    xs = {t.owner_id: t.x for t in planner._buses["pl1"].taps}
+    assert xs["above"] == 300.0
+    assert xs["below"] == 300.0
+
+
+def test_request_tap_avoid_global_x_pushes_across_different_buses():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("pl1", "PressureLineTerminal", y=200.0, x_min=0.0, x_max=1000.0)
+    planner.register_bus("pl2", "PressureLineTerminal", y=800.0, x_min=0.0, x_max=1000.0)
+    c1, c2 = ({"target": {}}, {"target": {}})
+    # owner above pl1 (y=0 < 200) and owner below pl2 (y=1000 > 800): order INVERTS
+    # relative to the buses' own y order (pl1's y=200 < pl2's y=800) -> real crossing
+    planner.request_tap("pl1", "o1", owner_y=0.0, desired_x=300.0, conn_ref=c1, side="target",
+                         avoid_global_x=True)
+    planner.request_tap("pl2", "o2", owner_y=1000.0, desired_x=300.0, conn_ref=c2, side="target",
+                         avoid_global_x=True)
+    x1 = planner._buses["pl1"].taps[0].x
+    x2 = planner._buses["pl2"].taps[0].x
+    assert x1 != x2

@@ -28,16 +28,17 @@ def _obstacle_rect(node_by_id, node_id):
 
 
 def _anchor_xy(node_by_id, node_id, anchor_name):
-    """Posição real (x, y) de um anchor, pra checagem geométrica -- trata
-    anchors "Xi" de PressureLine à parte porque layout_anchors() (ver
-    step_by_step_layout._pl_anchor_x) posiciona pelo índice na lista, não
-    pelo número no nome."""
-    from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+    """Posição real (x, y) de um anchor, pra checagem geométrica. Since
+    the RailPlanner migration (rail.py), a former PressureLine anchor
+    "Xi" resolves to a REAL node -- the bus's own "PressureLine" node
+    (anchor "X1"), a "PressureLineTerminal" far-end node (anchor "X1"),
+    or an interior "JunctionNodeItem" tap (anchor "J") -- each with its
+    own sprite_metrics.py anchor_local entry, so the generic
+    anchor_local_for_routing lookup below covers all of them; no more
+    special-casing needed."""
+    from circuit_generator.sprite_metrics import anchor_local_for_routing
     n = node_by_id[node_id]
     pos = n["position"]
-    if n["type"] == "PressureLine" and anchor_name.startswith("X"):
-        idx = int(anchor_name[1:])
-        return (pos["x"] + _pl_anchor_x_offset(idx, n["properties"]["anchors"]), pos["y"] + _M.pl_pix_h)
     local = anchor_local_for_routing(n["type"], anchor_name)
     return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
@@ -301,18 +302,20 @@ class TestRouting:
     def test_pl_anchor_connections_get_waypoints_too(self):
         """PL-touching connections need explicit `waypoints` UNLESS the
         connection is already near-straight (dx below astar_router's
-        `< 3px` "no routing needed" shortcut) -- proximity-based anchor
-        assignment (see step_by_step_layout._nearest_pl_anchor) can pick an
-        anchor whose x lands within a pixel or two of the target's x, in
-        which case a straight vertical line *is* the correct route and the
-        router legitimately returns None instead of a waypoints list.
-        Connections whose endpoints are NOT nearly aligned in x must still
-        be routed -- if the router silently stopped routing those, this
-        assertion should catch it."""
+        `< 3px` "no routing needed" shortcut) -- RailPlanner.request_tap
+        (circuit_generator/rail.py) can place a tap within a pixel or two
+        of the target's x, in which case a straight vertical line *is*
+        the correct route and the router legitimately returns None
+        instead of a waypoints list. Connections whose endpoints are NOT
+        nearly aligned in x must still be routed -- if the router
+        silently stopped routing those, this assertion should catch it.
+        A connection now counts as "PL-touching" if either endpoint's
+        anchor is "J" (JunctionNodeItem tap) or "X1" (bus/far-end node)
+        -- the discrete "Xi" anchor names are gone post-materialize."""
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
         pl_conns = [c for c in result["connections"]
-                    if c["source"]["anchor"].startswith("X") or c["target"]["anchor"].startswith("X")]
+                    if c["source"]["anchor"] in ("J", "X1") or c["target"]["anchor"] in ("J", "X1")]
         assert len(pl_conns) > 0
 
         from circuit_generator.sprite_metrics import anchor_local_for_routing
@@ -320,19 +323,22 @@ class TestRouting:
         nodes_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
+        _PL_BUS_TYPES = ("PressureLine", "PressureLineTerminal", "JunctionNodeItem")
+
         def _pl_anchor_xy_raw(node_id: str, anchor: str) -> tuple[float, float]:
-            # Como _anchor_xy (módulo), mas SEM o offset pl_pix_h em y --
-            # este teste só compara dx/dy contra STRAIGHT_THRESHOLD_PX pra
-            # decidir se a conexão precisa de roteamento, não a posição
-            # exata renderizada.
+            # Como _anchor_xy (módulo), mas SEM o offset pl_pix_h em y pro
+            # lado da PL/bus -- este teste só compara dx/dy contra
+            # STRAIGHT_THRESHOLD_PX pra decidir se a conexão precisa de
+            # roteamento, não a posição exata renderizada.
             node = nodes_by_id[node_id]
             x = node["position"]["x"]
             y = node["position"]["y"]
-            if node["type"] == "PressureLine" and anchor.startswith("X"):
-                idx = int(anchor[1:])
-                return (x + _pl_anchor_x_offset(idx, node["properties"]["anchors"]), y)
             local = anchor_local_for_routing(node_type_map[node_id], anchor)
-            return (x + local[0], y + local[1]) if local else (x, y)
+            if not local:
+                return (x, y)
+            if node_type_map[node_id] in _PL_BUS_TYPES:
+                return (x + local[0], y)
+            return (x + local[0], y + local[1])
 
         STRAIGHT_THRESHOLD_PX = 3  # mirrors astar_router.route_connection's shortcut
 
@@ -397,79 +403,74 @@ class TestLogicRegionColumnSpacing:
 
 
 class TestAnchorAssignmentByProximity:
-    def test_no_two_different_owners_share_the_same_pl_anchor(self):
-        # Verifica que, depois de apply(), nenhum anchor de PL é
-        # referenciado por 2 conexões cujo "outro lado" são componentes
-        # DIFERENTES -- isso indicaria colisão não resolvida.
+    def test_no_two_different_owners_share_the_same_pl_position(self):
+        # Verifica que, depois de apply(), nenhuma posição (x, y) na
+        # MESMA PressureLine original é compartilhada por 2 conexões cujo
+        # "outro lado" são componentes DIFERENTES -- isso indicaria uma
+        # colisão de taps não resolvida ("linha vertical compartilhada").
+        # RailPlanner.materialize() (rail.py) reescreve cada tap Xi
+        # original pro id de um nó REAL -- a própria PressureLine (anchor
+        # "X1"), um PressureLineTerminal (anchor "X1") ou um
+        # JunctionNodeItem intermediário (anchor "J", id prefixado com
+        # "{bus_id}-j-") -- então "pertence a este bus" agora é
+        # identificado por prefixo do id, não mais por
+        # side["node"] == pl_id.
         data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
         result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
         pl_ids = {n["id"] for n in result["nodes"] if n["type"] == "PressureLine"}
+
+        def _bus_owner(nid: str) -> str | None:
+            if nid in pl_ids:
+                return nid
+            for pid in pl_ids:
+                if nid.startswith(f"{pid}-b-") or nid.startswith(f"{pid}-j-"):
+                    return pid
+            return None
+
         seen: dict[tuple, set] = {}
         for c in result["connections"]:
             for side, other in ((c["source"], c["target"]), (c["target"], c["source"])):
-                if side["node"] in pl_ids and side["anchor"].startswith("X"):
-                    key = (side["node"], side["anchor"])
-                    seen.setdefault(key, set()).add(other["node"])
+                bus_id = _bus_owner(side["node"])
+                if bus_id is None or _bus_owner(other["node"]) == bus_id:
+                    continue  # not a bus tap, or an internal bus-chain segment
+                pos = node_by_id[side["node"]]["position"]
+                key = (bus_id, pos["x"], pos["y"])
+                seen.setdefault(key, set()).add(other["node"])
         collisions = {k: v for k, v in seen.items() if len(v) > 1}
-        assert collisions == {}, f"anchors com múltiplos donos: {collisions}"
+        assert collisions == {}, f"posições compartilhadas por donos diferentes: {collisions}"
 
     def test_pilot_connections_are_assigned_the_nearest_anchor(self):
-        # gen-pl-step0 alimenta gen-v42-A.PL -- o anchor escolhido deve
-        # ser o mais próximo (ou empatado) da posição X REAL do anchor PL
-        # de gen-v42-A (posição do nó + offset de anchor_local_for_routing,
-        # não a posição crua do nó -- ver sprite_metrics.py) entre todos
-        # os anchors da linha que ficam à esquerda do alvo (a conexão PL
-        # sempre entra pela esquerda por design, ver _nearest_pl_anchor
-        # side="left").
+        # gen-pl-step0 alimenta gen-v42-A.PL -- RailPlanner.request_tap
+        # (rail.py) deve resolver essa conexão pra um nó REAL (a própria
+        # PressureLine "X1", um PressureLineTerminal "X1" ou um
+        # JunctionNodeItem "J") posicionado na (ou muito perto da)
+        # posição X REAL do anchor PL de gen-v42-A (posição do nó +
+        # offset de anchor_local_for_routing, não a posição crua do nó --
+        # ver sprite_metrics.py) -- sem colisão nesse cenário de um único
+        # cilindro por lado, desired_x == target_x é atendido exatamente
+        # (ver step_by_step_layout.apply(), caso t_anc == "PL").
         from circuit_generator.sprite_metrics import anchor_local_for_routing
 
         data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
         result = layout.apply(data)
-        pl0 = next(n for n in result["nodes"] if n["id"] == "gen-pl-step0")
-        v42a = next(n for n in result["nodes"] if n["id"] == "gen-v42-A")
+        node_by_id = {n["id"]: n for n in result["nodes"]}
+        v42a = node_by_id["gen-v42-A"]
         conn = next(c for c in result["connections"]
-                    if c["source"]["node"] == "gen-pl-step0" and c["target"]["node"] == "gen-v42-A"
-                    and c["target"]["anchor"] == "PL")
-        chosen_idx = int(conn["source"]["anchor"][1:])
-        chosen_x = pl0["position"]["x"] + _pl_anchor_x_offset(chosen_idx, pl0["properties"]["anchors"])
+                    if c["target"]["node"] == "gen-v42-A" and c["target"]["anchor"] == "PL")
+        src_id, src_anchor = conn["source"]["node"], conn["source"]["anchor"]
+        src_node = node_by_id[src_id]
+        assert src_node["type"] in ("PressureLine", "PressureLineTerminal", "JunctionNodeItem")
+        assert (src_anchor == "X1" and src_node["type"] in ("PressureLine", "PressureLineTerminal")) \
+            or (src_anchor == "J" and src_node["type"] == "JunctionNodeItem")
+
+        chosen_x, _ = _anchor_xy(node_by_id, src_id, src_anchor)
         local = anchor_local_for_routing("Valve_4_2_Ways", "PL")
         target_x = v42a["position"]["x"] + (local[0] if local else 0)
-        # nenhum outro anchor à esquerda do alvo pode estar estritamente mais perto
-        for a in pl0["properties"]["anchors"]:
-            idx = int(a[1:])
-            ax = pl0["position"]["x"] + _pl_anchor_x_offset(idx, pl0["properties"]["anchors"])
-            if ax >= target_x:
-                continue
-            assert abs(ax - target_x) >= abs(chosen_x - target_x) - 1e-6
+        assert abs(chosen_x - target_x) < 1e-6
 
 
-def _pl_anchor_x_offset(idx, anchors):
-    # PressureLine.layout_anchors() posiciona pelo índice na lista, não
-    # pelo número do nome -- usa a origem real (menor índice atual) do
-    # array, não a constante 1 (ver mesma ressalva em _pl_anchor_x,
-    # circuit_generator/step_by_step_layout.py).
-    from circuit_generator.sprite_metrics import METRICS as _M
-    list_origin = min(int(a[1:]) for a in anchors)
-    return _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing
-
-
-class TestGlobalPruning:
-    def test_all_pressure_lines_share_the_same_anchor_count(self):
-        data = step_by_step_pneumatic.generate(parse("A+B+A-B-"))
-        result = layout.apply(data)
-        counts = {len(n["properties"]["anchors"]) for n in result["nodes"]
-                  if n["type"] == "PressureLine"}
-        assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"
-
-    def test_no_pl_anchor_connection_references_a_pruned_anchor(self):
-        data = step_by_step_pneumatic.generate(parse("C+(A+B+)C-A-B-"))
-        result = layout.apply(data)
-        pl_by_id = {n["id"]: n for n in result["nodes"] if n["type"] == "PressureLine"}
-        for c in result["connections"]:
-            for side in (c["source"], c["target"]):
-                if side["node"] in pl_by_id and side["anchor"].startswith("X"):
-                    kept = {int(a[1:]) for a in pl_by_id[side["node"]]["properties"]["anchors"]}
-                    assert int(side["anchor"][1:]) in kept
+_PL_BUS_NODE_TYPES = ("PressureLine", "PressureLineTerminal", "JunctionNodeItem")
 
 
 class TestPressureLineReachesEveryTarget:
@@ -489,16 +490,12 @@ class TestPressureLineReachesEveryTarget:
         result = layout.apply(data)
         nodes_by_id = {n["id"]: n for n in result["nodes"]}
 
-        def anchor_x(pl_node, anchor_name):
-            idx = int(anchor_name[1:])
-            return pl_node["position"]["x"] + _pl_anchor_x_offset(idx, pl_node["properties"]["anchors"])
-
         checked = 0
         for c in result["connections"]:
             s, t = c["source"], c["target"]
             src_node = nodes_by_id.get(s["node"])
-            if t["anchor"] == "PR" and src_node is not None and src_node["type"] == "PressureLine":
-                ax = anchor_x(src_node, s["anchor"])
+            if t["anchor"] == "PR" and src_node is not None and src_node["type"] in _PL_BUS_NODE_TYPES:
+                ax, _ = _anchor_xy(nodes_by_id, s["node"], s["anchor"])
                 tx = nodes_by_id[t["node"]]["position"]["x"]
                 assert ax > tx, f"{s} -> {t}: anchor x={ax} não ficou à direita do alvo x={tx}"
                 checked += 1
@@ -525,12 +522,12 @@ class TestValvePilotEntryDoesNotJump:
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
         def anchor_x(node_id, anchor_name):
+            # t["node"] here is always a Valve_4_2_Ways (see the filter
+            # below) -- never a PL bus node, so no PressureLine special
+            # case is needed (unlike _anchor_xy, module-level).
             node = node_by_id[node_id]
             ntype = node_type_map[node_id]
             pos = node["position"]
-            if ntype == "PressureLine" and anchor_name.startswith("X"):
-                idx = int(anchor_name[1:])
-                return pos["x"] + _pl_anchor_x_offset(idx, node["properties"]["anchors"])
             local = _M.anchor_local.get(ntype, {}).get(anchor_name)
             return pos["x"] + local[0] if local else pos["x"]
 
@@ -572,9 +569,7 @@ class TestPilotAnchorRobustToCommutation:
 
         conn = next(c for c in result["connections"]
                     if c["target"]["node"] == "gen-mc-3" and c["target"]["anchor"] == "PR")
-        pl = node_by_id[conn["source"]["node"]]
-        idx = int(conn["source"]["anchor"][1:])
-        anchor_x = pl["position"]["x"] + _pl_anchor_x_offset(idx, pl["properties"]["anchors"])
+        anchor_x, _ = _anchor_xy(node_by_id, conn["source"]["node"], conn["source"]["anchor"])
 
         assert anchor_x > worst_case_x, (
             f"anchor x={anchor_x} não ficou à direita do pior caso "
@@ -602,10 +597,18 @@ class TestComponentToPressureLineDoesNotCrossThrough:
         node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
+        # Every bus tap node (PressureLine/PressureLineTerminal/
+        # JunctionNodeItem) sits at the SAME y as the original bus (see
+        # rail.py's materialize()), so widening this filter from just
+        # "PressureLine" to all 3 bus node types still reads the right
+        # pl_y -- the migration rewrites conn["target"]["node"] away from
+        # the original PL id for most taps (only the leftmost tap keeps
+        # it), so keeping the filter at "PressureLine" alone would starve
+        # this test of connections to check.
         checked = 0
         for c in result["connections"]:
             s, t = c["source"], c["target"]
-            if node_type_map.get(t["node"]) != "PressureLine":
+            if node_type_map.get(t["node"]) not in _PL_BUS_NODE_TYPES:
                 continue
             wps = c.get("waypoints")
             if not wps:
@@ -644,8 +647,13 @@ class TestPressureLineAnchorYAccountsForSpriteHeight:
         # lado é o correto. Reproduzido com parse("A+A-B+B-"):
         # gen-pl-step0.X110 -> gen-mc-3.PR (o reset em anel do último
         # átomo, cuja fonte é a linha do PRIMEIRO átomo).
-        from circuit_generator.sprite_metrics import METRICS as _M
-
+        # _anchor_xy gets the real anchor y for whichever bus node type
+        # the tap resolved to -- PressureLine/PressureLineTerminal still
+        # carry the + pl_pix_h offset this regression is about, but a
+        # JunctionNodeItem tap has no y offset (sprite_metrics.py "J":
+        # (0.0, 0.0)) since it sits right on the bus's own y line, not
+        # pl_pix_h below it -- using the shared helper instead of
+        # hardcoding + _M.pl_pix_h keeps this correct for all 3.
         data = step_by_step_pneumatic.generate(parse("A+A-B+B-"))
         result = layout.apply(data)
         node_by_id = {n["id"]: n for n in result["nodes"]}
@@ -654,13 +662,12 @@ class TestPressureLineAnchorYAccountsForSpriteHeight:
         checked = 0
         for c in result["connections"]:
             s, t = c["source"], c["target"]
-            if node_type_map.get(s["node"]) != "PressureLine":
+            if node_type_map.get(s["node"]) not in _PL_BUS_NODE_TYPES:
                 continue
             wps = c.get("waypoints")
             if not wps:
                 continue
-            pl = node_by_id[s["node"]]
-            real_pl_y = pl["position"]["y"] + _M.pl_pix_h
+            _, real_pl_y = _anchor_xy(node_by_id, s["node"], s["anchor"])
             target_y = node_by_id[t["node"]]["position"]["y"]
             for wp in wps:
                 if target_y > real_pl_y:
@@ -703,11 +710,9 @@ class TestPressureLineToSigPAnchorClearsTheValve:
             s, t = c["source"], c["target"]
             if t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways":
                 continue
-            if node_type_map.get(s["node"]) != "PressureLine":
+            if node_type_map.get(s["node"]) not in _PL_BUS_NODE_TYPES:
                 continue
-            pl = node_by_id[s["node"]]
-            idx = int(s["anchor"][1:])
-            anchor_x = pl["position"]["x"] + _pl_anchor_x_offset(idx, pl["properties"]["anchors"])
+            anchor_x, _ = _anchor_xy(node_by_id, s["node"], s["anchor"])
             valve_left_x = node_by_id[t["node"]]["position"]["x"]
             safe_x = valve_left_x - _M.pilot_w
             assert anchor_x <= safe_x, (
@@ -730,7 +735,7 @@ class TestPressureLineToSigPAnchorClearsTheValve:
         checked = 0
         for c in result["connections"]:
             s, t = c["source"], c["target"]
-            if t["anchor"] != "P" or node_type_map.get(s["node"]) != "PressureLine":
+            if t["anchor"] != "P" or node_type_map.get(s["node"]) not in _PL_BUS_NODE_TYPES:
                 continue
             wps = c.get("waypoints")
             if not wps:

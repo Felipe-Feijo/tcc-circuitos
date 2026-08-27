@@ -598,36 +598,43 @@ class TestComponentToPressureLineDoesNotCrossThrough:
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
 
         # Every bus tap node (PressureLine/PressureLineTerminal/
-        # JunctionNodeItem) sits at the SAME y as the original bus (see
-        # rail.py's materialize()), so widening this filter from just
-        # "PressureLine" to all 3 bus node types still reads the right
-        # pl_y -- the migration rewrites conn["target"]["node"] away from
-        # the original PL id for most taps (only the leftmost tap keeps
-        # it), so keeping the filter at "PressureLine" alone would starve
-        # this test of connections to check.
+        # JunctionNodeItem) resolves to the SAME real anchor y once
+        # rail.py's anchor-space fix (generators-paired-terminal-
+        # migration final review, Important #1/#2) is accounted for --
+        # but each type's own "position" differs from that anchor y by
+        # its own local offset (pl_pix_h for PressureLine/
+        # PressureLineTerminal, 0 for JunctionNodeItem), so pl_y must go
+        # through _anchor_xy, not read position["y"] directly, or a
+        # PressureLine-typed target would be compared 100px off from the
+        # JunctionNodeItem-typed targets on the very same bus.
+        #
+        # Also: with the fix, every one of these bus-touching connections
+        # is now a straight line in anchor space (no detour needed), so
+        # waypoints are typically empty -- this test no longer requires
+        # waypoints to exist; it asserts the alignment invariant directly
+        # and additionally checks any waypoints that DO exist never cross
+        # back over the real anchor line.
         checked = 0
         for c in result["connections"]:
             s, t = c["source"], c["target"]
             if node_type_map.get(t["node"]) not in _PL_BUS_NODE_TYPES:
                 continue
-            wps = c.get("waypoints")
-            if not wps:
-                continue
             src_y = node_by_id[s["node"]]["position"]["y"]
-            pl_y = node_by_id[t["node"]]["position"]["y"]
-            last_y = wps[-1]["y"]
-            if src_y > pl_y:
-                assert last_y >= pl_y, (
-                    f"{s} -> {t}: origem está ABAIXO da PL (src_y={src_y} > "
-                    f"pl_y={pl_y}), mas o último waypoint fica ACIMA dela "
-                    f"(last_y={last_y}) -- o fio atravessa a PL e volta"
-                )
-            elif src_y < pl_y:
-                assert last_y <= pl_y, (
-                    f"{s} -> {t}: origem está ACIMA da PL (src_y={src_y} < "
-                    f"pl_y={pl_y}), mas o último waypoint fica ABAIXO dela "
-                    f"(last_y={last_y}) -- o fio atravessa a PL e volta"
-                )
+            _, pl_y = _anchor_xy(node_by_id, t["node"], t["anchor"])
+            for wp in c.get("waypoints") or []:
+                last_y = wp["y"]
+                if src_y > pl_y:
+                    assert last_y >= pl_y, (
+                        f"{s} -> {t}: origem está ABAIXO da PL (src_y={src_y} > "
+                        f"pl_y={pl_y}), mas o waypoint fica ACIMA dela "
+                        f"(y={last_y}) -- o fio atravessa a PL e volta"
+                    )
+                elif src_y < pl_y:
+                    assert last_y <= pl_y, (
+                        f"{s} -> {t}: origem está ACIMA da PL (src_y={src_y} < "
+                        f"pl_y={pl_y}), mas o waypoint fica ABAIXO dela "
+                        f"(y={last_y}) -- o fio atravessa a PL e volta"
+                    )
             checked += 1
         assert checked > 0  # sanity check -- o cenário precisa exercitar pelo menos 1 conexão pra PL
 

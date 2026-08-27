@@ -304,18 +304,18 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "T": (m.relay_coil_width / 2, 0.0),
             "B": (m.relay_coil_width / 2, float(m.relay_coil_height)),
         },
-        # PairedTerminalItem bus taps (Task 6 rail.py migration). The bus's
-        # own node (type "PressureLine") keeps its "X1" anchor -- its
-        # stored position already bakes in the pl_pix_w/2 x-offset (see
-        # rail.py's x_min/x_max), but PressureLine.layout_anchors() still
-        # draws the anchor pl_pix_h below the node's position, same as the
-        # deleted PL-special-case in layout_engine._scene_xy used to add.
+        # PairedTerminalItem bus taps (Task 6 rail.py migration). These
+        # mirror the REAL graphics classes' anchor offsets exactly (see
+        # PressureLine.initialize_own_anchor() -- QPointF(width/2, height)).
+        # rail.py is responsible for translating between this local offset
+        # and the node's stored (origin) "position" -- it must NOT be
+        # compensated away here (see rail.py's _materialize_bus).
         "PressureLine": {
-            "X1": (0.0, float(m.pl_pix_h)),
+            "X1": (m.pl_pix_w / 2, float(m.pl_pix_h)),
         },
         # The far end of the bus is a real PressureLineTerminal node
         # (rail.py's node_b) -- same anchor offset as the bus's own X1
-        # anchor used for idx==1 in the deleted discrete-anchor code.
+        # anchor (PressureLineTerminal.setup()'s QPointF(width/2, height)).
         "PressureLineTerminal": {
             "X1": (m.pl_pix_w / 2, float(m.pl_pix_h)),
         },
@@ -325,19 +325,16 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "J": (0.0, 0.0),
         },
         # VoltageSource/Ground bus (Task 7 rail.py migration, step_by_step_
-        # electric_layout.py). Same reasoning as PressureLine above: the
-        # node's stored position already bakes in the sprite-width offset
-        # (see rail.py's x_min/x_max, computed from
-        # vsource_pix_w/ground_pix_w*0.5 in the layout file), so only the
-        # graphics anchor's Y fraction survives here -- X is 0.
-        # Reproduces VoltageSource.initialize_own_anchor()'s
+        # electric_layout.py). Reproduces VoltageSource.initialize_own_anchor()'s
         # QPointF(self.width, self.height*0.69) and
-        # Ground.initialize_own_anchor()'s QPointF(self.width/2, 0).
+        # Ground.initialize_own_anchor()'s QPointF(self.width/2, 0) exactly --
+        # rail.py (not this table) is responsible for translating between
+        # this local offset and each node's stored origin position.
         "VoltageSource": {
-            "X1": (0.0, float(m.vsource_pix_h) * 0.69),
+            "X1": (float(m.vsource_pix_w), float(m.vsource_pix_h) * 0.69),
         },
         "Ground": {
-            "X1": (0.0, 0.0),
+            "X1": (float(m.ground_pix_w) / 2, 0.0),
         },
     }
 

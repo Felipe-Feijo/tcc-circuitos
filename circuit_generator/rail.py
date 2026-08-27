@@ -16,6 +16,8 @@ Two resolvers build on top of this module's materialize() step:
 import uuid
 from dataclasses import dataclass, field
 
+from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
+
 
 @dataclass
 class Tap:
@@ -46,6 +48,24 @@ class RailPlanner:
                       x_min: float, x_max: float) -> None:
         self._buses[bus_id] = _Bus(node_b_type=node_b_type, y=y, x_min=x_min, x_max=x_max)
 
+    def register_pressure_line_bus(self, pl_id: str, pl_node: dict,
+                                    pos: tuple[float, float]) -> None:
+        """Sizes and registers a PressureLine bus from its topology-phase
+        properties["anchors"] list and its node_pos entry -- shared by
+        layout_engine.py/step_by_step_layout.py/cascade_layout.py, which
+        previously each duplicated this ~7-line block verbatim (including
+        a dead `(min(idxs) - min(idxs))` term that always evaluates to 0).
+
+        x_min/x_max come out in ANCHOR space (origin_x + pl_pix_w/2, the
+        real scene x of the bus's own "X1" anchor -- see
+        PressureLine.initialize_own_anchor()), same as every caller
+        computed by hand before this helper existed.
+        """
+        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+        x_min = pos[0] + _M.pl_pix_w / 2
+        x_max = pos[0] + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
+        self.register_bus(pl_id, "PressureLineTerminal", y=pos[1], x_min=x_min, x_max=x_max)
+
     def request_tap(self, bus_id: str, owner_id: str, owner_y: float, desired_x: float,
                      conn_ref: dict, side: str, push_dir: int = 0,
                      avoid_global_x: bool = False) -> Tap:
@@ -64,7 +84,11 @@ class RailPlanner:
             return _clamp(x + step * self.min_spacing)
 
         def _bucket(x: float) -> int:
-            return round((x - bus.x_min) / self.min_spacing)
+            # Absolute (not bus-relative) so buckets are directly
+            # comparable across buses via self._global_used, regardless
+            # of whether every bus shares the same x_min (true today, but
+            # not an invariant this planner should silently depend on).
+            return round(x / self.min_spacing)
 
         def _reg(x: float, oid: str, oy: float, cref: dict, side: str,
                  seen: frozenset, pdir: int) -> Tap:
@@ -142,23 +166,39 @@ class RailPlanner:
                           node_by_id: dict, node_pos: dict) -> None:
         node_a = node_by_id[bus_id]
         node_a["properties"].pop("anchors", None)
-        node_a["position"] = {"x": bus.x_min, "y": bus.y}
-        node_pos[bus_id] = (bus.x_min, bus.y)
         domain = node_a["domain"]
+
+        # `bus.y` (as passed to register_bus) is node_a's ORIGIN y -- not
+        # the y the real graphics anchor draws at. node_a's own anchor
+        # ("X1") has a real local (dx, dy) offset from its origin (0 for
+        # Ground, pl_pix_h for PressureLine, etc. -- see sprite_metrics.py).
+        # `anchor_y` is the bus's real connectable line in scene space:
+        # every junction and node_b live there, since that's where real
+        # wires actually meet the bus. `bus.x_min`/`bus.x_max` are ALREADY
+        # anchor-space x (every call site computes them as
+        # origin_x + node_a's own anchor dx), so only node_a's x needs the
+        # dx subtracted back out to recover its origin.
+        a_dx, a_dy = anchor_local_for_routing(node_a["type"], "X1") or (0.0, 0.0)
+        anchor_y = bus.y + a_dy
+        origin_x = bus.x_min - a_dx
+        node_a["position"] = {"x": origin_x, "y": bus.y}
+        node_pos[bus_id] = (origin_x, bus.y)
 
         # When bus has zero taps, node_b is at x_min + min_spacing; otherwise at x_max
         node_b_x = bus.x_min + self.min_spacing if not bus.taps else bus.x_max
 
         node_b_id = f"{bus_id}-b-{uuid.uuid4().hex[:8]}"
+        node_b_anchor = "X1" if bus.node_b_type == "PressureLineTerminal" else "J"
+        b_dx, b_dy = anchor_local_for_routing(bus.node_b_type, node_b_anchor) or (0.0, 0.0)
+        node_b_pos = (node_b_x - b_dx, anchor_y - b_dy)
         node_b = {
             "id": node_b_id, "type": bus.node_b_type, "domain": domain,
-            "position": {"x": node_b_x, "y": bus.y},
+            "position": {"x": node_b_pos[0], "y": node_b_pos[1]},
             "properties": {},
         }
         node_by_id[node_b_id] = node_b
-        node_pos[node_b_id] = (node_b_x, bus.y)
+        node_pos[node_b_id] = node_b_pos
         data["nodes"].append(node_b)
-        node_b_anchor = "X1" if bus.node_b_type == "PressureLineTerminal" else "J"
 
         chain: list[tuple[str, str, float]] = [(bus_id, "X1", bus.x_min)]
         for tap in sorted(bus.taps, key=lambda t: t.x):
@@ -170,11 +210,13 @@ class RailPlanner:
                 j_id = f"{bus_id}-j-{uuid.uuid4().hex[:8]}"
                 j_node = {
                     "id": j_id, "type": "JunctionNodeItem", "domain": domain,
-                    "position": {"x": tap.x, "y": bus.y},
+                    # JunctionNodeItem's own anchor has a (0, 0) local
+                    # offset, so its position IS the anchor's scene point.
+                    "position": {"x": tap.x, "y": anchor_y},
                     "properties": {},
                 }
                 node_by_id[j_id] = j_node
-                node_pos[j_id] = (tap.x, bus.y)
+                node_pos[j_id] = (tap.x, anchor_y)
                 data["nodes"].append(j_node)
                 chain.append((j_id, "J", tap.x))
                 target = (j_id, "J")

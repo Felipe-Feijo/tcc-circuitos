@@ -1,4 +1,5 @@
 from circuit_generator.rail import RailPlanner, Tap
+from circuit_generator.sprite_metrics import METRICS as _M
 
 
 def _bus_node(bus_id="pl1", node_type="PressureLine", domain="pneumatic"):
@@ -24,7 +25,14 @@ def test_materialize_drops_anchors_and_repositions_node_a():
     planner.materialize(data, node_by_id, node_pos)
 
     assert "anchors" not in node["properties"]
-    assert node["position"] == {"x": 100.0, "y": 500.0}
+    # node_a's own anchor ("X1") has a real (pl_pix_w/2, pl_pix_h) local
+    # offset from its origin (see PressureLine.initialize_own_anchor()) --
+    # x_min (100.0) is already anchor-space (origin_x + pl_pix_w/2), so
+    # node_a's stored position must subtract that offset back out to
+    # recover its true origin x. y is untouched: register_bus's `y` is
+    # already node_a's origin y (its own anchor offset only affects where
+    # OTHER bus nodes -- junctions/node_b -- get placed, not node_a itself).
+    assert node["position"] == {"x": 100.0 - _M.pl_pix_w / 2, "y": 500.0}
 
 
 def test_extreme_taps_attach_directly_to_node_a_and_node_b_no_junction():
@@ -74,7 +82,11 @@ def test_interior_tap_gets_a_junction_node_and_the_rail_chains_through_it():
     junctions = [n for n in data["nodes"] if n["type"] == "JunctionNodeItem"]
     assert len(junctions) == 1
     j = junctions[0]
-    assert j["position"] == {"x": 250.0, "y": 500.0}
+    # Junctions sit at the bus's REAL anchor y (origin y + node_a's own
+    # anchor dy, here pl_pix_h) -- not the raw register_bus `y` -- so
+    # every tap materializes on the same line the real graphics anchors
+    # draw at, not the bus node's origin line.
+    assert j["position"] == {"x": 250.0, "y": 500.0 + _M.pl_pix_h}
     assert conn_mid["source"] == {"node": j["id"], "anchor": "J"}
 
     node_b_id = conn_right["source"]["node"]
@@ -119,9 +131,11 @@ def test_zero_taps_positions_node_b_at_x_min_plus_min_spacing():
     # No taps registered
     planner.materialize(data, node_by_id, node_pos)
 
-    # node_b should be at x_min + min_spacing, not at x_max
+    # node_b should be at x_min + min_spacing, not at x_max -- adjusted by
+    # PressureLineTerminal's own (pl_pix_w/2, pl_pix_h) anchor offset,
+    # same reasoning as node_a above.
     node_b = next(n for n in data["nodes"] if n["type"] == "PressureLineTerminal" and n["id"] != "pl1")
-    assert node_b["position"]["x"] == x_min + min_spacing
+    assert node_b["position"]["x"] == x_min + min_spacing - _M.pl_pix_w / 2
 
 
 def test_request_tap_two_taps_far_apart_keep_their_desired_x():

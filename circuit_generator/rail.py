@@ -123,6 +123,17 @@ class RailPlanner:
 
         return _reg(desired_x, owner_id, owner_y, conn_ref, side, frozenset(), push_dir)
 
+    def assign_sorted(self, bus_id: str, requests: list[tuple]) -> None:
+        bus = self._buses[bus_id]
+        ordered = sorted(requests, key=lambda r: r[2])  # by desired_x
+        last_x = None
+        for owner_id, owner_y, desired_x, conn_ref, side in ordered:
+            x = desired_x if last_x is None else max(desired_x, last_x + self.min_spacing)
+            x = max(bus.x_min, min(bus.x_max, x))
+            bus.taps.append(Tap(x=x, owner_id=owner_id, owner_y=owner_y,
+                                 conn_ref=conn_ref, side=side, push_dir=0))
+            last_x = x
+
     def materialize(self, data: dict, node_by_id: dict, node_pos: dict) -> None:
         for bus_id, bus in self._buses.items():
             self._materialize_bus(bus_id, bus, data, node_by_id, node_pos)

@@ -176,3 +176,32 @@ def test_request_tap_avoid_global_x_pushes_across_different_buses():
     x1 = planner._buses["pl1"].taps[0].x
     x2 = planner._buses["pl2"].taps[0].x
     assert x1 != x2
+
+
+def test_assign_sorted_orders_taps_by_desired_x():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("vs1", "JunctionNodeItem", y=100.0, x_min=0.0, x_max=1000.0)
+    c1, c2, c3 = ({"source": {}}, {"source": {}}, {"source": {}})
+    planner.assign_sorted("vs1", [
+        ("c", 0.0, 500.0, c3, "source"),
+        ("a", 0.0, 100.0, c1, "source"),
+        ("b", 0.0, 300.0, c2, "source"),
+    ])
+    xs = sorted(t.x for t in planner._buses["vs1"].taps)
+    assert xs == sorted(xs)
+    by_owner = {t.owner_id: t.x for t in planner._buses["vs1"].taps}
+    assert by_owner["a"] < by_owner["b"] < by_owner["c"]
+
+
+def test_assign_sorted_enforces_minimum_spacing_for_stacked_targets():
+    planner = RailPlanner(min_spacing=60.0)
+    planner.register_bus("vs1", "JunctionNodeItem", y=100.0, x_min=0.0, x_max=1000.0)
+    c1, c2 = ({"source": {}}, {"source": {}})
+    # two targets at the SAME real x (e.g. stacked power contacts) -- each
+    # must still get its own, distinct anchor.
+    planner.assign_sorted("vs1", [
+        ("a", 0.0, 400.0, c1, "source"),
+        ("b", 0.0, 400.0, c2, "source"),
+    ])
+    xs = sorted(t.x for t in planner._buses["vs1"].taps)
+    assert abs(xs[1] - xs[0]) >= 60.0

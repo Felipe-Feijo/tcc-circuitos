@@ -7,6 +7,14 @@ from circuit_generator.sequence_parser import parse
 from circuit_generator.methods import cascade
 from circuit_generator import cascade_layout as layout
 
+# Since the RailPlanner migration (circuit_generator/rail.py), a former
+# PressureLine anchor "Xi" resolves to a REAL node -- the bus's own
+# "PressureLine" node (anchor "X1"), a "PressureLineTerminal" far-end
+# node (anchor "X1"), or an interior "JunctionNodeItem" tap (anchor
+# "J") -- tests that used to filter on type == "PressureLine" alone now
+# need to recognize all 3.
+_PL_BUS_NODE_TYPES = ("PressureLine", "PressureLineTerminal", "JunctionNodeItem")
+
 
 def _node(data, node_id):
     return next(n for n in data["nodes"] if n["id"] == node_id)
@@ -448,7 +456,7 @@ class TestLogicRegionRows:
         for conn in result["connections"]:
             s, t = conn["source"], conn["target"]
             if (t["anchor"] != "P" or node_type_map.get(t["node"]) != "Valve_3_2_Ways"
-                    or node_type_map.get(s["node"]) != "PressureLine"
+                    or node_type_map.get(s["node"]) not in _PL_BUS_NODE_TYPES
                     or t["node"] in closure_sig_ids):
                 continue
             wps = conn.get("waypoints")
@@ -617,7 +625,7 @@ class TestConfirmationStaircase:
 
 
 class TestMemoryToPressureLineStagger:
-    def test_different_memories_never_share_the_same_pl_anchor(self):
+    def test_different_memories_never_share_the_same_pl_position(self):
         # Regressão real (feedback direto testando a UI): mem[i].PL/A/B ->
         # PL sempre mirava no MESMO src_x (o anchor local não depende de
         # qual memória, só do tipo/anchor) -- diferentes memórias
@@ -629,30 +637,50 @@ class TestMemoryToPressureLineStagger:
         # duas memórias diferentes usando o mesmo índice pra tipos DE
         # ORIGEM diferentes (ex: mem[1].B e mem[3].A) não é o problema
         # relatado (são conexões de natureza diferente, não ficam
-        # empilhadas uma sobre a outra); o que precisa ser único é o
-        # anchor entre memórias diferentes que usam o MESMO anchor de
+        # empilhadas uma sobre a outra); o que precisa ser único é a
+        # posição entre memórias diferentes que usam o MESMO anchor de
         # origem (ex: mem[0].B vs mem[1].B vs mem[2].B).
+        #
+        # Since the RailPlanner migration, a former discrete "Xi" anchor
+        # is now a real node's (x, y) -- the bus's own PressureLine node,
+        # a PressureLineTerminal, or a JunctionNodeItem tap -- so "same
+        # anchor" is now identified by that node's real position, not by
+        # a named anchor index.
         seq = "A+B+A-B-A+A-C+C-"
         data = cascade.generate(parse(seq))
         result = layout.apply(data)
+        node_by_id = {n["id"]: n for n in result["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in result["nodes"]}
+        pl_ids = {n["id"] for n in result["nodes"] if n["type"] == "PressureLine"}
 
-        anchors_by_source_anchor: dict[str, list[str]] = {}
+        def _bus_owner(nid: str) -> str | None:
+            if nid in pl_ids:
+                return nid
+            for pid in pl_ids:
+                if nid.startswith(f"{pid}-b-") or nid.startswith(f"{pid}-j-"):
+                    return pid
+            return None
+
+        positions_by_source_anchor: dict[str, dict[tuple, set]] = {"PL": {}, "A": {}, "B": {}}
         checked = 0
         for conn in result["connections"]:
             s, t = conn["source"], conn["target"]
+            bus_id = _bus_owner(t["node"])
             if (s["anchor"] not in ("PL", "A", "B")
                     or node_type_map.get(s["node"]) != "Valve_5_2_Ways"
-                    or node_type_map.get(t["node"]) != "PressureLine"):
+                    or bus_id is None):
                 continue
-            anchors_by_source_anchor.setdefault(s["anchor"], []).append(t["anchor"])
+            pos = node_by_id[t["node"]]["position"]
+            key = (bus_id, pos["x"], pos["y"])
+            positions_by_source_anchor[s["anchor"]].setdefault(key, set()).add(s["node"])
             checked += 1
 
         assert checked > 0  # sanity check -- a sequência precisa exercitar isso
-        for source_anchor, target_anchors in anchors_by_source_anchor.items():
-            assert len(target_anchors) == len(set(target_anchors)), (
-                f"anchors repetidos entre memórias diferentes pro anchor "
-                f"de origem {source_anchor!r}: {target_anchors}"
+        for source_anchor, seen in positions_by_source_anchor.items():
+            collisions = {k: v for k, v in seen.items() if len(v) > 1}
+            assert collisions == {}, (
+                f"posições repetidas entre memórias diferentes pro anchor "
+                f"de origem {source_anchor!r}: {collisions}"
             )
 
     def test_routing_is_manual_not_astar(self):
@@ -681,7 +709,7 @@ class TestMemoryToPressureLineStagger:
             s, t = conn["source"], conn["target"]
             if (s["anchor"] not in ("PL", "A", "B")
                     or node_type_map.get(s["node"]) != "Valve_5_2_Ways"
-                    or node_type_map.get(t["node"]) != "PressureLine"):
+                    or node_type_map.get(t["node"]) not in _PL_BUS_NODE_TYPES):
                 continue
             wps = conn.get("waypoints")
             assert wps, f"{s} -> {t}: sem waypoints"
@@ -730,7 +758,7 @@ class TestMemoryToPressureLineStagger:
 
             conn = next(c for c in result["connections"]
                         if c["source"]["node"] == mem_id and c["source"]["anchor"] == "B")
-            assert node_type_map.get(conn["target"]["node"]) == "PressureLine"
+            assert node_type_map.get(conn["target"]["node"]) in _PL_BUS_NODE_TYPES
             wps = conn["waypoints"]
             entry_x = wps[-1]["x"]
             # Margem reduzida pra pilot_w (era v32_width+pilot_w -- feedback
@@ -824,13 +852,6 @@ class TestChildPositioningAndRouting:
         result = layout.apply(data)
         with_waypoints = [c for c in result["connections"] if "waypoints" in c]
         assert len(with_waypoints) > 0
-
-    def test_all_pressure_lines_share_the_same_anchor_count(self):
-        data = cascade.generate(parse("A+B+A-B-A+A-"))
-        result = layout.apply(data)
-        counts = {len(n["properties"]["anchors"]) for n in result["nodes"]
-                  if n["type"] == "PressureLine"}
-        assert len(counts) == 1, f"larguras diferentes entre linhas: {counts}"
 
 
 class TestEndToEndDispatch:

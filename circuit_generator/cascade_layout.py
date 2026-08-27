@@ -43,11 +43,6 @@ _CONFIRM_ROW_P_EXTRA_MARGIN = 150
 # connections in the same column.
 _MEM_PL_STAGGER = 60
 
-# How many spare anchors global pruning keeps beyond the actually-used
-# range (used_min/used_max) on each end of the PressureLine -- see
-# step_by_step_layout.py, same constant/reason.
-_PL_PRUNE_MARGIN = 8
-
 
 def _build_role_maps(data: dict) -> dict:
     """Extracts the letter/index -> node_id maps from each node's _role."""
@@ -599,106 +594,212 @@ def apply(data: dict) -> dict:
                 pl_node["position"]["x"] += (lo - 1) * _M.pl_spacing
                 node_pos[pl_id] = (pl_node["position"]["x"], pl_node["position"]["y"])
 
-    # -- PressureLine anchor reassignment by proximity -----------------------
+    # -- PressureLine bus taps (RailPlanner) -----------------------------------
     #
-    #   Ported from step_by_step_layout.py (_pl_anchor_x/_nearest_pl_anchor/
-    #   _resolve_conflict, same names and body) -- the only real change is
-    #   in the elif chain of connections_sorted below, which recognizes
-    #   the cascade-specific PL/PR/A/B <-> PressureLine connection shapes
-    #   (mc is Valve_5_2_Ways, step-by-step only has Valve_3_2_Ways).
-    def _pl_anchor_x(pl_node: dict, anchor_name: str, list_origin: int | None = None) -> float:
-        pl_x = node_pos[pl_node["id"]][0]
-        if list_origin is None:
-            list_origin = min(int(a[1:]) for a in pl_node["properties"]["anchors"])
-        return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - list_origin) * _M.pl_spacing
+    #   The topology generator assigns X1, X2, ... sequentially, with no
+    #   notion of screen position -- this produces wires that
+    #   unnecessarily cross the drawing. Requests a tap at the real X
+    #   position of the component on the other side of the connection --
+    #   shared as circuit_generator.rail.RailPlanner (generic, nothing
+    #   Valve_5_2_Ways-specific), same as layout_engine.py/
+    #   step_by_step_layout.py. Only the elif chain of connections_sorted
+    #   below is cascade-specific, recognizing the cascade-specific
+    #   PL/PR/A/B <-> PressureLine connection shapes (mc is
+    #   Valve_5_2_Ways, step-by-step only has Valve_3_2_Ways).
+    from circuit_generator.rail import RailPlanner
 
-    def _nearest_pl_anchor(pl_node: dict, target_x: float, side: str = "any",
-                            min_margin: float = 0.0) -> str:
-        anchors = pl_node["properties"]["anchors"]
-        list_origin = min(int(a[1:]) for a in anchors)
-        scored = [(int(n[1:]), _pl_anchor_x(pl_node, n, list_origin), n) for n in anchors]
-        if side == "left":
-            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x - min_margin]
-            fallback = sorted(scored)[0][2]
-        elif side == "right":
-            candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x + min_margin]
-            fallback = sorted(scored, reverse=True)[0][2]
-        else:
-            candidates = [(abs(ax - target_x), n) for _, ax, n in scored]
-            fallback = anchors[0]
-        return min(candidates)[1] if candidates else fallback
+    rail = RailPlanner(min_spacing=_M.pl_spacing)
+    for pl_id, pl_node in pl_node_map.items():
+        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+        pl_x = node_pos[pl_id][0]
+        x_min = pl_x + _M.pl_pix_w / 2 + (min(idxs) - min(idxs)) * _M.pl_spacing
+        x_max = pl_x + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
+        rail.register_bus(pl_id, "PressureLineTerminal", y=node_pos[pl_id][1],
+                           x_min=x_min, x_max=x_max)
 
-    pl_anchor_used: dict[tuple[str, int], tuple[str, float, float]] = {}
-    conn_by_owner: dict[tuple[str, str], tuple] = {}
-    or_source_x_used: dict[int, tuple[str, float, float]] = {}
-
-    def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
-                           owner_y: float, conn_ref: dict, side: str,
-                           push_dir: int = 0, avoid_global_x: bool = False) -> str:
-        anchors = pl_node["properties"]["anchors"]
-        n, mid = len(anchors), len(anchors) / 2
-
-        def _next(anc: str, direction: int) -> str:
-            idx = int(anc[1:])
-            step = direction if direction else ((-1) if idx <= mid else 1)
-            return f"X{max(1, min(n, idx + step))}"
-
-        pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
-
-        def _reg(anc: str, oid: str, oy: float, cref: dict, seen: set, pdir: int) -> str:
-            if anc in seen:
-                return anc  # no free slot in that direction -- give up, keep it
-            seen = seen | {anc}
-            ax = _pl_anchor_x(pl_node, anc)
-
-            if avoid_global_x:
-                gx = round(ax)
-                prev_global = or_source_x_used.get(gx)
-                if prev_global is not None:
-                    prev_oid, prev_oy, prev_pl_y = prev_global
-                    same_order = (oy < prev_oy) == (pl_y < prev_pl_y)
-                    if prev_oid != oid and not same_order:
-                        return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
-                or_source_x_used[gx] = (oid, oy, pl_y)
-
-            key = (pl_node["id"], round(ax))
-            owner_key = (pl_node["id"], oid)
-            if key not in pl_anchor_used:
-                pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
-                return anc
-            prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
-            if prev_id == oid:
-                return anc
-            curr_above = oy < pl_y
-            prev_above = prev_y < prev_pl_y
-            opp_sides = curr_above != prev_above
-            if pl_y != prev_pl_y:
-                same_order = (oy < prev_y) == (pl_y < prev_pl_y)
-            else:
-                same_order = True
-            if opp_sides and same_order:
-                return anc
-            if oy >= prev_y:
-                return _reg(_next(anc, pdir), oid, oy, cref, seen, pdir)
-            else:
-                pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[owner_key] = (cref, side, pl_node, pdir)
-                prev_owner_key = (pl_node["id"], prev_id)
-                prev_conn, prev_side, prev_pl, prev_pdir = conn_by_owner.get(
-                    prev_owner_key, (None, None, None, 0))
-                if prev_conn is not None:
-                    new_anc = _reg(_next(anc, prev_pdir), prev_id, prev_y, prev_conn, set(), prev_pdir)
-                    prev_conn[prev_side]["anchor"] = new_anc
-                return anc
-
-        return _reg(anchor, owner, owner_y, conn_ref, set(), push_dir)
+    # RailPlanner.request_tap replaces the old local `_resolve_conflict` --
+    # collision/ordering resolution (per-bus AND the cross-row
+    # "avoid_global_x" case) now lives in rail.py, shared across all 3
+    # generators using this pattern.
 
     def _target_x(node_id: str, anchor_name: str) -> float:
         ntype = node_type_map.get(node_id, "")
         pos = node_by_id[node_id]["position"]
         local = anchor_local_for_routing(ntype, anchor_name)
         return pos["x"] + local[0] if local else pos["x"]
+
+    def _conn_sort_key(c: dict) -> tuple:
+        t_id = c["target"]["node"]
+        return (0, 0) if t_id in pl_node_map else (1, 0)
+
+    connections_sorted = sorted(
+        [c for c in data["connections"] if c["source"]["node"] != c["target"]["node"]],
+        key=_conn_sort_key,
+    )
+
+    for conn in connections_sorted:
+        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
+        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
+
+        if s_id in pl_node_map and s_anc.startswith("X"):
+            tgt_x = _target_x(t_id, t_anc)
+            avoid_global_x = False
+            owner_id = f"{t_id}#{t_anc}" if node_type_map.get(t_id) == "OrValve" else t_id
+            # desired_x bakes in the old "side" + min_margin search
+            # (_nearest_pl_anchor's "left"/"right" + min_margin) directly
+            # as a numeric offset from the target, since RailPlanner taps
+            # at a continuous x rather than choosing among discrete named
+            # anchors -- push_dir keeps re-pushing on collision in the
+            # same direction that motivated the offset.
+            if t_anc == "PL":
+                desired_x = tgt_x
+                push_dir = -1
+            elif t_anc == "PR":
+                desired_x = tgt_x + _PL_ANCHOR_MIN_MARGIN
+                push_dir = 1
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in left_entry_sig_ids:
+                # Closure-chain sig (button's column, leftmost of
+                # everything): enters from the left -- same logic
+                # inherited from step-by-step (direct user feedback:
+                # should keep entering from the left). This is the ONLY
+                # exception -- both Region A (the OR/sig-staircase leaf
+                # feeding the 4/2's pilot) and Region B (confirm_row, feeds
+                # mem.PR) exit from the right, see branches below.
+                valve_left_x = node_by_id[t_id]["position"]["x"]
+                desired_x = valve_left_x - _M.pilot_w
+                push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in region_a_sig_ids:
+                # Region A (the OR/sig-staircase leaf feeding the 4/2's
+                # pilot directly or via OrValve): exits to the RIGHT
+                # (found via live-UI testing, with an annotated screenshot
+                # showing the expected route: exits right, then goes up to
+                # the nearest anchor on the right). Only the BASE margin
+                # (_PL_ANCHOR_MIN_MARGIN) -- without confirm_row's extra
+                # margin below, which has no obstacle justifying it here.
+                desired_x = tgt_x + _PL_ANCHOR_MIN_MARGIN
+                push_dir = 1
+                avoid_global_x = True
+            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
+                # Region B (confirm_row, feeds mem.PR): exits to the RIGHT
+                # (found via live-UI testing, with an annotated screenshot
+                # showing the expected route: exits right, then goes up to
+                # the nearest anchor on the right). `tgt_x` (computed above
+                # via _target_x -> anchor_local_for_routing) is already the
+                # worst-case value adjusted for the commutation shift (same
+                # fix as anchor_local_for_routing("Valve_3_2_Ways","P") in
+                # sprite_metrics.py) -- using a different safe_x here (e.g.
+                # based only on v32_width+pilot_w) would aim the router at
+                # a point FARTHER RIGHT than the real endpoint (always
+                # tgt_x), forcing the trace back left on the final stretch
+                # -- exactly the zigzag this fix is meant to eliminate, not
+                # create. Extra margin (_CONFIRM_ROW_P_EXTRA_MARGIN): the
+                # default margin alone still left too little clearance
+                # specifically here (per live-UI feedback) -- unlike
+                # Region A above, which doesn't need this extra clearance.
+                desired_x = tgt_x + _PL_ANCHOR_MIN_MARGIN + _CONFIRM_ROW_P_EXTRA_MARGIN
+                push_dir = 1
+                avoid_global_x = True
+            elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
+                desired_x = tgt_x - _PL_ANCHOR_MIN_MARGIN
+                push_dir = -1
+                avoid_global_x = True
+            elif t_anc == "Y" and node_type_map.get(t_id) == "OrValve":
+                desired_x = tgt_x + _PL_ANCHOR_MIN_MARGIN
+                push_dir = 1
+                avoid_global_x = True
+            # -- Cascade-specific shapes: Valve_5_2_Ways (memory) PL/PR/A/B
+            #   fed DIRECTLY by a PressureLine (no sig in between) --
+            #   step_by_step_layout.py never has this shape because its
+            #   memories are Valve_3_2_Ways, and the only "PL as source"
+            #   case for them is P (already covered above). Verified by
+            #   running cascade.generate() on several real sequences (see
+            #   Task 6 report): the current generator NEVER produces a
+            #   PressureLine as the source of a mem.PL/PR/A/B connection --
+            #   those connections always come from a memory or a sig (the
+            #   "t_id in pl_node_map" branch below, or the sig's generic
+            #   "else"). Kept for symmetry/robustness with the brief's
+            #   request, in case a future topology produces this shape
+            #   directly.
+            elif t_anc in ("PL", "PR") and node_type_map.get(t_id) == "Valve_5_2_Ways":
+                margin = _PL_ANCHOR_MIN_MARGIN if t_anc == "PR" else -_PL_ANCHOR_MIN_MARGIN
+                desired_x = tgt_x + margin
+                push_dir = -1 if t_anc == "PL" else 1
+            elif t_anc in ("A", "B") and node_type_map.get(t_id) == "Valve_5_2_Ways":
+                desired_x = tgt_x
+                push_dir = 0
+            else:
+                desired_x = tgt_x
+                push_dir = 0
+                avoid_global_x = False
+            rail.request_tap(s_id, owner_id=owner_id, owner_y=node_pos.get(t_id, (0, 0))[1],
+                              desired_x=desired_x, conn_ref=conn, side="source",
+                              push_dir=push_dir, avoid_global_x=avoid_global_x)
+
+        elif t_id in pl_node_map and t_anc.startswith("X"):
+            src_x = _target_x(s_id, s_anc)
+            # Live-UI testing found a real bug: every memory computes the
+            # SAME src_x for PL/A/B (the local anchor doesn't depend on
+            # WHICH memory, only on the type/anchor), so mem[0].B,
+            # mem[1].B, mem[2].B... all targeted the SAME anchor on their
+            # respective PLs -- the conflict check (avoid_global_x/
+            # same_order) misses this because these connections don't
+            # CROSS each other (they keep a consistent order), they just
+            # stack in the same column, cutting through other
+            # memories'/sigs' bodies along the way.
+            if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
+                mem_idx = mc_idx_by_id[s_id]
+                next_mem_id = roles["mc_by_idx"].get(mem_idx + 1)
+                driving_x = (driving_sig_x_by_mem.get(next_mem_id)
+                             if s_anc == "B" and next_mem_id else None)
+                if driving_x is not None:
+                    # mem[i].B (i != mem[-1], the highest): targets well
+                    # to the left of the 3/2 valve that drives mem[i+1]
+                    # directly (that confirmation's chain[-1]) -- otherwise
+                    # the trace cuts through that valve on its way up
+                    # (found via live-UI testing, with an attached drawing
+                    # showing the expected route). mem[-1] (with no memory
+                    # above it) keeps the generic stagger below.
+                    #
+                    # Live-UI testing found a real bug (with an annotated
+                    # screenshot): the original margin
+                    # (v32_width + pilot_w = 400px) kept the trace too far
+                    # from the sig, creating a visually large detour
+                    # instead of hugging it -- pilot_w alone is already
+                    # enough to clear the sig's left actuator
+                    # (limit_switch).
+                    src_x = driving_x - _M.pilot_w
+                else:
+                    # Stagger the target per memory, growing rightward
+                    # with the index -- each memory ends up targeting its
+                    # own column.
+                    src_x += mem_idx * _MEM_PL_STAGGER
+            # Covers, among others, mem[i].A/mem[i].B -> PL (cascade's
+            # ring closure / group bus) -- already generic, no
+            # substitution needed (see Task 6 brief, item 2: "a mirrored
+            # branch ... needs no change"). Per-memory dedup
+            # (_mem_pl_used_x in the pre-migration version) is now
+            # RailPlanner's own avoid_global_x mechanism (Task 6 brief,
+            # item 1) -- first real use of avoid_global_x=True on the
+            # mem[i].A/B -> PL cross-bus case.
+            rail.request_tap(t_id, owner_id=s_id, owner_y=node_pos.get(s_id, (0, 0))[1],
+                              desired_x=src_x, conn_ref=conn, side="target",
+                              avoid_global_x=True)
+
+    # Turns every registered bus's pending taps into real
+    # JunctionNodeItem/PressureLineTerminal nodes + ConnectionItems (see
+    # rail.py) -- must run before the OrValve X/Y orientation fix below
+    # and before A* routing, since both need the connections list it
+    # rewrites (conn["source"/"target"]) to already point at real,
+    # positioned nodes. Also appends new nodes to node_by_id/node_pos in
+    # place.
+    rail.materialize(data, node_by_id, node_pos)
+    # node_type_map (built earlier in apply()) is stale after materialize()
+    # appends new nodes -- _or_source_x/get_exit_dir/
+    # anchor_local_for_routing below need the real type for each of them
+    # (PressureLine's "X1"/JunctionNodeItem's "J"/PressureLineTerminal's
+    # "X1" entries added to sprite_metrics.py in Task 4).
+    node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
 
     # -- Fixes OrValve X/Y orientation (avoids a crossed wire) --------------
     #
@@ -720,10 +821,17 @@ def apply(data: dict) -> dict:
     #   leftmost source always enters X and the rightmost enters Y,
     #   regardless of the chronological order cascade.py used to wire
     #   them.
+    #
+    #   Runs AFTER rail.materialize() (moved here from before the
+    #   connections_sorted loop, Task 6 brief): _pl_anchor_x (which used
+    #   to compute a PL source's position from its still-indexed "Xi"
+    #   anchor name) is gone -- a PL-fed source's connection here only
+    #   ever carries a real anchor ("X1" on the PressureLine/
+    #   PressureLineTerminal node, or "J" on a JunctionNodeItem tap) once
+    #   materialize() has rewritten it, so the generic node_pos-based
+    #   lookup below only works post-materialize.
     def _or_source_x(node_id: str, anchor_name: str) -> float | None:
         ntype = node_type_map.get(node_id, "")
-        if ntype == "PressureLine" and anchor_name.startswith("X"):
-            return _pl_anchor_x(node_by_id[node_id], anchor_name)
         pos = node_by_id.get(node_id, {}).get("position")
         if pos is None:
             return None
@@ -774,191 +882,6 @@ def apply(data: dict) -> dict:
         if x_src_x > y_src_x:
             x_conn["target"]["anchor"], y_conn["target"]["anchor"] = "Y", "X"
 
-    def _conn_sort_key(c: dict) -> tuple:
-        t_id = c["target"]["node"]
-        return (0, 0) if t_id in pl_node_map else (1, 0)
-
-    connections_sorted = sorted(
-        [c for c in data["connections"] if c["source"]["node"] != c["target"]["node"]],
-        key=_conn_sort_key,
-    )
-
-    for conn in connections_sorted:
-        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
-        t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
-
-        if s_id in pl_node_map and s_anc.startswith("X"):
-            pl = pl_node_map[s_id]
-            tgt_x = _target_x(t_id, t_anc)
-            avoid_global_x = False
-            owner_id = f"{t_id}#{t_anc}" if node_type_map.get(t_id) == "OrValve" else t_id
-            if t_anc == "PL":
-                anc = _nearest_pl_anchor(pl, tgt_x, "left")
-                push_dir = -1
-            elif t_anc == "PR":
-                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
-                push_dir = 1
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in left_entry_sig_ids:
-                # Closure-chain sig (button's column, leftmost of
-                # everything): enters from the left -- same logic
-                # inherited from step-by-step (direct user feedback:
-                # should keep entering from the left). This is the ONLY
-                # exception -- both Region A (the OR/sig-staircase leaf
-                # feeding the 4/2's pilot) and Region B (confirm_row, feeds
-                # mem.PR) exit from the right, see branches below.
-                valve_left_x = node_by_id[t_id]["position"]["x"]
-                safe_x = valve_left_x - _M.pilot_w
-                anc = _nearest_pl_anchor(pl, safe_x, "left")
-                push_dir = -1
-                avoid_global_x = True
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways" and t_id in region_a_sig_ids:
-                # Region A (the OR/sig-staircase leaf feeding the 4/2's
-                # pilot directly or via OrValve): exits to the RIGHT
-                # (found via live-UI testing, with an annotated screenshot
-                # showing the expected route: exits right, then goes up to
-                # the nearest anchor on the right). Only the BASE margin
-                # (_PL_ANCHOR_MIN_MARGIN) -- without confirm_row's extra
-                # margin below, which has no obstacle justifying it here.
-                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
-                push_dir = 1
-                avoid_global_x = True
-            elif t_anc == "P" and node_type_map.get(t_id) == "Valve_3_2_Ways":
-                # Region B (confirm_row, feeds mem.PR): exits to the RIGHT
-                # (found via live-UI testing, with an annotated screenshot
-                # showing the expected route: exits right, then goes up to
-                # the nearest anchor on the right). `tgt_x` (computed above
-                # via _target_x -> anchor_local_for_routing) is already the
-                # worst-case value adjusted for the commutation shift (same
-                # fix as anchor_local_for_routing("Valve_3_2_Ways","P") in
-                # sprite_metrics.py) -- using a different safe_x here (e.g.
-                # based only on v32_width+pilot_w) would aim the router at
-                # a point FARTHER RIGHT than the real endpoint (always
-                # tgt_x), forcing the trace back left on the final stretch
-                # -- exactly the zigzag this fix is meant to eliminate, not
-                # create. Extra margin (_CONFIRM_ROW_P_EXTRA_MARGIN): the
-                # default margin alone still left too little clearance
-                # specifically here (per live-UI feedback) -- unlike
-                # Region A above, which doesn't need this extra clearance.
-                anc = _nearest_pl_anchor(pl, tgt_x, "right",
-                                          min_margin=_PL_ANCHOR_MIN_MARGIN + _CONFIRM_ROW_P_EXTRA_MARGIN)
-                push_dir = 1
-                avoid_global_x = True
-            elif t_anc == "X" and node_type_map.get(t_id) == "OrValve":
-                anc = _nearest_pl_anchor(pl, tgt_x, "left", min_margin=_PL_ANCHOR_MIN_MARGIN)
-                push_dir = -1
-                avoid_global_x = True
-            elif t_anc == "Y" and node_type_map.get(t_id) == "OrValve":
-                anc = _nearest_pl_anchor(pl, tgt_x, "right", min_margin=_PL_ANCHOR_MIN_MARGIN)
-                push_dir = 1
-                avoid_global_x = True
-            # -- Cascade-specific shapes: Valve_5_2_Ways (memory) PL/PR/A/B
-            #   fed DIRECTLY by a PressureLine (no sig in between) --
-            #   step_by_step_layout.py never has this shape because its
-            #   memories are Valve_3_2_Ways, and the only "PL as source"
-            #   case for them is P (already covered above). Verified by
-            #   running cascade.generate() on several real sequences (see
-            #   Task 6 report): the current generator NEVER produces a
-            #   PressureLine as the source of a mem.PL/PR/A/B connection --
-            #   those connections always come from a memory or a sig (the
-            #   "t_id in pl_node_map" branch below, or the sig's generic
-            #   "else"). Kept for symmetry/robustness with the brief's
-            #   request, in case a future topology produces this shape
-            #   directly.
-            elif t_anc in ("PL", "PR") and node_type_map.get(t_id) == "Valve_5_2_Ways":
-                anc = _nearest_pl_anchor(pl, tgt_x, "left" if t_anc == "PL" else "right",
-                                          min_margin=_PL_ANCHOR_MIN_MARGIN)
-                push_dir = -1 if t_anc == "PL" else 1
-            elif t_anc in ("A", "B") and node_type_map.get(t_id) == "Valve_5_2_Ways":
-                anc = _nearest_pl_anchor(pl, tgt_x)
-                push_dir = 0
-            else:
-                anc = _nearest_pl_anchor(pl, tgt_x)
-                push_dir = 0
-                avoid_global_x = False
-            conn["source"]["anchor"] = _resolve_conflict(
-                pl, anc, owner_id, node_pos.get(t_id, (0, 0))[1], conn, "source", push_dir,
-                avoid_global_x=avoid_global_x)
-
-        elif t_id in pl_node_map and t_anc.startswith("X"):
-            pl = pl_node_map[t_id]
-            src_x = _target_x(s_id, s_anc)
-            # Live-UI testing found a real bug: every memory computes the
-            # SAME src_x for PL/A/B (the local anchor doesn't depend on
-            # WHICH memory, only on the type/anchor), so mem[0].B,
-            # mem[1].B, mem[2].B... all targeted the SAME anchor on their
-            # respective PLs -- the conflict check (avoid_global_x/
-            # same_order) misses this because these connections don't
-            # CROSS each other (they keep a consistent order), they just
-            # stack in the same column, cutting through other
-            # memories'/sigs' bodies along the way.
-            if node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id:
-                mem_idx = mc_idx_by_id[s_id]
-                next_mem_id = roles["mc_by_idx"].get(mem_idx + 1)
-                driving_x = (driving_sig_x_by_mem.get(next_mem_id)
-                             if s_anc == "B" and next_mem_id else None)
-                if driving_x is not None:
-                    # mem[i].B (i != mem[-1], the highest): targets well
-                    # to the left of the 3/2 valve that drives mem[i+1]
-                    # directly (that confirmation's chain[-1]) -- otherwise
-                    # the trace cuts through that valve on its way up
-                    # (found via live-UI testing, with an attached drawing
-                    # showing the expected route). mem[-1] (with no memory
-                    # above it) keeps the generic stagger below.
-                    #
-                    # Live-UI testing found a real bug (with an annotated
-                    # screenshot): the original margin
-                    # (v32_width + pilot_w = 400px) kept the trace too far
-                    # from the sig, creating a visually large detour
-                    # instead of hugging it -- pilot_w alone is already
-                    # enough to clear the sig's left actuator
-                    # (limit_switch).
-                    src_x = driving_x - _M.pilot_w
-                else:
-                    # Stagger the target per memory, growing rightward
-                    # with the index -- each memory ends up targeting its
-                    # own column.
-                    src_x += mem_idx * _MEM_PL_STAGGER
-            anc = _nearest_pl_anchor(pl, src_x)
-            if (node_type_map.get(s_id) == "Valve_5_2_Ways" and s_id in mc_idx_by_id
-                    and s_anc in _mem_pl_used_x):
-                used_x = _mem_pl_used_x[s_anc]
-                gx = round(_pl_anchor_x(pl, anc))
-                _guard = 0
-                while gx in used_x and _guard < n_mc + 2:
-                    idx = int(anc[1:]) + 1
-                    anc = f"X{idx}"
-                    gx = round(_pl_anchor_x(pl, anc))
-                    _guard += 1
-                used_x.add(gx)
-            # Covers, among others, mem[i].A/mem[i].B -> PL (cascade's
-            # ring closure / group bus) -- already generic, no
-            # substitution needed (see Task 6 brief, item 2: "a mirrored
-            # branch ... needs no change").
-            conn["target"]["anchor"] = _resolve_conflict(
-                pl, anc, s_id, node_pos.get(s_id, (0, 0))[1], conn, "target",
-                avoid_global_x=True)
-
-    # -- Global PressureLine pruning -----------------------------------------
-    #
-    #   Ported verbatim from step_by_step_layout.py (same block).
-    used_min, used_max = float("inf"), float("-inf")
-    for conn in data["connections"]:
-        for side in (conn["source"], conn["target"]):
-            if side["node"] in pl_node_map and side["anchor"].startswith("X"):
-                idx = int(side["anchor"][1:])
-                used_min = min(used_min, idx)
-                used_max = max(used_max, idx)
-
-    if used_min != float("inf"):
-        for pl_id, pl_node in pl_node_map.items():
-            all_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-            keep_min = max(min(all_idxs), used_min - _PL_PRUNE_MARGIN)
-            keep_max = min(max(all_idxs), used_max + _PL_PRUNE_MARGIN)
-            pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs if keep_min <= i <= keep_max]
-            removed_left = keep_min - min(all_idxs)
-            pl_node["position"]["x"] += removed_left * _M.pl_spacing
-            node_pos[pl_id] = (pl_node["position"]["x"], pl_node["position"]["y"])
-
     # -- Children (Exhaust / PressureSource) positioned relative to parent --
     #
     #   Ported verbatim from step_by_step_layout.py (same block).
@@ -998,12 +921,18 @@ def apply(data: dict) -> dict:
     def _scene_xy(node_id: str, anchor_name: str) -> tuple[float, float] | None:
         pos = node_by_id[node_id]["position"]
         ntype = node_type_map.get(node_id, "")
-        if ntype == "PressureLine" and anchor_name.startswith("X"):
-            idx = int(anchor_name[1:])
-            list_origin = min(int(a[1:]) for a in node_by_id[node_id]["properties"]["anchors"])
-            return (pos["x"] + _M.pl_pix_w / 2 + (idx - list_origin) * _M.pl_spacing, pos["y"] + _M.pl_pix_h)
         local = anchor_local_for_routing(ntype, anchor_name)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
+
+    # A former PL anchor ("Xi") now resolves to a REAL node post-
+    # materialize(): the bus's own "PressureLine" node (anchor "X1"), a
+    # "PressureLineTerminal" far-end node (anchor "X1"), or an interior
+    # "JunctionNodeItem" tap (anchor "J") -- the manual-routing filter
+    # below (mem.PL/A/B -> PL) needs to recognize all 3, not just
+    # "PressureLine", or it would silently stop matching most of these
+    # connections (only the leftmost tap keeps the original PL id) and
+    # let A* route them instead.
+    _PL_BUS_TYPES = ("PressureLine", "PressureLineTerminal", "JunctionNodeItem")
 
     # -- Deterministic manual routing: mem.PL/A/B -> PL ----------------------
     #
@@ -1024,7 +953,7 @@ def apply(data: dict) -> dict:
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
         t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
         if not (s_anc in ("PL", "A", "B") and node_type_map.get(s_id) == "Valve_5_2_Ways"
-                and node_type_map.get(t_id) == "PressureLine"):
+                and node_type_map.get(t_id) in _PL_BUS_TYPES):
             continue
         spos = _scene_xy(s_id, s_anc)
         tpos = _scene_xy(t_id, t_anc)

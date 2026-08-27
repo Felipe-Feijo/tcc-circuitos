@@ -553,20 +553,6 @@ def apply(data: dict) -> dict:
     # target of mem.PL/A/B -> PL connections per memory.
     mc_idx_by_id = {mid: i for i, mid in roles["mc_by_idx"].items()}
 
-    # Tracks the (rounded, global -- not per-PL) X values already used by
-    # mem.PL/A/B -> PL connections, SEPARATED BY source anchor TYPE
-    # (PL/A/B each with its own set) -- ensures DIFFERENT memories using
-    # the SAME anchor type never land on the same column even when
-    # targeting different PLs. _resolve_conflict/avoid_global_x alone
-    # misses this when the two routes don't cross (same_order), which is
-    # the most common case here (found via live-UI testing: mem[2].B and
-    # mem[3].B colliding by coincidence, one from the "left of the 3/2"
-    # calculation and the other from the generic stagger). Split by type
-    # (not one shared global set) so B's dedup doesn't unnecessarily push
-    # a PL connection's anchor -- found via live-UI testing: the user
-    # reported the PL moving position with no request to touch it there.
-    _mem_pl_used_x: dict[str, set[int]] = {"PL": set(), "A": set(), "B": set()}
-
     # -- Sizes PressureLines from the grid's real reach ---------------------
     #
     #   Ported verbatim from step_by_step_layout.py (same block, same

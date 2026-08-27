@@ -454,12 +454,7 @@ def apply(data: dict) -> dict:
 
     rail = RailPlanner(min_spacing=_M.pl_spacing)
     for pl_id, pl_node in pl_node_map.items():
-        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-        pl_x = node_pos[pl_id][0]
-        x_min = pl_x + _M.pl_pix_w / 2 + (min(idxs) - min(idxs)) * _M.pl_spacing
-        x_max = pl_x + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
-        rail.register_bus(pl_id, "PressureLineTerminal", y=node_pos[pl_id][1],
-                           x_min=x_min, x_max=x_max)
+        rail.register_pressure_line_bus(pl_id, pl_node, node_pos[pl_id])
 
     # RailPlanner.request_tap replaces the old local `_resolve_conflict`
     # -- collision/ordering resolution (per-bus AND the cross-row

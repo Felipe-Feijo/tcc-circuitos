@@ -439,15 +439,12 @@ def apply(data: dict) -> dict:
 
     rail = RailPlanner(min_spacing=_M.pl_spacing)
     for pl_id, pl_node in pl_node_map.items():
-        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-        pl_x = node_pos[pl_id][0]
-        x_min = pl_x + _M.pl_pix_w / 2 + (min(idxs) - min(idxs)) * _M.pl_spacing
-        x_max = pl_x + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
-        rail.register_bus(pl_id, "PressureLineTerminal", y=node_pos[pl_id][1],
-                           x_min=x_min, x_max=x_max)
+        rail.register_pressure_line_bus(pl_id, pl_node, node_pos[pl_id])
 
     # Processar caso 2 (componente → PL) antes do caso 1 (PL → componente)
-    # para registrar no pl_anchor_used antes de resolver conflitos
+    # para registrar os taps no RailPlanner antes de resolver conflitos
+    # (pl_anchor_used era o dict local pre-migração; substituído por
+    # rail.request_tap's dedup interno -- ver rail.py)
     def _conn_sort_key(c):
         s_id, s_anc = c["source"]["node"], c["source"]["anchor"]
         t_id = c["target"]["node"]

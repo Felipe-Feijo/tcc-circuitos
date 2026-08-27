@@ -66,3 +66,17 @@ def test_generated_circuit_loads_through_real_node_classes(method, sub_type, seq
         assert "anchors" not in node.properties, (
             f"node {node.id!r} ({node.node_type}) still has properties['anchors']"
         )
+
+    # At least one bus must have actually grown a multi-tap rail (a
+    # JunctionNodeItem is only ever created for an INTERIOR tap -- see
+    # rail.py's _materialize_bus). Without this, a future regression that
+    # collapses every bus back down to a single tap (e.g. a broken
+    # request_tap/assign_sorted call site) would silently keep this test
+    # green, since a single-tap bus round-trips through from_dict just
+    # fine too -- it just wouldn't be exercising the paired-terminal
+    # migration's actual reason for existing.
+    junctions = [n for n in nodes if n.node_type == "junction"]
+    assert junctions, (
+        f"no JunctionNodeItem produced for {sequence!r} ({method}/{sub_type}) -- "
+        f"every bus regressed to a single tap"
+    )

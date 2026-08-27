@@ -596,12 +596,7 @@ def apply(data: dict) -> dict:
 
     rail = RailPlanner(min_spacing=_M.pl_spacing)
     for pl_id, pl_node in pl_node_map.items():
-        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-        pl_x = node_pos[pl_id][0]
-        x_min = pl_x + _M.pl_pix_w / 2 + (min(idxs) - min(idxs)) * _M.pl_spacing
-        x_max = pl_x + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
-        rail.register_bus(pl_id, "PressureLineTerminal", y=node_pos[pl_id][1],
-                           x_min=x_min, x_max=x_max)
+        rail.register_pressure_line_bus(pl_id, pl_node, node_pos[pl_id])
 
     # RailPlanner.request_tap replaces the old local `_resolve_conflict` --
     # collision/ordering resolution (per-bus AND the cross-row
@@ -763,11 +758,23 @@ def apply(data: dict) -> dict:
             # Covers, among others, mem[i].A/mem[i].B -> PL (cascade's
             # ring closure / group bus) -- already generic, no
             # substitution needed (see Task 6 brief, item 2: "a mirrored
-            # branch ... needs no change"). Per-memory dedup
-            # (_mem_pl_used_x in the pre-migration version) is now
-            # RailPlanner's own avoid_global_x mechanism (Task 6 brief,
-            # item 1) -- first real use of avoid_global_x=True on the
-            # mem[i].A/B -> PL cross-bus case.
+            # branch ... needs no change").
+            #
+            # KNOWN, ACCEPTED FOLLOW-UP RISK (not resolved by this
+            # migration): the pre-migration per-memory dedup guard
+            # (_mem_pl_used_x) was REMOVED here and is NOT equivalently
+            # replaced by RailPlanner's avoid_global_x/same_order check.
+            # The old guard's own comment was explicit that avoid_global_x
+            # misses exactly the case _mem_pl_used_x existed for: two
+            # routes that DON'T cross (same_order is trivially True --
+            # they stack in the same column instead of crossing), which
+            # was the most common case that guard handled -- see the
+            # live-UI bug report cited above (mem[2].B/mem[3].B colliding
+            # on the same anchor). No regression has been demonstrated in
+            # current tests/probes, so this is not being re-implemented
+            # here; it's filed as a known, accepted follow-up risk, same
+            # treatment as this plan's own documented follow-ups for
+            # _best_pl_anchor_clear_column and _bus_vh_route.
             rail.request_tap(t_id, owner_id=s_id, owner_y=node_pos.get(s_id, (0, 0))[1],
                               desired_x=src_x, conn_ref=conn, side="target",
                               avoid_global_x=True)

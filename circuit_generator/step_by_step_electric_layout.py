@@ -38,9 +38,8 @@ construction (monotonic mapping), with no need for push-based conflict
 resolution.
 """
 
-import math
-
 from circuit_generator.grid_layout import Grid
+from circuit_generator.rail import RailPlanner
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
 
@@ -297,18 +296,21 @@ def apply(data: dict) -> dict:
     ground_id = roles["ground_id"]
     node_by_id[ground_id]["position"] = {"x": cyl_first_x, "y": ground_row_y}
 
-    # -- Sizes the VoltageSource/Ground bars from the grid's real reach
-    #    (grows, never shrinks -- see step_by_step_layout.py) ------------
+    # -- Registers the VoltageSource/Ground bars with RailPlanner, sized
+    #    from the grid's real reach (grows, never shrinks -- see
+    #    step_by_step_layout.py) -------------------------------------------
+    rail = RailPlanner(min_spacing=_M.pl_spacing)
     x_range = grid.occupied_x_range()
     if x_range is not None:
         min_x, max_x = x_range
-        needed_count = max(1, math.ceil((max_x - min_x) / _M.pl_spacing) + 1)
-        for bus_id in (vsource_id, ground_id):
-            anchors = node_by_id[bus_id]["properties"]["anchors"]
-            next_idx = max((int(a[1:]) for a in anchors), default=0) + 1
-            while len(anchors) < needed_count:
-                anchors.append(f"X{next_idx}")
-                next_idx += 1
+        needed_span = max(_M.pl_spacing, max_x - min_x)
+    else:
+        needed_span = _M.pl_spacing
+    for bus_id in (vsource_id, ground_id):
+        pos = node_by_id[bus_id]["position"]
+        width = _M.vsource_pix_w if node_type_map[bus_id] == "VoltageSource" else _M.ground_pix_w * 0.5
+        x0 = pos["x"] + width
+        rail.register_bus(bus_id, "JunctionNodeItem", y=pos["y"], x_min=x0, x_max=x0 + needed_span)
 
     # -- Children (Exhaust / PressureSource) positioned relative to parent -
     _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
@@ -350,100 +352,38 @@ def apply(data: dict) -> dict:
     #   no need for the push-based conflict logic PressureLine needs
     #   (there, N rows compete for the same X space; here it's a single
     #   bar).
-    def _bus_anchor_x(bus_id: str, anchor_name: str) -> float:
-        pos = node_by_id[bus_id]["position"]
-        anchors = node_by_id[bus_id]["properties"]["anchors"]
-        idx = anchors.index(anchor_name)
-        if node_type_map[bus_id] == "VoltageSource":
-            return pos["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
-        return pos["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
-
     def _other_endpoint_x(node_id: str, anchor_name: str) -> float:
         pos = node_by_id[node_id]["position"]
         local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
         return pos["x"] + (local[0] if local else 0.0)
 
-    def _select_nearest_anchors(anchors_sorted: list[str], anchor_xs: list[float],
-                                 target_xs: list[float]) -> list[str]:
-        """For each target_x (already sorted ascending), picks the anchor
-        GENUINELY nearest in real X among those already sorted by X --
-        not by rank/proportion (found during review: spreading by
-        proportional index ignores the real position when the targets'
-        distribution isn't uniform -- e.g. a dense block of connections
-        followed by a large gap to the power zone -- producing anchors
-        chosen way off to the sides, with measured error up to 1500px on
-        a 12-atom sequence).
-
-        Correct and monotonic by construction: since BOTH lists (anchors
-        and targets) already arrive sorted by X, the nearest-neighbor
-        index never decreases as the target grows -- the standard result
-        for 1D nearest-neighbor over sorted arrays. Two-pointer sweep,
-        never needs to backtrack: advances j while the NEXT anchor is as
-        good or better than the current one.
-
-        Found during final review: stacked power contacts (same X
-        position, different Y -- see TestMultiCyclePowerStacking)
-        produce two (or more) targets with the SAME real x. Pure
-        nearest-neighbor picks the same anchor for both, overlapping the
-        routed wire. Each target needs its OWN anchor (an invariant the
-        old _select_spread_anchors guaranteed via "idx = prev + 1" on
-        collision). Here: after advancing j by the proximity criterion,
-        forces j >= i (never behind the current index -- guarantees a
-        free column) and j <= m - (n - i) (guarantees enough anchors for
-        the remaining targets); then advances j past the just-used
-        anchor, so the next target never revisits the same index.
-        """
-        m = len(anchors_sorted)
-        n = len(target_xs)
-        if m == 0:
-            return []
-        result: list[str] = []
-        j = 0
-        for i, tx in enumerate(target_xs):
-            while j + 1 < m and abs(anchor_xs[j + 1] - tx) <= abs(anchor_xs[j] - tx):
-                j += 1
-            j = max(j, i)
-            j = min(j, m - (n - i))
-            result.append(anchors_sorted[j])
-            j += 1
-        return result
-
     vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
     ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
 
-    vsource_anchors_sorted = sorted(
-        node_by_id[vsource_id]["properties"]["anchors"],
-        key=lambda a: _bus_anchor_x(vsource_id, a),
-    )
-    vsource_anchor_xs = [_bus_anchor_x(vsource_id, a) for a in vsource_anchors_sorted]
-    vsource_conns_sorted = sorted(
-        vsource_conns,
-        key=lambda c: _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]),
-    )
-    vsource_target_xs = [
-        _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]) for c in vsource_conns_sorted
-    ]
-    vsource_anchor_selection = _select_nearest_anchors(
-        vsource_anchors_sorted, vsource_anchor_xs, vsource_target_xs)
-    for conn, anchor_name in zip(vsource_conns_sorted, vsource_anchor_selection):
-        conn["source"]["anchor"] = anchor_name
+    # Tracked by identity (not by node id) BEFORE rail.materialize() rewrites
+    # each conn_ref's node/anchor in place -- after materialize(), only the
+    # tap at bus.x_min still targets the original VoltageSource/Ground node
+    # id (interior taps and the x_max tap all get rewritten to point at a
+    # new JunctionNodeItem instead). _bus_vh_route's dispatch (below) needs
+    # this set to keep recognizing every one of these connections as
+    # bus-touching, since the post-materialize node-type check alone would
+    # only catch that single x_min tap.
+    bus_conn_ids = {id(c) for c in vsource_conns} | {id(c) for c in ground_conns}
 
-    ground_anchors_sorted = sorted(
-        node_by_id[ground_id]["properties"]["anchors"],
-        key=lambda a: _bus_anchor_x(ground_id, a),
-    )
-    ground_anchor_xs = [_bus_anchor_x(ground_id, a) for a in ground_anchors_sorted]
-    ground_conns_sorted = sorted(
-        ground_conns,
-        key=lambda c: _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]),
-    )
-    ground_target_xs = [
-        _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]) for c in ground_conns_sorted
-    ]
-    ground_anchor_selection = _select_nearest_anchors(
-        ground_anchors_sorted, ground_anchor_xs, ground_target_xs)
-    for conn, anchor_name in zip(ground_conns_sorted, ground_anchor_selection):
-        conn["target"]["anchor"] = anchor_name
+    rail.assign_sorted(vsource_id, [
+        (c["target"]["node"], node_by_id[c["target"]["node"]]["position"]["y"],
+         _other_endpoint_x(c["target"]["node"], c["target"]["anchor"]), c, "source")
+        for c in vsource_conns
+    ])
+    rail.assign_sorted(ground_id, [
+        (c["source"]["node"], node_by_id[c["source"]["node"]]["position"]["y"],
+         _other_endpoint_x(c["source"]["node"], c["source"]["anchor"]), c, "target")
+        for c in ground_conns
+    ])
+
+    node_pos = {n["id"]: (n["position"]["x"], n["position"]["y"]) for n in data["nodes"]}
+    rail.materialize(data, node_by_id, node_pos)
+    node_type_map = {n["id"]: n["type"] for n in data["nodes"]}  # rail added new nodes
 
     # -- Final cleanup: strip _role from every node -----------------------
     for node in data["nodes"]:
@@ -455,15 +395,6 @@ def apply(data: dict) -> dict:
     def _scene_xy(node_id: str, anchor_name: str) -> tuple[float, float] | None:
         pos = node_by_id[node_id]["position"]
         ntype = node_type_map.get(node_id, "")
-        if ntype == "VoltageSource" and anchor_name.startswith("X"):
-            anchors = node_by_id[node_id]["properties"]["anchors"]
-            idx = anchors.index(anchor_name)
-            return (pos["x"] + _M.vsource_pix_w + idx * _M.pl_spacing,
-                    pos["y"] + _M.vsource_pix_h * 69 / 100)
-        if ntype == "Ground" and anchor_name.startswith("X"):
-            anchors = node_by_id[node_id]["properties"]["anchors"]
-            idx = anchors.index(anchor_name)
-            return (pos["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing, pos["y"])
         local = anchor_local_for_routing(ntype, anchor_name)
         return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
@@ -499,7 +430,13 @@ def apply(data: dict) -> dict:
         if spos is None or tpos is None:
             continue
         s_type, t_type = node_type_map.get(s_id, ""), node_type_map.get(t_id, "")
-        if s_type in ("VoltageSource", "Ground") or t_type in ("VoltageSource", "Ground"):
+        # id(conn) in bus_conn_ids: catches connections that USED to target
+        # the VoltageSource/Ground node directly before rail.materialize()
+        # rewrote them onto an interior JunctionNodeItem tap (only the
+        # bus.x_min tap still has the original bus node id, so the plain
+        # type check below would otherwise miss every other bus connection).
+        if (id(conn) in bus_conn_ids
+                or s_type in ("VoltageSource", "Ground") or t_type in ("VoltageSource", "Ground")):
             wps = _bus_vh_route(spos, tpos)
         else:
             wps = route_connection(astar_grid, spos, get_exit_dir(s_type, s_anc),

@@ -24,17 +24,13 @@ def _node(data, node_id):
 
 
 def _scene_xy(node_by_id, node_type_map, node_id, anchor_name):
+    """Real (x, y) of an anchor. Since the RailPlanner migration (rail.py),
+    a VoltageSource/Ground "X1" resolves against the node's OWN stored
+    position (which already bakes in the vsource_pix_w/ground_pix_w*0.5
+    offset -- see rail.py's x_min) via sprite_metrics.py's "VoltageSource"/
+    "Ground" anchor_local entries -- no more special-casing needed here."""
     pos = node_by_id[node_id]["position"]
     ntype = node_type_map.get(node_id, "")
-    if ntype == "VoltageSource" and anchor_name.startswith("X"):
-        anchors = node_by_id[node_id]["properties"]["anchors"]
-        idx = anchors.index(anchor_name)
-        return (pos["x"] + _M.vsource_pix_w + idx * _M.pl_spacing,
-                pos["y"] + _M.vsource_pix_h * 69 / 100)
-    if ntype == "Ground" and anchor_name.startswith("X"):
-        anchors = node_by_id[node_id]["properties"]["anchors"]
-        idx = anchors.index(anchor_name)
-        return (pos["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing, pos["y"])
     local = anchor_local_for_routing(ntype, anchor_name)
     return (pos["x"] + local[0], pos["y"] + local[1]) if local else (pos["x"], pos["y"])
 
@@ -270,71 +266,80 @@ class TestLayoutMapRegistration:
 
 
 class TestVoltageSourceGroundBarDimensioned:
-    def test_bars_span_at_least_the_full_x_range_of_nodes(self):
+    """RailPlanner (rail.py) sizes each bus once from the grid's real reach
+    (x_min/x_max), no incremental "anchors" array to grow/shrink anymore --
+    materialize() pops properties["anchors"] entirely and represents the
+    bus's far end as a REAL "JunctionNodeItem" node (bus_id + "-b-...")."""
+
+    def test_bars_reach_the_full_x_range_of_nodes(self):
         raw = sbe.generate(parse("A+B+A-B-"))
         data = layout.apply(raw)
         node_xs = [n["position"]["x"] for n in data["nodes"]]
-        min_x, max_x = min(node_xs), max(node_xs)
+        max_x = max(node_xs)
         for bus_id in ("gen-vsource", "gen-ground"):
-            node = _node(data, bus_id)
-            anchors = node["properties"]["anchors"]
-            last_scene_x = node["position"]["x"] + (len(anchors) - 1) * _M.pl_spacing
-            assert node["position"]["x"] <= min_x
-            assert last_scene_x >= max_x - _M.pl_spacing
+            assert _node(data, bus_id)["properties"].get("anchors") is None
+            far_end = next(n for n in data["nodes"] if n["id"].startswith(f"{bus_id}-b-"))
+            assert far_end["type"] == "JunctionNodeItem"
+            assert far_end["position"]["x"] >= max_x - _M.pl_spacing
 
-    def test_bars_grow_only_never_shrink_existing_anchors(self):
-        raw = sbe.generate(parse("A+B+A-B-"))
-        original = {
-            "gen-vsource": list(next(n for n in raw["nodes"] if n["id"] == "gen-vsource")["properties"]["anchors"]),
-            "gen-ground": list(next(n for n in raw["nodes"] if n["id"] == "gen-ground")["properties"]["anchors"]),
-        }
-        data = layout.apply(raw)
-        for bus_id, orig in original.items():
-            grown = _node(data, bus_id)["properties"]["anchors"]
-            assert grown[:len(orig)] == orig
+
+def _bus_tap_owner(nid: str, bus_ids: set) -> str | None:
+    """Identifies which bus (if any) owns node `nid` post-materialize --
+    the bus's own node, its far-end "-b-..." JunctionNodeItem, or an
+    interior "-j-..." JunctionNodeItem tap. See rail.py's materialize()."""
+    if nid in bus_ids:
+        return nid
+    for bid in bus_ids:
+        if nid.startswith(f"{bid}-b-") or nid.startswith(f"{bid}-j-"):
+            return bid
+    return None
 
 
 class TestBusAnchorProximityReassignment:
     """Só existe UMA VoltageSource/Ground -- a reatribuição é um mapeamento
     monotônico: conexões ordenadas por X real do outro lado casam 1:1 com
-    anchors ordenados por X real -- garante zero cruzamento por construção."""
+    taps ordenados por X real -- garante zero cruzamento por construção.
+    Post-migration: a "anchor" de cada conexão da barra agora é um nó REAL
+    (a própria barra ou um JunctionNodeItem, interior ou "-b-" no fim
+    distante) -- lê-se a posição x real desse nó via node_by_id em vez de
+    indexar properties["anchors"]. Connections between two nodes that both
+    belong to the SAME bus are the bus's own internal chain segments, not
+    component connections, and are excluded."""
 
-    def test_voltage_source_anchor_assignment_is_monotonic_in_target_x(self):
+    def test_voltage_source_tap_assignment_is_monotonic_in_target_x(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         node_by_id = {n["id"]: n for n in data["nodes"]}
-        vsource = _node(data, "gen-vsource")
-        anchors = vsource["properties"]["anchors"]
-
-        def anchor_x(name):
-            idx = anchors.index(name)
-            return vsource["position"]["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
+        bus_ids = {"gen-vsource"}
 
         rows = []
         for c in data["connections"]:
-            if c["source"]["node"] == "gen-vsource":
-                target_x = node_by_id[c["target"]["node"]]["position"]["x"]
-                rows.append((anchor_x(c["source"]["anchor"]), target_x))
+            s_owner = _bus_tap_owner(c["source"]["node"], bus_ids)
+            if s_owner is None or _bus_tap_owner(c["target"]["node"], bus_ids) == s_owner:
+                continue
+            tap_x = node_by_id[c["source"]["node"]]["position"]["x"]
+            target_x = node_by_id[c["target"]["node"]]["position"]["x"]
+            rows.append((tap_x, target_x))
         rows.sort()
         target_xs = [r[1] for r in rows]
+        assert len(rows) > 0
         assert target_xs == sorted(target_xs)
 
-    def test_ground_anchor_assignment_is_monotonic_in_source_x(self):
+    def test_ground_tap_assignment_is_monotonic_in_source_x(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         node_by_id = {n["id"]: n for n in data["nodes"]}
-        ground = _node(data, "gen-ground")
-        anchors = ground["properties"]["anchors"]
-
-        def anchor_x(name):
-            idx = anchors.index(name)
-            return ground["position"]["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
+        bus_ids = {"gen-ground"}
 
         rows = []
         for c in data["connections"]:
-            if c["target"]["node"] == "gen-ground":
-                source_x = node_by_id[c["source"]["node"]]["position"]["x"]
-                rows.append((anchor_x(c["target"]["anchor"]), source_x))
+            t_owner = _bus_tap_owner(c["target"]["node"], bus_ids)
+            if t_owner is None or _bus_tap_owner(c["source"]["node"], bus_ids) == t_owner:
+                continue
+            tap_x = node_by_id[c["target"]["node"]]["position"]["x"]
+            source_x = node_by_id[c["source"]["node"]]["position"]["x"]
+            rows.append((tap_x, source_x))
         rows.sort()
         source_xs = [r[1] for r in rows]
+        assert len(rows) > 0
         assert source_xs == sorted(source_xs)
 
 
@@ -359,31 +364,29 @@ class TestBusAnchorReassignmentActuallyDoesSomething:
         assert len(vsource_conns) >= 2, "sequência de teste não gerou conexões suficientes"
         first, last = vsource_conns[0], vsource_conns[-1]
         first["target"], last["target"] = last["target"], first["target"]
-        naive_anchor_snapshot = [(c["source"]["anchor"], c["target"]["node"]) for c in vsource_conns]
+        # Snapshot of target node ids in raw creation order (== the order
+        # next_bus_anchor's sequential X1, X2, ... would have paired them,
+        # pre-rail.assign_sorted) -- this is the "naive" order the old
+        # array-index anchors would have produced without reassignment.
+        naive_target_ids = [c["target"]["node"] for c in vsource_conns]
 
         data = layout.apply(raw)
         node_by_id = {n["id"]: n for n in data["nodes"]}
-        vsource = _node(data, "gen-vsource")
-        anchors = vsource["properties"]["anchors"]
 
-        def anchor_x(name):
-            idx = anchors.index(name)
-            return vsource["position"]["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
-
-        naive_rows = sorted(
-            (anchor_x(a), node_by_id[target_id]["position"]["x"])
-            for a, target_id in naive_anchor_snapshot
-        )
-        naive_target_xs = [r[1] for r in naive_rows]
+        naive_target_xs = [node_by_id[tid]["position"]["x"] for tid in naive_target_ids]
         assert naive_target_xs != sorted(naive_target_xs), (
             "cenário sintético não ficou scrambled -- ajustar a troca de targets"
         )
 
+        bus_ids = {"gen-vsource"}
         rows = []
         for c in data["connections"]:
-            if c["source"]["node"] == "gen-vsource":
-                target_x = node_by_id[c["target"]["node"]]["position"]["x"]
-                rows.append((anchor_x(c["source"]["anchor"]), target_x))
+            s_owner = _bus_tap_owner(c["source"]["node"], bus_ids)
+            if s_owner is None or _bus_tap_owner(c["target"]["node"], bus_ids) == s_owner:
+                continue
+            tap_x = node_by_id[c["source"]["node"]]["position"]["x"]
+            target_x = node_by_id[c["target"]["node"]]["position"]["x"]
+            rows.append((tap_x, target_x))
         rows.sort()
         target_xs = [r[1] for r in rows]
         assert target_xs == sorted(target_xs), (
@@ -391,96 +394,74 @@ class TestBusAnchorReassignmentActuallyDoesSomething:
         )
 
 
-class TestBusAnchorsSpreadAcrossFullRange:
-    """Achado de revisão: zip(conns_sorted, anchors_sorted) truncava para o
-    prefixo dos m anchors mais à esquerda quando havia menos conexões (n)
-    que anchors disponíveis (m) -- a barra é dimensionada para cobrir toda
-    a largura do circuito, mas ficava com a maior parte do comprimento sem
-    uso, e componentes distantes (ex. x=3400) acabavam ligados a um anchor
-    bem à esquerda (ex. x=790), um fio ~2600px maior que o necessário."""
-
-    def test_vsource_anchor_indices_spread_beyond_leftmost_prefix(self):
-        # Sequência com bloco paralelo -> barra fica bem mais larga (mais
-        # anchors, m) do que o número de conexões da VoltageSource (n),
-        # expondo o truncamento se ele ainda existisse.
-        data = layout.apply(sbe.generate(parse("C+(A+B+)C-A-B-")))
-        vsource = _node(data, "gen-vsource")
-        anchors = vsource["properties"]["anchors"]
-        m = len(anchors)
-        used_indices = sorted(
-            anchors.index(c["source"]["anchor"])
-            for c in data["connections"]
-            if c["source"]["node"] == "gen-vsource"
-        )
-        n = len(used_indices)
-        assert n < m, "cenário de teste não tem folga entre n e m -- ajustar sequência"
-        assert max(used_indices) > (m - 1) // 2, (
-            f"anchors usados ({used_indices}) não se espalham além do "
-            f"prefixo mais à esquerda de {m} anchors disponíveis"
-        )
-
-
 class TestBusAnchorsGenuinelyNearest:
-    """Achado de revisão: o espalhamento por índice proporcional (ranking)
-    ignora a posição real quando a distribuição dos targets não é uniforme
-    -- o vão grande entre os blocos de átomo e a zona de potência produzia
-    erro de até 1530px numa sequência de 12 átomos. A busca de vizinho mais
-    próximo real reduz isso a ~70px (o termo de offset fixo da própria
-    fórmula da anchor, não um erro de escolha)."""
+    """Achado de revisão original (pre-RailPlanner): o espalhamento por
+    índice proporcional (ranking) ignora a posição real quando a
+    distribuição dos targets não é uniforme -- o vão grande entre os
+    blocos de átomo e a zona de potência produzia erro de até 1530px numa
+    sequência de 12 átomos. rail.py's assign_sorted (Task 3) keeps the
+    same sort-and-match approach (real X order on both sides), so this
+    regression coverage carries over -- reading each tap's real x directly
+    from its materialized node instead of an anchor-index formula. The old
+    "spread beyond leftmost prefix" companion test (checking against a
+    fixed-size anchors array) has no equivalent here: RailPlanner has no
+    such array -- assign_sorted places exactly one tap per connection."""
 
-    def test_max_anchor_target_delta_stays_small(self):
+    def test_max_tap_target_delta_stays_small(self):
         data = layout.apply(sbe.generate(parse("A+B+C+A-B-C-A+B+C+A-B-C-")))
-        vsource = _node(data, "gen-vsource")
-        anchors = vsource["properties"]["anchors"]
         node_by_id = {n["id"]: n for n in data["nodes"]}
-
-        def anchor_x(name):
-            idx = anchors.index(name)
-            return vsource["position"]["x"] + _M.vsource_pix_w + idx * _M.pl_spacing
+        bus_ids = {"gen-vsource"}
 
         max_delta = 0.0
+        checked = 0
         for c in data["connections"]:
-            if c["source"]["node"] == "gen-vsource":
-                ax = anchor_x(c["source"]["anchor"])
-                tx = node_by_id[c["target"]["node"]]["position"]["x"]
-                max_delta = max(max_delta, abs(ax - tx))
+            s_owner = _bus_tap_owner(c["source"]["node"], bus_ids)
+            if s_owner is None or _bus_tap_owner(c["target"]["node"], bus_ids) == s_owner:
+                continue
+            ax = node_by_id[c["source"]["node"]]["position"]["x"]
+            tx = node_by_id[c["target"]["node"]]["position"]["x"]
+            max_delta = max(max_delta, abs(ax - tx))
+            checked += 1
+        assert checked > 0
         assert max_delta < 200, f"max delta {max_delta} -- esperado bem abaixo de 200px"
 
-    def test_max_anchor_target_delta_stays_small_ground(self):
-        # Achado de revisão: o teste acima só cobre a barra VoltageSource,
-        # mesmo com os dois call sites (VoltageSource e Ground) tendo
-        # mudado para _select_nearest_anchors. Espelha o mesmo teste pro
-        # lado Ground -- fecha a lacuna de cobertura (Ground não tinha bug
+    def test_max_tap_source_delta_stays_small_ground(self):
+        # Achado de revisão: o teste acima só cobre a barra VoltageSource --
+        # espelha o mesmo teste pro lado Ground (Ground não tinha bug
         # conhecido, isso só confirma que o comportamento também é correto
         # lá).
         data = layout.apply(sbe.generate(parse("A+B+C+A-B-C-A+B+C+A-B-C-")))
-        ground = _node(data, "gen-ground")
-        anchors = ground["properties"]["anchors"]
         node_by_id = {n["id"]: n for n in data["nodes"]}
-
-        def anchor_x(name):
-            idx = anchors.index(name)
-            return ground["position"]["x"] + _M.ground_pix_w * 0.5 + idx * _M.pl_spacing
+        bus_ids = {"gen-ground"}
 
         max_delta = 0.0
+        checked = 0
         for c in data["connections"]:
-            if c["target"]["node"] == "gen-ground":
-                ax = anchor_x(c["target"]["anchor"])
-                sx = node_by_id[c["source"]["node"]]["position"]["x"]
-                max_delta = max(max_delta, abs(ax - sx))
+            t_owner = _bus_tap_owner(c["target"]["node"], bus_ids)
+            if t_owner is None or _bus_tap_owner(c["source"]["node"], bus_ids) == t_owner:
+                continue
+            ax = node_by_id[c["target"]["node"]]["position"]["x"]
+            sx = node_by_id[c["source"]["node"]]["position"]["x"]
+            max_delta = max(max_delta, abs(ax - sx))
+            checked += 1
+        assert checked > 0
         assert max_delta < 200, f"max delta {max_delta} -- esperado bem abaixo de 200px"
 
 
 class TestBusAnchorsDistinctPerConnection:
-    """Achado de revisão final: a busca de vizinho-mais-próximo pura (sem
-    guarda contra colisão de índice) podia atribuir a MESMA anchor a duas
-    conexões diferentes da mesma barra quando dois targets caem no mesmo X
-    real -- caso real dos contatos de potência empilhados em múltiplos
-    ciclos (mesma coluna X, Y diferente -- ver TestMultiCyclePowerStacking).
-    O resultado visível era dois fios roteados exatamente sobrepostos.
-    Este teste garante que toda conexão de uma barra (VoltageSource ou
-    Ground) recebe uma anchor própria, para as sequências de referência
-    que expõem o bug (incluindo as com contatos de potência empilhados)."""
+    """Achado de revisão original: a busca de vizinho-mais-próximo pura
+    (sem guarda contra colisão de índice) podia atribuir o MESMO anchor a
+    duas conexões diferentes da mesma barra quando dois targets caem no
+    mesmo X real -- caso real dos contatos de potência empilhados em
+    múltiplos ciclos (mesma coluna X, Y diferente -- ver
+    TestMultiCyclePowerStacking). O resultado visível era dois fios
+    roteados exatamente sobrepostos. rail.py's assign_sorted (Task 3)
+    enforces min_spacing between taps unconditionally, so the equivalent
+    check post-migration is: every connection into a bus resolves to its
+    OWN tap node, and no two taps of the same bus share a real (x, y)
+    position (TestMultiCyclePowerStacking already covers this for
+    stacked power contacts specifically at the node level; this is the
+    integration-level, bus-side check, across more reference sequences)."""
 
     @pytest.mark.parametrize("seq", [
         "A+B+A-B-",
@@ -488,22 +469,23 @@ class TestBusAnchorsDistinctPerConnection:
         "A+B+A-A+B-A-",
         "A+B+C+A-B-C-A+B+C+A-B-C-",
     ])
-    def test_no_duplicate_anchor_within_a_bus(self, seq):
+    def test_no_two_bus_taps_share_a_position(self, seq):
         data = layout.apply(sbe.generate(parse(seq)))
-        vsource_anchors = [
-            c["source"]["anchor"] for c in data["connections"]
-            if c["source"]["node"] == "gen-vsource"
-        ]
-        ground_anchors = [
-            c["target"]["anchor"] for c in data["connections"]
-            if c["target"]["node"] == "gen-ground"
-        ]
-        assert len(vsource_anchors) == len(set(vsource_anchors)), (
-            f"anchors duplicadas na VoltageSource para {seq!r}: {vsource_anchors}"
-        )
-        assert len(ground_anchors) == len(set(ground_anchors)), (
-            f"anchors duplicadas na Ground para {seq!r}: {ground_anchors}"
-        )
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+
+        for bus_id in ("gen-vsource", "gen-ground"):
+            bus_ids = {bus_id}
+            tap_positions = []
+            for c in data["connections"]:
+                for side, other in ((c["source"], c["target"]), (c["target"], c["source"])):
+                    owner = _bus_tap_owner(side["node"], bus_ids)
+                    if owner is None or _bus_tap_owner(other["node"], bus_ids) == owner:
+                        continue  # not this bus, or an internal bus-chain segment
+                    pos = node_by_id[side["node"]]["position"]
+                    tap_positions.append((pos["x"], pos["y"]))
+            assert len(tap_positions) == len(set(tap_positions)), (
+                f"taps compartilhando posição na barra {bus_id} para {seq!r}: {tap_positions}"
+            )
 
 
 class TestAllConnectionsOrthogonal:
@@ -519,15 +501,34 @@ class TestBusConnectionsRouteDeterministicallyVH:
     """VoltageSource/Ground usam roteamento VH determinístico (não A*) -- ver
     docs/superpowers/specs (fix do "degrau" acima da barra +24V, causado por
     snap de exit-point do A* perto do retângulo de bloqueio do sprite).
-    """
+
+    Identifies "connections from/to the bus" via _bus_tap_owner (any node
+    belonging to the bus post-materialize: the bus's own node, an interior
+    JunctionNodeItem tap, or the far-end JunctionNodeItem) instead of the
+    old plain node-type check -- after rail.materialize(), only ONE
+    connection (the bus's own unconditional internal chain link) still has
+    the literal VoltageSource/Ground type as its node, so a type-only
+    check would make these tests vacuous (checking nothing) for every
+    other, real component<->bus connection. Excludes the bus's own
+    internal chain segments (both sides on the same bus) -- those draw
+    the physical rail itself, not component wiring, and are not subject to
+    this invariant (see rail.py's materialize(): the bus's own sprite
+    anchor uses its real height*0.69 offset while interior/far-end
+    JunctionNodeItem taps sit at the bus's raw un-offset y -- a small,
+    pre-existing vertical mismatch inherent to materialize() for every bus
+    type, e.g. PressureLine's pl_pix_h offset vs. its JunctionNodeItem
+    taps, not something introduced by this file)."""
 
     @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
     def test_voltage_source_connections_never_go_above_the_source_anchor(self, seq):
         data = layout.apply(sbe.generate(parse(seq)))
         node_by_id = {n["id"]: n for n in data["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        bus_ids = {"gen-vsource"}
+        checked = 0
         for conn in data["connections"]:
-            if node_type_map.get(conn["source"]["node"]) != "VoltageSource":
+            s_owner = _bus_tap_owner(conn["source"]["node"], bus_ids)
+            if s_owner is None or _bus_tap_owner(conn["target"]["node"], bus_ids) == s_owner:
                 continue
             src_x, src_y = _scene_xy(
                 node_by_id, node_type_map, conn["source"]["node"], conn["source"]["anchor"])
@@ -535,14 +536,19 @@ class TestBusConnectionsRouteDeterministicallyVH:
                 assert wp["y"] >= src_y - 0.5, (
                     f"waypoint {wp} sobe acima do anchor fonte {(src_x, src_y)} em {conn}"
                 )
+            checked += 1
+        assert checked > 0
 
     @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
     def test_ground_connections_never_go_below_the_ground_anchor(self, seq):
         data = layout.apply(sbe.generate(parse(seq)))
         node_by_id = {n["id"]: n for n in data["nodes"]}
         node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        bus_ids = {"gen-ground"}
+        checked = 0
         for conn in data["connections"]:
-            if node_type_map.get(conn["target"]["node"]) != "Ground":
+            t_owner = _bus_tap_owner(conn["target"]["node"], bus_ids)
+            if t_owner is None or _bus_tap_owner(conn["source"]["node"], bus_ids) == t_owner:
                 continue
             tgt_x, tgt_y = _scene_xy(
                 node_by_id, node_type_map, conn["target"]["node"], conn["target"]["anchor"])
@@ -550,23 +556,35 @@ class TestBusConnectionsRouteDeterministicallyVH:
                 assert wp["y"] <= tgt_y + 0.5, (
                     f"waypoint {wp} desce abaixo do anchor terra {(tgt_x, tgt_y)} em {conn}"
                 )
+            checked += 1
+        assert checked > 0
 
     @pytest.mark.parametrize("seq", ["A+B+A-B-", "A+B+A-A+B-A-", "C+(A+B+)C-A-B-"])
     def test_voltage_source_connections_have_at_most_two_waypoints(self, seq):
         """VH determinístico: no máximo 1 jog horizontal -> no máximo 2 waypoints."""
         data = layout.apply(sbe.generate(parse(seq)))
-        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        bus_ids = {"gen-vsource"}
+        checked = 0
         for conn in data["connections"]:
-            if node_type_map.get(conn["source"]["node"]) != "VoltageSource":
+            s_owner = _bus_tap_owner(conn["source"]["node"], bus_ids)
+            if s_owner is None or _bus_tap_owner(conn["target"]["node"], bus_ids) == s_owner:
                 continue
             assert len(conn.get("waypoints", [])) <= 2, conn
+            checked += 1
+        assert checked > 0
 
 
 class TestRegressionCounts:
+    """Counts grew after the RailPlanner migration: rail.py's materialize()
+    (Task 2/3) adds one real node (a JunctionNodeItem, interior tap or
+    far-end) AND one connection (the chain segment leading to it) per bus
+    tap, replacing the old single-node properties["anchors"] array -- see
+    task-7-report.md."""
+
     @pytest.mark.parametrize("seq,n_nodes,n_conns", [
-        ("A+B+A-B-", 40, 51),
-        ("C+(A+B+)C-A-B-", 54, 69),
-        ("A+B+A-A+B-A-", 52, 69),
+        ("A+B+A-B-", 62, 73),
+        ("C+(A+B+)C-A-B-", 83, 98),
+        ("A+B+A-A+B-A-", 82, 99),
     ])
     def test_node_and_connection_counts_unchanged_from_topology(self, seq, n_nodes, n_conns):
         data = layout.apply(sbe.generate(parse(seq)))

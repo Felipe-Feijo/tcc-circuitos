@@ -324,6 +324,21 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
         "JunctionNodeItem": {
             "J": (0.0, 0.0),
         },
+        # VoltageSource/Ground bus (Task 7 rail.py migration, step_by_step_
+        # electric_layout.py). Same reasoning as PressureLine above: the
+        # node's stored position already bakes in the sprite-width offset
+        # (see rail.py's x_min/x_max, computed from
+        # vsource_pix_w/ground_pix_w*0.5 in the layout file), so only the
+        # graphics anchor's Y fraction survives here -- X is 0.
+        # Reproduces VoltageSource.initialize_own_anchor()'s
+        # QPointF(self.width, self.height*0.69) and
+        # Ground.initialize_own_anchor()'s QPointF(self.width/2, 0).
+        "VoltageSource": {
+            "X1": (0.0, float(m.vsource_pix_h) * 0.69),
+        },
+        "Ground": {
+            "X1": (0.0, 0.0),
+        },
     }
 
 

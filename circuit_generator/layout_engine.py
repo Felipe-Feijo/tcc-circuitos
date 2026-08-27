@@ -31,9 +31,6 @@ def _scene_x(node_id: str, anchor_name: str,
     ntype = node_type_map.get(node_id, "")
     if npos is None:
         return None
-    if ntype == "PressureLine" and anchor_name.startswith("X"):
-        idx = int(anchor_name[1:])
-        return npos[0] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing
     local = _anchor_local(ntype, anchor_name)
     return (npos[0] + local[0]) if local else npos[0]
 
@@ -45,87 +42,8 @@ def _scene_xy(node_id: str, anchor_name: str,
     ntype = node_type_map.get(node_id, "")
     if npos is None:
         return None
-    if ntype == "PressureLine" and anchor_name.startswith("X"):
-        idx = int(anchor_name[1:])
-        # PressureLine.layout_anchors() (graphics/items/base/nodes/
-        # expandable/pressure_line.py) posiciona cada anchor em
-        # y0=self.pix_h -- pl_pix_h abaixo da posição do nó, não na
-        # própria posição. Sem essa soma, o roteamento acha que o anchor
-        # está pl_pix_h mais acima do que é renderizado de verdade, e a
-        # conexão cruza de volta por cima dele.
-        return (npos[0] + _M.pl_pix_w / 2 + (idx - 1) * _M.pl_spacing, npos[1] + _M.pl_pix_h)
     local = _anchor_local(ntype, anchor_name)
     return (npos[0] + local[0], npos[1] + local[1]) if local else npos
-
-
-# ── Helpers de anchor em PressureLine ────────────────────────────────────────
-
-def _pl_anchor_x(pl_node: dict, anchor_name: str, node_pos: dict) -> float:
-    pl_x = node_pos[pl_node["id"]][0]
-    return pl_x + _M.pl_pix_w / 2 + (int(anchor_name[1:]) - 1) * _M.pl_spacing
-
-
-def _nearest_pl_anchor(pl_node: dict, target_x: float, node_pos: dict,
-                        side: str = "any") -> str:
-    """
-    Retorna o anchor Xi mais próximo de target_x.
-    side='left'  → apenas anchors com x < target_x (fallback: mais à esquerda)
-    side='right' → apenas anchors com x > target_x (fallback: mais à direita)
-    side='any'   → o mais próximo sem restrição
-    """
-    anchors = pl_node["properties"]["anchors"]
-    scored = [(int(n[1:]), _pl_anchor_x(pl_node, n, node_pos), n) for n in anchors]
-
-    if side == "left":
-        candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax < target_x]
-        fallback   = sorted(scored)[0][2]
-    elif side == "right":
-        candidates = [(abs(ax - target_x), n) for _, ax, n in scored if ax > target_x]
-        fallback   = sorted(scored, reverse=True)[0][2]
-    else:
-        candidates = [(abs(ax - target_x), n) for _, ax, n in scored]
-        fallback   = anchors[0]
-
-    return min(candidates)[1] if candidates else fallback
-
-
-def _best_pl_anchor_clear_column(pl_node: dict, target_x: float,
-                                   y_top: float, y_bot: float,
-                                   node_pos: dict, node_type_map: dict,
-                                   pl_anchor_used: dict) -> str:
-    """
-    Anchor cujo eixo vertical [y_top, y_bot] está mais livre de sprites.
-    Critérios (prioridade): livre → não-ocupado → mais próximo de target_x.
-    """
-    from circuit_generator.astar_router import SPRITE_SIZES as _SS
-    MH = 80
-    VALVE_TYPES = {"Valve_4_2_Ways", "Valve_5_2_Ways", "Valve_3_2_Ways"}
-
-    blocking = []
-    for nid, npos in node_pos.items():
-        ntype = node_type_map.get(nid, "")
-        if ntype in ("PressureLine", "Exhaust", "PressureSource"):
-            continue
-        w, h = _SS.get(ntype, (0, 0))
-        if not w:
-            continue
-        mg = MH if ntype in VALVE_TYPES else 30
-        if npos[1] + h > y_top and npos[1] < y_bot:
-            blocking.append((npos[0] - mg, npos[0] + w + mg))
-
-    def is_clear(ax: float) -> bool:
-        return all(not (bx0 <= ax <= bx1) for bx0, bx1 in blocking)
-
-    anchors = pl_node["properties"]["anchors"]
-    candidates = []
-    for name in anchors:
-        ax = _pl_anchor_x(pl_node, name, node_pos)
-        candidates.append((not is_clear(ax), round(ax) in pl_anchor_used,
-                           abs(ax - target_x), name))
-    candidates.sort(key=lambda c: c[:3])
-    chosen = candidates[0][3]
-    pl_anchor_used[round(_pl_anchor_x(pl_node, chosen, node_pos))] = ("_clear_col", 0.0, 0.0)
-    return chosen
 
 
 def apply(data: dict) -> dict:
@@ -516,59 +434,17 @@ def apply(data: dict) -> dict:
             pl_node["position"]["x"] = new_x
             node_pos[pl_id] = (new_x, node_pos[pl_id][1])
 
-    # ── Fase 3: atribuir anchors das PressureLines ────────────────────────────
-    pl_anchor_used: dict[int, tuple[str, float, float]] = {}  # round(x) → (owner_id, owner_y, owner_pl_y)
-    conn_by_owner:  dict[str, tuple]             = {}  # owner_id → (conn, side, pl_node)
-    mc_A_anchor:    dict[str, tuple[str, int]]   = {}  # mc_id → (pl_id, idx)
+    # ── Fase 3: atribuir taps das PressureLines (RailPlanner) ─────────────────
+    from circuit_generator.rail import RailPlanner
 
-    def _resolve_conflict(pl_node: dict, anchor: str, owner: str,
-                           owner_y: float, conn_ref: object, side: str) -> str:
-        anchors = pl_node["properties"]["anchors"]
-        n, mid  = len(anchors), len(anchors) / 2
-
-        def _next(anc: str) -> str:
-            idx = int(anc[1:])
-            return f"X{max(1, min(n, (idx-1) if idx <= mid else (idx+1)))}"
-
-        pl_y = node_pos.get(pl_node["id"], (0, 0))[1]
-
-        def _reg(anc: str, oid: str, oy: float, cref: object) -> str:
-            ax  = _pl_anchor_x(pl_node, anc, node_pos)
-            key = round(ax)
-            if key not in pl_anchor_used:
-                pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid]  = (cref, side, pl_node)
-                return anc
-            prev_id, prev_y, prev_pl_y = pl_anchor_used[key]
-            if prev_id == oid:
-                return anc
-            # Sem conflito real se lados opostos E ordem Y consistente com ordem PL
-            # (componente acima→PL acima e componente abaixo→PL abaixo = sem cruzamento)
-            # Um está acima e outro abaixo da pressure line?
-            curr_above = oy < pl_y
-            prev_above = prev_y < prev_pl_y
-            opp_sides = curr_above != prev_above
-            # A ordem relativa de Y dos componentes bate com a ordem das suas PLs?
-            # (se curr está acima de prev_y, a PL de curr deve estar acima da PL de prev)
-            if pl_y != prev_pl_y:
-                same_order = (oy < prev_y) == (pl_y < prev_pl_y)
-            else:
-                # Mesma PL: um vem de cima, outro de baixo → ordem trivialmente consistente
-                same_order = True
-            if opp_sides and same_order:
-                return anc
-            if oy >= prev_y:
-                return _reg(_next(anc), oid, oy, cref)
-            else:
-                pl_anchor_used[key] = (oid, oy, pl_y)
-                conn_by_owner[oid]  = (cref, side, pl_node)
-                prev_conn, prev_side, prev_pl = conn_by_owner.get(prev_id, (None, None, None))
-                if prev_conn is not None:
-                    new_anc = _reg(_next(anc), prev_id, prev_y, prev_conn)
-                    prev_conn[prev_side]["anchor"] = new_anc
-                return anc
-
-        return _reg(anchor, owner, owner_y, conn_ref)
+    rail = RailPlanner(min_spacing=_M.pl_spacing)
+    for pl_id, pl_node in pl_node_map.items():
+        idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
+        pl_x = node_pos[pl_id][0]
+        x_min = pl_x + _M.pl_pix_w / 2 + (min(idxs) - min(idxs)) * _M.pl_spacing
+        x_max = pl_x + _M.pl_pix_w / 2 + (max(idxs) - min(idxs)) * _M.pl_spacing
+        rail.register_bus(pl_id, "PressureLineTerminal", y=node_pos[pl_id][1],
+                           x_min=x_min, x_max=x_max)
 
     # Processar caso 2 (componente → PL) antes do caso 1 (PL → componente)
     # para registrar no pl_anchor_used antes de resolver conflitos
@@ -594,102 +470,51 @@ def apply(data: dict) -> dict:
         s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
         t_id, t_anc = conn["target"]["node"], conn["target"]["anchor"]
         s_type = node_type_map.get(s_id, "")
-        t_type = node_type_map.get(t_id, "")
 
         if s_id in pl_node_map and s_anc.startswith("X"):
-            # PL → componente
+            # PL → componente: pede tap direto na posição real do alvo.
+            # request_tap resolve colisão/ordenação sozinho (substitui os
+            # antigos casos especiais por side/_best_pl_anchor_clear_column
+            # -- ver task-4-report.md sobre a regressão conhecida e não
+            # portada de _best_pl_anchor_clear_column).
             tgt_x = _scene_x(t_id, t_anc, node_pos, node_type_map)
             if tgt_x is None:
                 continue
-            pl = pl_node_map[s_id]
-            pl_y  = node_pos.get(s_id, (0,0))[1]
-            tgt_y = (node_pos.get(t_id, (0,0))[1] + 180) if t_type == "Valve_3_2_Ways" else 0
-            if t_type == "Valve_3_2_Ways" and t_anc == "P":
-                y0, y1 = (pl_y, tgt_y) if tgt_y > pl_y else (tgt_y, pl_y)
-                if y0 != y1:
-                    anc = _best_pl_anchor_clear_column(pl, tgt_x, y0, y1,
-                                                        node_pos, node_type_map, pl_anchor_used)
-                else:
-                    anc = _nearest_pl_anchor(pl, tgt_x, node_pos)
-            elif t_anc == "PL":
-                anc = _nearest_pl_anchor(pl, tgt_x, node_pos, "left")
-            elif t_anc == "PR":
-                anc = _nearest_pl_anchor(pl, tgt_x, node_pos, "right")
-            else:
-                anc = _nearest_pl_anchor(pl, tgt_x, node_pos)
-            conn["source"]["anchor"] = _resolve_conflict(
-                pl, anc, t_id, node_pos.get(t_id,(0,0))[1], conn, "source")
+            rail.request_tap(s_id, owner_id=t_id, owner_y=node_pos.get(t_id, (0, 0))[1],
+                              desired_x=tgt_x, conn_ref=conn, side="source")
 
         elif t_id in pl_node_map and t_anc.startswith("X"):
             # componente → PL
             src_x = _scene_x(s_id, s_anc, node_pos, node_type_map)
             if src_x is None:
                 continue
-            pl = pl_node_map[t_id]
             OFF_PL = cols.get("v42_pl_exit_offset", 10)
             OFF_PR = cols.get("v42_pr_exit_offset", 150)
             if s_anc == "PL" and s_type == "Valve_5_2_Ways":
-                mc_role = role_map.get(s_id, "")
-                mc_idx  = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
-                anc = _nearest_pl_anchor(pl, src_x - mc_idx * 2 * _M.pl_spacing, node_pos, "left")
+                mc_role   = role_map.get(s_id, "")
+                mc_idx    = int(mc_role.split(":", 1)[1]) if mc_role.startswith("memory:") else 0
+                desired_x = src_x - mc_idx * 2 * _M.pl_spacing
             elif s_anc == "PL":
-                anc = _nearest_pl_anchor(pl, src_x - OFF_PL, node_pos, "left")
+                desired_x = src_x - OFF_PL
             elif s_anc == "PR":
-                anc = _nearest_pl_anchor(pl, src_x + OFF_PR, node_pos, "right")
+                desired_x = src_x + OFF_PR
             elif s_type == "Valve_5_2_Ways" and s_anc == "A":
-                ax  = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["A"][0]
-                anc = _nearest_pl_anchor(pl, ax, node_pos)
+                desired_x = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["A"][0]
             elif s_type == "Valve_5_2_Ways" and s_anc == "B":
-                bx      = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
+                bx        = node_pos.get(s_id,(0,0))[0] + _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
                 safeguard = cols.get("mc_B_pl_safeguard", 20)
                 PR_B_diff = anchor_local_for_routing("Valve_5_2_Ways", "PR")[0] - _ANCHOR_LOCAL["Valve_5_2_Ways"]["B"][0]
-                margin  = PR_B_diff + 2.5 * _M.mc_x_step + safeguard
-                anc = _nearest_pl_anchor(pl, bx + margin, node_pos, "right")
-                conn["target"]["anchor"] = anc  # mc.B sempre abaixo da PL, sem conflito real
-                continue
+                margin    = PR_B_diff + 2.5 * _M.mc_x_step + safeguard
+                desired_x = bx + margin
             else:
-                anc = _nearest_pl_anchor(pl, src_x, node_pos)
-            conn["target"]["anchor"] = _resolve_conflict(
-                pl, anc, s_id, node_pos.get(s_id,(0,0))[1], conn, "target")
-            if s_type == "Valve_5_2_Ways" and s_anc == "A":
-                mc_A_anchor[s_id] = (t_id, int(conn["target"]["anchor"][1:]))
-
-    # ── Fase 3.5: mc.B anchor > mc.A anchor (evita cruzamento) ───────────────
-    for conn in data.get("connections", []):
-        s_id, s_anc = conn["source"]["node"], conn["source"]["anchor"]
-        t_id = conn["target"]["node"]
-        if (node_type_map.get(s_id) == "Valve_5_2_Ways" and s_anc == "B"
-                and t_id in pl_node_map):
-            _, a_idx = mc_A_anchor.get(s_id, (None, -1))
-            if a_idx != -1:
-                b_idx     = int(conn["target"]["anchor"][1:])
-                n_anchors = len(pl_node_map[t_id]["properties"]["anchors"])
-                if b_idx <= a_idx:
-                    conn["target"]["anchor"] = f"X{min(a_idx + 1, n_anchors)}"
-
-    # ── Fase 3.9: pruning das PressureLines ──────────────────────────────────
-    used_min, used_max = float("inf"), float("-inf")
-    for conn in data.get("connections", []):
-        for side in (conn["source"], conn["target"]):
-            if side["node"] in pl_node_map and side["anchor"].startswith("X"):
-                idx = int(side["anchor"][1:])
-                used_min = min(used_min, idx)
-                used_max = max(used_max, idx)
-
-    if used_min != float("inf"):
-        for pl_id, pl_node in pl_node_map.items():
-            all_idxs = [int(a[1:]) for a in pl_node["properties"]["anchors"]]
-            keep_min = max(min(all_idxs), used_min - 1)
-            keep_max = min(max(all_idxs), used_max + 1)
-            pl_node["properties"]["anchors"] = [f"X{i}" for i in all_idxs
-                                                if keep_min <= i <= keep_max]
-            removed_left = keep_min - min(all_idxs)
-            new_x = node_pos[pl_id][0] + removed_left * _M.pl_spacing
-            pl_node["position"]["x"] = new_x
-            node_pos[pl_id] = (new_x, node_pos[pl_id][1])
-
+                desired_x = src_x
+            rail.request_tap(t_id, owner_id=s_id, owner_y=node_pos.get(s_id, (0, 0))[1],
+                              desired_x=desired_x, conn_ref=conn, side="target")
 
     # ── Fase 4: roteamento A* ─────────────────────────────────────────────────
+    rail.materialize(data, {n["id"]: n for n in data["nodes"]}, node_pos)
+    node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+
     from circuit_generator.astar_router import build_grid, route_connection, get_exit_dir
     astar_grid = build_grid(data["nodes"])
 

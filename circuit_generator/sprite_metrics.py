@@ -304,6 +304,26 @@ def _build_anchor_local(m: "SpriteMetrics") -> dict:
             "T": (m.relay_coil_width / 2, 0.0),
             "B": (m.relay_coil_width / 2, float(m.relay_coil_height)),
         },
+        # PairedTerminalItem bus taps (Task 6 rail.py migration). The bus's
+        # own node (type "PressureLine") keeps its "X1" anchor -- its
+        # stored position already bakes in the pl_pix_w/2 x-offset (see
+        # rail.py's x_min/x_max), but PressureLine.layout_anchors() still
+        # draws the anchor pl_pix_h below the node's position, same as the
+        # deleted PL-special-case in layout_engine._scene_xy used to add.
+        "PressureLine": {
+            "X1": (0.0, float(m.pl_pix_h)),
+        },
+        # The far end of the bus is a real PressureLineTerminal node
+        # (rail.py's node_b) -- same anchor offset as the bus's own X1
+        # anchor used for idx==1 in the deleted discrete-anchor code.
+        "PressureLineTerminal": {
+            "X1": (m.pl_pix_w / 2, float(m.pl_pix_h)),
+        },
+        # Plain junction dot for interior bus taps -- no offset from its
+        # own position.
+        "JunctionNodeItem": {
+            "J": (0.0, 0.0),
+        },
     }
 
 

@@ -184,3 +184,18 @@ class TestPressureLineAnchorYAccountsForSpriteHeight:
                     )
             checked += 1
         assert checked > 0
+
+
+def test_pressure_line_buses_use_the_new_paired_terminal_format():
+    data = cascade.generate(parse("A+B+A-B-"))
+    data = apply_layout(data)
+    pl_nodes = [n for n in data["nodes"] if n["type"] == "PressureLine"]
+    assert pl_nodes, "expected at least one PressureLine bus"
+    for pl in pl_nodes:
+        assert "anchors" not in pl["properties"]
+    node_ids = {n["id"] for n in data["nodes"]}
+    for conn in data["connections"]:
+        assert conn["source"]["node"] in node_ids
+        assert conn["target"]["node"] in node_ids
+        assert not conn["source"]["anchor"].startswith("X") or conn["source"]["anchor"] == "X1"
+        assert not conn["target"]["anchor"].startswith("X") or conn["target"]["anchor"] == "X1"

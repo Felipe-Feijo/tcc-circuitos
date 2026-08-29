@@ -90,7 +90,7 @@ class TestNoCollisionOrDuplicatePositions:
         for role in ("ramo_a_sensor0", "ramo_a_sensor1", "ramo_a_sensor2"):
             sensor = _node(data, f"gen-contact-1-{role}")
             s_top = sensor["position"]["y"]
-            s_bottom = s_top + _M.relay_switch_height
+            s_bottom = s_top + _M.contact_height
             overlap = s_top < vs_bottom and vs_top < s_bottom
             assert not overlap, (
                 f"{role}: vsource=[{vs_top},{vs_bottom}] sensor=[{s_top},{s_bottom}]"

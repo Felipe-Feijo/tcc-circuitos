@@ -1,14 +1,21 @@
-"""Simulation node for the push-button switch."""
+"""Simulation node for a generic NO/NC electric contact.
+
+Merges what used to be two separate node types (ButtonSwitch and
+RelaySwitch): the schematic symbol for a contact is the same whatever
+actuates it -- a direct click ("Button"), a relay/solenoid coil, or a
+cylinder limit switch. "Button" is a sentinel, not a real signal name
+(see actuator_sensor / BUTTON_SENSOR in the graphics counterpart).
+"""
 
 from simulation.nodes.nodes import Node
 
 
-class ButtonSwitch(Node):
+class Contact(Node):
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
-        super().__init__(node_id, "button_switch", domain=domain, properties=properties)
+        super().__init__(node_id, "contact", domain=domain, properties=properties)
 
         self.state = 0  # 0 = at rest, 1 = actuated
-        self.contact_type = self.properties.get("contact_type", "NO")
+        self.actuator_sensor_name = self.properties.get("actuator_sensor")
 
     # --------------------------
     # Commands coming from the UI
@@ -18,6 +25,10 @@ class ButtonSwitch(Node):
         command:
             type: "switch"
             value: 0 | 1
+
+        Meaningful when actuator_sensor is "Button" (direct click instead
+        of a named sensor); harmless otherwise -- a sensor-driven contact
+        overwrites self.state again on the next update() tick.
         """
         if command.get("type") != "switch":
             return
@@ -32,10 +43,18 @@ class ButtonSwitch(Node):
     # Logic update
     # --------------------------
     def update(self, outputs=None):
-        """
-        Switch is purely passive -- doesn't depend on sensors.
-        """
-        pass
+
+        if not outputs or not self.actuator_sensor_name:
+            return
+        payload = outputs.get(self.actuator_sensor_name)
+
+        if not payload:
+            return
+
+        if payload.get("type") != "signal":
+            return
+
+        self.state = 1 if payload.get("value") else 0
 
     # --------------------------
     # Internal connections

@@ -192,15 +192,15 @@ def apply(data: dict) -> dict:
 
     # -- Cohesive block per atom: ramo A | ramo B (top) + reset/K coil
     #    (right below, same column as ramo B) -------------------------------
-    grid.add_row("ramo_row", ramo_cell_w, _M.relay_switch_height, ramo_row_y,
+    grid.add_row("ramo_row", ramo_cell_w, _M.contact_height, ramo_row_y,
                  x_origin=cyl_first_x)
     # Cycle-start button: in series at the end of the FIRST atom's ramo A
     # -- same column as ramo A (0), 1 level below ramo_row on the same
     # grid as the sensors (where it sits electrically: after the previous
     # K's contact, before converging with ramo B).
-    grid.add_row("start_btn_row", ramo_cell_w, _M.button_switch_height, start_btn_row_y,
+    grid.add_row("start_btn_row", ramo_cell_w, _M.contact_height, start_btn_row_y,
                  x_origin=cyl_first_x)
-    grid.add_row("reset_row", ramo_cell_w, _M.relay_switch_height, reset_row_y,
+    grid.add_row("reset_row", ramo_cell_w, _M.contact_height, reset_row_y,
                  x_origin=cyl_first_x)
     grid.add_row("coil_row", ramo_cell_w, _M.relay_coil_height, coil_row_y,
                  x_origin=cyl_first_x)
@@ -222,7 +222,7 @@ def apply(data: dict) -> dict:
             sensor_id = _contact(sensor_role)
             stack_row_id = f"ramo_a_stack_{depth}"
             if stack_row_id not in stack_rows_added:
-                grid.add_row(stack_row_id, ramo_cell_w, _M.relay_switch_height,
+                grid.add_row(stack_row_id, ramo_cell_w, _M.contact_height,
                              ramo_row_y - depth * ramo_stack_gap, x_origin=cyl_first_x)
                 stack_rows_added.add(stack_row_id)
             x, y = _place_aligned(stack_row_id, 3 * k, sensor_id)
@@ -275,7 +275,7 @@ def apply(data: dict) -> dict:
         for depth, (_k, contact_id) in enumerate(contacts, start=1):
             row_id = f"power_row_{depth}"
             if row_id not in power_stack_rows_added:
-                grid.add_row(row_id, zone3_cell_w, _M.relay_switch_height,
+                grid.add_row(row_id, zone3_cell_w, _M.contact_height,
                              reset_row_y - depth * ramo_stack_gap, x_origin=zone3_x0)
                 power_stack_rows_added.add(row_id)
             if depth == 1:

@@ -6,17 +6,17 @@ in circuit_generator.methods.step_by_step_pneumatic: a single event, or
 a whole "(...)" block of simultaneous moves):
   - 1 VoltageSource + 1 Ground (electric buses, anchors grow on demand,
     same pattern as the pneumatic PressureLine)
-  - 1 cycle-bootstrap ButtonSwitch
+  - 1 cycle-bootstrap Contact (actuator_sensor = "Button")
   - Per cylinder: 1 DoubleActingCylinder + 1 Valve_4_2_Ways (P/R with
     dedicated PressureSource/Exhaust, same as pneumatic)
-  - Per atom: 1 RelayCoil K_k + 3 step RelaySwitches (ramo A: previous
+  - Per atom: 1 RelayCoil K_k + 3 step Contacts (ramo A: previous
     atom's end-of-stroke sensor(s) in series + the previous atom's K
     contact; ramo B: K_k's own self-hold; reset: NC of the next atom's
     K) -- logic ring, see docs/superpowers/specs/
     2026-07-31-step-by-step-electric-power-contacts-design.md
   - Per (cylinder, direction) present in the sequence: 1 SolenoidCoil Y
     (sensor "Y{letter}{1|0}") + 1 dedicated NO power contact per atom
-    that triggers that move (relay_sensor = the atom's K), all in
+    that triggers that move (actuator_sensor = the atom's K), all in
     parallel feeding the same Y coil -- multi-cycle becomes just one
     more parallel contact, no sig or OrValve.
   - 4/2 piloting: always the "solenoid" actuator, reading the matching
@@ -38,6 +38,7 @@ step" is remembered by the K_k's own energized/de-energized state.
 
 import uuid
 from circuit_generator.sequence_parser import extract_cylinders
+from graphics.items.base.nodes.switch.contact import BUTTON_SENSOR
 
 
 def _atomize(events: list[tuple]) -> list[list[tuple[int, str, str]]]:
@@ -159,10 +160,10 @@ def generate(events: list[tuple[str, str]]) -> dict:
              properties={"anchors": []})
     add_node("gen-ground", "Ground", "ground", domain="electric",
              properties={"anchors": []})
-    add_node("gen-btn", "ButtonSwitch", "button", domain="electric",
-             properties={"contact_type": "NO"})
-    add_node("gen-btn-start", "ButtonSwitch", "button_start", domain="electric",
-             properties={"contact_type": "NO"})
+    add_node("gen-btn", "Contact", "button", domain="electric",
+             properties={"contact_type": "NO", "actuator_sensor": BUTTON_SENSOR})
+    add_node("gen-btn-start", "Contact", "button_start", domain="electric",
+             properties={"contact_type": "NO", "actuator_sensor": BUTTON_SENSOR})
 
     _bus_counter: dict[str, int] = {"gen-vsource": 0, "gen-ground": 0}
 
@@ -177,7 +178,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
     # -- 4. K_k coil ring (one per atom) and self-holding steps -------------
     #
     #   Each atom gets exactly 1 RelayCoil (K_k, sensor "K{k+1}",
-    #   1-indexed) and a step of 3 RelaySwitch contact groups:
+    #   1-indexed) and a step of 3 Contact groups:
     #     - ramo A (start): serial chain of NO contacts reading the
     #       PREVIOUS atom's end-of-stroke sensors (1 contact per atom
     #       event, in series -- same serial-confirmation technique
@@ -189,7 +190,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
     #       the ring with no special case), after the point where ramo A
     #       and ramo B converge.
     #   Atom M-1 (the cycle's last one) gets a third parallel branch,
-    #   with only the bootstrap ButtonSwitch.
+    #   with only the bootstrap Contact (Button).
     #
     #   K_k is a LOGIC-only relay -- it doesn't drive anything pneumatic
     #   directly. The power coil (Y, section 6) is a separate physical
@@ -200,10 +201,10 @@ def generate(events: list[tuple[str, str]]) -> dict:
         add_node(k_ids[k], "RelayCoil", f"coil:{k}", domain="electric",
                  properties={"sensor": {"coil": {"name": f"K{k + 1}"}}})
 
-    def contact(role_suffix: str, contact_type: str, relay_sensor: str) -> str:
+    def contact(role_suffix: str, contact_type: str, actuator_sensor: str) -> str:
         cid = f"gen-contact-{role_suffix}"
-        add_node(cid, "RelaySwitch", f"contact:{role_suffix}", domain="electric",
-                 properties={"contact_type": contact_type, "relay_sensor": relay_sensor})
+        add_node(cid, "Contact", f"contact:{role_suffix}", domain="electric",
+                 properties={"contact_type": contact_type, "actuator_sensor": actuator_sensor})
         return cid
 
     for k in range(n_atoms):

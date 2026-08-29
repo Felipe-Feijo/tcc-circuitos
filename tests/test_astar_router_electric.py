@@ -7,26 +7,22 @@ from circuit_generator.sprite_metrics import METRICS
 
 
 def test_sprite_sizes_registered_for_electric_types():
-    assert SPRITE_SIZES["RelaySwitch"] == (METRICS.relay_switch_width, METRICS.relay_switch_height)
+    assert SPRITE_SIZES["Contact"] == (METRICS.contact_width, METRICS.contact_height)
     assert SPRITE_SIZES["SolenoidCoil"] == (METRICS.solenoid_coil_width, METRICS.solenoid_coil_height)
-    assert SPRITE_SIZES["ButtonSwitch"] == (METRICS.button_switch_width, METRICS.button_switch_height)
     assert SPRITE_SIZES["VoltageSource"] == (METRICS.vsource_pix_w, METRICS.vsource_pix_h)
     assert SPRITE_SIZES["Ground"] == (METRICS.ground_pix_w, METRICS.ground_pix_h)
 
 
-def test_relay_switch_exit_directions():
-    assert get_exit_dir("RelaySwitch", "T") == "UP"
-    assert get_exit_dir("RelaySwitch", "B") == "DOWN"
+def test_contact_exit_directions():
+    # Contact merges the former RelaySwitch/ButtonSwitch classes -- same
+    # symbol, same T/B anchors, regardless of what actuates it.
+    assert get_exit_dir("Contact", "T") == "UP"
+    assert get_exit_dir("Contact", "B") == "DOWN"
 
 
 def test_solenoid_coil_exit_directions():
     assert get_exit_dir("SolenoidCoil", "T") == "UP"
     assert get_exit_dir("SolenoidCoil", "B") == "DOWN"
-
-
-def test_button_switch_exit_directions():
-    assert get_exit_dir("ButtonSwitch", "T") == "UP"
-    assert get_exit_dir("ButtonSwitch", "B") == "DOWN"
 
 
 def test_voltage_source_dynamic_anchor_exits_down():

@@ -72,7 +72,7 @@ class TestBoilerplate:
         btn = _node(data, "gen-btn")
         assert vsource["type"] == "VoltageSource" and vsource["domain"] == "electric"
         assert ground["type"] == "Ground" and ground["domain"] == "electric"
-        assert btn["type"] == "ButtonSwitch" and btn["domain"] == "electric"
+        assert btn["type"] == "Contact" and btn["domain"] == "electric"
         assert btn["properties"]["contact_type"] == "NO"
 
 
@@ -94,16 +94,16 @@ class TestLogicRing:
 
 class TestRungWiring:
     """A+B+A-B- -- 4 átomos, cada um 1 evento só. Mesma topologia de degrau
-    de antes, só os relay_sensor agora referenciam K em vez de Y."""
+    de antes, só os actuator_sensor agora referenciam K em vez de Y."""
 
     def test_reset_contact_is_nc_and_wired_to_next_coil(self):
         data = sbe.generate(parse("A+B+A-B-"))
         for k in range(4):
             next_k = (k + 1) % 4
             reset = _node(data, f"gen-contact-{k}-reset_nc")
-            assert reset["type"] == "RelaySwitch"
+            assert reset["type"] == "Contact"
             assert reset["properties"]["contact_type"] == "NC"
-            assert reset["properties"]["relay_sensor"] == f"K{next_k + 1}"
+            assert reset["properties"]["actuator_sensor"] == f"K{next_k + 1}"
 
     def test_reset_contact_receives_both_branches(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -116,14 +116,14 @@ class TestRungWiring:
         expected = {0: "K4", 1: "K1", 2: "K2", 3: "K3"}  # ring: atom 0 volta pro último
         for k, kname in expected.items():
             n = _node(data, f"gen-contact-{k}-ramo_a_prev")
-            assert n["properties"]["relay_sensor"] == kname
+            assert n["properties"]["actuator_sensor"] == kname
             assert n["properties"]["contact_type"] == "NO"
 
     def test_ramo_b_self_hold_references_own_coil(self):
         data = sbe.generate(parse("A+B+A-B-"))
         for k in range(4):
             n = _node(data, f"gen-contact-{k}-ramo_b_self")
-            assert n["properties"]["relay_sensor"] == f"K{k + 1}"
+            assert n["properties"]["actuator_sensor"] == f"K{k + 1}"
             assert n["properties"]["contact_type"] == "NO"
 
     def test_coil_fed_from_reset_contact_and_drains_to_ground(self):
@@ -142,7 +142,7 @@ class TestRungWiring:
         data = sbe.generate(parse("A+B+A-B-"))
         sensor_contact = _node(data, "gen-contact-1-ramo_a_sensor0")
         assert sensor_contact["properties"]["contact_type"] == "NO"
-        assert sensor_contact["properties"]["relay_sensor"] == "a1"  # confirm_sensor("A","+")
+        assert sensor_contact["properties"]["actuator_sensor"] == "a1"  # confirm_sensor("A","+")
         out = _conns_from(data, "gen-contact-1-ramo_a_sensor0", "B")
         assert out[0]["target"]["node"] == "gen-contact-1-ramo_a_prev"
 
@@ -150,7 +150,7 @@ class TestRungWiring:
         data = sbe.generate(parse("C+(A+B+)C-A-B-"))  # átomo 2 (C-) segue o átomo 1 ((A+B+))
         s0 = _node(data, "gen-contact-2-ramo_a_sensor0")
         s1 = _node(data, "gen-contact-2-ramo_a_sensor1")
-        assert {s0["properties"]["relay_sensor"], s1["properties"]["relay_sensor"]} == {"a1", "b1"}
+        assert {s0["properties"]["actuator_sensor"], s1["properties"]["actuator_sensor"]} == {"a1", "b1"}
         chain = _conns_from(data, "gen-contact-2-ramo_a_sensor0", "B")
         assert chain[0]["target"]["node"] == "gen-contact-2-ramo_a_sensor1"
         assert chain[0]["target"]["anchor"] == "T"
@@ -198,7 +198,7 @@ class TestStartButton:
     def test_start_button_created_with_electric_domain(self):
         data = sbe.generate(parse("A+B+A-B-"))
         btn = _node(data, "gen-btn-start")
-        assert btn["type"] == "ButtonSwitch"
+        assert btn["type"] == "Contact"
         assert btn["domain"] == "electric"
         assert btn["properties"]["contact_type"] == "NO"
 
@@ -234,7 +234,7 @@ class TestStartButton:
 
     def test_only_one_start_button_exists(self):
         data = sbe.generate(parse("A+B+A-B-"))
-        btn_starts = [n for n in data["nodes"] if n["type"] == "ButtonSwitch"
+        btn_starts = [n for n in data["nodes"] if n["type"] == "Contact"
                       and n["id"] == "gen-btn-start"]
         assert len(btn_starts) == 1
 
@@ -264,9 +264,9 @@ class TestPowerZoneSingleOccurrence:
         }
         for cid, kname in expected.items():
             n = _node(data, cid)
-            assert n["type"] == "RelaySwitch"
+            assert n["type"] == "Contact"
             assert n["properties"]["contact_type"] == "NO"
-            assert n["properties"]["relay_sensor"] == kname
+            assert n["properties"]["actuator_sensor"] == kname
 
     def test_power_contact_wired_from_own_vsource_tap_to_y_coil(self):
         data = sbe.generate(parse("A+B+A-B-"))
@@ -312,8 +312,8 @@ class TestPowerZoneMultiCycle:
         data = sbe.generate(parse("A+B+A-A+B-A-"))
         c0 = _node(data, "gen-contact-power-A-ext-0")
         c3 = _node(data, "gen-contact-power-A-ext-3")
-        assert c0["properties"]["relay_sensor"] == "K1"
-        assert c3["properties"]["relay_sensor"] == "K4"
+        assert c0["properties"]["actuator_sensor"] == "K1"
+        assert c3["properties"]["actuator_sensor"] == "K4"
 
         for cid in ("gen-contact-power-A-ext-0", "gen-contact-power-A-ext-3"):
             into_contact = _conns_to(data, cid, "T")

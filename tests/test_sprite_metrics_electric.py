@@ -5,19 +5,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from circuit_generator.sprite_metrics import METRICS
 
 
-def test_relay_switch_dimensions():
-    assert METRICS.relay_switch_width == 50
-    assert METRICS.relay_switch_height == 75
+def test_contact_dimensions():
+    assert METRICS.contact_width == 50
+    assert METRICS.contact_height == 75
 
 
 def test_solenoid_coil_dimensions():
     assert METRICS.solenoid_coil_width == 50
     assert METRICS.solenoid_coil_height == 50
-
-
-def test_button_switch_dimensions():
-    assert METRICS.button_switch_width == 50
-    assert METRICS.button_switch_height == 75
 
 
 def test_voltage_source_and_ground_terminal_dimensions():
@@ -27,14 +22,8 @@ def test_voltage_source_and_ground_terminal_dimensions():
     assert METRICS.ground_pix_h == 75
 
 
-def test_relay_switch_anchor_local():
-    anchors = METRICS.anchor_local["RelaySwitch"]
-    assert anchors["T"] == (50 * 39 / 50, 0)
-    assert anchors["B"] == (50 * 39 / 50, 75)
-
-
-def test_button_switch_anchor_local():
-    anchors = METRICS.anchor_local["ButtonSwitch"]
+def test_contact_anchor_local():
+    anchors = METRICS.anchor_local["Contact"]
     assert anchors["T"] == (50 * 39 / 50, 0)
     assert anchors["B"] == (50 * 39 / 50, 75)
 

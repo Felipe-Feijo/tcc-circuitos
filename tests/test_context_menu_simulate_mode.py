@@ -17,7 +17,7 @@ app = QApplication.instance() or QApplication([])
 from editor.editor_state import EditorState
 from editor.mode import EditorMode
 from graphics.items.base.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
-from graphics.items.base.nodes.switch.button_switch import ButtonSwitch
+from graphics.items.base.nodes.switch.contact import Contact
 from graphics.items.base.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 
 
@@ -126,7 +126,7 @@ def test_context_menu_event_end_to_end_ignores_when_menu_would_be_empty(monkeypa
     monkeypatch.setattr(QMenu, "exec", lambda self, pos: exec_calls.append(True) or None)
 
     scene = QGraphicsScene()
-    item = ButtonSwitch(domain="electric")
+    item = Contact(domain="electric")
     item.simulation_mode = True
     scene.addItem(item)
 
@@ -231,8 +231,8 @@ def test_hydraulic_valve_menu_outside_simulation_offers_full_editing():
     assert "Posição padrão" in submenu_titles
 
 
-def test_switch_item_hides_contact_type_submenu_during_simulation():
-    item = ButtonSwitch(domain="electric")
+def test_contact_hides_contact_type_submenu_during_simulation():
+    item = Contact(domain="electric")
     item.simulation_mode = True
 
     menu = QMenu()
@@ -242,8 +242,8 @@ def test_switch_item_hides_contact_type_submenu_during_simulation():
     assert "Tipo de contato" not in submenu_titles
 
 
-def test_switch_item_shows_contact_type_submenu_outside_simulation():
-    item = ButtonSwitch(domain="electric")
+def test_contact_shows_contact_type_submenu_outside_simulation():
+    item = Contact(domain="electric")
     item.simulation_mode = False
 
     menu = QMenu()

@@ -19,6 +19,19 @@ ACTUATOR_DICT = {
         "mirrored": True,
         "menu": True,
         "default_bit": 0,
+        # Two behaviors, same actuator: "latch" toggles on click (today's
+        # default, kept for backwards compatibility with saved circuits);
+        # "momentary" is active only while held (press = 1, release = 0).
+        "modes": {
+            "latch": {
+                "sprite_active_path": "resources/actuators/button/button_latch_active.png",
+                "sprite_inactive_path": "resources/actuators/button/button_latch_inactive.png",
+            },
+            "momentary": {
+                "sprite_active_path": "resources/actuators/button/button_active.png",
+                "sprite_inactive_path": "resources/actuators/button/button_inactive.png",
+            },
+        },
     },
     "spring": {
         "label": "Spring",
@@ -72,6 +85,8 @@ ACTUATOR_DICT = {
 
 SPRING_SCALE = 0.5  # ~50% reduction relative to the "spring" actuator's normal sprite
 
+DEFAULT_BUTTON_MODE = "momentary"  # active only while held; latch is opt-in
+
 class DirectionalValveItem(NodeItem):
 
     THREE_POSITION = False
@@ -91,6 +106,7 @@ class DirectionalValveItem(NodeItem):
         self.bits = {"left": 0, "right": 0}
         self.spring_visuals = {}
         self.spring_rects = {}
+        self._active_momentary_side = None  # side currently held down (momentary button)
 
         self.initialize_body_visuals()
         self.initialize_anchors()
@@ -195,17 +211,40 @@ class DirectionalValveItem(NodeItem):
                     actuator = self.actuators.get(side)
                     if not actuator or actuator.get("type") != "button":
                         continue  # only responds to buttons
-                    
-                    # inverte o bit do atuador
-                    self.command.emit(self.id, {
-                        "type": "actuator",
-                        "value": 1 if self.bits[side] == 0 else 0,
-                        "side": side
-                    })
+
+                    if actuator.get("mode", DEFAULT_BUTTON_MODE) == "momentary":
+                        # active only while held: press -> 1, release -> 0
+                        self._active_momentary_side = side
+                        self.command.emit(self.id, {
+                            "type": "actuator",
+                            "value": 1,
+                            "side": side
+                        })
+                    else:
+                        # inverte o bit do atuador
+                        self.command.emit(self.id, {
+                            "type": "actuator",
+                            "value": 1 if self.bits[side] == 0 else 0,
+                            "side": side
+                        })
                     event.accept()
                     return
 
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        side = self._active_momentary_side
+        if side is not None:
+            self._active_momentary_side = None
+            self.command.emit(self.id, {
+                "type": "actuator",
+                "value": 0,
+                "side": side
+            })
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
 
 
     def shape(self):
@@ -271,9 +310,14 @@ class DirectionalValveItem(NodeItem):
 
         self.update_connections()
  
-    def _load_actuator_pixmaps(self, actuator_desc, side):
-        active = QPixmap(actuator_desc["sprite_active_path"])
-        inactive = QPixmap(actuator_desc["sprite_inactive_path"])
+    def _load_actuator_pixmaps(self, actuator_desc, side, mode=None):
+        # Actuators with per-mode sprites (currently just "button") pick
+        # their sprite pair from "modes"; everything else uses the
+        # top-level path unchanged.
+        paths = actuator_desc.get("modes", {}).get(mode or DEFAULT_BUTTON_MODE, actuator_desc)
+
+        active = QPixmap(paths["sprite_active_path"])
+        inactive = QPixmap(paths["sprite_inactive_path"])
 
         if side == "right" and actuator_desc.get("mirrored", False):
             active = active.transformed(QTransform().scale(-1, 1))
@@ -346,7 +390,8 @@ class DirectionalValveItem(NodeItem):
                     self.bits[side] = default_bit
 
             # carregar visuais
-            visuals = self._load_actuator_pixmaps(actuator_desc, side)
+            actuator_mode = actuator_cfg.get("mode") if actuator_cfg else None
+            visuals = self._load_actuator_pixmaps(actuator_desc, side, mode=actuator_mode)
             self.actuator_visuals[side] = visuals
 
             # calcular rect
@@ -511,6 +556,9 @@ class DirectionalValveItem(NodeItem):
                 continue
             if self.THREE_POSITION and name == "spring":
                 continue
+            if name == "button":
+                self._add_button_actuator_menu(menu, side, desc, current)
+                continue
             action = QAction(desc["label"], menu, checkable=True)
             action.setChecked(current is not None and current.get("type") == name)
             action.triggered.connect(
@@ -558,6 +606,20 @@ class DirectionalValveItem(NodeItem):
                     )
                     menu.addAction(action)
 
+    def _add_button_actuator_menu(self, menu: QMenu, side: str, desc: dict, current: dict | None):
+        """"Button" gets a submenu instead of a flat action, so the user
+        can pick latch (toggle) or momentary (active while held)."""
+        button_menu = menu.addMenu(desc["label"])
+        current_mode = current.get("mode", DEFAULT_BUTTON_MODE) if current and current.get("type") == "button" else None
+
+        for mode, label in (("latch", "Retido"), ("momentary", "Momentâneo")):
+            action = QAction(label, button_menu, checkable=True)
+            action.setChecked(current_mode == mode)
+            action.triggered.connect(
+                lambda _, s=side, m=mode: self.set_actuator(s, "button", mode=m)
+            )
+            button_menu.addAction(action)
+
     def _set_default_side(self, side: str):
         if self.properties.get("default_side") == side:
             return
@@ -571,7 +633,7 @@ class DirectionalValveItem(NodeItem):
             self.update_connections()
             self.update()
 
-    def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None, delay_steps: int | None = None):
+    def set_actuator(self, side: str, actuator_name: str | None, actuator_sensor_name: str | None = None, delay_steps: int | None = None, mode: str | None = None):
         current = self.properties["actuators"].get(side)
 
         if actuator_name is None:
@@ -585,6 +647,11 @@ class DirectionalValveItem(NodeItem):
             new_value = {
                 "type": "timer",
                 "delay_steps": delay_steps if delay_steps is not None else 3,
+            }
+        elif actuator_name == "button":
+            new_value = {
+                "type": "button",
+                "mode": mode or DEFAULT_BUTTON_MODE,
             }
         else:
             new_value = {
@@ -698,13 +765,19 @@ class DirectionalValveItem(NodeItem):
             return ACTUATOR_DICT[a["type"]]["label"]
 
         timer_label = ACTUATOR_DICT["timer"]["label"]
+        button_label = ACTUATOR_DICT["button"]["label"]
 
         def _timer_delay(side):
             a = self.properties["actuators"].get(side)
             return a.get("delay_steps", 3) if a and a.get("type") == "timer" else 3
 
-        # Helper to show/hide a delay row by widget reference
-        def _set_timer_row_visible(field, visible):
+        def _button_is_latch(side):
+            a = self.properties["actuators"].get(side)
+            mode = a.get("mode", DEFAULT_BUTTON_MODE) if a and a.get("type") == "button" else DEFAULT_BUTTON_MODE
+            return mode == "latch"
+
+        # Helper to show/hide a row by widget reference
+        def _set_row_visible(field, visible):
             form = dialog._form_layout
             for row in range(form.rowCount()):
                 item = form.itemAt(row, form.ItemRole.FieldRole)
@@ -717,11 +790,17 @@ class DirectionalValveItem(NodeItem):
             "Timer delay — left (steps)", placeholder="ex: 3",
             value=_timer_delay("left"), required=False,
         )
+        dialog._field_latch_left = dialog.add_bool_field(
+            "Trava", value=_button_is_latch("left"),
+        )
 
         dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_label("right"))
         dialog._field_timer_right = dialog.add_number_field(
             "Timer delay — right (steps)", placeholder="ex: 3",
             value=_timer_delay("right"), required=False,
+        )
+        dialog._field_latch_right = dialog.add_bool_field(
+            "Trava", value=_button_is_latch("right"),
         )
 
         if self.THREE_POSITION:
@@ -736,17 +815,25 @@ class DirectionalValveItem(NodeItem):
             current=default_side_current,
         )
 
-        # Show/hide timer delay rows based on combo selection
+        # Show/hide timer delay / latch rows based on combo selection
         dialog._combo_left.currentTextChanged.connect(
-            lambda t: _set_timer_row_visible(dialog._field_timer_left, t == timer_label)
+            lambda t: (
+                _set_row_visible(dialog._field_timer_left, t == timer_label),
+                _set_row_visible(dialog._field_latch_left, t == button_label),
+            )
         )
         dialog._combo_right.currentTextChanged.connect(
-            lambda t: _set_timer_row_visible(dialog._field_timer_right, t == timer_label)
+            lambda t: (
+                _set_row_visible(dialog._field_timer_right, t == timer_label),
+                _set_row_visible(dialog._field_latch_right, t == button_label),
+            )
         )
 
         # Set initial visibility
-        _set_timer_row_visible(dialog._field_timer_left,  current_label("left")  == timer_label)
-        _set_timer_row_visible(dialog._field_timer_right, current_label("right") == timer_label)
+        _set_row_visible(dialog._field_timer_left,  current_label("left")  == timer_label)
+        _set_row_visible(dialog._field_timer_right, current_label("right") == timer_label)
+        _set_row_visible(dialog._field_latch_left,  current_label("left")  == button_label)
+        _set_row_visible(dialog._field_latch_right, current_label("right") == button_label)
 
         return dialog
 
@@ -754,9 +841,9 @@ class DirectionalValveItem(NodeItem):
         if dialog._field_k is not None:
             k_text = dialog._field_k.text().strip()
             self.properties["k"] = float(k_text) if k_text else None
-        for side, combo, timer_field in [
-            ("left",  dialog._combo_left,  dialog._field_timer_left),
-            ("right", dialog._combo_right, dialog._field_timer_right),
+        for side, combo, timer_field, latch_field in [
+            ("left",  dialog._combo_left,  dialog._field_timer_left,  dialog._field_latch_left),
+            ("right", dialog._combo_right, dialog._field_timer_right, dialog._field_latch_right),
         ]:
             selected = combo.currentText()
             if selected == "None":
@@ -769,6 +856,9 @@ class DirectionalValveItem(NodeItem):
                     except ValueError:
                         delay = 3
                     self.set_actuator(side, "timer", delay_steps=delay)
+                elif key == "button":
+                    mode = "latch" if latch_field.isChecked() else "momentary"
+                    self.set_actuator(side, "button", mode=mode)
                 else:
                     self.set_actuator(side, key)
             elif self.sensor_registry:

@@ -6,21 +6,21 @@ from PyQt6.QtCore import Qt
 def create_edit_actions(main_window):
     actions = {}
 
-    actions["delete"] = QAction("Delete", main_window)
+    actions["delete"] = QAction(main_window.tr("Delete"), main_window)
     actions["delete"].setShortcut(QKeySequence.StandardKey.Delete)
     actions["delete"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
     actions["delete"].triggered.connect(
         main_window.delete_selected_items
     )
 
-    actions["copy"] = QAction("Copy", main_window)
+    actions["copy"] = QAction(main_window.tr("Copy"), main_window)
     actions["copy"].setShortcut(QKeySequence.StandardKey.Copy)  # Ctrl+C
     actions["copy"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
     actions["copy"].triggered.connect(
         lambda: main_window.clipboard_manager.copy(main_window.scene)
     )
 
-    actions["paste"] = QAction("Paste", main_window)
+    actions["paste"] = QAction(main_window.tr("Paste"), main_window)
     actions["paste"].setShortcut(QKeySequence.StandardKey.Paste)  # Ctrl+V
     actions["paste"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
 
@@ -30,8 +30,8 @@ def create_edit_actions(main_window):
         if main_window.state.mode == EditorMode.SIMULATE:
             QMessageBox.information(
                 main_window,
-                "Simulação em execução",
-                "Pare a simulação para editar o diagrama.",
+                main_window.tr("Simulation running"),
+                main_window.tr("Stop the simulation to edit the diagram."),
             )
             return
         main_window.clipboard_manager.paste(main_window.scene, main_window.state)
@@ -39,7 +39,7 @@ def create_edit_actions(main_window):
 
     actions["paste"].triggered.connect(_do_paste)
 
-    actions["open_palette"] = QAction("Add", main_window)
+    actions["open_palette"] = QAction(main_window.tr("Add"), main_window)
     actions["open_palette"].setCheckable(True)
     actions["open_palette"].toggled.connect(
         main_window.palette_dock.setVisible
@@ -50,14 +50,14 @@ def create_edit_actions(main_window):
     # is active. These actions are enabled only outside simulation;
     # the toggle logic is handled in MainWindow.update_simulation_actions().
 
-    actions["undo"] = QAction("Undo", main_window)
+    actions["undo"] = QAction(main_window.tr("Undo"), main_window)
     actions["undo"].setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z
     actions["undo"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
     actions["undo"].triggered.connect(
         lambda: main_window.state.undo_stack.undo()
     )
 
-    actions["redo"] = QAction("Redo", main_window)
+    actions["redo"] = QAction(main_window.tr("Redo"), main_window)
     actions["redo"].setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Shift+Z
     actions["redo"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
     actions["redo"].triggered.connect(
@@ -65,10 +65,12 @@ def create_edit_actions(main_window):
     )
 
     # ── Rotate ───────────────────────────────────────────────────────────────
-    actions["rotate"] = QAction("Rotate 90°", main_window)
+    actions["rotate"] = QAction(main_window.tr("Rotate 90°"), main_window)
     actions["rotate"].setShortcut(QKeySequence("R"))
     actions["rotate"].setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
-    actions["rotate"].setToolTip("Rotate selected component 90° clockwise (R)")
+    actions["rotate"].setToolTip(
+        main_window.tr("Rotate selected component 90° clockwise (R)")
+    )
 
     def _do_rotate():
         from editor.mode import EditorMode
@@ -92,7 +94,7 @@ def create_edit_actions(main_window):
             node.rotate(90)
 
         undo_stack.push_snapshot(
-            scene, main_window.state, before, "Rotate component"
+            scene, main_window.state, before, main_window.tr("Rotate component")
         )
 
     actions["rotate"].triggered.connect(_do_rotate)

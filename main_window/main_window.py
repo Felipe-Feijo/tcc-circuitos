@@ -97,7 +97,8 @@ class MainWindow(QMainWindow):
         """Re-applies tr() text to every persistent widget after a language
         change. Transient dialogs need no hook here -- they're rebuilt from
         scratch on every open and pick up the active language automatically."""
-        pass
+        from main_window.actions import retranslate_actions
+        retranslate_actions(self.actions, self)
 
     def _wire_state_callbacks(self):
         # Disconnect first to avoid duplicate connections on new_scene()

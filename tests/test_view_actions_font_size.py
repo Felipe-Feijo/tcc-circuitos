@@ -12,6 +12,7 @@ from main_window.actions.view_actions import create_view_actions
 
 def test_font_size_action_exists_and_triggers_handler():
     fake_main_window = Mock()
+    fake_main_window.tr = lambda s: s  # identity translation, no .qm installed
     actions = create_view_actions(fake_main_window)
 
     assert "font_size" in actions

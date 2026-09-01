@@ -6,7 +6,7 @@ def create_help_actions(main_window):
     
     actions = {}
 
-    actions["about"] = QAction("About", main_window)
+    actions["about"] = QAction(main_window.tr("About"), main_window)
     actions["about"].triggered.connect(main_window.show_about)
 
     return actions

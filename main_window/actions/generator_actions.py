@@ -9,7 +9,7 @@ from editor.mode import EditorMode
 def create_generator_actions(main_window) -> dict:
     actions = {}
 
-    act = QAction("Novo a partir de Sequência...", main_window)
+    act = QAction(main_window.tr("New from Sequence..."), main_window)
     act.setShortcut("Ctrl+G")
     act.triggered.connect(lambda: _open_dialog(main_window))
     actions["new_from_sequence"] = act

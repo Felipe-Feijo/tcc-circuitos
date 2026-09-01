@@ -7,6 +7,7 @@ from .mode_actions import create_mode_actions
 from .help_actions import create_help_actions
 from .simulation_actions import create_simulation_actions
 from .generator_actions import create_generator_actions
+from .language_actions import create_language_actions
 
 def create_actions(main_window):
     actions = {}
@@ -18,5 +19,6 @@ def create_actions(main_window):
     actions.update(create_help_actions(main_window))
     actions.update(create_simulation_actions(main_window))
     actions.update(create_generator_actions(main_window))
+    actions.update(create_language_actions(main_window))
 
     return actions

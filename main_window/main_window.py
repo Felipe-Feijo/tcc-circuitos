@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsIte
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from main_window import theme
+from main_window.language import language_manager
 from editor.clipboard_manager import ClipboardManager
 from editor.editor_state import EditorState
 from editor.mode import EditorMode
@@ -68,7 +69,7 @@ class MainWindow(QMainWindow):
 
     def _init_actions_ui(self):
         self.actions = create_actions(self)
-        create_menus(self, self.actions)
+        self.menus = create_menus(self, self.actions)
         create_toolbars(self, self.actions)
 
         # Registers every action on the window so ApplicationShortcut
@@ -78,6 +79,19 @@ class MainWindow(QMainWindow):
 
         # explicit initial state
         self.actions["mode_select"].setChecked(True)
+
+        # Not a direct `connect(self.retranslate_ui)`: PyQt resolves that to
+        # the bound method's underlying function at connect time, so a test
+        # (or a future subclass) that reassigns self.retranslate_ui *after*
+        # this connection would never see its replacement invoked. The
+        # lambda re-reads the attribute at emit time instead.
+        language_manager.language_changed.connect(lambda _code: self.retranslate_ui())
+
+    def retranslate_ui(self) -> None:
+        """Re-applies tr() text to every persistent widget after a language
+        change. Transient dialogs need no hook here -- they're rebuilt from
+        scratch on every open and pick up the active language automatically."""
+        pass
 
     def _wire_state_callbacks(self):
         # Disconnect first to avoid duplicate connections on new_scene()

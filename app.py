@@ -22,11 +22,13 @@ if sys.stderr is None:
 from PyQt6.QtWidgets import QApplication
 from main_window.main_window import MainWindow
 from main_window import settings
+from main_window import language
 
 faulthandler.enable()
 
 app = QApplication(sys.argv)
 settings.apply_font_from_settings(app)
+language.apply_language(app, language.get_language())
 
 window = MainWindow()
 window.resize(800, 600)

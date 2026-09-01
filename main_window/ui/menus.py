@@ -1,7 +1,7 @@
 """Builds the main window menu bar from the created actions."""
 
 
-def create_menus(main_window, actions):
+def create_menus(main_window, actions) -> dict:
     menubar = main_window.menuBar()
 
     file_menu = menubar.addMenu("File")
@@ -29,6 +29,18 @@ def create_menus(main_window, actions):
     view_menu.addAction(actions["zoom_fit"])
     view_menu.addSeparator()
     view_menu.addAction(actions["font_size"])
+    view_menu.addSeparator()
+    lang_menu = view_menu.addMenu(main_window.tr("Language"))
+    lang_menu.addAction(actions["language_en"])
+    lang_menu.addAction(actions["language_pt_br"])
 
     help_menu = menubar.addMenu("Help")
     help_menu.addAction(actions["about"])
+
+    return {
+        "file": file_menu,
+        "edit": edit_menu,
+        "view": view_menu,
+        "help": help_menu,
+        "language": lang_menu,
+    }

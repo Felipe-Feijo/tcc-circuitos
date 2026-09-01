@@ -80,12 +80,18 @@ class MainWindow(QMainWindow):
         # explicit initial state
         self.actions["mode_select"].setChecked(True)
 
-        # Not a direct `connect(self.retranslate_ui)`: PyQt resolves that to
-        # the bound method's underlying function at connect time, so a test
-        # (or a future subclass) that reassigns self.retranslate_ui *after*
-        # this connection would never see its replacement invoked. The
-        # lambda re-reads the attribute at emit time instead.
-        language_manager.language_changed.connect(lambda _code: self.retranslate_ui())
+        # Bound method, not a lambda: language_manager is a module-level
+        # singleton, and PyQt's weak-reference auto-disconnect (which lets a
+        # connected MainWindow be garbage-collected normally) only applies
+        # to a direct bound-method connection, not a lambda closure over
+        # self -- a lambda here would leak every MainWindow instance for
+        # the life of the process. The wrapper still does a fresh
+        # self.retranslate_ui lookup at call time, so patch.object on it
+        # after this connection is made is still observed.
+        language_manager.language_changed.connect(self._on_language_changed)
+
+    def _on_language_changed(self, _code: str) -> None:
+        self.retranslate_ui()
 
     def retranslate_ui(self) -> None:
         """Re-applies tr() text to every persistent widget after a language

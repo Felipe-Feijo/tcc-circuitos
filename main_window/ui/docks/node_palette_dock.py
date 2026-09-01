@@ -12,11 +12,11 @@ def create_node_palette(main_window):
     palette = NodePalette()
     palette.set_size_tier(settings.get_palette_tier(), persist=False)
 
-    palette.add_section("Pneumatic")
-    palette.add_section("Electric")
-    palette.add_section("Hydraulic")
+    palette.add_section("Pneumatic", main_window.tr("Pneumatic"))
+    palette.add_section("Electric", main_window.tr("Electric"))
+    palette.add_section("Hydraulic", main_window.tr("Hydraulic"))
 
-    dock = QDockWidget("Nodes", main_window)
+    dock = QDockWidget(main_window.tr("Nodes"), main_window)
     dock.setMinimumWidth(180)
     dock.setMaximumWidth(700)
     dock.setWidget(palette)

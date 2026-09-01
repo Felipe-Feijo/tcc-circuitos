@@ -110,6 +110,13 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(self.tr("Circuit Editor"))
 
+        self.palette_dock.setWindowTitle(self.tr("Nodes"))
+        self.node_palette.retranslate_ui({
+            "Pneumatic": self.tr("Pneumatic"),
+            "Electric": self.tr("Electric"),
+            "Hydraulic": self.tr("Hydraulic"),
+        })
+
     def _wire_state_callbacks(self):
         # Disconnect first to avoid duplicate connections on new_scene()
         try:

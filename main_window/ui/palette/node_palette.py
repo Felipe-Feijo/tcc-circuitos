@@ -15,8 +15,14 @@ class NodePalette(QWidget):
         "medium": {"pixmap": (84, 56),  "item_width": 130, "font_delta": 1},
         "large":  {"pixmap": (112, 76), "item_width": 160, "font_delta": 2},
     }
-    TIER_LABELS = {"small": "P", "medium": "M", "large": "G"}
-    TIER_TOOLTIPS = {"small": "Pequeno", "medium": "Médio", "large": "Grande"}
+    TIER_LABELS = {"small": "S", "medium": "M", "large": "L"}
+
+    def _tier_tooltip(self, tier: str) -> str:
+        return {
+            "small": self.tr("Small"),
+            "medium": self.tr("Medium"),
+            "large": self.tr("Large"),
+        }[tier]
 
     def __init__(self, parent=None, settings_obj=None):
         super().__init__(parent)
@@ -25,7 +31,7 @@ class NodePalette(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(8)
-        title = QLabel("Nodes")
+        title = QLabel(self.tr("Nodes"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title)
 
@@ -39,7 +45,7 @@ class NodePalette(QWidget):
             btn = QPushButton(self.TIER_LABELS[tier])
             btn.setObjectName("sizeTierButton")
             btn.setCheckable(True)
-            btn.setToolTip(self.TIER_TOOLTIPS[tier])
+            btn.setToolTip(self._tier_tooltip(tier))
             btn.clicked.connect(lambda checked, t=tier: self.set_size_tier(t))
             self._tier_group.addButton(btn)
             self.tier_buttons[tier] = btn
@@ -88,15 +94,25 @@ class NodePalette(QWidget):
             self.selected_item.set_selected(False)
         self.selected_item = None
 
-    def add_section(self, name: str):
-        if name in self.sections:
-            return self.sections[name]
+    def add_section(self, key: str, title: str | None = None):
+        if key in self.sections:
+            return self.sections[key]
 
-        section = PaletteSection(name, num_columns=1)
+        section = PaletteSection(title or key, num_columns=1)
         section.set_light_theme(self.use_light_theme)
-        self.sections[name] = section
+        self.sections[key] = section
         self.container_layout.addWidget(section)
         return section
+
+    def retranslate_ui(self, section_titles: dict[str, str]):
+        """section_titles maps each canonical section key ("Pneumatic",
+        "Electric", "Hydraulic") to its already-translated display title."""
+        for key, title in section_titles.items():
+            if key in self.sections:
+                self.sections[key].retranslate_ui(title)
+
+        for tier, btn in self.tier_buttons.items():
+            btn.setToolTip(self._tier_tooltip(tier))
 
     def register_item(self, item: NodePaletteItem, callback):
         item.mouseReleaseEvent = lambda e: self.on_click(item, callback)

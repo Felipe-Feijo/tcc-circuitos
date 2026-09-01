@@ -20,14 +20,15 @@ class PaletteSection(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Clickable header
-        self.header = QLabel(f"▾ {title}")
+        self.header = QLabel()
         self.header.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header.setStyleSheet("font-weight: bold;")
         self.header.mousePressEvent = self.toggle
+        self._refresh_header_text()
 
         self.main_layout.addWidget(self.header)
 
-        # Container do grid
+        # Grid container
         self.content = QWidget()
         self.grid_layout = QGridLayout(self.content)
         self.grid_layout.setSpacing(8)
@@ -35,12 +36,20 @@ class PaletteSection(QWidget):
 
         self.main_layout.addWidget(self.content)
 
+    def _refresh_header_text(self):
+        arrow = "▸" if self._collapsed else "▾"
+        self.header.setText(f"{arrow} {self.title}")
+
     def toggle(self, event=None):
         self._collapsed = not self._collapsed
         self.content.setVisible(not self._collapsed)
-        self.header.setText(
-            f"{'▸' if self._collapsed else '▾'} {self.title}"
-        )
+        self._refresh_header_text()
+
+    def retranslate_ui(self, title: str):
+        """Updates the displayed title (called after a language change;
+        title is already translated by the caller)."""
+        self.title = title
+        self._refresh_header_text()
 
     def add_node(self, name: str, icon_path: str, callback):
         item = NodePaletteItem(name, icon_path)

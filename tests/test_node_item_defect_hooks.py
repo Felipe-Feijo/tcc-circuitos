@@ -39,8 +39,8 @@ def test_context_menu_shows_propriedades_when_not_simulating():
     menu = QMenu()
     item.extend_context_menu(menu)
     labels = [a.text() for a in menu.actions()]
-    assert "Propriedades..." in labels
-    assert "Simular defeito..." not in labels
+    assert "Properties..." in labels
+    assert "Simulate defect..." not in labels
 
 
 def test_context_menu_shows_simular_defeito_when_simulating():
@@ -49,8 +49,8 @@ def test_context_menu_shows_simular_defeito_when_simulating():
     menu = QMenu()
     item.extend_context_menu(menu)
     labels = [a.text() for a in menu.actions()]
-    assert "Simular defeito..." in labels
-    assert "Propriedades..." not in labels
+    assert "Simulate defect..." in labels
+    assert "Properties..." not in labels
 
 
 def test_context_menu_hides_simular_defeito_when_item_has_no_defect_dialog():
@@ -59,7 +59,7 @@ def test_context_menu_hides_simular_defeito_when_item_has_no_defect_dialog():
     menu = QMenu()
     item.extend_context_menu(menu)
     labels = [a.text() for a in menu.actions()]
-    assert "Simular defeito..." not in labels
+    assert "Simulate defect..." not in labels
 
 
 def test_update_from_domain_caches_domain_node_reference():

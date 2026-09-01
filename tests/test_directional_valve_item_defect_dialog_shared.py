@@ -1,6 +1,6 @@
 """Confere build_defect_dialog()/apply_defect_from_dialog() promovidos pra
 DirectionalValveItem (base compartilhada) -- todas as 5 válvulas direcionais
-ganham "Simular defeito..." de uma vez, sem duplicar código por subtipo."""
+ganham "Simulate defect..." de uma vez, sem duplicar código por subtipo."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -85,6 +85,6 @@ def test_context_menu_during_simulation_offers_defect_entry_only(cls):
     labels = [a.text() for a in menu.actions()]
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Simular defeito..." in labels
-    assert "Propriedades..." not in labels
+    assert "Simulate defect..." in labels
+    assert "Properties..." not in labels
     assert not submenu_titles  # nenhum submenu de atuador/posição durante simulação

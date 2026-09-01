@@ -189,8 +189,11 @@ class CoilItem(NodeItem):
         if not ok:
             if label:
                 label.set_text(old_name)  # reverts to the old name
-            QMessageBox.warning(None, "Erro ao renomear",
-                                f"Já existe um sinal com o nome '{new_name}'.")
+            QMessageBox.warning(
+                None,
+                self.tr("Error renaming"),
+                self.tr("A signal named '{0}' already exists.").format(new_name),
+            )
             return
 
         sensor["name"] = new_name

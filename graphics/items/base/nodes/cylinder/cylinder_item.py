@@ -319,8 +319,11 @@ class CylinderItem(NodeItem):
             sensor["name"] = old_name
             if label:
                 label.set_text(old_name)  # updates the visual
-            QMessageBox.warning(None, "Erro ao renomear sensor",
-                                f"Já existe um sensor com o nome '{new_name}'.")
+            QMessageBox.warning(
+                None,
+                self.tr("Error renaming sensor"),
+                self.tr("A sensor named '{0}' already exists.").format(new_name),
+            )
             return
 
         # rename ok
@@ -336,15 +339,15 @@ class CylinderItem(NodeItem):
             return
         menu.addSeparator()
 
-        r_menu = menu.addMenu("Sensor retraído")
-        e_menu = menu.addMenu("Sensor estendido")
+        r_menu = menu.addMenu(self.tr("Retracted sensor"))
+        e_menu = menu.addMenu(self.tr("Extended sensor"))
 
         self._populate_sensor_menu(r_menu, "retracted")
         self._populate_sensor_menu(e_menu, "extended")
 
         menu.addSeparator()
-        state_menu = menu.addMenu("Estado inicial")
-        for opt, label in [("retracted", "Retraído"), ("extended", "Estendido")]:
+        state_menu = menu.addMenu(self.tr("Initial state"))
+        for opt, label in [("retracted", self.tr("Retracted")), ("extended", self.tr("Extended"))]:
             action = QAction(label, menu, checkable=True)
             action.setChecked(self.properties.get("default_state", "retracted") == opt)
             action.triggered.connect(lambda _, o=opt: self._set_default_state(o))
@@ -366,7 +369,7 @@ class CylinderItem(NodeItem):
         sensor = self.properties["sensors"][position]
         current = sensor.get("type")
 
-        action_none = QAction("None", menu, checkable=True)
+        action_none = QAction(self.tr("None"), menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, p=position: self.set_sensor(p, None)

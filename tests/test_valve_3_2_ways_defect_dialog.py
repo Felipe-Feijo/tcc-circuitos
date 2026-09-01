@@ -142,6 +142,6 @@ def test_context_menu_offers_defect_only_during_simulation():
     labels = [a.text() for a in menu.actions()]
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Simular defeito..." in labels
-    assert "Propriedades..." not in labels
-    assert "Atuador esquerdo" not in submenu_titles
+    assert "Simulate defect..." in labels
+    assert "Properties..." not in labels
+    assert "Left actuator" not in submenu_titles

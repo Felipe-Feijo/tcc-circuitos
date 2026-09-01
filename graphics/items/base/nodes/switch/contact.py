@@ -352,7 +352,7 @@ class Contact(NodeItem):
 
         menu.addSeparator()
 
-        contact_menu = menu.addMenu("Tipo de contato")
+        contact_menu = menu.addMenu(self.tr("Contact type"))
         for t in ("NO", "NC"):
             action = QAction(t, menu, checkable=True)
             action.setChecked(self.properties.get("contact_type") == t)
@@ -381,14 +381,14 @@ class Contact(NodeItem):
     def _add_button_actuator_menu(self, menu: QMenu):
         """"Button" gets a submenu instead of a flat action, so the user
         can pick latch (toggle) or momentary (active while held)."""
-        button_menu = menu.addMenu("Button")
+        button_menu = menu.addMenu(self.tr("Button"))
         current_mode = (
             self.properties.get("button_mode", DEFAULT_BUTTON_MODE)
             if self.properties.get("actuator_sensor") == BUTTON_SENSOR
             else None
         )
 
-        for mode, label in (("latch", "Retido"), ("momentary", "Momentâneo")):
+        for mode, label in (("latch", self.tr("Latched")), ("momentary", self.tr("Momentary"))):
             action = QAction(label, button_menu, checkable=True)
             action.setChecked(current_mode == mode)
             action.triggered.connect(lambda _, m=mode: self.set_button_actuator(m))

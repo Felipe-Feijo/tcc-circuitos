@@ -153,7 +153,7 @@ def test_actuator_menu_button_is_submenu_not_flat_action():
     assert button_entries[0].menu() is not None
 
     submenu_labels = [a.text() for a in button_entries[0].menu().actions()]
-    assert submenu_labels == ["Retido", "Momentâneo"]
+    assert submenu_labels == ["Latched", "Momentary"]
 
 
 def test_actuator_menu_button_latch_checked_when_current_mode_latch():
@@ -164,7 +164,7 @@ def test_actuator_menu_button_latch_checked_when_current_mode_latch():
 
     button_menu = next(a for a in menu.actions() if a.text() == "Button").menu()
     checked = {a.text(): a.isChecked() for a in button_menu.actions()}
-    assert checked == {"Retido": True, "Momentâneo": False}
+    assert checked == {"Latched": True, "Momentary": False}
 
 
 def test_actuator_menu_button_momentary_checked_when_current_mode_momentary():
@@ -175,7 +175,7 @@ def test_actuator_menu_button_momentary_checked_when_current_mode_momentary():
 
     button_menu = next(a for a in menu.actions() if a.text() == "Button").menu()
     checked = {a.text(): a.isChecked() for a in button_menu.actions()}
-    assert checked == {"Retido": False, "Momentâneo": True}
+    assert checked == {"Latched": False, "Momentary": True}
 
 
 def test_actuator_menu_selecting_momentary_sets_actuator_momentary_mode():
@@ -185,7 +185,7 @@ def test_actuator_menu_selecting_momentary_sets_actuator_momentary_mode():
     item._populate_actuator_menu(menu, side="left")
 
     button_menu = next(a for a in menu.actions() if a.text() == "Button").menu()
-    momentary_action = next(a for a in button_menu.actions() if a.text() == "Momentâneo")
+    momentary_action = next(a for a in button_menu.actions() if a.text() == "Momentary")
     momentary_action.trigger()
 
     assert item.properties["actuators"]["left"] == {"type": "button", "mode": "momentary"}

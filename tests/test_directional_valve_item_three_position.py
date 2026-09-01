@@ -43,12 +43,12 @@ def test_two_position_item_still_offers_spring_and_renamed_menu_with_2_options()
     full_menu = QMenu()
     item.extend_context_menu(full_menu)
     submenu_titles = [a.text() for a in full_menu.actions() if a.menu()]
-    assert "Posição padrão" in submenu_titles
+    assert "Default position" in submenu_titles
     assert "Posição de repouso" not in submenu_titles
 
-    rest_menu = next(a.menu() for a in full_menu.actions() if a.text() == "Posição padrão")
+    rest_menu = next(a.menu() for a in full_menu.actions() if a.text() == "Default position")
     option_labels = [a.text() for a in rest_menu.actions()]
-    assert option_labels == ["Direita (0)", "Esquerda (1)"]
+    assert option_labels == ["Right (0)", "Left (1)"]
 
 
 def test_three_position_item_offers_renamed_menu_with_3_options_and_no_spring():
@@ -62,11 +62,11 @@ def test_three_position_item_offers_renamed_menu_with_3_options_and_no_spring():
     full_menu = QMenu()
     item.extend_context_menu(full_menu)
     submenu_titles = [a.text() for a in full_menu.actions() if a.menu()]
-    assert "Posição padrão" in submenu_titles
+    assert "Default position" in submenu_titles
 
-    rest_menu = next(a.menu() for a in full_menu.actions() if a.text() == "Posição padrão")
+    rest_menu = next(a.menu() for a in full_menu.actions() if a.text() == "Default position")
     option_labels = [a.text() for a in rest_menu.actions()]
-    assert option_labels == ["Direita (0)", "Centro (1)", "Esquerda (2)"]
+    assert option_labels == ["Right (0)", "Center (1)", "Left (2)"]
 
 
 def test_three_position_item_defaults_to_center_when_default_side_absent():

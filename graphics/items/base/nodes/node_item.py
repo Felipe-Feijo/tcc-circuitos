@@ -694,16 +694,16 @@ class NodeItem(DiagramItemBase):
             # explicitly simulation-aware, is offered.
             defect_dialog = self.build_defect_dialog()
             if defect_dialog is not None:
-                defect_action = menu.addAction("Simular defeito...")
+                defect_action = menu.addAction(self.tr("Simulate defect..."))
                 defect_action.triggered.connect(lambda: self._open_defect_dialog(defect_dialog))
             super().extend_context_menu(menu)
             return
 
-        props_action = menu.addAction("Propriedades...")
+        props_action = menu.addAction(self.tr("Properties..."))
         props_action.triggered.connect(self._open_properties_dialog)
         menu.addSeparator()
 
-        rotate_action = menu.addAction("Rotate 90°")
+        rotate_action = menu.addAction(self.tr("Rotate 90°"))
         rotate_action.setShortcut("R")
 
         def _rotate():
@@ -712,12 +712,12 @@ class NodeItem(DiagramItemBase):
             before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
             self.rotate(90)
             if before is not None:
-                undo_stack.push_snapshot(scene, self.editor, before, "Rotate component")
+                undo_stack.push_snapshot(scene, self.editor, before, self.tr("Rotate component"))
 
         rotate_action.triggered.connect(_rotate)
         menu.addSeparator()
 
-        add_label_action = menu.addAction("Adicionar label")
+        add_label_action = menu.addAction(self.tr("Add label"))
 
         def _add_label():
             label = LabelItem(properties={"editable": True, "movable": True, "border": False})

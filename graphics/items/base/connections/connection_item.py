@@ -965,7 +965,7 @@ class ConnectionItem(DiagramItemBase):
 
     def _show_wp_context_menu(self, wp_idx: int, event):
         menu   = QMenu()
-        action = QAction("Deletar waypoint", menu)
+        action = QAction(self.tr("Delete waypoint"), menu)
         action.triggered.connect(lambda: self._delete_waypoint(wp_idx))
         menu.addAction(action)
         view = self.scene().views()[0] if self.scene() and self.scene().views() else None

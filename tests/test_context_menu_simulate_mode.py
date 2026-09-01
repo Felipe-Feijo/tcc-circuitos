@@ -1,6 +1,6 @@
 """Regressão: menu de contexto ficava totalmente inacessível durante a
 simulação (EditorMode.SIMULATE), porque DiagramItemBase.contextMenuEvent só
-permitia EditorMode.SELECT -- isso bloqueava "Simular defeito..." (e
+permitia EditorMode.SELECT -- isso bloqueava "Simulate defect..." (e
 qualquer outra entrada ciente de simulação) antes mesmo de
 extend_context_menu() ser chamado.
 """
@@ -115,7 +115,7 @@ def test_context_menu_event_end_to_end_offers_defect_not_delete_during_simulatio
     assert ev.accepted is True
     assert len(exec_calls) == 1
     labels = exec_calls[0]
-    assert "Simular defeito..." in labels
+    assert "Simulate defect..." in labels
     assert "Deletar" not in labels
 
 
@@ -180,7 +180,7 @@ def test_context_menu_event_ignores_in_add_mode():
 
 
 # ---------------------------------------------------------------------------
-# extend_context_menu() -- "Simular defeito..." aparece, edição de projeto some
+# extend_context_menu() -- "Simulate defect..." aparece, edição de projeto some
 # ---------------------------------------------------------------------------
 
 def test_hydraulic_valve_menu_during_simulation_offers_defect_only():
@@ -192,10 +192,10 @@ def test_hydraulic_valve_menu_during_simulation_offers_defect_only():
     item.extend_context_menu(menu)
     labels = _menu_labels(menu)
 
-    assert "Simular defeito..." in labels
-    assert "Propriedades..." not in labels
+    assert "Simulate defect..." in labels
+    assert "Properties..." not in labels
     assert "Rotate 90°" not in labels
-    assert "Adicionar label" not in labels
+    assert "Add label" not in labels
 
 
 def test_hydraulic_valve_menu_during_simulation_hides_actuator_submenus():
@@ -207,9 +207,9 @@ def test_hydraulic_valve_menu_during_simulation_hides_actuator_submenus():
     item.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Atuador esquerdo" not in submenu_titles
-    assert "Atuador direito" not in submenu_titles
-    assert "Posição padrão" not in submenu_titles
+    assert "Left actuator" not in submenu_titles
+    assert "Right actuator" not in submenu_titles
+    assert "Default position" not in submenu_titles
 
 
 def test_hydraulic_valve_menu_outside_simulation_offers_full_editing():
@@ -222,13 +222,13 @@ def test_hydraulic_valve_menu_outside_simulation_offers_full_editing():
     labels = _menu_labels(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Propriedades..." in labels
+    assert "Properties..." in labels
     assert "Rotate 90°" in labels
-    assert "Adicionar label" in labels
-    assert "Simular defeito..." not in labels
-    assert "Atuador esquerdo" in submenu_titles
-    assert "Atuador direito" in submenu_titles
-    assert "Posição padrão" in submenu_titles
+    assert "Add label" in labels
+    assert "Simulate defect..." not in labels
+    assert "Left actuator" in submenu_titles
+    assert "Right actuator" in submenu_titles
+    assert "Default position" in submenu_titles
 
 
 def test_contact_hides_contact_type_submenu_during_simulation():
@@ -239,7 +239,7 @@ def test_contact_hides_contact_type_submenu_during_simulation():
     item.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Tipo de contato" not in submenu_titles
+    assert "Contact type" not in submenu_titles
 
 
 def test_contact_shows_contact_type_submenu_outside_simulation():
@@ -250,7 +250,7 @@ def test_contact_shows_contact_type_submenu_outside_simulation():
     item.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Tipo de contato" in submenu_titles
+    assert "Contact type" in submenu_titles
 
 
 def test_cylinder_item_hides_sensor_and_state_submenus_during_simulation():
@@ -261,9 +261,9 @@ def test_cylinder_item_hides_sensor_and_state_submenus_during_simulation():
     item.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Sensor retraído" not in submenu_titles
-    assert "Sensor estendido" not in submenu_titles
-    assert "Estado inicial" not in submenu_titles
+    assert "Retracted sensor" not in submenu_titles
+    assert "Extended sensor" not in submenu_titles
+    assert "Initial state" not in submenu_titles
 
 
 def test_cylinder_item_shows_sensor_and_state_submenus_outside_simulation():
@@ -274,6 +274,6 @@ def test_cylinder_item_shows_sensor_and_state_submenus_outside_simulation():
     item.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Sensor retraído" in submenu_titles
-    assert "Sensor estendido" in submenu_titles
-    assert "Estado inicial" in submenu_titles
+    assert "Retracted sensor" in submenu_titles
+    assert "Extended sensor" in submenu_titles
+    assert "Initial state" in submenu_titles

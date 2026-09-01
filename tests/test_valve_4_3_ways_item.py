@@ -68,12 +68,12 @@ def test_default_position_menu_renamed_with_3_options():
     menu = QMenu()
     node.extend_context_menu(menu)
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
-    assert "Posição padrão" in submenu_titles
+    assert "Default position" in submenu_titles
     assert "Posição de repouso" not in submenu_titles
 
-    rest_menu = next(a.menu() for a in menu.actions() if a.text() == "Posição padrão")
+    rest_menu = next(a.menu() for a in menu.actions() if a.text() == "Default position")
     option_labels = [a.text() for a in rest_menu.actions()]
-    assert option_labels == ["Direita (0)", "Centro (1)", "Esquerda (2)"]
+    assert option_labels == ["Right (0)", "Center (1)", "Left (2)"]
 
 
 def test_spring_excluded_from_actuator_menu():

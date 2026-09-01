@@ -514,19 +514,26 @@ class DirectionalValveItem(NodeItem):
             return
         menu.addSeparator()
 
-        left_menu = menu.addMenu("Atuador esquerdo")
-        right_menu = menu.addMenu("Atuador direito")
+        left_menu = menu.addMenu(self.tr("Left actuator"))
+        right_menu = menu.addMenu(self.tr("Right actuator"))
 
         self._populate_actuator_menu(left_menu, side="left")
         self._populate_actuator_menu(right_menu, side="right")
 
         menu.addSeparator()
-        rest_menu = menu.addMenu("Posição padrão")
+        rest_menu = menu.addMenu(self.tr("Default position"))
         if self.THREE_POSITION:
-            rest_options = [("right", "Direita (0)"), ("center", "Centro (1)"), ("left", "Esquerda (2)")]
+            rest_options = [
+                ("right", self.tr("Right (0)")),
+                ("center", self.tr("Center (1)")),
+                ("left", self.tr("Left (2)")),
+            ]
             current_default = self.properties.get("default_side", "center")
         else:
-            rest_options = [("right", "Direita (0)"), ("left", "Esquerda (1)")]
+            rest_options = [
+                ("right", self.tr("Right (0)")),
+                ("left", self.tr("Left (1)")),
+            ]
             current_default = self.properties.get("default_side", "right")
         for opt, label in rest_options:
             action = QAction(label, menu, checkable=True)
@@ -540,7 +547,7 @@ class DirectionalValveItem(NodeItem):
         # -----------------------
         # "None" option
         # -----------------------
-        action_none = QAction("None", menu, checkable=True)
+        action_none = QAction(self.tr("None"), menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, s=side: self.set_actuator(s, None)
@@ -612,7 +619,7 @@ class DirectionalValveItem(NodeItem):
         button_menu = menu.addMenu(desc["label"])
         current_mode = current.get("mode", DEFAULT_BUTTON_MODE) if current and current.get("type") == "button" else None
 
-        for mode, label in (("latch", "Retido"), ("momentary", "Momentâneo")):
+        for mode, label in (("latch", self.tr("Latched")), ("momentary", self.tr("Momentary"))):
             action = QAction(label, button_menu, checkable=True)
             action.setChecked(current_mode == mode)
             action.triggered.connect(

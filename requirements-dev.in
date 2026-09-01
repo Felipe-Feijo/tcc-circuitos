@@ -1,0 +1,5 @@
+# Dev-only tools, not shipped in the packaged app.
+# PySide6 is installed solely for its bundled `pyside6-lrelease` binary,
+# used by scripts/compile_translations.py to compile .ts -> .qm.
+-r requirements.in
+pyside6

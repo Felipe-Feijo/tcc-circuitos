@@ -7,9 +7,14 @@ node via NodeItem.command, and the defect lives only as long as the
 current simulation is running.
 """
 
+from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtWidgets import QDialog, QPushButton
 
 from graphics.utils.properties_dialog import PropertiesDialog
+
+
+def _default_defect_title() -> str:
+    return QCoreApplication.translate("DefectDialog", "Simulate defect")
 
 
 class DefectDialog(PropertiesDialog):
@@ -20,13 +25,13 @@ class DefectDialog(PropertiesDialog):
     its default condition -- there's no field to validate).
     """
 
-    def __init__(self, title="Simular defeito", parent=None):
-        super().__init__(title=title, parent=parent)
+    def __init__(self, title: str | None = None, parent=None):
+        super().__init__(title=title if title is not None else _default_defect_title(), parent=parent)
         self.restore_requested = False
 
-        self._ok_btn.setText("Aplicar")
+        self._ok_btn.setText(self.tr("Apply"))
 
-        self._restore_btn = QPushButton("Restaurar")
+        self._restore_btn = QPushButton(self.tr("Restore"))
         self._restore_btn.clicked.connect(self._on_restore_clicked)
         # btn_layout, before this insertion: [stretch(0), Cancel(1), OK(2)].
         # Inserting at 2 positions Restore between Cancel and Apply (pushes

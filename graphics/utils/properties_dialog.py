@@ -8,8 +8,10 @@ from PyQt6.QtCore import Qt
 
 
 class PropertiesDialog(QDialog):
-    def __init__(self, title="Properties", parent=None):
+    def __init__(self, title: str | None = None, parent=None):
         super().__init__(parent)
+        if title is None:
+            title = self.tr("Properties")
         self.setWindowTitle(title)
         self.setMinimumWidth(320)
         self.setModal(True)
@@ -41,10 +43,10 @@ class PropertiesDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        self._cancel_btn = QPushButton("Cancelar")
+        self._cancel_btn = QPushButton(self.tr("Cancel"))
         self._cancel_btn.clicked.connect(self.reject)
 
-        self._ok_btn = QPushButton("OK")
+        self._ok_btn = QPushButton(self.tr("OK"))
         self._ok_btn.setDefault(True)
         self._ok_btn.clicked.connect(self._validate_and_accept)
 
@@ -78,7 +80,7 @@ class PropertiesDialog(QDialog):
         return field
 
     def add_no_properties_message(self):
-        msg = QLabel("This node has no editable properties.")
+        msg = QLabel(self.tr("This node has no editable properties."))
         msg.setStyleSheet("color: gray; font-style: italic;")
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._main_layout.insertWidget(2, msg)  # after the separator

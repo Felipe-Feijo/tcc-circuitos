@@ -23,7 +23,7 @@ class CircuitGeneratorDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Novo a partir de Sequência")
+        self.setWindowTitle(self.tr("New from Sequence"))
         self.setMinimumWidth(420)
 
         self.sequence: str = ""
@@ -42,10 +42,10 @@ class CircuitGeneratorDialog(QDialog):
         root.setSpacing(16)
 
         # -- Sequence --
-        seq_box = QGroupBox("Sequência")
+        seq_box = QGroupBox(self.tr("Sequence"))
         seq_layout = QVBoxLayout(seq_box)
 
-        hint = QLabel("Ex: A+B+A-B-   (letras maiúsculas seguidas de + ou -)")
+        hint = QLabel(self.tr("E.g.: A+B+A-B-   (uppercase letters followed by + or -)"))
         hint.setStyleSheet("color: gray; font-size: 13px;")
         seq_layout.addWidget(hint)
 
@@ -63,11 +63,11 @@ class CircuitGeneratorDialog(QDialog):
         root.addWidget(seq_box)
 
         # -- Method --
-        method_box = QGroupBox("Método")
+        method_box = QGroupBox(self.tr("Method"))
         method_layout = QVBoxLayout(method_box)
 
-        self._rb_cascade   = QRadioButton("Cascata")
-        self._rb_step      = QRadioButton("Passo a Passo")
+        self._rb_cascade   = QRadioButton(self.tr("Cascade"))
+        self._rb_step      = QRadioButton(self.tr("Step by Step"))
         self._rb_cascade.setChecked(True)
 
         self._method_group = QButtonGroup(self)
@@ -83,9 +83,9 @@ class CircuitGeneratorDialog(QDialog):
         sub_layout = QHBoxLayout(self._subtype_widget)
         sub_layout.setContentsMargins(20, 0, 0, 0)
 
-        sub_label = QLabel("Sub-tipo:")
-        self._rb_pneumatic = QRadioButton("Pneumático")
-        self._rb_electric  = QRadioButton("Elétrico")
+        sub_label = QLabel(self.tr("Sub-type:"))
+        self._rb_pneumatic = QRadioButton(self.tr("Pneumatic"))
+        self._rb_electric  = QRadioButton(self.tr("Electric"))
         self._rb_pneumatic.setChecked(True)
 
         self._subtype_group = QButtonGroup(self)
@@ -104,10 +104,10 @@ class CircuitGeneratorDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self._btn_cancel = QPushButton("Cancelar")
+        self._btn_cancel = QPushButton(self.tr("Cancel"))
         self._btn_cancel.clicked.connect(self.reject)
 
-        self._btn_generate = QPushButton("Gerar")
+        self._btn_generate = QPushButton(self.tr("Generate"))
         self._btn_generate.setDefault(True)
         self._btn_generate.clicked.connect(self._on_generate)
 
@@ -148,7 +148,7 @@ class CircuitGeneratorDialog(QDialog):
     def _validate_sequence(self, text: str) -> "str | None":
         """Returns None if valid, or the error message."""
         if not text:
-            return "Digite uma sequência."
+            return self.tr("Enter a sequence.")
         try:
             _parse_sequence(text.replace(" ", ""))
             return None

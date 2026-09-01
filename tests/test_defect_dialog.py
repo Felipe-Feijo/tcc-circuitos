@@ -11,7 +11,7 @@ from graphics.utils.defect_dialog import DefectDialog
 
 def test_ok_button_relabeled_to_aplicar():
     dialog = DefectDialog(title="Test")
-    assert dialog._ok_btn.text() == "Aplicar"
+    assert dialog._ok_btn.text() == "Apply"
 
 
 def test_has_three_buttons_in_order_cancelar_restaurar_aplicar():
@@ -21,7 +21,7 @@ def test_has_three_buttons_in_order_cancelar_restaurar_aplicar():
         for i in range(dialog._btn_layout.count())
         if dialog._btn_layout.itemAt(i).widget() is not None
     ]
-    assert labels == ["Cancelar", "Restaurar", "Aplicar"]
+    assert labels == ["Cancel", "Restore", "Apply"]
 
 
 def test_restore_requested_defaults_to_false():
@@ -31,7 +31,7 @@ def test_restore_requested_defaults_to_false():
 
 def test_clicking_restore_sets_flag_and_accepts_without_validation():
     dialog = DefectDialog(title="Test")
-    # campo obrigatório vazio -- validação normal do OK/Aplicar falharia aqui
+    # required field left empty -- normal OK/Apply validation would fail here
     dialog.add_number_field("K", value=None, required=True)
     dialog._restore_btn.click()
     assert dialog.restore_requested is True

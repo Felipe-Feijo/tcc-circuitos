@@ -67,7 +67,7 @@ def retranslate_actions(actions: dict, main_window) -> None:
     # -- Stateful text --
     use_light_theme = getattr(main_window, "use_light_theme", False)
     actions["toggle_theme"].setText(
-        main_window.tr("Light Theme") if not use_light_theme else main_window.tr("Dark Theme")
+        main_window.tr("Light Theme") if use_light_theme else main_window.tr("Dark Theme")
     )
 
     simulation = getattr(main_window, "simulation", None)

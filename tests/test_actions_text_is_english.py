@@ -105,4 +105,4 @@ def test_retranslate_actions_reapplies_toggle_theme_text_from_current_state():
 
     retranslate_actions(actions, fake_main_window)
 
-    assert actions["toggle_theme"].text() == "Dark Theme"
+    assert actions["toggle_theme"].text() == "Light Theme"

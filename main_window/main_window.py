@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
         
 
 
-        self.setWindowTitle("Simulador – Editor Gráfico")
+        self.setWindowTitle(self.tr("Circuit Editor"))
 
         self.current_file: str | None = None
 
@@ -70,7 +70,7 @@ class MainWindow(QMainWindow):
     def _init_actions_ui(self):
         self.actions = create_actions(self)
         self.menus = create_menus(self, self.actions)
-        create_toolbars(self, self.actions)
+        self.toolbar = create_toolbars(self, self.actions)
 
         # Registers every action on the window so ApplicationShortcut
         # shortcuts work even outside menus (required on Windows)
@@ -99,6 +99,16 @@ class MainWindow(QMainWindow):
         scratch on every open and pick up the active language automatically."""
         from main_window.actions import retranslate_actions
         retranslate_actions(self.actions, self)
+
+        self.menus["file"].setTitle(self.tr("File"))
+        self.menus["edit"].setTitle(self.tr("Edit"))
+        self.menus["view"].setTitle(self.tr("View"))
+        self.menus["help"].setTitle(self.tr("Help"))
+        self.menus["language"].setTitle(self.tr("Language"))
+
+        self.toolbar.setWindowTitle(self.tr("Tools"))
+
+        self.setWindowTitle(self.tr("Circuit Editor"))
 
     def _wire_state_callbacks(self):
         # Disconnect first to avoid duplicate connections on new_scene()
@@ -150,7 +160,7 @@ class MainWindow(QMainWindow):
         self.file_session = SceneFileSession(self.scene, self, self.state)
         self._wire_state_callbacks()
         self.state.undo_stack.clear()
-        self.setWindowTitle("Simulador – Editor Gráfico")
+        self.setWindowTitle(self.tr("Circuit Editor"))
         self.update_scene_rect()
 
 
@@ -206,10 +216,12 @@ class MainWindow(QMainWindow):
     def show_about(self):
         QMessageBox.about(
             self,
-            "About",
-            "Simulador – Editor Gráfico\n"
-            "Pneumatic and Hydraulic Systems\n\n"
-            "Built with PyQt6"
+            self.tr("About"),
+            self.tr(
+                "Circuit Editor\n"
+                "Pneumatic and Hydraulic Systems\n\n"
+                "Built with PyQt6"
+            )
         )
 
     def on_change_font_size(self):
@@ -244,7 +256,7 @@ class MainWindow(QMainWindow):
         self.update_scene_rect()
 
         # Pushes the undo command AFTER the node is added
-        self.state.undo_stack.push_snapshot(self.scene, self.state, before, "Adicionar nó")
+        self.state.undo_stack.push_snapshot(self.scene, self.state, before, self.tr("Add node"))
 
         self.set_mode(EditorMode.SELECT)
 
@@ -337,13 +349,13 @@ class MainWindow(QMainWindow):
     def on_dt_clicked(self):
         from PyQt6.QtWidgets import QInputDialog
         value, ok = QInputDialog.getDouble(
-            self, "Step size", "dt (s):",
+            self, self.tr("Step size"), self.tr("dt (s):"),
             self.simulation.dt,  # reads from the session
             0.001, 1.0, 3
         )
         if ok:
             self.simulation.set_dt(value)  # salva na session, controller e recorder
-            self.actions["dt"].setText(f"dt: {value:.3f}s")
+            self.actions["dt"].setText(self.tr("dt: {0:.3f}s").format(value))
 
     def on_cycle_speed(self):
         self.simulation.speed_index = (self.simulation.speed_index + 1) % len(SPEED_STEPS)

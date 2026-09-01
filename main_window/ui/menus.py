@@ -4,7 +4,7 @@
 def create_menus(main_window, actions) -> dict:
     menubar = main_window.menuBar()
 
-    file_menu = menubar.addMenu("File")
+    file_menu = menubar.addMenu(main_window.tr("File"))
     file_menu.addAction(actions["new"])
     file_menu.addAction(actions["open"])
     file_menu.addAction(actions["save"])
@@ -14,7 +14,7 @@ def create_menus(main_window, actions) -> dict:
     file_menu.addSeparator()
     file_menu.addAction(actions["exit"])
 
-    edit_menu = menubar.addMenu("Edit")
+    edit_menu = menubar.addMenu(main_window.tr("Edit"))
     edit_menu.addAction(actions["undo"])
     edit_menu.addAction(actions["redo"])
     edit_menu.addSeparator()
@@ -22,7 +22,7 @@ def create_menus(main_window, actions) -> dict:
     edit_menu.addAction(actions["copy"])
     edit_menu.addAction(actions["paste"])
 
-    view_menu = menubar.addMenu("View")
+    view_menu = menubar.addMenu(main_window.tr("View"))
     view_menu.addAction(actions["toggle_theme"])
     view_menu.addAction(actions["zoom_in"])
     view_menu.addAction(actions["zoom_out"])
@@ -34,7 +34,7 @@ def create_menus(main_window, actions) -> dict:
     lang_menu.addAction(actions["language_en"])
     lang_menu.addAction(actions["language_pt_br"])
 
-    help_menu = menubar.addMenu("Help")
+    help_menu = menubar.addMenu(main_window.tr("Help"))
     help_menu.addAction(actions["about"])
 
     return {

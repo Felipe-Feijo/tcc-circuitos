@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import QToolBar
 
 def create_toolbars(main_window, actions):
-    toolbar = QToolBar("Tools", main_window)
+    toolbar = QToolBar(main_window.tr("Tools"), main_window)
     toolbar.setMovable(False)
 
     toolbar.addAction(actions["open_palette"])
@@ -30,4 +30,4 @@ def create_toolbars(main_window, actions):
 
     main_window.addToolBar(toolbar)
 
-    
+    return toolbar

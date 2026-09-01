@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
             return
         circuit_name = (
             Path(self.file_session.current_file).stem
-            if self.file_session.current_file else "circuito"
+            if self.file_session.current_file else self.tr("circuit")
         )
         resolve_report(self, result.report_dir, circuit_name)
 

@@ -1,6 +1,7 @@
 """Manages the open file session: current path, dialogs and window title."""
 
 from pathlib import Path
+from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 
@@ -40,7 +41,7 @@ class SceneFileSession:
         """Opens the "save as" dialog and writes the scene to the chosen path."""
         path, _ = QFileDialog.getSaveFileName(
             self.parent,
-            "Salvar cena",
+            QCoreApplication.translate("SceneFileSession", "Save scene"),
             "",
             "Scene Files (*.json)",
         )
@@ -54,7 +55,7 @@ class SceneFileSession:
         """Opens the file dialog and loads the scene from the chosen JSON."""
         path, _ = QFileDialog.getOpenFileName(
             self.parent,
-            "Abrir cena",
+            QCoreApplication.translate("SceneFileSession", "Open scene"),
             "",
             "Scene Files (*.json)",
         )
@@ -66,7 +67,11 @@ class SceneFileSession:
             self.current_file = path
             self._update_window_title()
         except Exception as e:
-            QMessageBox.critical(self.parent, "Erro ao abrir", str(e))
+            QMessageBox.critical(
+                self.parent,
+                QCoreApplication.translate("SceneFileSession", "Error opening file"),
+                str(e),
+            )
 
     # Internal methods
 
@@ -82,9 +87,15 @@ class SceneFileSession:
             self.current_file = path
             self._update_window_title()
         except Exception as e:
-            QMessageBox.critical(self.parent, "Erro ao salvar", str(e))
+            QMessageBox.critical(
+                self.parent,
+                QCoreApplication.translate("SceneFileSession", "Error saving file"),
+                str(e),
+            )
 
     def _update_window_title(self) -> None:
         """Updates the main window title with the current file name."""
         name = Path(self.current_file).name
-        self.parent.setWindowTitle(f"Simulador – {name}")
+        self.parent.setWindowTitle(
+            QCoreApplication.translate("SceneFileSession", "Circuit Editor – {0}").format(name)
+        )

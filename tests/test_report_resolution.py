@@ -50,4 +50,4 @@ def test_user_accepts_and_picks_folder_moves_files(tmp_path, monkeypatch):
     assert not os.path.exists(report_dir)
     moved = list(dest_parent.iterdir())
     assert len(moved) == 1
-    assert moved[0].name.startswith("relatorio_teste_")
+    assert moved[0].name.startswith("report_teste_")

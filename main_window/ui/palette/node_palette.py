@@ -31,9 +31,9 @@ class NodePalette(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(8)
-        title = QLabel(self.tr("Nodes"))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title)
+        self.title_label = QLabel(self.tr("Nodes"))
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.title_label)
 
         # size selector (Small / Medium / Large)
         tier_row = QHBoxLayout()
@@ -107,6 +107,8 @@ class NodePalette(QWidget):
     def retranslate_ui(self, section_titles: dict[str, str]):
         """section_titles maps each canonical section key ("Pneumatic",
         "Electric", "Hydraulic") to its already-translated display title."""
+        self.title_label.setText(self.tr("Nodes"))
+
         for key, title in section_titles.items():
             if key in self.sections:
                 self.sections[key].retranslate_ui(title)

@@ -31,3 +31,18 @@ def test_retranslate_updates_section_titles_and_tier_tooltips():
 
     assert palette.sections["Hydraulic"].header.text() == "▾ Hidráulico"
     assert palette.tier_buttons["small"].toolTip() == "Small"
+
+
+def test_title_label_is_stored_and_set_on_construction():
+    palette = NodePalette()
+
+    assert palette.title_label.text() == "Nodes"
+
+
+def test_retranslate_updates_title_label():
+    palette = NodePalette()
+    palette.title_label.setText("stale")
+
+    palette.retranslate_ui({})
+
+    assert palette.title_label.text() == "Nodes"

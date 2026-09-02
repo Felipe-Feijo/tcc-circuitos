@@ -31,10 +31,10 @@ class FixedDisplacementPump(NodeItem):
         self.add_anchor(AnchorItem("P", QPointF(self.width*28/84, 0), node=self, domain=self.domain, exit_directions={"external": ["top", "right", "left"]}))
 
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Fixed Displacement Pump — Properties")
+        dialog = PropertiesDialog(title=self.tr("Fixed Displacement Pump — Properties"))
         if self.domain == "hydraulic":
             dialog._field_Q = dialog.add_number_field(
-                "Vazão (m³/s)", placeholder="ex: 8.3e-4  (= 50 L/min)",
+                self.tr("Flow rate (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q"),
                 required=True,
             )

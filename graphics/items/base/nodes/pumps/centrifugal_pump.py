@@ -32,15 +32,15 @@ class CentrifugalPump(NodeItem):
         self.add_anchor(AnchorItem("P", QPointF(self.width*28/84, 0), node=self, domain=self.domain, exit_directions={"external": ["top", "right", "left"]}))
 
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Centrifugal Pump — Properties")
+        dialog = PropertiesDialog(title=self.tr("Centrifugal Pump — Properties"))
         if self.domain == "hydraulic":
             dialog._field_h = dialog.add_number_field(
-                "Pressão de shutoff H (Pa)", placeholder="ex: 2e6",
+                self.tr("Shutoff pressure H (Pa)"), placeholder="ex: 2e6",
                 value=self.properties.get("H_shutoff"),
                 required=True,
             )
             dialog._field_qmax = dialog.add_number_field(
-                "Vazão máxima Q_max (m³/s)", placeholder="ex: 8.3e-4  (= 50 L/min)",
+                self.tr("Maximum flow Q_max (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q_max"),
                 required=True,
             )

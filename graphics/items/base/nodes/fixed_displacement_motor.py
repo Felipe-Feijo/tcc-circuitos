@@ -107,7 +107,7 @@ class FixedDisplacementMotor(NodeItem):
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Fixed Displacement Motor — Properties")
+        dialog = PropertiesDialog(title=self.tr("Fixed Displacement Motor — Properties"))
         if self.domain != "hydraulic":
             dialog._field_d = None
             dialog._combo_mode = None
@@ -118,12 +118,12 @@ class FixedDisplacementMotor(NodeItem):
             return dialog
 
         dialog._field_d = dialog.add_number_field(
-            "Deslocamento D (m³/rad)", placeholder="ex: 1.5e-6",
+            self.tr("Displacement D (m³/rad)"), placeholder="ex: 1.5e-6",
             value=self.properties.get("D"),
             required=True,
         )
         dialog._combo_mode = dialog.add_combo_field(
-            "Modo de controle",
+            self.tr("Control mode"),
             [("torque", self.tr("Torque")), ("speed", self.tr("Speed"))],
             current=self.properties.get("control_mode", "torque"),
         )
@@ -135,12 +135,12 @@ class FixedDisplacementMotor(NodeItem):
         # Same pattern already used by the conditional timer fields in
         # directional_valve_item.py.
         dialog._field_t = dialog.add_number_field(
-            "Torque de carga T_load (N·m)", placeholder="ex: 50",
+            self.tr("Load torque T_load (N·m)"), placeholder="ex: 50",
             value=self.properties.get("T_load"),
             required=False,
         )
         dialog._field_omega = dialog.add_number_field(
-            "Velocidade alvo ω (rad/s)", placeholder="ex: 100",
+            self.tr("Target speed ω (rad/s)"), placeholder="ex: 100",
             value=self.properties.get("omega_target"),
             required=False,
         )
@@ -150,18 +150,18 @@ class FixedDisplacementMotor(NodeItem):
         # physics. required=False -- absence is a valid choice (no
         # check), not a fill-in error.
         dialog._field_p_max = dialog.add_number_field(
-            "Limite P_max (Pa) — opcional", placeholder="ex: 1e7",
+            self.tr("Limit P_max (Pa) — optional"), placeholder="ex: 1e7",
             value=self.properties.get("P_max"),
             required=False,
         )
         dialog._field_n_max = dialog.add_number_field(
-            "Limite n_max (rad/s) — opcional", placeholder="ex: 300",
+            self.tr("Limit n_max (rad/s) — optional"), placeholder="ex: 300",
             value=self.properties.get("n_max"),
             required=False,
         )
 
         dialog._preview_label = QLabel("—")
-        dialog._form_layout.addRow("Requisito calculado", dialog._preview_label)
+        dialog._form_layout.addRow(self.tr("Calculated requirement"), dialog._preview_label)
 
         def _update_mode_visibility(mode: str) -> None:
             form = dialog._form_layout
@@ -187,11 +187,11 @@ class FixedDisplacementMotor(NodeItem):
                 if mode == "torque":
                     t_load = float(dialog._field_t.text())
                     delta_p = t_load / d
-                    dialog._preview_label.setText(f"Δp necessário: {delta_p:.3g} Pa")
+                    dialog._preview_label.setText(self.tr("Required Δp: {0:.3g} Pa").format(delta_p))
                 else:
                     omega_target = float(dialog._field_omega.text())
                     q = d * omega_target
-                    dialog._preview_label.setText(f"Vazão necessária: {q:.3g} m³/s")
+                    dialog._preview_label.setText(self.tr("Required flow rate: {0:.3g} m³/s").format(q))
             except (ValueError, ZeroDivisionError):
                 dialog._preview_label.setText("—")
 

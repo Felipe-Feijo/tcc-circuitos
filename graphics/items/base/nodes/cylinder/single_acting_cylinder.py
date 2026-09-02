@@ -110,16 +110,16 @@ class SingleActingCylinder(CylinderItem):
 
         if self.domain == "hydraulic":
             dialog._field_bore      = dialog.add_number_field(
-                "Diâmetro do furo (m)",            placeholder="ex: 0.05",
+                self.tr("Bore diameter (m)"),            placeholder="ex: 0.05",
                 value=self.properties.get("bore"), required=True)
             dialog._field_stroke    = dialog.add_number_field(
-                "Curso (m)",                        placeholder="ex: 0.5",
+                self.tr("Stroke (m)"),                        placeholder="ex: 0.5",
                 value=self.properties.get("stroke"), required=True)
             dialog._field_spring_k  = dialog.add_number_field(
-                "Constante da mola (N/m)",          placeholder="ex: 5000",
+                self.tr("Spring constant (N/m)"),          placeholder="ex: 5000",
                 value=self.properties.get("spring_k"), required=True)
             dialog._field_ext_force = dialog.add_number_field(
-                "Carga externa (N)",                placeholder="ex: 0.0",
+                self.tr("External load (N)"),                placeholder="ex: 0.0",
                 value=self.properties.get("external_force", 0.0))
         else:
             dialog._field_bore = dialog._field_stroke = None

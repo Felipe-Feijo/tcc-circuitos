@@ -85,15 +85,15 @@ class ReliefValve(NodeItem):
             painter.restore()
 
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Relief Valve — Properties")
+        dialog = PropertiesDialog(title=self.tr("Relief Valve — Properties"))
         if self.domain == "hydraulic":
             dialog._field_p_set = dialog.add_number_field(
-                "Pressão de abertura (Pa)", placeholder="ex: 1.5e7  (= 150 bar)",
+                self.tr("Cracking pressure (Pa)"), placeholder="ex: 1.5e7  (= 150 bar)",
                 value=self.properties.get("p_set"),
                 required=True,
             )
             dialog._field_piloted = dialog.add_bool_field(
-                "Pilotagem externa (Y)", value=self.properties.get("piloted", False),
+                self.tr("External pilot (Y)"), value=self.properties.get("piloted", False),
             )
         else:
             dialog._field_p_set = None

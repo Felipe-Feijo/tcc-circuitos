@@ -136,13 +136,13 @@ class CheckValve(NodeItem):
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self) -> PropertiesDialog:
-        dialog = PropertiesDialog(title="Check Valve — Properties")
+        dialog = PropertiesDialog(title=self.tr("Check Valve — Properties"))
 
         dialog._field_piloted = dialog.add_bool_field(
-            "Piloted", value=self.properties.get("piloted", False),
+            self.tr("Piloted"), value=self.properties.get("piloted", False),
         )
         dialog._field_pilot_mirrored = dialog.add_bool_field(
-            "Mirror pilot side", value=self.properties.get("pilot_mirrored", False),
+            self.tr("Mirror pilot side"), value=self.properties.get("pilot_mirrored", False),
         )
 
         def _set_pilot_mirrored_visible(visible: bool) -> None:

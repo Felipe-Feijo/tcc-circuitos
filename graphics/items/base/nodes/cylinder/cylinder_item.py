@@ -441,8 +441,6 @@ class CylinderItem(NodeItem):
             self.sensor_registry.unregister(name)
 
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Cylinder — Properties")
-
         # QCoreApplication.translate(...) with an explicit "CylinderItem"
         # context, not self.tr(...): this method is inherited-and-called
         # via super() by DoubleActingCylinder/SingleActingCylinder, whose
@@ -455,6 +453,8 @@ class CylinderItem(NodeItem):
         # directional_valve_item.py.
         def _(text: str) -> str:
             return QCoreApplication.translate("CylinderItem", text)
+
+        dialog = PropertiesDialog(title=_("Cylinder — Properties"))
 
         sensor_options = [(None, _("None"))] + [
             (key, _(desc["label"])) for key, desc in SENSOR_DICT.items()
@@ -478,8 +478,11 @@ class CylinderItem(NodeItem):
             current_type = sensor.get("type") if sensor else None
             current_name = sensor.get("name", "") if sensor else ""
 
-            combo = dialog.add_combo_field(f"Sensor {pos}", sensor_options, current=current_type)
-            name_field = dialog.add_text_field("  Nome", placeholder="ex: A1", value=current_name)
+            # Reuses the same "Retracted sensor"/"Extended sensor" phrasing
+            # already cataloged for the context-menu submenu titles.
+            side_label = _("Retracted sensor") if pos == "retracted" else _("Extended sensor")
+            combo = dialog.add_combo_field(side_label, sensor_options, current=current_type)
+            name_field = dialog.add_text_field(_("  Name"), placeholder="ex: A1", value=current_name)
             name_field.setEnabled(current_type is not None)
 
             def on_type_changed(_index, combo=combo):
@@ -505,7 +508,7 @@ class CylinderItem(NodeItem):
         dialog._combo_extended, dialog._name_extended = make_side_widgets("extended")
 
         dialog._combo_default_state = dialog.add_combo_field(
-            "Estado inicial",
+            _("Initial state"),
             [("retracted", _("Retracted")), ("extended", _("Extended"))],
             current=self.properties.get("default_state", "retracted"),
         )

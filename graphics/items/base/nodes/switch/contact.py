@@ -291,11 +291,13 @@ class Contact(NodeItem):
 
     def build_properties_dialog(self):
         from graphics.utils.properties_dialog import PropertiesDialog
-        dialog = PropertiesDialog(title="Contact — Properties")
+        dialog = PropertiesDialog(title=self.tr("Contact — Properties"))
 
         current_type = self.properties.get("contact_type", "NO")
         dialog._combo_contact = dialog.add_combo_field(
-            "Tipo de contato",
+            # Reuses the phrasing already cataloged for the context-menu
+            # submenu title.
+            self.tr("Contact type"),
             # "NO"/"NC" (Normally Open/Closed) are kept as-is in both
             # languages -- an internationally recognized electrical
             # abbreviation, not natural-language text.
@@ -315,12 +317,12 @@ class Contact(NodeItem):
         else:
             current_option = None
         dialog._combo_relay = dialog.add_combo_field(
-            "Atuador", options, current=current_option
+            self.tr("Actuator"), options, current=current_option
         )
 
         current_mode = self.properties.get("button_mode", DEFAULT_BUTTON_MODE)
         dialog._field_latch = dialog.add_bool_field(
-            "Trava", value=current_mode == "latch",
+            self.tr("Latch"), value=current_mode == "latch",
         )
 
         def _set_latch_visible(visible):

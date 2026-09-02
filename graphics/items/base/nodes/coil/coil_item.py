@@ -99,10 +99,16 @@ class CoilItem(NodeItem):
 
     def build_properties_dialog(self):
         from graphics.utils.properties_dialog import PropertiesDialog
-        dialog = PropertiesDialog(title="Coil — Properties")
+        # QCoreApplication.translate(...) with an explicit "CoilItem"
+        # context, not self.tr(...): this method is inherited-and-called
+        # (never overridden) by RelayCoil/SolenoidCoil, whose runtime
+        # class self.tr() would resolve against instead -- same gotcha as
+        # NodeItem.extend_context_menu (see Task 11's fix note in
+        # main_window/actions/__init__.py).
+        dialog = PropertiesDialog(title=QCoreApplication.translate("CoilItem", "Coil — Properties"))
         current_name = self.properties["sensor"]["coil"].get("name", "")
         dialog._name_field = dialog.add_text_field(
-            "Nome do sensor",
+            QCoreApplication.translate("CoilItem", "Sensor name"),
             placeholder=f"ex: {self.PREFIX}1",
             value=current_name,
         )

@@ -98,15 +98,15 @@ class Accumulator(NodeItem):
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self) -> PropertiesDialog:
-        dialog = PropertiesDialog(title="Accumulator — Properties")
+        dialog = PropertiesDialog(title=self.tr("Accumulator — Properties"))
         dialog._field_v0 = dialog.add_number_field(
-            "Volume total V0 (m³)",
+            self.tr("Total volume V0 (m³)"),
             placeholder="ex: 0.001",
             value=self.properties.get("V0"),
             required=True,
         )
         dialog._field_p0 = dialog.add_number_field(
-            "Pressão de pré-carga P0 (Pa)",
+            self.tr("Precharge pressure P0 (Pa)"),
             placeholder="ex: 3e6",
             value=self.properties.get("P0"),
             required=True,

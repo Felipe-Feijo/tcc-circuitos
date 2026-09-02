@@ -8,6 +8,21 @@
         <source>Accumulator</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="101" />
+        <source>Accumulator — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="103" />
+        <source>Total volume V0 (m³)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="109" />
+        <source>Precharge pressure P0 (Pa)</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>AndValve</name>
     <message>
@@ -22,11 +37,41 @@
         <source>Centrifugal Pump</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="35" />
+        <source>Centrifugal Pump — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="38" />
+        <source>Shutoff pressure H (Pa)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="43" />
+        <source>Maximum flow Q_max (m³/s)</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>CheckValve</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\check_valve\check_valve.py" line="54" />
         <source>Check Valve</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\check_valve.py" line="139" />
+        <source>Check Valve — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\check_valve.py" line="142" />
+        <source>Piloted</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\check_valve.py" line="145" />
+        <source>Mirror pilot side</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -94,12 +139,22 @@
 </context><context>
     <name>CoilItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="194" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="108" />
+        <source>Coil — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="111" />
+        <source>Sensor name</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="200" />
         <source>Error renaming</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="195" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="201" />
         <source>A signal named '{0}' already exists.</source>
         <translation type="unfinished" />
     </message>
@@ -118,28 +173,44 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
-        <source>(None)</source>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="294" />
+        <source>Contact — Properties</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="390" />
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
-        <source>Button</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="361" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="363" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="300" />
         <source>Contact type</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="311" />
+        <source>(None)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="392" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="311" />
+        <source>Button</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="320" />
+        <source>Actuator</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="325" />
+        <source>Latch</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="399" />
         <source>Latched</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="399" />
         <source>Momentary</source>
         <translation type="unfinished" />
     </message>
@@ -256,17 +327,17 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="933" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="937" />
         <source>Simulate defect — {0}</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="938" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="942" />
         <source>Conductance k (m³/s/√Pa)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="943" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="947" />
         <source>Valve stuck (won't switch)</source>
         <translation type="unfinished" />
     </message>
@@ -275,6 +346,26 @@
     <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="41" />
         <source>Double Acting Cylinder</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="98" />
+        <source>Bore diameter (m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="101" />
+        <source>Rod diameter (m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="104" />
+        <source>Stroke (m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="107" />
+        <source>External load (N)</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -292,6 +383,21 @@
         <translation type="unfinished" />
     </message>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="110" />
+        <source>Fixed Displacement Motor — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="121" />
+        <source>Displacement D (m³/rad)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="126" />
+        <source>Control mode</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
         <source>Torque</source>
         <translation type="unfinished" />
@@ -301,11 +407,56 @@
         <source>Speed</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="138" />
+        <source>Load torque T_load (N·m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="143" />
+        <source>Target speed ω (rad/s)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="153" />
+        <source>Limit P_max (Pa) — optional</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="158" />
+        <source>Limit n_max (rad/s) — optional</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="164" />
+        <source>Calculated requirement</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="190" />
+        <source>Required Δp: {0:.3g} Pa</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="194" />
+        <source>Required flow rate: {0:.3g} m³/s</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>FixedDisplacementPump</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="22" />
         <source>Fixed Displacement Pump</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="34" />
+        <source>Fixed Displacement Pump — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="37" />
+        <source>Flow rate (m³/s)</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -540,6 +691,21 @@ Built with PyQt6</source>
         <source>Relief Valve (direct)</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="88" />
+        <source>Relief Valve — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="91" />
+        <source>Cracking pressure (Pa)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="96" />
+        <source>External pilot (Y)</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>ReportResolution</name>
     <message>
@@ -598,6 +764,26 @@ Built with PyQt6</source>
         <source>Single Acting Cylinder</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="113" />
+        <source>Bore diameter (m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="116" />
+        <source>Stroke (m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="119" />
+        <source>Spring constant (N/m)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="122" />
+        <source>External load (N)</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>SolenoidCoil</name>
     <message>
@@ -610,6 +796,21 @@ Built with PyQt6</source>
     <message>
         <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="38" />
         <source>Throttle Check Valve</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="96" />
+        <source>Throttle Check Valve — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="100" />
+        <source>Conductance k (m³/s/√Pa) — restricted direction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="107" />
+        <source>Delay steps (restricted direction)</source>
         <translation type="unfinished" />
     </message>
 </context><context>

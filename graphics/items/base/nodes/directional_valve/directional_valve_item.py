@@ -741,16 +741,6 @@ class DirectionalValveItem(NodeItem):
 
     
     def build_properties_dialog(self):
-        dialog = PropertiesDialog(title="Directional Valve — Properties")
-        if self.domain == "hydraulic":
-            dialog._field_k = dialog.add_number_field(
-                "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
-                value=self.properties.get("k"),
-                required=True,
-            )
-        else:
-            dialog._field_k = None
-
         # QCoreApplication.translate(...) with an explicit
         # "DirectionalValveItem" context, not self.tr(...): this method is
         # inherited-and-called (never overridden) by every concrete valve
@@ -763,6 +753,18 @@ class DirectionalValveItem(NodeItem):
         # added by hand.
         def _(text: str) -> str:
             return QCoreApplication.translate("DirectionalValveItem", text)
+
+        dialog = PropertiesDialog(title=_("Directional Valve — Properties"))
+        if self.domain == "hydraulic":
+            dialog._field_k = dialog.add_number_field(
+                # Reuses the same phrasing already cataloged for the
+                # defect dialog's field of the same physical quantity.
+                _("Conductance k (m³/s/√Pa)"), placeholder="ex: 1.5e-8",
+                value=self.properties.get("k"),
+                required=True,
+            )
+        else:
+            dialog._field_k = None
 
         options = [(None, _("None"))]
         dialog._actuator_key_map = {}
@@ -809,22 +811,24 @@ class DirectionalValveItem(NodeItem):
                     form.setRowVisible(row, visible)
                     return
 
-        dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_value("left"))
+        # "Left actuator"/"Right actuator" reuse the phrasing already
+        # cataloged for the context-menu submenu titles.
+        dialog._combo_left = dialog.add_combo_field(_("Left actuator"), options, current=current_value("left"))
         dialog._field_timer_left = dialog.add_number_field(
-            "Timer delay — left (steps)", placeholder="ex: 3",
+            _("Timer delay — left (steps)"), placeholder="ex: 3",
             value=_timer_delay("left"), required=False,
         )
         dialog._field_latch_left = dialog.add_bool_field(
-            "Trava", value=_button_is_latch("left"),
+            _("Latch"), value=_button_is_latch("left"),
         )
 
-        dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_value("right"))
+        dialog._combo_right = dialog.add_combo_field(_("Right actuator"), options, current=current_value("right"))
         dialog._field_timer_right = dialog.add_number_field(
-            "Timer delay — right (steps)", placeholder="ex: 3",
+            _("Timer delay — right (steps)"), placeholder="ex: 3",
             value=_timer_delay("right"), required=False,
         )
         dialog._field_latch_right = dialog.add_bool_field(
-            "Trava", value=_button_is_latch("right"),
+            _("Latch"), value=_button_is_latch("right"),
         )
 
         if self.THREE_POSITION:
@@ -836,7 +840,7 @@ class DirectionalValveItem(NodeItem):
             default_side_options = [("right", _("Right")), ("left", _("Left"))]
             default_side_current = self.properties.get("default_side", "right")
         dialog._combo_default_side = dialog.add_combo_field(
-            "Posição padrão",
+            _("Default position"),
             default_side_options,
             current=default_side_current,
         )

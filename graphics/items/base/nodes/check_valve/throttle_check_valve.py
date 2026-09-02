@@ -93,18 +93,18 @@ class ThrottleCheckValve(NodeItem):
     # ------------------------------------------------------------------
 
     def build_properties_dialog(self) -> PropertiesDialog:
-        dialog = PropertiesDialog(title="Throttle Check Valve — Properties")
+        dialog = PropertiesDialog(title=self.tr("Throttle Check Valve — Properties"))
         if self.domain == "hydraulic":
             dialog._field_delay = None
             dialog._field_k = dialog.add_number_field(
-                "Condutância k (m³/s/√Pa) — sentido restrito",
+                self.tr("Conductance k (m³/s/√Pa) — restricted direction"),
                 placeholder="ex: 1.5e-8",
                 value=self.properties.get("k"),
                 required=True,
             )
         else:
             dialog._field_delay = dialog.add_number_field(
-                "Delay steps (restricted direction)",
+                self.tr("Delay steps (restricted direction)"),
                 placeholder="ex: 3",
                 value=self.properties.get("delay_steps", 3),
                 required=True,

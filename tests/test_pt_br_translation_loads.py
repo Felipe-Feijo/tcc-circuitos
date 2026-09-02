@@ -470,3 +470,98 @@ def test_motor_control_mode_combo_translates_and_applies_canonical_value():
         assert node.properties["control_mode"] == "speed"
     finally:
         language_manager.apply_language(app, "en")
+
+
+# ---------------------------------------------------------------------------
+# Dialog titles and field labels (as opposed to dropdown option text,
+# covered above) -- the part of each properties dialog that isn't a combo
+# box: the window title and every add_number_field/add_text_field/
+# add_bool_field label.
+# ---------------------------------------------------------------------------
+
+def test_directional_valve_dialog_title_and_latch_checkbox_translate():
+    """The exact user-reported bug: the dialog's own title ("Directional
+    Valve — Properties") and field labels like "Trava" (Latch) stayed in
+    Portuguese/English regardless of the active language, because only
+    the dropdown OPTIONS had been migrated, not the dialog chrome around
+    them."""
+    node = Valve_3_2_Ways(domain="hydraulic")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        assert dialog.windowTitle() == "Válvula Direcional — Propriedades"
+
+        labels = _form_label_texts(dialog)
+        assert "Atuador esquerdo" in labels
+        assert "Atuador direito" in labels
+        assert "Posição padrão" in labels
+        assert "Trava" in labels
+        assert "Condutância k (m³/s/√Pa)" in labels
+    finally:
+        language_manager.apply_language(app, "en")
+        dialog.close()
+
+    dialog_en = node.build_properties_dialog()
+    try:
+        assert dialog_en.windowTitle() == "Directional Valve — Properties"
+        labels_en = _form_label_texts(dialog_en)
+        assert "Left actuator" in labels_en
+        assert "Latch" in labels_en
+    finally:
+        dialog_en.close()
+
+
+def test_cylinder_dialog_title_and_field_labels_translate():
+    node = DoubleActingCylinder(domain="hydraulic", sensor_registry=SensorRegistry())
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        assert dialog.windowTitle() == "Cilindro — Propriedades"
+
+        labels = _form_label_texts(dialog)
+        assert "Sensor retraído" in labels
+        assert "Sensor estendido" in labels
+        assert "Estado inicial" in labels
+        assert "Diâmetro do furo (m)" in labels
+        assert "Curso (m)" in labels
+    finally:
+        language_manager.apply_language(app, "en")
+        dialog.close()
+
+
+def test_contact_dialog_title_and_field_labels_translate():
+    node = Contact(domain="electric")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        assert dialog.windowTitle() == "Contato — Propriedades"
+
+        labels = _form_label_texts(dialog)
+        assert "Tipo de contato" in labels
+        assert "Atuador" in labels
+        assert "Trava" in labels
+    finally:
+        language_manager.apply_language(app, "en")
+        dialog.close()
+
+
+def test_motor_dialog_title_and_field_labels_translate():
+    from graphics.items.base.nodes.fixed_displacement_motor import FixedDisplacementMotor
+
+    node = FixedDisplacementMotor(domain="hydraulic")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        assert dialog.windowTitle() == "Motor de Deslocamento Fixo — Propriedades"
+
+        labels = _form_label_texts(dialog)
+        assert "Deslocamento D (m³/rad)" in labels
+        assert "Modo de controle" in labels
+        assert "Requisito calculado" in labels
+
+        dialog._field_d.setText("1.5e-6")
+        dialog._field_t.setText("60")
+        assert "Δp necessário" in dialog._preview_label.text()
+    finally:
+        language_manager.apply_language(app, "en")
+        dialog.close()

@@ -123,7 +123,7 @@ def test_preview_shows_required_delta_p_in_torque_mode():
     dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("60")
 
-    assert "Δp necessário" in dialog._preview_label.text()
+    assert "Required Δp" in dialog._preview_label.text()
     assert "4e+07" in dialog._preview_label.text()  # 60 / 1.5e-6 = 4e7
 
 
@@ -134,7 +134,7 @@ def test_preview_shows_required_flow_in_speed_mode():
     dialog._combo_mode.setCurrentText("Speed")
     dialog._field_omega.setText("100")
 
-    assert "Vazão necessária" in dialog._preview_label.text()
+    assert "Required flow rate" in dialog._preview_label.text()
     assert "0.00015" in dialog._preview_label.text()  # 1.5e-6 * 100 = 1.5e-4
 
 

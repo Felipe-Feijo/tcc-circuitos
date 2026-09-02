@@ -24,6 +24,16 @@ under the <name>MainWindow</name> context with their translation, before
 running this compile step. See main_window/actions/__init__.py's module
 docstring and .superpowers/sdd/2026-09-01-language-switching/task-10-report.md
 for the full list and how this was verified.
+
+RELATED GOTCHA: a `self.tr(...)` call written in a base class, when run via
+an inherited (unoverridden) method on a subclass instance, resolves its Qt
+context to the *subclass's* runtime class at runtime, not the base class
+pylupdate6 statically attributes it to -- so the catalog entry under the
+base class's context never matches. Fix at the call site: use
+`QCoreApplication.translate("<BaseClassName>", "...")` instead of
+`self.tr(...)`. See main_window/actions/__init__.py's module docstring and
+.superpowers/sdd/2026-09-01-language-switching/task-11-report.md for the
+worked examples (NodeItem.extend_context_menu, PropertiesDialog).
 """
 
 import shutil

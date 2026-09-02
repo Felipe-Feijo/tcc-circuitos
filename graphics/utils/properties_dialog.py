@@ -4,14 +4,20 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QFrame,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QCoreApplication
 
 
 class PropertiesDialog(QDialog):
     def __init__(self, title: str | None = None, parent=None):
         super().__init__(parent)
         if title is None:
-            title = self.tr("Properties")
+            # QCoreApplication.translate(...) with an explicit context,
+            # not self.tr(...): a subclass (e.g. DefectDialog) invoking
+            # this __init__ via super() has a *different* runtime class,
+            # so self.tr() here would resolve to that subclass's Qt
+            # context instead of "PropertiesDialog" -- see the module-level
+            # gotcha note in main_window/actions/__init__.py.
+            title = QCoreApplication.translate("PropertiesDialog", "Properties")
         self.setWindowTitle(title)
         self.setMinimumWidth(320)
         self.setModal(True)
@@ -43,10 +49,10 @@ class PropertiesDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        self._cancel_btn = QPushButton(self.tr("Cancel"))
+        self._cancel_btn = QPushButton(QCoreApplication.translate("PropertiesDialog", "Cancel"))
         self._cancel_btn.clicked.connect(self.reject)
 
-        self._ok_btn = QPushButton(self.tr("OK"))
+        self._ok_btn = QPushButton(QCoreApplication.translate("PropertiesDialog", "OK"))
         self._ok_btn.setDefault(True)
         self._ok_btn.clicked.connect(self._validate_and_accept)
 
@@ -80,7 +86,9 @@ class PropertiesDialog(QDialog):
         return field
 
     def add_no_properties_message(self):
-        msg = QLabel(self.tr("This node has no editable properties."))
+        msg = QLabel(QCoreApplication.translate(
+            "PropertiesDialog", "This node has no editable properties."
+        ))
         msg.setStyleSheet("color: gray; font-style: italic;")
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._main_layout.insertWidget(2, msg)  # after the separator

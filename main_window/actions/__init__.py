@@ -15,6 +15,23 @@ textually written, so these calls correctly resolve to context
 "MainWindow" -- same as main_window.py's own `self.tr(...)` calls -- and
 translate fine once a matching <message> entry exists.
 
+RELATED GOTCHA (inheritance, not module-level functions): the same
+runtime-vs-static-context mismatch bites the other way too. A `self.tr(...)`
+call written inside a BASE class method, when that method runs with `self`
+bound to a SUBCLASS instance (e.g. via an inherited, unoverridden method),
+resolves its Qt context to the *subclass's* runtime class name at runtime --
+but `pylupdate6` statically attributes it to the base class (where it's
+textually written). If the catalog only has the string under the base
+class's context, every subclass silently loses that translation. Fix: use
+`QCoreApplication.translate("<BaseClassName>", "...")` instead of
+`self.tr(...)` in the base class, pinning the context regardless of which
+subclass calls it. Worked examples: `graphics/items/base/nodes/node_item.py`
+(`NodeItem.extend_context_menu`, called by ~20 subclasses) and
+`graphics/utils/properties_dialog.py` (`PropertiesDialog.__init__`/
+`add_no_properties_message`, inherited by `DefectDialog`). See
+.superpowers/sdd/2026-09-01-language-switching/task-11-report.md's
+"coordinator fix round" section.
+
 The catch: `pylupdate6 -ts resources/i18n/circuiteditor_pt_BR.ts ...` will
 NOT add that <message> entry for you. If you add a new translatable
 string to any factory function in this package (or to menus.py /

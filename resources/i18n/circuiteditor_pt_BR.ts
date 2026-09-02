@@ -444,27 +444,27 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>NodeItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="697" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="700" />
         <source>Simulate defect...</source>
         <translation>Simular defeito...</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="702" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="707" />
         <source>Properties...</source>
         <translation>Propriedades...</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="706" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="713" />
         <source>Rotate 90°</source>
         <translation>Girar 90°</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="715" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="725" />
         <source>Rotate component</source>
         <translation>Girar componente</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="720" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="732" />
         <source>Add label</source>
         <translation>Adicionar label</translation>
     </message>
@@ -494,22 +494,22 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>PropertiesDialog</name>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="14" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="20" />
         <source>Properties</source>
         <translation>Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="46" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="52" />
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="49" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="55" />
         <source>OK</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="83" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="89" />
         <source>This node has no editable properties.</source>
         <translation>Este nó não possui propriedades editáveis.</translation>
     </message>

@@ -16,6 +16,9 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
+    # `resources` also carries resources/i18n/*.qm (Qt Linguist translation
+    # catalogs) -- bundled automatically as part of the whole-directory copy,
+    # no separate datas entry needed.
     datas=[
         ('resources', 'resources'),
         ('graphics', 'graphics'),

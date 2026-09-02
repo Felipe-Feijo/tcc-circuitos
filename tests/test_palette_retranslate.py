@@ -33,6 +33,34 @@ def test_retranslate_updates_section_titles_and_tier_tooltips():
     assert palette.tier_buttons["small"].toolTip() == "Small"
 
 
+def test_tier_button_labels_are_the_first_letter_of_the_tooltip_word():
+    palette = NodePalette()
+
+    assert palette.tier_buttons["small"].text() == "S"
+    assert palette.tier_buttons["medium"].text() == "M"
+    assert palette.tier_buttons["large"].text() == "L"
+
+
+def test_retranslate_updates_tier_button_labels_to_portuguese():
+    from PyQt6.QtCore import QTranslator
+    from pathlib import Path
+    from PyQt6.QtWidgets import QApplication as _QApp
+
+    translator = QTranslator()
+    qm_path = Path(__file__).parent.parent / "resources" / "i18n" / "circuiteditor_pt_BR.qm"
+    assert translator.load(str(qm_path))
+    _QApp.instance().installTranslator(translator)
+    try:
+        palette = NodePalette()
+        palette.retranslate_ui({})
+
+        assert palette.tier_buttons["small"].text() == "P"
+        assert palette.tier_buttons["medium"].text() == "M"
+        assert palette.tier_buttons["large"].text() == "G"
+    finally:
+        _QApp.instance().removeTranslator(translator)
+
+
 def test_title_label_is_stored_and_set_on_construction():
     palette = NodePalette()
 

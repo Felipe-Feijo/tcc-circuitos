@@ -15,14 +15,18 @@ class NodePalette(QWidget):
         "medium": {"pixmap": (84, 56),  "item_width": 130, "font_delta": 1},
         "large":  {"pixmap": (112, 76), "item_width": 160, "font_delta": 2},
     }
-    TIER_LABELS = {"small": "S", "medium": "M", "large": "L"}
-
     def _tier_tooltip(self, tier: str) -> str:
         return {
             "small": self.tr("Small"),
             "medium": self.tr("Medium"),
             "large": self.tr("Large"),
         }[tier]
+
+    def _tier_label(self, tier: str) -> str:
+        """Single-letter button glyph, derived from the (already localized)
+        tooltip word -- "Small"/"Pequeno" -> "S"/"P", etc. -- so it stays
+        correct in any language without a separate translation entry."""
+        return self._tier_tooltip(tier)[0].upper()
 
     def __init__(self, parent=None, settings_obj=None):
         super().__init__(parent)
@@ -42,7 +46,7 @@ class NodePalette(QWidget):
         self._tier_group = QButtonGroup(self)
         self._tier_group.setExclusive(True)
         for tier in ("small", "medium", "large"):
-            btn = QPushButton(self.TIER_LABELS[tier])
+            btn = QPushButton(self._tier_label(tier))
             btn.setObjectName("sizeTierButton")
             btn.setCheckable(True)
             btn.setToolTip(self._tier_tooltip(tier))
@@ -114,6 +118,7 @@ class NodePalette(QWidget):
                 self.sections[key].retranslate_ui(title)
 
         for tier, btn in self.tier_buttons.items():
+            btn.setText(self._tier_label(tier))
             btn.setToolTip(self._tier_tooltip(tier))
 
     def register_item(self, item: NodePaletteItem, callback):

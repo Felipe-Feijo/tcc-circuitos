@@ -123,7 +123,8 @@ class FixedDisplacementMotor(NodeItem):
             required=True,
         )
         dialog._combo_mode = dialog.add_combo_field(
-            "Modo de controle", ["torque", "speed"],
+            "Modo de controle",
+            [("torque", self.tr("Torque")), ("speed", self.tr("Speed"))],
             current=self.properties.get("control_mode", "torque"),
         )
         # required=False on both -- whether it's actually required
@@ -162,7 +163,7 @@ class FixedDisplacementMotor(NodeItem):
         dialog._preview_label = QLabel("—")
         dialog._form_layout.addRow("Requisito calculado", dialog._preview_label)
 
-        def _update_mode_visibility(mode_text: str) -> None:
+        def _update_mode_visibility(mode: str) -> None:
             form = dialog._form_layout
             for row in range(form.rowCount()):
                 item = form.itemAt(row, form.ItemRole.FieldRole)
@@ -170,9 +171,9 @@ class FixedDisplacementMotor(NodeItem):
                     continue
                 widget = item.widget()
                 if widget is dialog._field_t:
-                    form.setRowVisible(row, mode_text == "torque")
+                    form.setRowVisible(row, mode == "torque")
                 elif widget is dialog._field_omega:
-                    form.setRowVisible(row, mode_text == "speed")
+                    form.setRowVisible(row, mode == "speed")
 
         def _update_preview(*_args) -> None:
             try:
@@ -181,7 +182,7 @@ class FixedDisplacementMotor(NodeItem):
                 dialog._preview_label.setText("—")
                 return
 
-            mode = dialog._combo_mode.currentText()
+            mode = dialog._combo_mode.currentData()
             try:
                 if mode == "torque":
                     t_load = float(dialog._field_t.text())
@@ -194,13 +195,15 @@ class FixedDisplacementMotor(NodeItem):
             except (ValueError, ZeroDivisionError):
                 dialog._preview_label.setText("—")
 
-        dialog._combo_mode.currentTextChanged.connect(_update_mode_visibility)
-        dialog._combo_mode.currentTextChanged.connect(_update_preview)
+        dialog._combo_mode.currentIndexChanged.connect(
+            lambda _i, combo=dialog._combo_mode: _update_mode_visibility(combo.currentData())
+        )
+        dialog._combo_mode.currentIndexChanged.connect(_update_preview)
         dialog._field_d.textChanged.connect(_update_preview)
         dialog._field_t.textChanged.connect(_update_preview)
         dialog._field_omega.textChanged.connect(_update_preview)
 
-        _update_mode_visibility(dialog._combo_mode.currentText())
+        _update_mode_visibility(dialog._combo_mode.currentData())
         _update_preview()
 
         return dialog
@@ -212,7 +215,7 @@ class FixedDisplacementMotor(NodeItem):
         d_text = dialog._field_d.text().strip()
         self.properties["D"] = float(d_text) if d_text else None
 
-        mode = dialog._combo_mode.currentText()
+        mode = dialog._combo_mode.currentData()
         self.properties["control_mode"] = mode
 
         if mode == "torque":

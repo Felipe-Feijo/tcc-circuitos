@@ -344,3 +344,129 @@ def test_coil_item_rename_error_dialog_translates_when_inherited(monkeypatch):
         assert captured["text"] == f"Já existe um sinal com o nome '{conflicting_name}'."
     finally:
         language_manager.apply_language(app, "en")
+
+
+# ---------------------------------------------------------------------------
+# Dropdown options: value (stored/compared internally) vs. display label
+# (translatable) must stay independent -- a circuit saved in Portuguese
+# must store the same canonical property values as one saved in English.
+# ---------------------------------------------------------------------------
+
+def test_cylinder_sensor_combo_shows_portuguese_but_applies_canonical_value():
+    node = DoubleActingCylinder(domain="pneumatic", sensor_registry=SensorRegistry())
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        assert dialog._combo_retracted.itemText(0) == "Nenhum"
+        assert "Sensor Reed" in [dialog._combo_retracted.itemText(i) for i in range(dialog._combo_retracted.count())]
+
+        idx = dialog._combo_retracted.findText("Sensor Reed")
+        dialog._combo_retracted.setCurrentIndex(idx)
+        dialog._name_retracted.setText("A1")
+
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["sensors"]["retracted"]["type"] == "reed"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_cylinder_default_state_combo_translates_and_applies_canonical_value():
+    node = DoubleActingCylinder(domain="pneumatic", sensor_registry=SensorRegistry())
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        idx = dialog._combo_default_state.findText("Estendido")
+        assert idx >= 0
+        dialog._combo_default_state.setCurrentIndex(idx)
+
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["default_state"] == "extended"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_directional_valve_actuator_combo_translates_and_applies_canonical_value():
+    node = Valve_3_2_Ways(domain="pneumatic")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        idx = dialog._combo_left.findText("Temporizador")
+        assert idx >= 0
+        dialog._combo_left.setCurrentIndex(idx)
+
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["actuators"]["left"]["type"] == "timer"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_directional_valve_default_side_combo_translates_and_applies_canonical_value():
+    node = Valve_3_2_Ways(domain="pneumatic")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        idx = dialog._combo_default_side.findText("Esquerda")
+        assert idx >= 0
+        dialog._combo_default_side.setCurrentIndex(idx)
+
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["default_side"] == "left"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_contact_type_combo_stays_no_nc_in_both_languages():
+    node = Contact(domain="electric")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        items = [dialog._combo_contact.itemText(i) for i in range(dialog._combo_contact.count())]
+        assert items == ["NO", "NC"]
+
+        dialog._combo_contact.setCurrentIndex(dialog._combo_contact.findText("NC"))
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["contact_type"] == "NC"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_contact_actuator_combo_translates_and_applies_canonical_value():
+    node = Contact(domain="electric")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        items = [dialog._combo_relay.itemText(i) for i in range(dialog._combo_relay.count())]
+        assert "(Nenhum)" in items
+        assert "Botão" in items
+
+        dialog._combo_relay.setCurrentIndex(dialog._combo_relay.findText("Botão"))
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties.get("actuator_sensor") == "__button__"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_motor_control_mode_combo_translates_and_applies_canonical_value():
+    from graphics.items.base.nodes.fixed_displacement_motor import FixedDisplacementMotor
+
+    node = FixedDisplacementMotor(domain="hydraulic")
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = node.build_properties_dialog()
+        idx = dialog._combo_mode.findText("Velocidade")
+        assert idx >= 0
+        dialog._combo_mode.setCurrentIndex(idx)
+        dialog._field_d.setText("1.5e-6")
+        dialog._field_omega.setText("100")
+
+        node.apply_properties_from_dialog(dialog)
+
+        assert node.properties["control_mode"] == "speed"
+    finally:
+        language_manager.apply_language(app, "en")

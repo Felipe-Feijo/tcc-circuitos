@@ -295,19 +295,25 @@ class Contact(NodeItem):
 
         current_type = self.properties.get("contact_type", "NO")
         dialog._combo_contact = dialog.add_combo_field(
-            "Tipo de contato", ["NO", "NC"], current=current_type
+            "Tipo de contato",
+            # "NO"/"NC" (Normally Open/Closed) are kept as-is in both
+            # languages -- an internationally recognized electrical
+            # abbreviation, not natural-language text.
+            [("NO", "NO"), ("NC", "NC")],
+            current=current_type,
         )
 
         actuator_signals = self._available_actuator_signals()
 
         current_sensor = self.properties.get("actuator_sensor")
-        options = ["(nenhum)", "Button"] + actuator_signals
+        options = [(None, self.tr("(None)")), (BUTTON_SENSOR, self.tr("Button"))]
+        options += [(name, name) for name in actuator_signals]
         if current_sensor == BUTTON_SENSOR:
-            current_option = "Button"
+            current_option = BUTTON_SENSOR
         elif current_sensor in actuator_signals:
             current_option = current_sensor
         else:
-            current_option = "(nenhum)"
+            current_option = None
         dialog._combo_relay = dialog.add_combo_field(
             "Atuador", options, current=current_option
         )
@@ -325,19 +331,19 @@ class Contact(NodeItem):
                     form.setRowVisible(row, visible)
                     return
 
-        dialog._combo_relay.currentTextChanged.connect(
-            lambda t: _set_latch_visible(t == "Button")
+        dialog._combo_relay.currentIndexChanged.connect(
+            lambda _i, combo=dialog._combo_relay: _set_latch_visible(combo.currentData() == BUTTON_SENSOR)
         )
-        _set_latch_visible(current_option == "Button")
+        _set_latch_visible(current_option == BUTTON_SENSOR)
 
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
-        self.set_contact_type(dialog._combo_contact.currentText())
-        selected = dialog._combo_relay.currentText()
-        if selected == "(nenhum)":
+        self.set_contact_type(dialog._combo_contact.currentData())
+        selected = dialog._combo_relay.currentData()
+        if selected is None:
             self.set_actuator_sensor(None)
-        elif selected == "Button":
+        elif selected == BUTTON_SENSOR:
             mode = "latch" if dialog._field_latch.isChecked() else "momentary"
             self.set_button_actuator(mode)
         else:

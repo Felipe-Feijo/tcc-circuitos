@@ -42,7 +42,7 @@ def test_output_label_switches_to_torque_immediately_after_confirming_speed_mode
 
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("speed")
+    dialog._combo_mode.setCurrentText("Speed")
     dialog._field_omega.setText("100")
 
     node.apply_properties_from_dialog(dialog)
@@ -92,7 +92,7 @@ def test_apply_properties_from_dialog_saves_p_max_and_n_max():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("torque")
+    dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("50")
     dialog._field_p_max.setText("1e8")
     dialog._field_n_max.setText("300")
@@ -107,7 +107,7 @@ def test_apply_properties_from_dialog_leaves_p_max_none_when_empty():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("torque")
+    dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("50")
 
     node.apply_properties_from_dialog(dialog)
@@ -120,7 +120,7 @@ def test_preview_shows_required_delta_p_in_torque_mode():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("torque")
+    dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("60")
 
     assert "Δp necessário" in dialog._preview_label.text()
@@ -131,7 +131,7 @@ def test_preview_shows_required_flow_in_speed_mode():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("speed")
+    dialog._combo_mode.setCurrentText("Speed")
     dialog._field_omega.setText("100")
 
     assert "Vazão necessária" in dialog._preview_label.text()
@@ -152,7 +152,7 @@ def test_ok_button_enabled_after_filling_only_the_field_for_current_mode():
     dialog = node.build_properties_dialog()
 
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("torque")
+    dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("50")
     # omega_target fica vazio (escondido, não se aplica no modo torque)
 
@@ -163,7 +163,7 @@ def test_apply_properties_from_dialog_torque_mode_clears_omega_target():
     node = FixedDisplacementMotor(domain="hydraulic")
     dialog = node.build_properties_dialog()
     dialog._field_d.setText("1.5e-6")
-    dialog._combo_mode.setCurrentText("torque")
+    dialog._combo_mode.setCurrentText("Torque")
     dialog._field_t.setText("50")
 
     node.apply_properties_from_dialog(dialog)

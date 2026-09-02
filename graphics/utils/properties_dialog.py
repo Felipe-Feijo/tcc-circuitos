@@ -71,11 +71,23 @@ class PropertiesDialog(QDialog):
         self._form_layout.addRow(label, field)
         return field
 
-    def add_combo_field(self, label: str, options: list[str], current: str = "") -> QComboBox:
+    def add_combo_field(
+        self, label: str, options: list[tuple[object, str]], current: object = None
+    ) -> QComboBox:
+        """options is a list of (value, display_label) pairs. The combo
+        shows display_label (translatable) but the caller reads the
+        selection back via combo.currentData() to get the canonical
+        value -- keeping display text free to localize without touching
+        whatever gets stored in properties / the saved file / compared
+        against elsewhere (e.g. "retracted"/"torque"/"NO" must never
+        become "Retraído"/"Torque"/"NO" *as stored data* just because the
+        UI switched language)."""
         combo = QComboBox()
-        combo.addItems(options)
-        if current in options:
-            combo.setCurrentText(current)
+        for value, display_label in options:
+            combo.addItem(display_label, value)
+        idx = combo.findData(current)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
         self._form_layout.addRow(label, combo)
         return combo
 

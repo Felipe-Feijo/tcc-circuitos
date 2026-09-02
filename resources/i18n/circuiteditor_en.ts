@@ -118,22 +118,28 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="355" />
-        <source>Contact type</source>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
+        <source>(None)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="384" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="390" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
         <source>Button</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="391" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="361" />
+        <source>Contact type</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
         <source>Latched</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="391" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
         <source>Momentary</source>
         <translation type="unfinished" />
     </message>
@@ -250,17 +256,17 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="915" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="933" />
         <source>Simulate defect — {0}</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="920" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="938" />
         <source>Conductance k (m³/s/√Pa)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="925" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="943" />
         <source>Valve stuck (won't switch)</source>
         <translation type="unfinished" />
     </message>
@@ -283,6 +289,16 @@
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="24" />
         <source>Fixed Displacement Motor</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <source>Torque</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <source>Speed</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -447,23 +463,23 @@ Built with PyQt6</source>
 </context><context>
     <name>NodePalette</name>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="22" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="20" />
         <source>Small</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="23" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="21" />
         <source>Medium</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="24" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="22" />
         <source>Large</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="110" />
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="34" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="114" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="38" />
         <source>Nodes</source>
         <translation type="unfinished" />
     </message>
@@ -506,7 +522,7 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="89" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="101" />
         <source>This node has no editable properties.</source>
         <translation type="unfinished" />
     </message>

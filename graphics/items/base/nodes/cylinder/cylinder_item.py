@@ -443,8 +443,22 @@ class CylinderItem(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title="Cylinder — Properties")
 
-        sensor_options = ["None"] + [desc["label"] for desc in SENSOR_DICT.values()]
-        dialog._sensor_label_to_key = {desc["label"]: key for key, desc in SENSOR_DICT.items()}
+        # QCoreApplication.translate(...) with an explicit "CylinderItem"
+        # context, not self.tr(...): this method is inherited-and-called
+        # via super() by DoubleActingCylinder/SingleActingCylinder, whose
+        # runtime class self.tr() would resolve against instead -- same
+        # gotcha as NodeItem.extend_context_menu (see Task 11's fix note
+        # in main_window/actions/__init__.py). SENSOR_DICT's "label"
+        # values are plain data (dict lookups aren't literal strings, so
+        # pylupdate6 can't auto-extract them); their catalog entries are
+        # added by hand, same treatment as ACTUATOR_DICT's labels in
+        # directional_valve_item.py.
+        def _(text: str) -> str:
+            return QCoreApplication.translate("CylinderItem", text)
+
+        sensor_options = [(None, _("None"))] + [
+            (key, _(desc["label"])) for key, desc in SENSOR_DICT.items()
+        ]
 
         # Tracks names already assigned within this dialog session so that
         # auto-generated names for multiple sensors don't collide.
@@ -462,15 +476,15 @@ class CylinderItem(NodeItem):
         def make_side_widgets(pos):
             sensor = self.properties["sensors"].get(pos)
             current_type = sensor.get("type") if sensor else None
-            current_label = SENSOR_DICT[current_type]["label"] if current_type else "None"
             current_name = sensor.get("name", "") if sensor else ""
 
-            combo = dialog.add_combo_field(f"Sensor {pos}", sensor_options, current=current_label)
+            combo = dialog.add_combo_field(f"Sensor {pos}", sensor_options, current=current_type)
             name_field = dialog.add_text_field("  Nome", placeholder="ex: A1", value=current_name)
             name_field.setEnabled(current_type is not None)
 
-            def on_type_changed(label):
-                is_none = label == "None"
+            def on_type_changed(_index, combo=combo):
+                sensor_type = combo.currentData()
+                is_none = sensor_type is None
                 name_field.setEnabled(not is_none)
                 if not is_none and not name_field.text().strip():
                     name = next_name()
@@ -483,7 +497,7 @@ class CylinderItem(NodeItem):
                 pending_names.add(text)
                 name_field.setProperty("_last_pending", text)
 
-            combo.currentTextChanged.connect(on_type_changed)
+            combo.currentIndexChanged.connect(on_type_changed)
             name_field.textChanged.connect(on_name_changed)
             return combo, name_field
 
@@ -492,26 +506,23 @@ class CylinderItem(NodeItem):
 
         dialog._combo_default_state = dialog.add_combo_field(
             "Estado inicial",
-            ["retracted", "extended"],
+            [("retracted", _("Retracted")), ("extended", _("Extended"))],
             current=self.properties.get("default_state", "retracted"),
         )
 
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
-        label_to_key = dialog._sensor_label_to_key
-
         for pos, combo, name_field in [
             ("retracted", dialog._combo_retracted, dialog._name_retracted),
             ("extended", dialog._combo_extended, dialog._name_extended),
         ]:
-            label = combo.currentText()
-            sensor_type = label_to_key.get(label) if label != "None" else None
+            sensor_type = combo.currentData()
             name = name_field.text().strip() if sensor_type else ""
 
             self.set_sensor(pos, sensor_type)
             if sensor_type and name:
                 self._set_sensor_name(pos, name)
 
-        self.properties["default_state"] = dialog._combo_default_state.currentText()
+        self.properties["default_state"] = dialog._combo_default_state.currentData()
         self.apply_properties()

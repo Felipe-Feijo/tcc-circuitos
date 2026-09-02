@@ -751,31 +751,45 @@ class DirectionalValveItem(NodeItem):
         else:
             dialog._field_k = None
 
-        options = ["None"]
+        # QCoreApplication.translate(...) with an explicit
+        # "DirectionalValveItem" context, not self.tr(...): this method is
+        # inherited-and-called (never overridden) by every concrete valve
+        # (Valve_2_2_Ways, Valve_3_2_Ways, ...), whose runtime class
+        # self.tr() would resolve against instead -- same gotcha as
+        # NodeItem.extend_context_menu (see Task 11's fix note in
+        # main_window/actions/__init__.py). ACTUATOR_DICT's "label" values
+        # are plain data (dict lookups aren't literal strings, so
+        # pylupdate6 can't auto-extract them); their catalog entries are
+        # added by hand.
+        def _(text: str) -> str:
+            return QCoreApplication.translate("DirectionalValveItem", text)
+
+        options = [(None, _("None"))]
         dialog._actuator_key_map = {}
         for key, desc in ACTUATOR_DICT.items():
             if not desc.get("menu", True):
                 continue
             if self.THREE_POSITION and key == "spring":
                 continue
-            options.append(desc["label"])
-            dialog._actuator_key_map[desc["label"]] = key
+            options.append((key, _(desc["label"])))
+            dialog._actuator_key_map[key] = key
 
         if self.sensor_registry:
-            options += self.sensor_registry.list_names(sensor_type="cylinder_end")
-            options += self.sensor_registry.list_names(sensor_type="solenoid_coil")
+            for sensor_name in self.sensor_registry.list_names(sensor_type="cylinder_end"):
+                options.append((sensor_name, sensor_name))
+            for sensor_name in self.sensor_registry.list_names(sensor_type="solenoid_coil"):
+                options.append((sensor_name, sensor_name))
 
-        # determines the current selection
-        def current_label(side):
+        # determines the current selection (a canonical value: an
+        # ACTUATOR_DICT key, a sensor name, or None -- never a translated
+        # display label)
+        def current_value(side):
             a = self.properties["actuators"].get(side)
             if not a:
-                return "None"
+                return None
             if a["type"] in ["limit_switch", "solenoid"]:
-                return a.get("sensor_name", "None")
-            return ACTUATOR_DICT[a["type"]]["label"]
-
-        timer_label = ACTUATOR_DICT["timer"]["label"]
-        button_label = ACTUATOR_DICT["button"]["label"]
+                return a.get("sensor_name")
+            return a["type"]
 
         def _timer_delay(side):
             a = self.properties["actuators"].get(side)
@@ -795,7 +809,7 @@ class DirectionalValveItem(NodeItem):
                     form.setRowVisible(row, visible)
                     return
 
-        dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_label("left"))
+        dialog._combo_left = dialog.add_combo_field("Atuador esquerdo", options, current=current_value("left"))
         dialog._field_timer_left = dialog.add_number_field(
             "Timer delay — left (steps)", placeholder="ex: 3",
             value=_timer_delay("left"), required=False,
@@ -804,7 +818,7 @@ class DirectionalValveItem(NodeItem):
             "Trava", value=_button_is_latch("left"),
         )
 
-        dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_label("right"))
+        dialog._combo_right = dialog.add_combo_field("Atuador direito", options, current=current_value("right"))
         dialog._field_timer_right = dialog.add_number_field(
             "Timer delay — right (steps)", placeholder="ex: 3",
             value=_timer_delay("right"), required=False,
@@ -814,10 +828,12 @@ class DirectionalValveItem(NodeItem):
         )
 
         if self.THREE_POSITION:
-            default_side_options = ["right", "center", "left"]
+            default_side_options = [
+                ("right", _("Right")), ("center", _("Center")), ("left", _("Left")),
+            ]
             default_side_current = self.properties.get("default_side", "center")
         else:
-            default_side_options = ["right", "left"]
+            default_side_options = [("right", _("Right")), ("left", _("Left"))]
             default_side_current = self.properties.get("default_side", "right")
         dialog._combo_default_side = dialog.add_combo_field(
             "Posição padrão",
@@ -825,25 +841,27 @@ class DirectionalValveItem(NodeItem):
             current=default_side_current,
         )
 
-        # Show/hide timer delay / latch rows based on combo selection
-        dialog._combo_left.currentTextChanged.connect(
-            lambda t: (
-                _set_row_visible(dialog._field_timer_left, t == timer_label),
-                _set_row_visible(dialog._field_latch_left, t == button_label),
+        # Show/hide timer delay / latch rows based on combo selection --
+        # compares the canonical value (currentData()), not the
+        # (translatable) displayed text.
+        dialog._combo_left.currentIndexChanged.connect(
+            lambda _i, combo=dialog._combo_left: (
+                _set_row_visible(dialog._field_timer_left, combo.currentData() == "timer"),
+                _set_row_visible(dialog._field_latch_left, combo.currentData() == "button"),
             )
         )
-        dialog._combo_right.currentTextChanged.connect(
-            lambda t: (
-                _set_row_visible(dialog._field_timer_right, t == timer_label),
-                _set_row_visible(dialog._field_latch_right, t == button_label),
+        dialog._combo_right.currentIndexChanged.connect(
+            lambda _i, combo=dialog._combo_right: (
+                _set_row_visible(dialog._field_timer_right, combo.currentData() == "timer"),
+                _set_row_visible(dialog._field_latch_right, combo.currentData() == "button"),
             )
         )
 
         # Set initial visibility
-        _set_row_visible(dialog._field_timer_left,  current_label("left")  == timer_label)
-        _set_row_visible(dialog._field_timer_right, current_label("right") == timer_label)
-        _set_row_visible(dialog._field_latch_left,  current_label("left")  == button_label)
-        _set_row_visible(dialog._field_latch_right, current_label("right") == button_label)
+        _set_row_visible(dialog._field_timer_left,  current_value("left")  == "timer")
+        _set_row_visible(dialog._field_timer_right, current_value("right") == "timer")
+        _set_row_visible(dialog._field_latch_left,  current_value("left")  == "button")
+        _set_row_visible(dialog._field_latch_right, current_value("right") == "button")
 
         return dialog
 
@@ -855,8 +873,8 @@ class DirectionalValveItem(NodeItem):
             ("left",  dialog._combo_left,  dialog._field_timer_left,  dialog._field_latch_left),
             ("right", dialog._combo_right, dialog._field_timer_right, dialog._field_latch_right),
         ]:
-            selected = combo.currentText()
-            if selected == "None":
+            selected = combo.currentData()
+            if selected is None:
                 self.set_actuator(side, None)
             elif selected in dialog._actuator_key_map:
                 key = dialog._actuator_key_map[selected]
@@ -877,7 +895,7 @@ class DirectionalValveItem(NodeItem):
                     actuator_type = "limit_switch" if info.sensor_type == "cylinder_end" else "solenoid"
                     self.set_actuator(side, actuator_type, selected)
 
-        self.properties["default_side"] = dialog._combo_default_side.currentText()
+        self.properties["default_side"] = dialog._combo_default_side.currentData()
         side = self.properties["default_side"]
         if not self.simulation_mode:
             if self.THREE_POSITION:

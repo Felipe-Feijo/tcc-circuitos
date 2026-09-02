@@ -118,22 +118,28 @@
         <translation>Contato</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="355" />
-        <source>Contact type</source>
-        <translation>Tipo de contato</translation>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
+        <source>(None)</source>
+        <translation>(Nenhum)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="384" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="390" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="309" />
         <source>Button</source>
         <translation>Botão</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="391" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="361" />
+        <source>Contact type</source>
+        <translation>Tipo de contato</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
         <source>Latched</source>
         <translation>Retido</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="391" />
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="397" />
         <source>Momentary</source>
         <translation>Momentâneo</translation>
     </message>
@@ -178,6 +184,14 @@
         <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="377" />
         <source>None</source>
         <translation>Nenhum</translation>
+    </message>
+    <message>
+        <source>Reed switch</source>
+        <translation>Sensor Reed</translation>
+    </message>
+    <message>
+        <source>Proximity</source>
+        <translation>Proximidade</translation>
     </message>
 </context><context>
     <name>DefectDialog</name>
@@ -250,19 +264,59 @@
         <translation>Momentâneo</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="915" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="933" />
         <source>Simulate defect — {0}</source>
         <translation>Simular defeito — {0}</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="920" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="938" />
         <source>Conductance k (m³/s/√Pa)</source>
         <translation>Condutância k (m³/s/√Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="925" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="943" />
         <source>Valve stuck (won't switch)</source>
         <translation>Válvula travada (não comuta)</translation>
+    </message>
+    <message>
+        <source>Button</source>
+        <translation>Botão</translation>
+    </message>
+    <message>
+        <source>Spring</source>
+        <translation>Mola</translation>
+    </message>
+    <message>
+        <source>Pilot (Pneumatic)</source>
+        <translation>Piloto (Pneumático)</translation>
+    </message>
+    <message>
+        <source>Pilot (Hydraulic)</source>
+        <translation>Piloto (Hidráulico)</translation>
+    </message>
+    <message>
+        <source>Limit Switch</source>
+        <translation>Fim de Curso</translation>
+    </message>
+    <message>
+        <source>Solenoid (electric)</source>
+        <translation>Solenoide (elétrico)</translation>
+    </message>
+    <message>
+        <source>Timer</source>
+        <translation>Temporizador</translation>
+    </message>
+    <message>
+        <source>Right</source>
+        <translation>Direita</translation>
+    </message>
+    <message>
+        <source>Center</source>
+        <translation>Centro</translation>
+    </message>
+    <message>
+        <source>Left</source>
+        <translation>Esquerda</translation>
     </message>
 </context><context>
     <name>DoubleActingCylinder</name>
@@ -284,6 +338,16 @@
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="24" />
         <source>Fixed Displacement Motor</source>
         <translation>Motor de Deslocamento Fixo</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <source>Torque</source>
+        <translation>Torque</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <source>Speed</source>
+        <translation>Velocidade</translation>
     </message>
 </context><context>
     <name>FixedDisplacementPump</name>
@@ -554,23 +618,23 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>NodePalette</name>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="22" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="20" />
         <source>Small</source>
         <translation>Pequeno</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="23" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="21" />
         <source>Medium</source>
         <translation>Médio</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="24" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="22" />
         <source>Large</source>
         <translation>Grande</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="110" />
-        <location filename="..\..\main_window\ui\palette\node_palette.py" line="34" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="114" />
+        <location filename="..\..\main_window\ui\palette\node_palette.py" line="38" />
         <source>Nodes</source>
         <translation>Nós</translation>
     </message>
@@ -613,7 +677,7 @@ Desenvolvido com PyQt6</translation>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="89" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="101" />
         <source>This node has no editable properties.</source>
         <translation>Este nó não possui propriedades editáveis.</translation>
     </message>

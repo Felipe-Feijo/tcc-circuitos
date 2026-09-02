@@ -117,32 +117,32 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="342" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="344" />
         <source>Retracted sensor</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="343" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="345" />
         <source>Extended sensor</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="349" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="351" />
         <source>Initial state</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="350" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="353" />
         <source>Retracted</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="350" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="354" />
         <source>Extended</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="372" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="377" />
         <source>None</source>
         <translation type="unfinished" />
     </message>
@@ -207,13 +207,28 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="622" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="623" />
         <source>Latched</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="622" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="624" />
         <source>Momentary</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="915" />
+        <source>Simulate defect — {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="920" />
+        <source>Conductance k (m³/s/√Pa)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="925" />
+        <source>Valve stuck (won't switch)</source>
         <translation type="unfinished" />
     </message>
 </context><context>

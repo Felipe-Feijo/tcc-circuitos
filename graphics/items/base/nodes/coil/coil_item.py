@@ -1,7 +1,7 @@
 """Base class for electric coils (relay and solenoid)."""
 
 from PyQt6.QtGui import QPixmap, QPainterPath
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt, QCoreApplication
 from PyQt6.QtWidgets import QMessageBox
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -191,8 +191,10 @@ class CoilItem(NodeItem):
                 label.set_text(old_name)  # reverts to the old name
             QMessageBox.warning(
                 None,
-                self.tr("Error renaming"),
-                self.tr("A signal named '{0}' already exists.").format(new_name),
+                QCoreApplication.translate("CoilItem", "Error renaming"),
+                QCoreApplication.translate(
+                    "CoilItem", "A signal named '{0}' already exists."
+                ).format(new_name),
             )
             return
 

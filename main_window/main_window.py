@@ -108,7 +108,13 @@ class MainWindow(QMainWindow):
 
         self.toolbar.setWindowTitle(self.tr("Tools"))
 
-        self.setWindowTitle(self.tr("Circuit Editor"))
+        # A file is open: delegate to SceneFileSession's own title logic
+        # (filename-suffixed, "Circuit Editor – {0}") instead of clobbering
+        # it with the bare "Circuit Editor" title below.
+        if self.file_session.current_file:
+            self.file_session._update_window_title()
+        else:
+            self.setWindowTitle(self.tr("Circuit Editor"))
 
         self.palette_dock.setWindowTitle(self.tr("Nodes"))
         self.node_palette.retranslate_ui({

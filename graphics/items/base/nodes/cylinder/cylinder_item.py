@@ -1,7 +1,7 @@
 """Base class for pneumatic and hydraulic cylinders."""
 
 from PyQt6.QtGui import QPixmap, QPainterPath, QAction
-from PyQt6.QtCore import QRectF, QPointF, Qt
+from PyQt6.QtCore import QRectF, QPointF, Qt, QCoreApplication
 from PyQt6.QtWidgets import QMessageBox
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -321,8 +321,10 @@ class CylinderItem(NodeItem):
                 label.set_text(old_name)  # updates the visual
             QMessageBox.warning(
                 None,
-                self.tr("Error renaming sensor"),
-                self.tr("A sensor named '{0}' already exists.").format(new_name),
+                QCoreApplication.translate("CylinderItem", "Error renaming sensor"),
+                QCoreApplication.translate(
+                    "CylinderItem", "A sensor named '{0}' already exists."
+                ).format(new_name),
             )
             return
 
@@ -339,15 +341,18 @@ class CylinderItem(NodeItem):
             return
         menu.addSeparator()
 
-        r_menu = menu.addMenu(self.tr("Retracted sensor"))
-        e_menu = menu.addMenu(self.tr("Extended sensor"))
+        r_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Retracted sensor"))
+        e_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Extended sensor"))
 
         self._populate_sensor_menu(r_menu, "retracted")
         self._populate_sensor_menu(e_menu, "extended")
 
         menu.addSeparator()
-        state_menu = menu.addMenu(self.tr("Initial state"))
-        for opt, label in [("retracted", self.tr("Retracted")), ("extended", self.tr("Extended"))]:
+        state_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Initial state"))
+        for opt, label in [
+            ("retracted", QCoreApplication.translate("CylinderItem", "Retracted")),
+            ("extended", QCoreApplication.translate("CylinderItem", "Extended")),
+        ]:
             action = QAction(label, menu, checkable=True)
             action.setChecked(self.properties.get("default_state", "retracted") == opt)
             action.triggered.connect(lambda _, o=opt: self._set_default_state(o))
@@ -369,7 +374,7 @@ class CylinderItem(NodeItem):
         sensor = self.properties["sensors"][position]
         current = sensor.get("type")
 
-        action_none = QAction(self.tr("None"), menu, checkable=True)
+        action_none = QAction(QCoreApplication.translate("CylinderItem", "None"), menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, p=position: self.set_sensor(p, None)

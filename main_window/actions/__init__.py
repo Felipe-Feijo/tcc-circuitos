@@ -32,6 +32,14 @@ subclass calls it. Worked examples: `graphics/items/base/nodes/node_item.py`
 .superpowers/sdd/2026-09-01-language-switching/task-11-report.md's
 "coordinator fix round" section.
 
+The final whole-branch review found the same bug still unfixed in three
+more never-instantiated-directly base classes; fixed the same way:
+`graphics/items/base/nodes/cylinder/cylinder_item.py` (`CylinderItem`),
+`graphics/items/base/nodes/directional_valve/directional_valve_item.py`
+(`DirectionalValveItem`), and `graphics/items/base/nodes/coil/coil_item.py`
+(`CoilItem`). See
+.superpowers/sdd/2026-09-01-language-switching/final-review-fix-report.md.
+
 The catch: `pylupdate6 -ts resources/i18n/circuiteditor_pt_BR.ts ...` will
 NOT add that <message> entry for you. If you add a new translatable
 string to any factory function in this package (or to menus.py /

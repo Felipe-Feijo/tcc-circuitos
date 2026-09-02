@@ -4,10 +4,13 @@ Mirrors the persistence pattern already used by main_window/settings.py
 (QSettings-backed, module-level get/apply functions).
 """
 
+import logging
 from pathlib import Path
 
 from PyQt6.QtCore import QLocale, QObject, QSettings, QTranslator, pyqtSignal
 from PyQt6.QtWidgets import QApplication
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_LANGUAGES = ("en", "pt_BR")
 DEFAULT_LANGUAGE = "en"
@@ -55,21 +58,41 @@ class LanguageManager(QObject):
             app.removeTranslator(self._translator)
             self._translator = None
 
+        # Tracks the language actually applied -- may fall back to English
+        # below if the requested catalog is missing/corrupt, in which case
+        # this diverges from the requested `code`.
+        effective_code = code
+
         # English needs no .qm: its tr() text IS the source text already.
         if code != DEFAULT_LANGUAGE:
             translator = QTranslator()
             qm_path = _I18N_DIR / f"circuiteditor_{code}.qm"
-            if not translator.load(str(qm_path)):
-                raise FileNotFoundError(
-                    f"Translation file not found or invalid: {qm_path}"
+            if translator.load(str(qm_path)):
+                app.installTranslator(translator)
+                self._translator = translator
+            else:
+                # Missing/corrupt .qm must not crash the app: app.py calls
+                # apply_language() unconditionally before MainWindow is even
+                # constructed, so an uncaught exception here previously
+                # meant no window and no user-facing error at all. Fall
+                # back to English (which needs no catalog) instead.
+                logger.warning(
+                    "Translation file not found or invalid: %s -- "
+                    "falling back to English",
+                    qm_path,
                 )
-            app.installTranslator(translator)
-            self._translator = translator
+                effective_code = DEFAULT_LANGUAGE
 
         s = settings or _default_settings()
-        s.setValue(_LANGUAGE_KEY, code)
+        # Persists the *effective* language, not the originally requested
+        # one: if we persisted the requested `code` here, a missing/corrupt
+        # .qm would make every subsequent launch retry and fall back again,
+        # forever silently ignoring the user's language choice. Persisting
+        # "en" instead means the fallback is a one-time event per broken
+        # install, and the app settles into a language it can actually load.
+        s.setValue(_LANGUAGE_KEY, effective_code)
 
-        self.language_changed.emit(code)
+        self.language_changed.emit(effective_code)
 
 
 language_manager = LanguageManager()

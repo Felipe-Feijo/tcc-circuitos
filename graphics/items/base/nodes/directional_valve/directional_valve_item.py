@@ -1,7 +1,7 @@
 """Base class for directional valves with configurable actuator support."""
 
 from PyQt6.QtGui import QPixmap, QTransform, QPainterPath, QAction
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt, QCoreApplication
 from PyQt6.QtWidgets import QMenu
 
 
@@ -514,25 +514,25 @@ class DirectionalValveItem(NodeItem):
             return
         menu.addSeparator()
 
-        left_menu = menu.addMenu(self.tr("Left actuator"))
-        right_menu = menu.addMenu(self.tr("Right actuator"))
+        left_menu = menu.addMenu(QCoreApplication.translate("DirectionalValveItem", "Left actuator"))
+        right_menu = menu.addMenu(QCoreApplication.translate("DirectionalValveItem", "Right actuator"))
 
         self._populate_actuator_menu(left_menu, side="left")
         self._populate_actuator_menu(right_menu, side="right")
 
         menu.addSeparator()
-        rest_menu = menu.addMenu(self.tr("Default position"))
+        rest_menu = menu.addMenu(QCoreApplication.translate("DirectionalValveItem", "Default position"))
         if self.THREE_POSITION:
             rest_options = [
-                ("right", self.tr("Right (0)")),
-                ("center", self.tr("Center (1)")),
-                ("left", self.tr("Left (2)")),
+                ("right", QCoreApplication.translate("DirectionalValveItem", "Right (0)")),
+                ("center", QCoreApplication.translate("DirectionalValveItem", "Center (1)")),
+                ("left", QCoreApplication.translate("DirectionalValveItem", "Left (2)")),
             ]
             current_default = self.properties.get("default_side", "center")
         else:
             rest_options = [
-                ("right", self.tr("Right (0)")),
-                ("left", self.tr("Left (1)")),
+                ("right", QCoreApplication.translate("DirectionalValveItem", "Right (0)")),
+                ("left", QCoreApplication.translate("DirectionalValveItem", "Left (1)")),
             ]
             current_default = self.properties.get("default_side", "right")
         for opt, label in rest_options:
@@ -547,7 +547,7 @@ class DirectionalValveItem(NodeItem):
         # -----------------------
         # "None" option
         # -----------------------
-        action_none = QAction(self.tr("None"), menu, checkable=True)
+        action_none = QAction(QCoreApplication.translate("DirectionalValveItem", "None"), menu, checkable=True)
         action_none.setChecked(current is None)
         action_none.triggered.connect(
             lambda _, s=side: self.set_actuator(s, None)
@@ -619,7 +619,10 @@ class DirectionalValveItem(NodeItem):
         button_menu = menu.addMenu(desc["label"])
         current_mode = current.get("mode", DEFAULT_BUTTON_MODE) if current and current.get("type") == "button" else None
 
-        for mode, label in (("latch", self.tr("Latched")), ("momentary", self.tr("Momentary"))):
+        for mode, label in (
+            ("latch", QCoreApplication.translate("DirectionalValveItem", "Latched")),
+            ("momentary", QCoreApplication.translate("DirectionalValveItem", "Momentary")),
+        ):
             action = QAction(label, button_menu, checkable=True)
             action.setChecked(current_mode == mode)
             action.triggered.connect(
@@ -908,13 +911,19 @@ class DirectionalValveItem(NodeItem):
         # node_registry.py already follows) -- same fallback here, so
         # the context menu never breaks.
         label = (meta.name if meta else None) or type(self).__name__
-        dialog = DefectDialog(title=f"Simular defeito — {label}")
+        dialog = DefectDialog(
+            title=QCoreApplication.translate(
+                "DirectionalValveItem", "Simulate defect — {0}"
+            ).format(label)
+        )
         dialog._field_k = dialog.add_number_field(
-            "Condutância k (m³/s/√Pa)", placeholder="ex: 1.5e-8",
+            QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
+            placeholder="ex: 1.5e-8",
             value=current_k, required=True, min_value=0,
         )
         dialog._field_stuck = dialog.add_bool_field(
-            "Válvula travada (não comuta)", value=current_stuck,
+            QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
+            value=current_stuck,
         )
         return dialog
 

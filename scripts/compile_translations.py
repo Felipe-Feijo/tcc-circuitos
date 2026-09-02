@@ -33,7 +33,9 @@ base class's context never matches. Fix at the call site: use
 `QCoreApplication.translate("<BaseClassName>", "...")` instead of
 `self.tr(...)`. See main_window/actions/__init__.py's module docstring and
 .superpowers/sdd/2026-09-01-language-switching/task-11-report.md for the
-worked examples (NodeItem.extend_context_menu, PropertiesDialog).
+worked examples (NodeItem.extend_context_menu, PropertiesDialog) and
+.superpowers/sdd/2026-09-01-language-switching/final-review-fix-report.md
+for three more (CylinderItem, DirectionalValveItem, CoilItem).
 """
 
 import shutil

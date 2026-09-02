@@ -92,3 +92,53 @@ def test_apply_language_removes_previous_translator_before_installing_new_one():
     # can't easily assert app.removeTranslator was called on a real
     # QApplication without a live translator; behavioral coverage for the
     # swap itself is exercised in Task 3's end-to-end MainWindow test.
+
+
+def test_apply_language_falls_back_to_english_when_qm_missing():
+    """Regression test for Finding 4 (final whole-branch review): a
+    missing/corrupt .qm file used to raise FileNotFoundError uncaught from
+    apply_language(), and since app.py calls it unconditionally before
+    MainWindow is even constructed, this crashed the whole app with no
+    window and no user-facing error. Fixed by catching the load failure,
+    logging a warning, and falling back to English (both in the current
+    call and in what gets persisted, so a broken catalog doesn't retry
+    and fail on every subsequent launch)."""
+    settings = _fresh_settings()
+    manager = LanguageManager()
+    received = []
+    manager.language_changed.connect(received.append)
+
+    with patch("main_window.language.QTranslator") as mock_translator_cls:
+        mock_translator_cls.return_value.load.return_value = False
+        with patch.object(app, "installTranslator") as mock_install:
+            manager.apply_language(app, "pt_BR", settings)  # must not raise
+            mock_install.assert_not_called()
+
+    # Falls back to English: persisted setting, emitted signal, and no
+    # installed translator all agree -- not a UI that's silently
+    # untranslated while everything else still believes pt_BR is active.
+    assert settings.value("ui/language") == "en"
+    assert received == ["en"]
+    assert manager._translator is None
+
+
+def test_apply_language_missing_qm_still_allows_constructing_main_window():
+    """Same fallback, exercised closer to how app.py actually calls it:
+    language applied before MainWindow() is constructed, against a
+    genuinely missing .qm file on disk (not mocked), followed by a real
+    MainWindow() construction to confirm the app can still start and
+    ends up in English."""
+    settings = _fresh_settings()
+    manager = LanguageManager()
+
+    with patch("main_window.language._I18N_DIR", Path("nonexistent_i18n_dir_for_test")):
+        manager.apply_language(app, "pt_BR", settings)  # must not raise
+
+    assert settings.value("ui/language") == "en"
+
+    from main_window.main_window import MainWindow
+    window = MainWindow()
+    try:
+        assert window.windowTitle() == "Circuit Editor"  # English, not Portuguese
+    finally:
+        window.close()

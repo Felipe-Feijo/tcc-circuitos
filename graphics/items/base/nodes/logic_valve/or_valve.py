@@ -1,7 +1,7 @@
 """Graphics node for the OR logic valve (circuit selector)."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, QCoreApplication
 from simulation.nodes.logic_valve.or_valve import OrValve as OrValveNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -18,7 +18,7 @@ class OrValve(NodeItem):
         return PaletteMeta(
             domains=("pneumatic",),
             sprite="resources/nodes/or_valve/or_valve_x_side.png",
-            name="Or Valve",
+            name=QCoreApplication.translate("OrValve", "Or Valve"),
         )
 
     def setup(self) -> None:

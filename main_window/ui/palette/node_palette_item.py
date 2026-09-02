@@ -61,6 +61,9 @@ class NodePaletteItem(QWidget):
 
         self.setFixedWidth(item_width)
 
+    def set_name(self, name: str):
+        self.text_label.setText(name)
+
     def set_selected(self, value: bool):
         self.selected = value
         self.update()

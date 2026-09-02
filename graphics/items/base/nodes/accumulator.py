@@ -1,7 +1,7 @@
 """Gas-charged hydraulic accumulator graphics node (Boyle's law, bladder)."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 
 from simulation.nodes.accumulator import Accumulator as AccumulatorNode
 from graphics.items.base.nodes.node_item import NodeItem
@@ -33,7 +33,7 @@ class Accumulator(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite=f"{_SPRITE_DIR}/accumulator.png",
-            name="Accumulator",
+            name=QCoreApplication.translate("Accumulator", "Accumulator"),
         )
 
     def setup(self) -> None:

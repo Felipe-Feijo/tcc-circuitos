@@ -1,6 +1,6 @@
 """Graphics node for the electrical voltage source symbol."""
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from PyQt6.QtGui import QPixmap
 
 from graphics.anchors.anchor import AnchorItem
@@ -21,7 +21,7 @@ class VoltageSource(PairedTerminalItem):
         return PaletteMeta(
             domains=("electric",),
             sprite=_SPRITE,
-            name="Voltage Source",
+            name=QCoreApplication.translate("VoltageSource", "Voltage Source"),
         )
 
     def initialize_own_anchor(self) -> None:

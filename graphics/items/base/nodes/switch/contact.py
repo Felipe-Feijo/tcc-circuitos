@@ -10,7 +10,7 @@ a separate set of sprites. With only one concrete switch type left,
 the SwitchItem split no longer earns its keep.
 """
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt, QCoreApplication
 from PyQt6.QtGui import QAction, QPainterPath, QPixmap
 from PyQt6.QtWidgets import QMenu
 from simulation.nodes.switch.contact import Contact as ContactNode
@@ -85,7 +85,7 @@ class Contact(NodeItem):
         return PaletteMeta(
             domains=("electric",),
             sprite=cls.SWITCH_VISUALS["NO"][0]["sprite"],
-            name="Contact",
+            name=QCoreApplication.translate("Contact", "Contact"),
         )
 
     # --------------------------

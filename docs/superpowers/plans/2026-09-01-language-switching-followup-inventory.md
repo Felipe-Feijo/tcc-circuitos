@@ -5,6 +5,23 @@ Generated 2026-09-01 as a tracked follow-up to
 (Task 12) -- not migrated in that plan per the spec's non-goal on 100%
 v1 string coverage.
 
+**Update (2026-09-01):** the `palette_meta(name=...)` component-name entries
+(25 of them, one per concrete node class) have been migrated -- wrapped in
+`QCoreApplication.translate("<ClassName>", "...")` with the class name as
+literal context (each `palette_meta()` is defined directly on its own
+concrete class, never inherited-unoverridden, so this is immune to the
+base-class inheritance-context bug described below by construction), PT-BR
+translations added, catalog recompiled. Live retranslation required a small
+addition: `main_window/ui/registry/node_registry.py` now stashes the
+originating class on each `NodePaletteItem` (`item._node_cls = cls`) and
+exposes `retranslate_nodes(palette)`, called from
+`MainWindow.retranslate_ui()`, which re-invokes each item's `palette_meta()`
+to refresh its label against the currently active translator.
+**Remaining in this inventory: only the property-dialog field labels below**
+(`add_number_field`/`add_text_field`/`add_combo_field`/`add_bool_field`
+calls) -- the `palette_meta()` entries are no longer part of the pending
+sweep.
+
 ## Pattern
 
 Identical to Tasks 4-9 of the parent plan: wrap each literal in

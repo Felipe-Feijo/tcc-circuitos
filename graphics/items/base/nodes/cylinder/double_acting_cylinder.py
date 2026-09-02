@@ -1,6 +1,6 @@
 """Double-acting cylinder graphics node."""
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from PyQt6.QtGui import QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.nodes.cylinder.cylinder_item import CylinderItem
@@ -38,7 +38,7 @@ class DoubleActingCylinder(CylinderItem):
         return PaletteMeta(
             domains=("pneumatic", "hydraulic"),
             sprite=f"{_BASE_PATH}/double_acting_cylinder_retracted.png",
-            name="Double Acting Cylinder",
+            name=QCoreApplication.translate("DoubleActingCylinder", "Double Acting Cylinder"),
         )
 
     def setup(self) -> None:

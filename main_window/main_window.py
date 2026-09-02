@@ -123,6 +123,9 @@ class MainWindow(QMainWindow):
             "Hydraulic": self.tr("Hydraulic"),
         })
 
+        from main_window.ui.registry.node_registry import retranslate_nodes
+        retranslate_nodes(self.node_palette)
+
     def _wire_state_callbacks(self):
         # Disconnect first to avoid duplicate connections on new_scene()
         try:

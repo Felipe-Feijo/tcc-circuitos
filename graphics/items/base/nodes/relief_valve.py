@@ -22,7 +22,7 @@ relief_valve_pilot.png -- external pilot overlay (dotted line + Y port),
 """
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.relief_valve import ReliefValve as ReliefValveNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -42,7 +42,7 @@ class ReliefValve(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite=f"{_SPRITE_DIR}/relief_valve.png",
-            name="Relief Valve (direct)",
+            name=QCoreApplication.translate("ReliefValve", "Relief Valve (direct)"),
         )
 
     def setup(self) -> None:

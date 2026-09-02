@@ -27,7 +27,7 @@ check_valve_pilot.png   -- pilot overlay (frame + dotted tail leaving
 """
 
 from PyQt6.QtGui import QPixmap, QTransform
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 
 from simulation.nodes.check_valve.check_valve import (
     CheckValve as CheckValveNode,
@@ -51,7 +51,7 @@ class CheckValve(NodeItem):
         return PaletteMeta(
             domains=("pneumatic", "hydraulic"),
             sprite=f"{_SPRITE_DIR}/check_valve_closed.png",
-            name="Check Valve",
+            name=QCoreApplication.translate("CheckValve", "Check Valve"),
         )
 
     # ------------------------------------------------------------------

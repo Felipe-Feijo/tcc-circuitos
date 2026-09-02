@@ -13,7 +13,7 @@ throttle_check_valve_closed.png  — restricted direction (X=1, Y=0)
 """
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 
 from simulation.nodes.check_valve.throttle_check_valve import (
     ThrottleCheckValve as ThrottleCheckValveNode,
@@ -35,7 +35,7 @@ class ThrottleCheckValve(NodeItem):
         return PaletteMeta(
             domains=("pneumatic", "hydraulic"),
             sprite=f"{_SPRITE_DIR}/throttle_check_valve_open.png",
-            name="Throttle Check Valve",
+            name=QCoreApplication.translate("ThrottleCheckValve", "Throttle Check Valve"),
         )
 
     # ------------------------------------------------------------------

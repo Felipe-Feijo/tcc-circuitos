@@ -1,7 +1,7 @@
 """Graphics node for the pneumatic exhaust (pressure outlet to atmosphere)."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.nodes import Exhaust as ExhaustNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -18,7 +18,7 @@ class Exhaust(NodeItem):
         return PaletteMeta(
             domains=("pneumatic",),
             sprite="resources/nodes/exhaust/exhaust.png",
-            name="Exhaust",
+            name=QCoreApplication.translate("Exhaust", "Exhaust"),
         )
 
     def setup(self) -> None:

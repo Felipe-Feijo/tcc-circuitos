@@ -1,6 +1,6 @@
 """Single-acting cylinder graphics node."""
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from PyQt6.QtGui import QPixmap
 from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.nodes.cylinder.cylinder_item import CylinderItem
@@ -44,7 +44,7 @@ class SingleActingCylinder(CylinderItem):
         return PaletteMeta(
             domains=("pneumatic", "hydraulic"),
             sprite=f"{_BASE_PATH}/single_acting_cylinder_retracted.png",
-            name="Single Acting Cylinder",
+            name=QCoreApplication.translate("SingleActingCylinder", "Single Acting Cylinder"),
         )
 
     def setup(self) -> None:

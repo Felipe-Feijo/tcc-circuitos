@@ -1,6 +1,6 @@
 """4/3-way directional valve graphics node, closed center."""
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.directional_valve.valve_4_3_ways import Valve_4_3_Ways as Valve_4_3_WaysNode
 
 from graphics.items.base.nodes.directional_valve.directional_valve_item import DirectionalValveItem
@@ -36,7 +36,7 @@ class Valve_4_3_Ways(DirectionalValveItem):
         return PaletteMeta(
             domains=("pneumatic", "hydraulic"),
             sprite=cls.BODY_VISUALS[1]["sprite"],
-            name="Valve 4/3 Ways",
+            name=QCoreApplication.translate("Valve_4_3_Ways", "Valve 4/3 Ways"),
         )
 
     def initialize_anchors(self):

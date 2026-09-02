@@ -306,7 +306,7 @@ def test_directional_valve_item_defect_dialog_translates():
     try:
         dialog_pt = item.build_defect_dialog()
         try:
-            assert dialog_pt.windowTitle() == "Simular defeito — Valve 3/2 Ways"
+            assert dialog_pt.windowTitle() == "Simular defeito — Válvula 3/2 Vias"
             labels = _form_label_texts(dialog_pt)
             assert "Condutância k (m³/s/√Pa)" in labels
             assert "Válvula travada (não comuta)" in labels

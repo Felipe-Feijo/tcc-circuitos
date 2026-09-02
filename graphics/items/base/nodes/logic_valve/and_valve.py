@@ -1,7 +1,7 @@
 """Graphics node for the AND logic valve (double check)."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, QCoreApplication
 from simulation.nodes.logic_valve.and_valve import AndValve as AndValveNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -18,7 +18,7 @@ class AndValve(NodeItem):
         return PaletteMeta(
             domains=("pneumatic",),
             sprite="resources/nodes/and_valve/and_valve_default.png",
-            name="And Valve",
+            name=QCoreApplication.translate("AndValve", "And Valve"),
         )
 
     def setup(self) -> None:

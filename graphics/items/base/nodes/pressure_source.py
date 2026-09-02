@@ -1,7 +1,7 @@
 """Graphics node for the pneumatic pressure source."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.nodes import PressureSource as PressureSourceNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -18,7 +18,7 @@ class PressureSource(NodeItem):
         return PaletteMeta(
             domains=("pneumatic",),
             sprite="resources/nodes/pressure_source/pressure_source.png",
-            name="Pressure Source",
+            name=QCoreApplication.translate("PressureSource", "Pressure Source"),
         )
     def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/pressure_source/pressure_source.png")

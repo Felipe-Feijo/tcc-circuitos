@@ -1,7 +1,7 @@
 """Graphics node for the fixed-displacement pump."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump as FixedDisplacementPumpNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -19,7 +19,7 @@ class FixedDisplacementPump(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite="resources/nodes/fixed_displacement_pump/fixed_displacement_pump.png",
-            name="Fixed Displacement Pump",
+            name=QCoreApplication.translate("FixedDisplacementPump", "Fixed Displacement Pump"),
         )
     def setup(self) -> None:
         self.properties = {}

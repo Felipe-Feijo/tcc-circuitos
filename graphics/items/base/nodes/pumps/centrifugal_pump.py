@@ -1,7 +1,7 @@
 """Graphics node for the centrifugal pump."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.pumps.centrifugal_pump import CentrifugalPump as CentrifugalPumpNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -19,7 +19,7 @@ class CentrifugalPump(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite="resources/nodes/centrifugal_pump/centrifugal_pump.png",
-            name="Centrifugal Pump",
+            name=QCoreApplication.translate("CentrifugalPump", "Centrifugal Pump"),
         )
 
     def setup(self) -> None:

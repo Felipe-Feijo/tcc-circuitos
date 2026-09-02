@@ -8,7 +8,7 @@ PressureLine domain node would be pure pass-through, identical to
 Junction, so it isn't reintroduced.
 """
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from PyQt6.QtGui import QPixmap
 
 from graphics.anchors.anchor import AnchorItem
@@ -48,7 +48,7 @@ class PressureLine(PairedTerminalItem):
         return PaletteMeta(
             domains=("pneumatic",),
             sprite=_SPRITE,
-            name="Pressure Line",
+            name=QCoreApplication.translate("PressureLine", "Pressure Line"),
         )
 
     def initialize_own_anchor(self) -> None:

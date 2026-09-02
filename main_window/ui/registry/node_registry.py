@@ -117,8 +117,32 @@ def register_nodes(palette, on_add_node) -> None:
                 icon_path=meta.sprite,
                 callback=callback,
             )
+            # Stashed so retranslate_nodes() can re-fetch this item's
+            # localized display name after a language change, without
+            # re-running the filesystem discovery in _discover_palette_nodes().
+            item._node_cls = cls
             # route the click through NodePalette.select_item() too, so the
             # clicked item gets the blue "selected" outline while its node
             # is pending placement (ADD mode) -- add_node() alone only
             # wires the callback.
             palette.register_item(item, callback)
+
+
+def retranslate_nodes(palette) -> None:
+    """Re-applies each registered node's palette display name after a
+    language change.
+
+    palette_meta() is a classmethod called once at registration time
+    (register_nodes(), above) and its resolved name gets baked into the
+    item's QLabel -- calling cls.palette_meta() again here re-runs its
+    QCoreApplication.translate(...) lookup against the now-active
+    translator, without needing to re-discover or re-register any nodes.
+    """
+    for section in palette.sections.values():
+        for item in section._items:
+            cls = getattr(item, "_node_cls", None)
+            if cls is None:
+                continue
+            meta = cls.palette_meta()
+            display_name = (meta.name if meta else None) or cls.__name__
+            item.set_name(display_name)

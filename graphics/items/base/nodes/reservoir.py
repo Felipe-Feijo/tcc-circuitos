@@ -1,7 +1,7 @@
 """Graphics node for the hydraulic reservoir."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from simulation.nodes.reservoir import Reservoir as ReservoirNode
 
 from graphics.items.base.nodes.node_item import NodeItem
@@ -18,7 +18,7 @@ class Reservoir(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite="resources/nodes/reservoir/reservoir.png",
-            name="Reservoir",
+            name=QCoreApplication.translate("Reservoir", "Reservoir"),
         )
     def setup(self) -> None:
         self.pixmap = QPixmap("resources/nodes/reservoir/reservoir.png")

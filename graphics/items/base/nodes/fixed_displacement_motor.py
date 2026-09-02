@@ -1,7 +1,7 @@
 """Fixed-displacement hydraulic motor graphics node."""
 
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QCoreApplication
 from PyQt6.QtWidgets import QLabel
 from simulation.nodes.fixed_displacement_motor import FixedDisplacementMotor as FixedDisplacementMotorNode
 
@@ -21,7 +21,7 @@ class FixedDisplacementMotor(NodeItem):
         return PaletteMeta(
             domains=("hydraulic",),
             sprite="resources/nodes/fixed_displacement_motor/fixed_displacement_motor.png",
-            name="Fixed Displacement Motor",
+            name=QCoreApplication.translate("FixedDisplacementMotor", "Fixed Displacement Motor"),
         )
 
     def setup(self) -> None:

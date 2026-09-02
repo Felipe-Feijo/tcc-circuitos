@@ -2,6 +2,34 @@
 <!DOCTYPE TS>
 <TS version="2.1">
 <context>
+    <name>Accumulator</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="36" />
+        <source>Accumulator</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>AndValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\logic_valve\and_valve.py" line="21" />
+        <source>And Valve</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>CentrifugalPump</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="22" />
+        <source>Centrifugal Pump</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>CheckValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\check_valve.py" line="54" />
+        <source>Check Valve</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>CircuitGeneratorDialog</name>
     <message>
         <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="26" />
@@ -84,6 +112,11 @@
     </message>
 </context><context>
     <name>Contact</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="88" />
+        <source>Contact</source>
+        <translation type="unfinished" />
+    </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\switch\contact.py" line="355" />
         <source>Contact type</source>
@@ -232,10 +265,45 @@
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>DoubleActingCylinder</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="41" />
+        <source>Double Acting Cylinder</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Exhaust</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\exhaust.py" line="21" />
+        <source>Exhaust</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>FixedDisplacementMotor</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="24" />
+        <source>Fixed Displacement Motor</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>FixedDisplacementPump</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="22" />
+        <source>Fixed Displacement Pump</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Ground</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\expandable\ground.py" line="24" />
+        <source>Ground</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>MainWindow</name>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="170" />
-        <location filename="..\..\main_window\main_window.py" line="111" />
+        <location filename="..\..\main_window\main_window.py" line="179" />
+        <location filename="..\..\main_window\main_window.py" line="117" />
         <location filename="..\..\main_window\main_window.py" line="39" />
         <source>Circuit Editor</source>
         <translation type="unfinished" />
@@ -271,32 +339,32 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="113" />
+        <location filename="..\..\main_window\main_window.py" line="119" />
         <source>Nodes</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="115" />
+        <location filename="..\..\main_window\main_window.py" line="121" />
         <source>Pneumatic</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="116" />
+        <location filename="..\..\main_window\main_window.py" line="122" />
         <source>Electric</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="117" />
+        <location filename="..\..\main_window\main_window.py" line="123" />
         <source>Hydraulic</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="226" />
+        <location filename="..\..\main_window\main_window.py" line="235" />
         <source>About</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="227" />
+        <location filename="..\..\main_window\main_window.py" line="236" />
         <source>Circuit Editor
 Pneumatic and Hydraulic Systems
 
@@ -304,48 +372,48 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="266" />
+        <location filename="..\..\main_window\main_window.py" line="275" />
         <source>Add node</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="326" />
+        <location filename="..\..\main_window\main_window.py" line="335" />
         <source>circuit</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="359" />
+        <location filename="..\..\main_window\main_window.py" line="368" />
         <source>Step size</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="359" />
+        <location filename="..\..\main_window\main_window.py" line="368" />
         <source>dt (s):</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="365" />
+        <location filename="..\..\main_window\main_window.py" line="374" />
         <source>dt: {0:.3f}s</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="396" />
-        <location filename="..\..\main_window\main_window.py" line="388" />
+        <location filename="..\..\main_window\main_window.py" line="405" />
+        <location filename="..\..\main_window\main_window.py" line="397" />
         <source>Run</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="396" />
+        <location filename="..\..\main_window\main_window.py" line="405" />
         <source>Pause</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="430" />
+        <location filename="..\..\main_window\main_window.py" line="439" />
         <source>Light Theme</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="430" />
+        <location filename="..\..\main_window\main_window.py" line="439" />
         <source>Dark Theme</source>
         <translation type="unfinished" />
     </message>
@@ -400,6 +468,27 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>OrValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\logic_valve\or_valve.py" line="21" />
+        <source>Or Valve</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>PressureLine</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\expandable\pressure_line.py" line="51" />
+        <source>Pressure Line</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>PressureSource</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_source.py" line="21" />
+        <source>Pressure Source</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>PropertiesDialog</name>
     <message>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="20" />
@@ -422,6 +511,20 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>RelayCoil</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\coil\relay_coil.py" line="21" />
+        <source>Relay Coil</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>ReliefValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="45" />
+        <source>Relief Valve (direct)</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>ReportResolution</name>
     <message>
         <location filename="..\..\main_window\report_resolution.py" line="27" />
@@ -436,6 +539,13 @@ Built with PyQt6</source>
     <message>
         <location filename="..\..\main_window\report_resolution.py" line="36" />
         <source>Save report to</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Reservoir</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\reservoir.py" line="21" />
+        <source>Reservoir</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -463,6 +573,69 @@ Built with PyQt6</source>
     <message>
         <location filename="..\..\persistence\file_session.py" line="100" />
         <source>Circuit Editor – {0}</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>SingleActingCylinder</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="47" />
+        <source>Single Acting Cylinder</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>SolenoidCoil</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\coil\solenoid_coil.py" line="21" />
+        <source>Solenoid Coil</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>ThrottleCheckValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="38" />
+        <source>Throttle Check Valve</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Valve_2_2_Ways</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_2_2_ways.py" line="30" />
+        <source>Valve 2/2 Ways</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Valve_3_2_Ways</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_3_2_ways.py" line="30" />
+        <source>Valve 3/2 Ways</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Valve_4_2_Ways</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_4_2_ways.py" line="30" />
+        <source>Valve 4/2 Ways</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Valve_4_3_Ways</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_4_3_ways.py" line="39" />
+        <source>Valve 4/3 Ways</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Valve_5_2_Ways</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_5_2_ways.py" line="30" />
+        <source>Valve 5/2 Ways</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>VoltageSource</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\expandable\voltage_source.py" line="24" />
+        <source>Voltage Source</source>
         <translation type="unfinished" />
     </message>
 </context></TS>

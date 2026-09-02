@@ -16,6 +16,8 @@ from graphics.items.base.nodes.switch.contact import Contact
 from graphics.items.base.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
 from graphics.utils.defect_dialog import DefectDialog
+from graphics.items.base.nodes.junction_node_item import JunctionNodeItem
+from graphics.utils.properties_dialog import PropertiesDialog
 
 
 def test_switching_to_pt_br_translates_a_known_menu_title():
@@ -143,5 +145,36 @@ def test_defect_dialog_cancel_button_translates_despite_being_inherited():
         assert dialog._ok_btn.text() == "Aplicar"
         assert dialog._restore_btn.text() == "Restaurar"
         assert dialog.windowTitle() == "Simular defeito"
+    finally:
+        language_manager.apply_language(app, "en")
+
+
+def test_no_editable_properties_dialog_title_translates(monkeypatch):
+    """Regression test for a bug where NodeItem._open_properties_dialog()'s
+    no-properties fallback path built its dialog as
+    PropertiesDialog(title="Properties") -- a hardcoded, never-translated
+    string literal -- bypassing Task 8's title=None -> tr("Properties")
+    default resolution entirely. Fixed by dropping the explicit argument
+    so the dialog resolves its title via QCoreApplication.translate(...)
+    fresh at construction time, like every other PropertiesDialog.
+
+    Drives the real _open_properties_dialog() fallback branch end-to-end
+    (not a hand-rebuilt copy of it) -- QDialog.exec() is monkeypatched to
+    avoid blocking on a real modal loop in this headless test."""
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        item = JunctionNodeItem(domain="electric")
+        assert item.build_properties_dialog() is None  # exercises the fallback branch
+
+        captured = {}
+
+        def fake_exec(self):
+            captured["title"] = self.windowTitle()
+            return 0  # QDialog.Rejected -- skips apply_properties_from_dialog()
+
+        monkeypatch.setattr(PropertiesDialog, "exec", fake_exec)
+        item._open_properties_dialog()
+
+        assert captured["title"] == "Propriedades"
     finally:
         language_manager.apply_language(app, "en")

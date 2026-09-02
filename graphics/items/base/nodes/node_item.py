@@ -748,7 +748,7 @@ class NodeItem(DiagramItemBase):
     def _open_properties_dialog(self) -> None:
         dialog = self.build_properties_dialog()
         if dialog is None:
-            dialog = PropertiesDialog(title="Properties")
+            dialog = PropertiesDialog()
             dialog.add_no_properties_message()
 
         scene = self.scene()

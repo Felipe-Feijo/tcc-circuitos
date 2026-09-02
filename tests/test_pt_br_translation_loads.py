@@ -74,7 +74,7 @@ def test_run_action_text_stays_translated_after_a_simulation_state_change():
         window.state.mode = EditorMode.SIMULATE
         window.simulation = Mock(
             active=True,
-            dt=0.1,  # real float: retranslate_ui() formats this ("dt: {0:.3f}s")
+            dt=0.1,  # real float: retranslate_ui() formats this ("Δt: {0:.3f}s")
             controller=Mock(playing=True, can_step_back=lambda: False),
         )
         window.update_simulation_actions()

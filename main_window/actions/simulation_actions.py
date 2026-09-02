@@ -24,7 +24,7 @@ def create_simulation_actions(main_window):
     actions["step_forward"].setEnabled(False)
     actions["step_forward"].triggered.connect(main_window.on_step_forward)
 
-    actions["dt"] = QAction("dt: 0.100s", main_window)
+    actions["dt"] = QAction("Δt: 0.100s", main_window)
     actions["dt"].triggered.connect(main_window.on_dt_clicked)
 
     actions["speed"] = QAction("1x", main_window)

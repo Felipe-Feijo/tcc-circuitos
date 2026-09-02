@@ -391,13 +391,13 @@ Desenvolvido com PyQt6</translation>
     </message>
     <message>
         <location filename="..\..\main_window\main_window.py" line="368" />
-        <source>dt (s):</source>
-        <translation>dt (s):</translation>
+        <source>Δt (s):</source>
+        <translation>Δt (s):</translation>
     </message>
     <message>
         <location filename="..\..\main_window\main_window.py" line="374" />
-        <source>dt: {0:.3f}s</source>
-        <translation>dt: {0:.3f}s</translation>
+        <source>Δt: {0:.3f}s</source>
+        <translation>Δt: {0:.3f}s</translation>
     </message>
     <message>
         <location filename="..\..\main_window\main_window.py" line="405" />

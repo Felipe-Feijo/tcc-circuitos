@@ -124,7 +124,7 @@ def retranslate_actions(actions: dict, main_window) -> None:
 
     simulation = getattr(main_window, "simulation", None)
     if simulation is not None:
-        actions["dt"].setText(main_window.tr("dt: {0:.3f}s").format(simulation.dt))
+        actions["dt"].setText(main_window.tr("Δt: {0:.3f}s").format(simulation.dt))
 
     # "run"'s text/enabled state depends on simulation play state, which
     # update_simulation_actions() already fully recomputes -- avoid

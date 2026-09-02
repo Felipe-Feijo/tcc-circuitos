@@ -365,13 +365,13 @@ class MainWindow(QMainWindow):
     def on_dt_clicked(self):
         from PyQt6.QtWidgets import QInputDialog
         value, ok = QInputDialog.getDouble(
-            self, self.tr("Step size"), self.tr("dt (s):"),
+            self, self.tr("Step size"), self.tr("Δt (s):"),
             self.simulation.dt,  # reads from the session
             0.001, 1.0, 3
         )
         if ok:
             self.simulation.set_dt(value)  # salva na session, controller e recorder
-            self.actions["dt"].setText(self.tr("dt: {0:.3f}s").format(value))
+            self.actions["dt"].setText(self.tr("Δt: {0:.3f}s").format(value))
 
     def on_cycle_speed(self):
         self.simulation.speed_index = (self.simulation.speed_index + 1) % len(SPEED_STEPS)

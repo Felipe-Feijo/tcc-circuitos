@@ -388,12 +388,12 @@ Built with PyQt6</source>
     </message>
     <message>
         <location filename="..\..\main_window\main_window.py" line="368" />
-        <source>dt (s):</source>
+        <source>Δt (s):</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="..\..\main_window\main_window.py" line="374" />
-        <source>dt: {0:.3f}s</source>
+        <source>Δt: {0:.3f}s</source>
         <translation type="unfinished" />
     </message>
     <message>

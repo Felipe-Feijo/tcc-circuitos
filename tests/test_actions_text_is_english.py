@@ -96,7 +96,7 @@ def test_retranslate_actions_reformats_dt_from_current_simulation_state():
 
     retranslate_actions(actions, fake_main_window)
 
-    assert actions["dt"].text() == "dt: 0.250s"
+    assert actions["dt"].text() == "Δt: 0.250s"
 
 
 def test_retranslate_actions_reapplies_toggle_theme_text_from_current_state():

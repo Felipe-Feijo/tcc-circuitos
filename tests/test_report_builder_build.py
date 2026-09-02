@@ -10,7 +10,7 @@ from simulation.report.frame_recorder import Frame
 from simulation.report.report_builder import build
 
 
-def _frames_with_images(tmp_path):
+def _frames_with_images(tmp_path, gauge_readings=None):
     frames = []
     for i in range(3):
         img_path = tmp_path / f"frame_{i}.png"
@@ -20,6 +20,7 @@ def _frames_with_images(tmp_path):
             sim_time=i * 0.1,
             piston_positions={"c1": i / 2.0},
             image_path=str(img_path),
+            gauge_readings=dict(gauge_readings[i]) if gauge_readings else {},
         ))
     return frames
 
@@ -42,6 +43,19 @@ def test_build_writes_html_pdf_and_video(tmp_path):
     html = html_path.read_text(encoding="utf-8")
     assert "<video" in html
     assert 'href="graficos.pdf"' in html
+
+
+def test_build_includes_gauge_chart_in_html(tmp_path):
+    gauge_readings = [{"g1": 0.0}, {"g1": 5e6}, {"g1": 3e6}]
+    frames = _frames_with_images(tmp_path, gauge_readings=gauge_readings)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    build(frames, str(out_dir))
+
+    html = (out_dir / "relatorio.html").read_text(encoding="utf-8")
+    assert html.count("<img") == 2  # 1 gráfico de pistão + 1 de manômetro
+    assert "Manômetros" in html
 
 
 def test_build_degrades_gracefully_without_video(tmp_path, monkeypatch):

@@ -49,6 +49,53 @@ def build_charts(frames: list) -> list:
     return figures
 
 
+def build_gauge_charts(frames: list) -> list:
+    """Builds a reading-vs-time chart per pressure gauge present in the frames.
+
+    Hydraulic gauges (numeric readings, in Pa) get a continuous line;
+    pneumatic gauges (boolean readings) get a 0/1 step chart labeled
+    Despressurizado/Pressurizado, since the pneumatic domain has no
+    real pressure magnitude to plot.
+
+    Args:
+        frames: List of `Frame` (see `frame_recorder.Frame`), in
+            increasing `sim_time` order.
+
+    Returns:
+        One `matplotlib.figure.Figure` per gauge `node_id` found, in
+        alphabetical id order. Empty list if `frames` is empty.
+    """
+    series: dict[str, list[tuple[float, float | bool]]] = {}
+    for frame in frames:
+        for node_id, reading in frame.gauge_readings.items():
+            series.setdefault(node_id, []).append((frame.sim_time, reading))
+
+    figures = []
+    for node_id in sorted(series):
+        points = series[node_id]
+        times = [t for t, _ in points]
+        readings = [r for _, r in points]
+        is_binary = isinstance(readings[0], bool)
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        if is_binary:
+            ax.plot(times, [1.0 if r else 0.0 for r in readings],
+                    drawstyle="steps-post", marker="o", markersize=3)
+            ax.set_title(f"Pressão — {node_id}")
+            ax.set_ylabel("Despressurizado (0) / Pressurizado (1)")
+            ax.set_ylim(-0.05, 1.05)
+        else:
+            ax.plot(times, readings, marker="o", markersize=3)
+            ax.set_title(f"Pressão — {node_id}")
+            ax.set_ylabel("Pressão (Pa)")
+        ax.set_xlabel("Tempo (s)")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        figures.append(fig)
+
+    return figures
+
+
 def save_pdf(figures: list, path: str) -> None:
     """Writes every figure into a single PDF, one per page."""
     with PdfPages(path) as pdf:
@@ -94,24 +141,34 @@ def build_video(frame_paths: list, path: str, fps: int = 10) -> bool:
         return False
 
 
-def build_html(chart_pngs: list, has_video: bool) -> str:
+def _pngs_to_html(pngs: list, alt: str) -> str:
+    return "".join(
+        '<img src="data:image/png;base64,{}" alt="{}" '
+        'style="max-width:100%;margin-bottom:24px;">'.format(base64.b64encode(png).decode("ascii"), alt)
+        for png in pngs
+    )
+
+
+def build_html(chart_pngs: list, has_video: bool, gauge_pngs: list | None = None) -> str:
     """Builds the report's self-contained HTML.
 
     Args:
         chart_pngs: Trajectory chart PNGs, embedded in base64.
         has_video: If True, references `video.mp4` (a file alongside
             the HTML); if False, shows a message in place of the player.
+        gauge_pngs: Pressure gauge chart PNGs, embedded in base64.
+            Section omitted entirely if empty/None.
     """
-    charts_html = "".join(
-        '<img src="data:image/png;base64,{}" alt="Gráfico de trajetória" '
-        'style="max-width:100%;margin-bottom:24px;">'.format(base64.b64encode(png).decode("ascii"))
-        for png in chart_pngs
-    )
+    charts_html = _pngs_to_html(chart_pngs, "Gráfico de trajetória")
     video_html = (
         '<video controls style="max-width:100%;">'
         '<source src="video.mp4" type="video/mp4"></video>'
         if has_video else
         "<p>Vídeo não disponível para esta simulação.</p>"
+    )
+    gauges_html = (
+        f"<h2>Manômetros</h2>\n{_pngs_to_html(gauge_pngs, 'Gráfico de pressão')}"
+        if gauge_pngs else ""
     )
 
     return f"""<!DOCTYPE html>
@@ -126,6 +183,7 @@ def build_html(chart_pngs: list, has_video: bool) -> str:
 {video_html}
 <h2>Trajetória dos pistões</h2>
 {charts_html}
+{gauges_html}
 <p><a href="graficos.pdf">Ver gráficos (PDF)</a></p>
 </body>
 </html>
@@ -155,10 +213,13 @@ def build(frames: list, out_dir: str) -> None:
         out_dir: Directory the files will be written to (must already exist).
     """
     figures = build_charts(frames)
+    gauge_figures = build_gauge_charts(frames)
+    all_figures = figures + gauge_figures
     try:
-        if figures:
-            save_pdf(figures, os.path.join(out_dir, "graficos.pdf"))
+        if all_figures:
+            save_pdf(all_figures, os.path.join(out_dir, "graficos.pdf"))
             chart_pngs = save_chart_pngs(figures)
+            gauge_pngs = save_chart_pngs(gauge_figures)
         else:
             # Create an empty PDF with a blank page when there are no figures
             blank_fig = plt.figure(figsize=(8, 6))
@@ -166,8 +227,9 @@ def build(frames: list, out_dir: str) -> None:
                 pdf.savefig(blank_fig)
             plt.close(blank_fig)
             chart_pngs = []
+            gauge_pngs = []
     finally:
-        for fig in figures:
+        for fig in all_figures:
             plt.close(fig)
 
     frame_paths = [f.image_path for f in frames if os.path.exists(f.image_path)]
@@ -175,6 +237,6 @@ def build(frames: list, out_dir: str) -> None:
 
     _delete_frame_images(frames)
 
-    html = build_html(chart_pngs, has_video)
+    html = build_html(chart_pngs, has_video, gauge_pngs)
     with open(os.path.join(out_dir, "relatorio.html"), "w", encoding="utf-8") as fh:
         fh.write(html)

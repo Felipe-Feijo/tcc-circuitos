@@ -186,6 +186,66 @@ def test_frame_background_falls_back_to_white_without_scene_brush():
     recorder.discard()
 
 
+def _add_gauge(engine, domain, node_id="g1"):
+    from simulation.nodes.pressure_gauge import PressureGauge
+
+    gauge = PressureGauge(node_id, domain=domain)
+    gauge.add_anchor("P", domain=domain)
+    engine.nodes[node_id] = gauge
+    return gauge
+
+
+def test_capture_step_records_hydraulic_gauge_pressure():
+    engine, cyl = _build_engine_with_piston()
+    gauge = _add_gauge(engine, "hydraulic")
+    gauge.anchors["P"].pressure = 5e6
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert data.frames[0].gauge_readings["g1"] == pytest.approx(5e6)
+
+
+def test_capture_step_records_pneumatic_gauge_state():
+    engine, cyl = _build_engine_with_piston()
+    gauge = _add_gauge(engine, "pneumatic")
+    gauge.anchors["P"].state = True
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert data.frames[0].gauge_readings["g1"] is True
+
+
+def test_gauge_readings_ignores_non_gauge_nodes():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert data.frames[0].gauge_readings == {}
+
+
+def test_capture_step_skips_rendering_when_video_disabled():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1, capture_video=False)
+
+    cyl.position = 0.5
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert len(data.frames) == 1
+    assert data.frames[0].image_path == ""
+    assert data.frames[0].piston_positions == {"c1": 0.5}
+
+
 def test_set_dt_changes_subsequent_sim_time():
     engine, cyl = _build_engine_with_piston()
     scene = _build_scene()

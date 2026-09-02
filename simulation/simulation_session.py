@@ -84,7 +84,10 @@ class SimulationSession:
 
         self.active = True
 
-        self._recorder = FrameRecorder(self.engine, self.scene, self.dt)
+        # capture_video=False: per-step screen rendering is the
+        # performance-lag hypothesis under investigation, disabled
+        # here until resolved. Chart data (piston/gauge) is unaffected.
+        self._recorder = FrameRecorder(self.engine, self.scene, self.dt, capture_video=False)
         self.controller.state_changed.connect(self._recorder.capture_step)
 
         # Step 3: activates the graphics items in simulation mode

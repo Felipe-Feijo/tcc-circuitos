@@ -12,6 +12,7 @@ from PyQt6.QtGui import QImage, QPainter
 logger = logging.getLogger(__name__)
 
 PISTON_TYPES = ("single_acting_cylinder", "double_acting_cylinder")
+GAUGE_TYPES = ("pressure_gauge",)
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Frame:
     sim_time: float
     piston_positions: dict
     image_path: str
+    gauge_readings: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -43,12 +45,17 @@ class FrameRecorder:
         scene: The scene's `QGraphicsScene`, used to render each frame.
         dt: Simulated time interval between steps, used to compute each
             frame's `sim_time`.
+        capture_video: If False, skips rendering/saving each step's PNG
+            (the source material for the report's video) -- piston
+            positions and gauge readings are still recorded. Off by
+            default reduces this to a data-only recorder.
     """
 
-    def __init__(self, engine, scene, dt: float):
+    def __init__(self, engine, scene, dt: float, capture_video: bool = True):
         self.engine = engine
         self.scene = scene
         self.dt = dt
+        self.capture_video = capture_video
 
         self._frames: list[Frame] = []
         self._temp_dir = tempfile.mkdtemp(prefix="circuit_report_")
@@ -77,19 +84,27 @@ class FrameRecorder:
             for node_id, node in self.engine.nodes.items()
             if getattr(node, "type", None) in PISTON_TYPES
         }
+        gauge_readings = {
+            node_id: node.get_visual_state()
+            for node_id, node in self.engine.nodes.items()
+            if getattr(node, "type", None) in GAUGE_TYPES
+        }
 
-        image_path = os.path.join(self._temp_dir, f"frame_{self._step_index:05d}.png")
-        try:
-            self._render_frame(image_path)
-        except Exception:
-            logger.exception("failed to capture report frame %d", self._step_index)
-            return
+        image_path = ""
+        if self.capture_video:
+            image_path = os.path.join(self._temp_dir, f"frame_{self._step_index:05d}.png")
+            try:
+                self._render_frame(image_path)
+            except Exception:
+                logger.exception("failed to capture report frame %d", self._step_index)
+                return
 
         self._frames.append(Frame(
             step_index=self._step_index,
             sim_time=self._step_index * self.dt,
             piston_positions=positions,
             image_path=image_path,
+            gauge_readings=gauge_readings,
         ))
         self._step_index += 1
 

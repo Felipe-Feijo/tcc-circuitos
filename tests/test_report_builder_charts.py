@@ -2,11 +2,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pytest
 import matplotlib
 matplotlib.use("Agg")
 
 from simulation.report.frame_recorder import Frame
-from simulation.report.report_builder import build_charts, save_pdf, save_chart_pngs
+from simulation.report.report_builder import build_charts, save_pdf, save_chart_pngs, build_gauge_charts
 
 
 def _frames():
@@ -14,6 +15,17 @@ def _frames():
         Frame(step_index=0, sim_time=0.0, piston_positions={"c1": 0.0, "c2": 1.0}, image_path=""),
         Frame(step_index=1, sim_time=0.1, piston_positions={"c1": 0.5, "c2": 1.0}, image_path=""),
         Frame(step_index=2, sim_time=0.2, piston_positions={"c1": 1.0, "c2": 0.0}, image_path=""),
+    ]
+
+
+def _gauge_frames():
+    return [
+        Frame(step_index=0, sim_time=0.0, piston_positions={}, image_path="",
+              gauge_readings={"g_hyd": 0.0, "g_pneu": False}),
+        Frame(step_index=1, sim_time=0.1, piston_positions={}, image_path="",
+              gauge_readings={"g_hyd": 5e6, "g_pneu": True}),
+        Frame(step_index=2, sim_time=0.2, piston_positions={}, image_path="",
+              gauge_readings={"g_hyd": 3e6, "g_pneu": False}),
     ]
 
 
@@ -43,3 +55,30 @@ def test_save_chart_pngs_returns_one_png_per_figure():
     assert len(pngs) == len(figures)
     for png in pngs:
         assert png.startswith(b"\x89PNG")
+
+
+def test_build_gauge_charts_returns_one_figure_per_gauge():
+    figures = build_gauge_charts(_gauge_frames())
+    assert len(figures) == 2
+
+
+def test_build_gauge_charts_handles_no_frames():
+    assert build_gauge_charts([]) == []
+
+
+def test_build_gauge_charts_plots_pa_for_numeric_readings():
+    figures = build_gauge_charts(_gauge_frames())
+    fig = dict(zip(sorted({"g_hyd", "g_pneu"}), figures))["g_hyd"]
+    ax = fig.axes[0]
+    assert "Pa" in ax.get_ylabel()
+    line = ax.lines[0]
+    assert list(line.get_ydata()) == [0.0, 5e6, 3e6]
+
+
+def test_build_gauge_charts_plots_binary_step_for_boolean_readings():
+    figures = build_gauge_charts(_gauge_frames())
+    fig = dict(zip(sorted({"g_hyd", "g_pneu"}), figures))["g_pneu"]
+    ax = fig.axes[0]
+    line = ax.lines[0]
+    assert list(line.get_ydata()) == [0.0, 1.0, 0.0]
+    assert ax.get_ylim() == pytest.approx((-0.05, 1.05))

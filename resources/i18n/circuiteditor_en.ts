@@ -217,43 +217,38 @@
 </context><context>
     <name>CylinderItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="324" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="316" />
         <source>Error renaming sensor</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="325" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="318" />
         <source>A sensor named '{0}' already exists.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="344" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="336" />
         <source>Retracted sensor</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="345" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="341" />
         <source>Extended sensor</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="351" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="347" />
         <source>Initial state</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="353" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="349" />
         <source>Retracted</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="354" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="350" />
         <source>Extended</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="377" />
-        <source>None</source>
         <translation type="unfinished" />
     </message>
 </context><context>

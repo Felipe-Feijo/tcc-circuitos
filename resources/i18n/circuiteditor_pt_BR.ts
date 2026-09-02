@@ -217,52 +217,39 @@
 </context><context>
     <name>CylinderItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="324" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="316" />
         <source>Error renaming sensor</source>
         <translation>Erro ao renomear sensor</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="325" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="318" />
         <source>A sensor named '{0}' already exists.</source>
         <translation>Já existe um sensor com o nome '{0}'.</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="344" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="336" />
         <source>Retracted sensor</source>
         <translation>Sensor retraído</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="345" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="341" />
         <source>Extended sensor</source>
         <translation>Sensor estendido</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="351" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="347" />
         <source>Initial state</source>
         <translation>Estado inicial</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="353" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="349" />
         <source>Retracted</source>
         <translation>Retraído</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="354" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="350" />
         <source>Extended</source>
         <translation>Estendido</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="377" />
-        <source>None</source>
-        <translation>Nenhum</translation>
-    </message>
-    <message>
-        <source>Reed switch</source>
-        <translation>Sensor Reed</translation>
-    </message>
-    <message>
-        <source>Proximity</source>
-        <translation>Proximidade</translation>
     </message>
     <message>
         <source>Cylinder — Properties</source>

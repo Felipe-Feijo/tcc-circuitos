@@ -210,8 +210,9 @@ def test_cylinder_item_context_menu_translates_when_inherited():
         menu = QMenu()
         item.extend_context_menu(menu)
 
-        assert _find_submenu(menu, "Sensor retraído") is not None
-        assert _find_submenu(menu, "Sensor estendido") is not None
+        top_level_labels = [a.text() for a in menu.actions()]
+        assert "Sensor retraído" in top_level_labels
+        assert "Sensor estendido" in top_level_labels
 
         state_menu = _find_submenu(menu, "Estado inicial")
         assert state_menu is not None
@@ -230,8 +231,8 @@ def test_cylinder_item_rename_error_dialog_translates_when_inherited(monkeypatch
     try:
         registry = SensorRegistry()
         item = DoubleActingCylinder(domain="hydraulic", sensor_registry=registry)
-        item.set_sensor("retracted", "reed")
-        item.set_sensor("extended", "reed")
+        item.set_sensor("retracted", True)
+        item.set_sensor("extended", True)
 
         captured = {}
 
@@ -352,21 +353,19 @@ def test_coil_item_rename_error_dialog_translates_when_inherited(monkeypatch):
 # must store the same canonical property values as one saved in English.
 # ---------------------------------------------------------------------------
 
-def test_cylinder_sensor_combo_shows_portuguese_but_applies_canonical_value():
+def test_cylinder_sensor_checkbox_shows_portuguese_but_applies_canonical_value():
     node = DoubleActingCylinder(domain="pneumatic", sensor_registry=SensorRegistry())
     language_manager.apply_language(app, "pt_BR")
     try:
         dialog = node.build_properties_dialog()
-        assert dialog._combo_retracted.itemText(0) == "Nenhum"
-        assert "Sensor Reed" in [dialog._combo_retracted.itemText(i) for i in range(dialog._combo_retracted.count())]
+        assert "Sensor retraído" in _form_label_texts(dialog)
 
-        idx = dialog._combo_retracted.findText("Sensor Reed")
-        dialog._combo_retracted.setCurrentIndex(idx)
+        dialog._check_retracted.setChecked(True)
         dialog._name_retracted.setText("A1")
 
         node.apply_properties_from_dialog(dialog)
 
-        assert node.properties["sensors"]["retracted"]["type"] == "reed"
+        assert node.properties["sensors"]["retracted"]["enabled"] is True
     finally:
         language_manager.apply_language(app, "en")
 

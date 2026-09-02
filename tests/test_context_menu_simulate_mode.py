@@ -272,8 +272,9 @@ def test_cylinder_item_shows_sensor_and_state_submenus_outside_simulation():
 
     menu = QMenu()
     item.extend_context_menu(menu)
+    action_titles = [a.text() for a in menu.actions()]
     submenu_titles = [a.text() for a in menu.actions() if a.menu()]
 
-    assert "Retracted sensor" in submenu_titles
-    assert "Extended sensor" in submenu_titles
+    assert "Retracted sensor" in action_titles
+    assert "Extended sensor" in action_titles
     assert "Initial state" in submenu_titles

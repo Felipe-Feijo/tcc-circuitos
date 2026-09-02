@@ -129,8 +129,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         add_node(f"gen-cyl-{letter}", "DoubleActingCylinder", f"cylinder:{letter}",
                  properties={
                      "sensors": {
-                         "retracted": {"type": "reed", "name": f"{letter.lower()}0"},
-                         "extended":  {"type": "reed", "name": f"{letter.lower()}1"},
+                         "retracted": {"enabled": True, "name": f"{letter.lower()}0"},
+                         "extended":  {"enabled": True, "name": f"{letter.lower()}1"},
                      },
                      "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
@@ -160,10 +160,15 @@ def generate(events: list[tuple[str, str]]) -> dict:
              properties={"anchors": []})
     add_node("gen-ground", "Ground", "ground", domain="electric",
              properties={"anchors": []})
+    # gen-btn stays momentary: it directly energizes K_last's coil in
+    # parallel with the ring's own logic (see section 4 below), bypassing
+    # ramo A/B -- latched, it would hold K_last on forever and break the
+    # ring's reset.
     add_node("gen-btn", "Contact", "button", domain="electric",
              properties={"contact_type": "NO", "actuator_sensor": BUTTON_SENSOR})
     add_node("gen-btn-start", "Contact", "button_start", domain="electric",
-             properties={"contact_type": "NO", "actuator_sensor": BUTTON_SENSOR})
+             properties={"contact_type": "NO", "actuator_sensor": BUTTON_SENSOR,
+                         "button_mode": "latch"})
 
     _bus_counter: dict[str, int] = {"gen-vsource": 0, "gen-ground": 0}
 

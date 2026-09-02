@@ -8,14 +8,6 @@ from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
 from graphics.utils.properties_dialog import PropertiesDialog
 
-SENSOR_DICT = {
-    "reed": {
-        "label": "Reed switch",
-    },
-    "proximity": {
-        "label": "Proximity",
-    },
-}
 class CylinderItem(NodeItem):
     """
     Base class for all pistons.
@@ -27,8 +19,8 @@ class CylinderItem(NodeItem):
     def setup(self) -> None:
         self.properties = {
             "sensors": {
-                "retracted": {"type": None, "name": ""},
-                "extended":  {"type": None, "name": ""},
+                "retracted": {"enabled": False, "name": ""},
+                "extended":  {"enabled": False, "name": ""},
             },
             "default_state": "retracted",  # "retracted" = 0, "extended" = 1
         }
@@ -43,7 +35,7 @@ class CylinderItem(NodeItem):
     def register_sensors(self) -> None:
         for pos in ("retracted", "extended"):
             sensor = self.properties["sensors"].get(pos)
-            if sensor and sensor.get("type") is not None:
+            if sensor and sensor.get("enabled"):
                 self._register_sensor(pos)
 
     # --------------------------
@@ -269,7 +261,7 @@ class CylinderItem(NodeItem):
             sensor = self.sensors.get(pos)
             label_name = f"sensor_{pos}"
 
-            if sensor and sensor.get("type") is not None:
+            if sensor and sensor.get("enabled"):
                 visual = self.body_visuals[pos_to_index[pos]]
                 sprite = visual["sprite"]
                 offset = visual["offset"]
@@ -341,11 +333,15 @@ class CylinderItem(NodeItem):
             return
         menu.addSeparator()
 
-        r_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Retracted sensor"))
-        e_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Extended sensor"))
+        r_action = QAction(QCoreApplication.translate("CylinderItem", "Retracted sensor"), menu, checkable=True)
+        r_action.setChecked(self.properties["sensors"]["retracted"].get("enabled", False))
+        r_action.triggered.connect(lambda checked: self.set_sensor("retracted", checked))
+        menu.addAction(r_action)
 
-        self._populate_sensor_menu(r_menu, "retracted")
-        self._populate_sensor_menu(e_menu, "extended")
+        e_action = QAction(QCoreApplication.translate("CylinderItem", "Extended sensor"), menu, checkable=True)
+        e_action.setChecked(self.properties["sensors"]["extended"].get("enabled", False))
+        e_action.triggered.connect(lambda checked: self.set_sensor("extended", checked))
+        menu.addAction(e_action)
 
         menu.addSeparator()
         state_menu = menu.addMenu(QCoreApplication.translate("CylinderItem", "Initial state"))
@@ -370,41 +366,20 @@ class CylinderItem(NodeItem):
 
         
 
-    def _populate_sensor_menu(self, menu, position):
-        sensor = self.properties["sensors"][position]
-        current = sensor.get("type")
-
-        action_none = QAction(QCoreApplication.translate("CylinderItem", "None"), menu, checkable=True)
-        action_none.setChecked(current is None)
-        action_none.triggered.connect(
-            lambda _, p=position: self.set_sensor(p, None)
-        )
-        menu.addAction(action_none)
-
-        menu.addSeparator()
-
-        for name, desc in SENSOR_DICT.items():
-            action = QAction(desc["label"], menu, checkable=True)
-            action.setChecked(current == name)
-            action.triggered.connect(
-                lambda _, p=position, n=name: self.set_sensor(p, n)
-            )
-            menu.addAction(action)
-
-    def set_sensor(self, position, sensor_type):
+    def set_sensor(self, position, enabled):
         sensor = self.properties["sensors"][position]
 
-        if sensor["type"] == sensor_type:
+        if sensor["enabled"] == enabled:
             return
 
         # if it was active, unregisters it
-        if sensor["type"] is not None:
+        if sensor["enabled"]:
             self._unregister_sensor(position)
 
-        sensor["type"] = sensor_type
+        sensor["enabled"] = enabled
 
         # if it now exists, registers it
-        if sensor_type is not None:
+        if enabled:
             self._register_sensor(position)
         else:
             sensor["name"] = ""
@@ -446,19 +421,11 @@ class CylinderItem(NodeItem):
         # via super() by DoubleActingCylinder/SingleActingCylinder, whose
         # runtime class self.tr() would resolve against instead -- same
         # gotcha as NodeItem.extend_context_menu (see Task 11's fix note
-        # in main_window/actions/__init__.py). SENSOR_DICT's "label"
-        # values are plain data (dict lookups aren't literal strings, so
-        # pylupdate6 can't auto-extract them); their catalog entries are
-        # added by hand, same treatment as ACTUATOR_DICT's labels in
-        # directional_valve_item.py.
+        # in main_window/actions/__init__.py).
         def _(text: str) -> str:
             return QCoreApplication.translate("CylinderItem", text)
 
         dialog = PropertiesDialog(title=_("Cylinder — Properties"))
-
-        sensor_options = [(None, _("None"))] + [
-            (key, _(desc["label"])) for key, desc in SENSOR_DICT.items()
-        ]
 
         # Tracks names already assigned within this dialog session so that
         # auto-generated names for multiple sensors don't collide.
@@ -475,21 +442,20 @@ class CylinderItem(NodeItem):
 
         def make_side_widgets(pos):
             sensor = self.properties["sensors"].get(pos)
-            current_type = sensor.get("type") if sensor else None
+            current_enabled = sensor.get("enabled", False) if sensor else False
             current_name = sensor.get("name", "") if sensor else ""
 
             # Reuses the same "Retracted sensor"/"Extended sensor" phrasing
-            # already cataloged for the context-menu submenu titles.
+            # already cataloged for the context-menu toggle titles.
             side_label = _("Retracted sensor") if pos == "retracted" else _("Extended sensor")
-            combo = dialog.add_combo_field(side_label, sensor_options, current=current_type)
+            checkbox = dialog.add_bool_field(side_label, value=current_enabled)
             name_field = dialog.add_text_field(_("  Name"), placeholder="ex: A1", value=current_name)
-            name_field.setEnabled(current_type is not None)
+            name_field.setEnabled(current_enabled)
 
-            def on_type_changed(_index, combo=combo):
-                sensor_type = combo.currentData()
-                is_none = sensor_type is None
-                name_field.setEnabled(not is_none)
-                if not is_none and not name_field.text().strip():
+            def on_enabled_changed(_state, checkbox=checkbox):
+                enabled = checkbox.isChecked()
+                name_field.setEnabled(enabled)
+                if enabled and not name_field.text().strip():
                     name = next_name()
                     pending_names.add(name)
                     name_field.setText(name)
@@ -500,12 +466,12 @@ class CylinderItem(NodeItem):
                 pending_names.add(text)
                 name_field.setProperty("_last_pending", text)
 
-            combo.currentIndexChanged.connect(on_type_changed)
+            checkbox.stateChanged.connect(on_enabled_changed)
             name_field.textChanged.connect(on_name_changed)
-            return combo, name_field
+            return checkbox, name_field
 
-        dialog._combo_retracted, dialog._name_retracted = make_side_widgets("retracted")
-        dialog._combo_extended, dialog._name_extended = make_side_widgets("extended")
+        dialog._check_retracted, dialog._name_retracted = make_side_widgets("retracted")
+        dialog._check_extended, dialog._name_extended = make_side_widgets("extended")
 
         dialog._combo_default_state = dialog.add_combo_field(
             _("Initial state"),
@@ -516,15 +482,15 @@ class CylinderItem(NodeItem):
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
-        for pos, combo, name_field in [
-            ("retracted", dialog._combo_retracted, dialog._name_retracted),
-            ("extended", dialog._combo_extended, dialog._name_extended),
+        for pos, checkbox, name_field in [
+            ("retracted", dialog._check_retracted, dialog._name_retracted),
+            ("extended", dialog._check_extended, dialog._name_extended),
         ]:
-            sensor_type = combo.currentData()
-            name = name_field.text().strip() if sensor_type else ""
+            enabled = checkbox.isChecked()
+            name = name_field.text().strip() if enabled else ""
 
-            self.set_sensor(pos, sensor_type)
-            if sensor_type and name:
+            self.set_sensor(pos, enabled)
+            if enabled and name:
                 self._set_sensor_name(pos, name)
 
         self.properties["default_state"] = dialog._combo_default_state.currentData()

@@ -12,20 +12,20 @@ class SingleActingCylinder(Node, HydraulicMixin):
         self.position = 1 if default == "extended" else 0
 
         self.sensors = self.properties.get("sensors", {
-            "retracted": {"type": None, "name": ""},
-            "extended":  {"type": None, "name": ""}
+            "retracted": {"enabled": False, "name": ""},
+            "extended":  {"enabled": False, "name": ""}
         })
 
         self.outputs = {}
 
         # Initializes sensor outputs from default_state, so the value is
         # already correct before the first simulation step.
-        if self.sensors["retracted"]["type"]:
+        if self.sensors["retracted"]["enabled"]:
             name = self.sensors["retracted"]["name"]
             if name:
                 self.outputs[name] = {"type": "signal", "value": self.position == 0}
 
-        if self.sensors["extended"]["type"]:
+        if self.sensors["extended"]["enabled"]:
             name = self.sensors["extended"]["name"]
             if name:
                 self.outputs[name] = {"type": "signal", "value": self.position == 1}
@@ -193,11 +193,11 @@ class SingleActingCylinder(Node, HydraulicMixin):
         super().post_step_update(dt=dt)
 
         # sensors
-        if self.sensors["retracted"]["type"]:
+        if self.sensors["retracted"]["enabled"]:
             name = self.sensors["retracted"]["name"]
             self.outputs[name] = {"type": "signal", "value": self.position == 0}
 
-        if self.sensors["extended"]["type"]:
+        if self.sensors["extended"]["enabled"]:
             name = self.sensors["extended"]["name"]
             self.outputs[name] = {"type": "signal", "value": self.position == 1}
 

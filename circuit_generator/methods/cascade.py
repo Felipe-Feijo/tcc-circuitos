@@ -127,8 +127,8 @@ def generate(events: list[tuple[str, str]]) -> dict:
         add_node(f"gen-cyl-{letter}", "DoubleActingCylinder", f"cylinder:{letter}",
                  properties={
                      "sensors": {
-                         "retracted": {"type": "reed", "name": f"{letter.lower()}0"},
-                         "extended":  {"type": "reed", "name": f"{letter.lower()}1"},
+                         "retracted": {"enabled": True, "name": f"{letter.lower()}0"},
+                         "extended":  {"enabled": True, "name": f"{letter.lower()}1"},
                      },
                      "default_state": "extended" if starts_extended[letter] else "retracted",
                  })
@@ -157,7 +157,7 @@ def generate(events: list[tuple[str, str]]) -> dict:
     add_node("gen-btn", "Valve_3_2_Ways", "button",
              properties={
                  "actuators": {
-                     "left":  {"type": "button"},
+                     "left":  {"type": "button", "mode": "latch"},
                      "right": {"type": "spring"},
                  }
              })

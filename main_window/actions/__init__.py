@@ -1,4 +1,31 @@
-"""Aggregates and exports the factory function for all main window actions."""
+"""Aggregates and exports the factory function for all main window actions.
+
+TRANSLATION GOTCHA: every action factory in this package (and menus.py /
+toolbars.py / node_palette_dock.py) calls `main_window.tr("...")` from a
+plain module-level function, not `self.tr("...")` inside a class method.
+`pylupdate6`'s static extraction only recognizes `self.tr(...)` (and
+`QCoreApplication.translate(...)`) call sites -- it silently skips
+`main_window.tr(...)` here, since `main_window` is just a function
+parameter as far as its source-scanning is concerned.
+
+At runtime this is harmless: PyQt resolves a `tr()` call's translation
+context from the *runtime class* of the bound object
+(`main_window.metaObject().className()`), not from where the call is
+textually written, so these calls correctly resolve to context
+"MainWindow" -- same as main_window.py's own `self.tr(...)` calls -- and
+translate fine once a matching <message> entry exists.
+
+The catch: `pylupdate6 -ts resources/i18n/circuiteditor_pt_BR.ts ...` will
+NOT add that <message> entry for you. If you add a new translatable
+string to any factory function in this package (or to menus.py /
+toolbars.py / node_palette_dock.py), you must manually add a
+<message><source>...</source><translation>...</translation></message>
+block under the <name>MainWindow</name> <context> in
+resources/i18n/circuiteditor_pt_BR.ts, then re-run
+`python scripts/compile_translations.py`. See
+.superpowers/sdd/2026-09-01-language-switching/task-10-report.md for the
+full list of entries added this way and how the gap was verified.
+"""
 
 from .file_actions import create_file_actions
 from .view_actions import create_view_actions

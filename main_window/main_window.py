@@ -385,7 +385,7 @@ class MainWindow(QMainWindow):
 
         if not in_simulation:
             run.setEnabled(False)
-            run.setText("Run")
+            run.setText(self.tr("Run"))
             step_back.setEnabled(False)
             step_fwd.setEnabled(False)
             return
@@ -393,7 +393,7 @@ class MainWindow(QMainWindow):
         ctrl = self.simulation.controller
 
         run.setEnabled(True)
-        run.setText("Pause" if ctrl.playing else "Run")
+        run.setText(self.tr("Pause") if ctrl.playing else self.tr("Run"))
 
         steps_enabled = not ctrl.playing
         step_back.setEnabled(steps_enabled and ctrl.can_step_back())
@@ -427,5 +427,5 @@ class MainWindow(QMainWindow):
 
         # updates the button text
         self.actions["toggle_theme"].setText(
-            "Light Theme" if enabled else "Dark Theme"
+            self.tr("Light Theme") if enabled else self.tr("Dark Theme")
         )

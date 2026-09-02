@@ -317,6 +317,27 @@ Desenvolvido com PyQt6</translation>
         <translation>dt: {0:.3f}s</translation>
     </message>
     <message>
+        <location filename="..\..\main_window\main_window.py" line="396" />
+        <location filename="..\..\main_window\main_window.py" line="388" />
+        <source>Run</source>
+        <translation>Executar</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="396" />
+        <source>Pause</source>
+        <translation>Pausar</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="430" />
+        <source>Light Theme</source>
+        <translation>Tema Claro</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="430" />
+        <source>Dark Theme</source>
+        <translation>Tema Escuro</translation>
+    </message>
+    <message>
         <source>New</source>
         <translation>Novo</translation>
     </message>
@@ -347,10 +368,6 @@ Desenvolvido com PyQt6</translation>
     <message>
         <source>Fit to Contents</source>
         <translation>Ajustar ao Conteúdo</translation>
-    </message>
-    <message>
-        <source>Light Theme</source>
-        <translation>Tema Claro</translation>
     </message>
     <message>
         <source>Font Size...</source>
@@ -413,10 +430,6 @@ Desenvolvido com PyQt6</translation>
         <translation>Simular</translation>
     </message>
     <message>
-        <source>Run</source>
-        <translation>Executar</translation>
-    </message>
-    <message>
         <source>Step Back</source>
         <translation>Passo Anterior</translation>
     </message>
@@ -427,10 +440,6 @@ Desenvolvido com PyQt6</translation>
     <message>
         <source>New from Sequence...</source>
         <translation>Novo a partir de Sequência...</translation>
-    </message>
-    <message>
-        <source>Dark Theme</source>
-        <translation>Tema Escuro</translation>
     </message>
 </context><context>
     <name>NodeItem</name>

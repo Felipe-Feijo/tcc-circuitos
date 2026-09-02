@@ -313,6 +313,27 @@ Built with PyQt6</source>
         <source>dt: {0:.3f}s</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="396" />
+        <location filename="..\..\main_window\main_window.py" line="388" />
+        <source>Run</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="396" />
+        <source>Pause</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="430" />
+        <source>Light Theme</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="430" />
+        <source>Dark Theme</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>NodeItem</name>
     <message>

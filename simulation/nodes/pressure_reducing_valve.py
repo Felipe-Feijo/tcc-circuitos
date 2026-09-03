@@ -28,6 +28,17 @@ state. Instead, the same closed-regime branch above is extended: once
 inside it, Q_P stays pinned to zero (as before) and a second equation
 directly pins P_A to p_set via T's flow. Outside that branch, T is a
 dead port (pinned to zero flow) -- no relief is needed.
+
+`relieving=True` also makes port A BIDIRECTIONAL. With the domain sign
+convention (Q > 0 means fluid entering the node through that port), the
+2-port valve only ever pushes fluid OUT through A, so Q_A is bounded
+(None, 0.0). Relieving reverses that flow: fluid enters at A (something
+external pressurizing the outlet) and leaves at T, which requires
+Q_A > 0. Keeping the (None, 0.0) bound while relieving makes relief
+impossible -- with Q_P pinned to zero and Q_T <= 0, conservation
+(Q_P + Q_A + Q_T = 0) forces Q_A = -Q_T with both <= 0, whose only
+solution is Q_A = Q_T = 0. So `bounds` drops A's upper bound entirely
+when relieving, and keeps it only in the 2-port case.
 """
 
 import math
@@ -70,10 +81,12 @@ class PressureReducingValve(Node, HydraulicMixin):
     def bounds(self):
         b = {
             self.flow_var_p: (0.0, None),   # Q_P never negative -- forward flow only
-            self.flow_var_a: (None, 0.0),   # Q_A never positive
         }
         if self.relieving:
+            b[self.flow_var_a] = (None, None)  # A is bidirectional once T can relieve
             b[self.flow_var_t] = (None, 0.0)   # Q_T never positive -- only leaves via T
+        else:
+            b[self.flow_var_a] = (None, 0.0)   # Q_A never positive -- 2-port, forward only
         return b
 
     def hydraulic_ports(self) -> dict:
@@ -111,7 +124,10 @@ class PressureReducingValve(Node, HydraulicMixin):
             eq_supply = Q_p / Q_scale
             if self.relieving:
                 # Actively pull the outlet back down via T instead of
-                # leaving it floating above p_set.
+                # leaving it floating above p_set. Flow reverses through
+                # A here (Q_a > 0, fluid entering) and leaves via T
+                # (Q_t < 0) -- which is why `bounds` drops A's upper
+                # bound when relieving, see the module docstring.
                 eq_relief = (P_a - self.p_set) / P_scale
         else:
             # a >= 0: P_A never exceeds p_set. b >= 0: the valve only drops

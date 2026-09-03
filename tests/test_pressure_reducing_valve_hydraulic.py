@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import numpy as np
+import pytest
 
 from simulation.nodes.pressure_reducing_valve import PressureReducingValve
 
@@ -201,10 +202,14 @@ def test_variables_include_t_flow_and_pressure_when_relieving():
 
 
 def test_bounds_include_t_when_relieving():
+    """A must be UNBOUNDED when relieving: relief means flow reverses into
+    A (Q_A > 0, fluid entering) and out through T. Keeping A's (None, 0.0)
+    upper bound here plus Q_P pinned to 0 and Q_T <= 0 makes conservation
+    force Q_A = Q_T = 0 -- no relief flow representable at all."""
     valve = make_relieving_valve()
     assert valve.bounds == {
         valve.flow_var_p: (0.0, None),
-        valve.flow_var_a: (None, 0.0),
+        valve.flow_var_a: (None, None),
         valve.flow_var_t: (None, 0.0),
     }
 
@@ -258,3 +263,82 @@ def test_initial_guess_seeds_t_flow_when_relieving():
     valve.anchors["P"].pressure = 3e7
     guess = valve.initial_guess
     assert guess[valve.flow_var_t] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: relief regime through the real SimulationEngine
+# ---------------------------------------------------------------------------
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "KNOWN UNFIXED: the relief branch's guard (P_a > p_set, strict) has "
+        "its own root sitting exactly ON that boundary, so the solution point "
+        "is a discontinuity. fsolve reaches it (P_A=1.5e7, Q_T=-1e-4, raw "
+        "residual ~7e-6) but returns ier=5, so it is not accepted; "
+        "least_squares then warm-starts from that point, lands a hair BELOW "
+        "p_set, flips to the open/regulating FB branch (residual jumps 0 -> "
+        "2.0) and descends into that branch's local minimum at P_A ~ 40 Pa. "
+        "Seeding initial_guess inside the relief branch was tried and does "
+        "not fix it (see .superpowers/sdd/2026-09-03-pressure-reducing-valve"
+        "-relief-port/final-review-fix-report.md). A real fix needs a proper "
+        "complementarity/smoothing formulation for the relief side, which is "
+        "a design decision for the spec process, not a fix round."
+    ),
+)
+def test_relief_regime_holds_outlet_at_p_set_end_to_end():
+    """External pump pushes flow into A (representing something outside
+    the valve's control pressurizing the outlet -- e.g. a load-driven
+    cylinder, or the topology-change reseed scenario documented in the
+    module docstring) while P is fed from a low-pressure reservoir that
+    can never reach p_set on its own -- the valve must rely on T/relief
+    to hold P_A at p_set, not on throttling supply. Runs the real
+    SimulationEngine/NonlinearSystemSolver, not equations() in
+    isolation -- this is the only test in the suite that exercises the
+    relief path end-to-end, added specifically because Finding 1 (the
+    bounds bug making relief physically impossible) was invisible to
+    every equations()-only test."""
+    from simulation.simulation_engine import SimulationEngine
+    from simulation.nodes.pressure_reducing_valve import PressureReducingValve
+    from simulation.nodes.reservoir import Reservoir
+    from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
+    from simulation.connections import Connection
+
+    p_set = 1.5e7
+
+    prv = PressureReducingValve("prv", domain="hydraulic", properties={"p_set": p_set, "relieving": True})
+    prv.add_anchor("P", domain="hydraulic")
+    prv.add_anchor("A", domain="hydraulic")
+    prv.add_anchor("T", domain="hydraulic")
+
+    res_supply = Reservoir("res_supply", domain="hydraulic", properties={"pressure": 0.0})
+    res_supply.add_anchor("T", domain="hydraulic")
+
+    res_tank = Reservoir("res_tank", domain="hydraulic", properties={"pressure": 0.0})
+    res_tank.add_anchor("T", domain="hydraulic")
+
+    load_pump = FixedDisplacementPump("load_pump", domain="hydraulic", properties={"Q": 1e-4})
+    load_pump.add_anchor("P", domain="hydraulic")
+    load_pump.add_anchor("S", domain="hydraulic")
+
+    res_load_suction = Reservoir("res_load_suction", domain="hydraulic", properties={"pressure": 0.0})
+    res_load_suction.add_anchor("T", domain="hydraulic")
+
+    conn_p = Connection(prv.get_anchor("P"), res_supply.get_anchor("T"))
+    conn_t = Connection(prv.get_anchor("T"), res_tank.get_anchor("T"))
+    conn_load_p = Connection(load_pump.get_anchor("P"), prv.get_anchor("A"))
+    conn_load_s = Connection(load_pump.get_anchor("S"), res_load_suction.get_anchor("T"))
+
+    nodes = {
+        "prv": prv, "res_supply": res_supply, "res_tank": res_tank,
+        "load_pump": load_pump, "res_load_suction": res_load_suction,
+    }
+    connections = {c.id: c for c in (conn_p, conn_t, conn_load_p, conn_load_s)}
+
+    engine = SimulationEngine(nodes, connections)
+    engine.run_until_stable(dt=1.0)
+
+    p_a = prv.get_anchor("A").pressure
+    q_t = prv.get_anchor("T").flow
+    assert p_a == pytest.approx(p_set, rel=1e-3)
+    assert q_t < 0  # relieving to tank

@@ -817,17 +817,17 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>PressureReducingValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="40" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="43" />
         <source>Pressure Reducing Valve</source>
         <translation>Válvula Redutora de Pressão</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="56" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="86" />
         <source>Pressure Reducing Valve — Properties</source>
         <translation>Válvula Redutora de Pressão — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="58" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="88" />
         <source>Setpoint pressure (Pa)</source>
         <translation>Pressão de ajuste (Pa)</translation>
     </message>

@@ -30,14 +30,22 @@ exactly like `ReliefValve`'s own `T` port already does).
 `T`'s bounds: `(None, 0.0)` — flow only ever leaves through `T` (same
 convention as `ReliefValve.bounds[flow_var_out]`).
 
-No anchor exists with no equation pinning its pressure: every tank port
-in this codebase (including `ReliefValve`'s own `T`) requires the user to
-wire it to a `Reservoir` node, whose own `equations()` is what actually
-fixes that pressure variable (`simulation/nodes/reservoir.py:30-33`,
-`P_T = self.pressure`, normally 0). This valve's `T` is no different —
-there is no "implicit tank" mode; an unconnected `T` leaves that pressure
-variable unconstrained and the solve underdetermined, same as it would
-for any other component's tank port.
+Every tank port in this codebase (including `ReliefValve`'s own `T`)
+requires the user to wire it to a `Reservoir` node, whose own
+`equations()` is what actually fixes that pressure variable
+(`simulation/nodes/reservoir.py:30-33`, `P_T = self.pressure`, normally
+0). This valve's `T` is no different — there is no "implicit tank" mode.
+
+An unconnected `T` does NOT leave the system underdetermined —
+`NodeContinuity` gives even a lone anchor its own pressure group and
+equation (same mechanism as any node with no other equation referencing
+its pressure variable), so the solve stays square. The problem is
+physical, not numerical: the valve relieves into a pressure that has no
+real meaning (nothing enforces it beyond an arbitrary starting seed),
+producing a solvable but nonsensical result. As with `ReliefValve`'s own
+`T` port (which has no connectivity guard either), correctness depends on
+the user actually wiring `T` to a real `Reservoir` — this is a modeling
+convention, not something the solver enforces.
 
 ## Equations
 

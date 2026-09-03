@@ -54,3 +54,57 @@ def test_apply_properties_from_dialog_updates_properties():
     node.apply_properties_from_dialog(dialog)
 
     assert node.properties["p_set"] == 2e7
+
+
+def test_relieving_false_by_default_no_t_anchor_or_overlay():
+    node = PressureReducingValve(domain="hydraulic")
+    assert "T" not in node.anchors
+    assert node._relief_overlay is None
+
+
+def test_relieving_true_adds_t_anchor_and_overlay():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["relieving"] = True
+    node.apply_properties()
+
+    assert "T" in node.anchors
+    assert (node.anchors["T"].pos().x(), node.anchors["T"].pos().y()) == (
+        node.width * 134.5 / 200, node.height,
+    )
+    assert node._relief_overlay is not None
+
+
+def test_toggling_relieving_back_to_false_removes_t_anchor():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["relieving"] = True
+    node.apply_properties()
+    assert "T" in node.anchors
+
+    node.properties["relieving"] = False
+    node.apply_properties()
+    assert "T" not in node.anchors
+    assert node._relief_overlay is None
+
+
+def test_build_properties_dialog_reflects_relieving_property():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["p_set"] = 1.5e7
+    node.properties["relieving"] = True
+
+    dialog = node.build_properties_dialog()
+
+    assert dialog._field_p_set.text() == "15000000.0"
+    assert dialog._field_relieving.isChecked() is True
+
+
+def test_apply_properties_from_dialog_updates_relieving_and_anchors():
+    node = PressureReducingValve(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+    dialog._field_p_set.setText("2e7")
+    dialog._field_relieving.setChecked(True)
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node.properties["p_set"] == 2e7
+    assert node.properties["relieving"] is True
+    assert "T" in node.anchors

@@ -154,3 +154,107 @@ def test_set_scale_applies_minimum_floors():
     valve.set_scale(p_ref=10.0, q_ref=1e-15)
     assert valve.p_ref == 1e5   # floor: 1 bar
     assert valve.q_ref == 1e-10  # floor
+
+
+# ---------------------------------------------------------------------------
+# relieving=True: T port, 3-port conservation, relief regime
+# ---------------------------------------------------------------------------
+
+def make_relieving_valve(p_set=1.5e7):
+    valve = PressureReducingValve(
+        "prv", domain="hydraulic", properties={"p_set": p_set, "relieving": True},
+    )
+    valve.add_anchor("P", domain="hydraulic")
+    valve.add_anchor("A", domain="hydraulic")
+    valve.add_anchor("T", domain="hydraulic")
+    valve.anchors["P"].pressure_var = "P_P"
+    valve.anchors["A"].pressure_var = "P_A"
+    valve.anchors["T"].pressure_var = "P_T"
+    return valve
+
+
+def make_relieving_idx(valve):
+    return {
+        valve.flow_var_p: 0, valve.flow_var_a: 1, valve.flow_var_t: 2,
+        "P_P": 3, "P_A": 4, "P_T": 5,
+    }
+
+
+def test_relieving_false_by_default_no_t_port():
+    valve = make_valve()
+    assert valve.relieving is False
+    assert not hasattr(valve, "flow_var_t")
+    assert set(valve.hydraulic_ports().keys()) == {"P", "A"}
+
+
+def test_relieving_true_adds_t_port():
+    valve = make_relieving_valve()
+    assert valve.relieving is True
+    assert set(valve.hydraulic_ports().keys()) == {"P", "A", "T"}
+
+
+def test_variables_include_t_flow_and_pressure_when_relieving():
+    valve = make_relieving_valve(p_set=2e7)
+    assert set(valve.variables) == {
+        valve.flow_var_p, valve.flow_var_a, valve.flow_var_t, "P_P", "P_A", "P_T",
+    }
+
+
+def test_bounds_include_t_when_relieving():
+    valve = make_relieving_valve()
+    assert valve.bounds == {
+        valve.flow_var_p: (0.0, None),
+        valve.flow_var_a: (None, 0.0),
+        valve.flow_var_t: (None, 0.0),
+    }
+
+
+def test_relieving_conservation_is_3_port():
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+    # Q_P + Q_A + Q_T = 2e-4 - 1e-4 - 1e-4 = 0
+    x = np.array([2e-4, -1e-4, -1e-4, 1.0e7, 1.0e7, 0.0])
+    eq_conservation, _, _ = valve.equations(x, idx)
+    assert abs(eq_conservation) < 1e-9
+
+
+def test_relief_regime_residual_matches_formula():
+    """Inside the closed/relief branch (P_a > p_set, Q_p <= 0), eq_relief
+    should equal exactly (P_a - p_set)/P_scale. Not asserted at zero: the
+    branch's own root (P_a == p_set) sits exactly on its guard's boundary
+    (P_a > p_set), which no floating trial value can land on exactly --
+    a converging solver approaches it from above without ever crossing it.
+    Check the formula directly instead of asserting an exact root here."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+    x = np.array([-2e-5, 1e-4, -8e-5, 1.0e7, 1.6e7, 0.0])  # Q_p<=0, P_a=1.6e7 > p_set
+    eq_conservation, eq_supply, eq_relief = valve.equations(x, idx)
+    assert abs(eq_conservation) < 1e-9  # -2e-5 + 1e-4 - 8e-5 = 0
+    assert abs(eq_supply - (-2e-5) / valve.q_ref) < 1e-12
+    assert abs(eq_relief - (1.6e7 - 1.5e7) / valve.p_ref) < 1e-12
+
+
+def test_relief_regime_residual_shrinks_to_near_zero_as_p_a_approaches_p_set():
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+    x = np.array([0.0, 1e-4, -1e-4, 1.0e7, 1.5e7 + 1e-3, 0.0])  # P_a just barely above p_set
+    _, _, eq_relief = valve.equations(x, idx)
+    assert abs(eq_relief) < 1e-9
+
+
+def test_relief_port_is_dead_when_not_in_closed_branch():
+    """Outside the closed/relief branch (here: regulating, P_a == p_set,
+    P_p above it), Q_T is a dead port -- pinned to zero, same 'dead port'
+    pattern ReliefValve/CheckValve already use for their piloted Y port."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+    x = np.array([1e-4, -1e-4, 3.0, 2.0e7, 1.5e7, 0.0])  # regulating regime, Q_t trial = 3.0
+    _, _, eq_relief = valve.equations(x, idx)
+    assert abs(eq_relief - 3.0 / valve.q_ref) < 1e-9  # not zero -- Q_t=3 isn't a root here
+
+
+def test_initial_guess_seeds_t_flow_when_relieving():
+    valve = make_relieving_valve(p_set=1.5e7)
+    valve.anchors["P"].pressure = 3e7
+    guess = valve.initial_guess
+    assert guess[valve.flow_var_t] == 0.0

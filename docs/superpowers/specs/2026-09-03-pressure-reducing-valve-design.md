@@ -48,6 +48,16 @@ Two regimes, selected implicitly by the solver via `eq_fb`:
 - **Regulating** (`a=0`): `P_A` held at `p_set`, with `P_P >= P_A` (the
   valve throttles down to hold the setpoint).
 
+A third regime, handled outside the FB pairing above: **closed**
+(`P_A > p_set` and `Q_P <= 0`). This is a state the 2-term FB pairing
+has no root for — `a` stays negative regardless of `b` whenever `P_A`
+exceeds `p_set` — but it's physically real: something outside the
+valve's control (a blocked downstream branch, or a stale `p_previous`
+seed right after a topology change) has pushed the outlet above
+setpoint while there's no forward flow trying to happen. `equations()`
+detects this from the trial values and substitutes `Q_P = 0` directly,
+so the valve holds shut instead of faulting the solve.
+
 `bounds`: `Q_P >= 0`, `Q_A <= 0` — forward flow only, no reverse/check
 function in this version (see Non-goals).
 

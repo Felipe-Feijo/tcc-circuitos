@@ -2,7 +2,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import math
 import numpy as np
 
 from simulation.nodes.pressure_reducing_valve import PressureReducingValve
@@ -108,6 +107,21 @@ def test_regulating_regime_not_a_root_if_p_a_drifts_from_setpoint():
     x = np.array([1e-4, -1e-4, 2.0e7, 1.4e7])
     _, eq_fb = valve.equations(x, idx)
     assert abs(eq_fb) > 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Regime 3: closed (outlet pushed above p_set externally, no forward flow)
+# ---------------------------------------------------------------------------
+
+def test_closed_regime_is_exact_root_when_outlet_exceeds_setpoint_with_no_flow():
+    """P_A pushed above p_set externally, Q_p already at its zero lower
+    bound -- the valve should hold Q_p=0 rather than have no root."""
+    valve = make_valve(p_set=1.5e7)
+    idx = make_idx(valve)
+    x = np.array([0.0, 0.0, 1.0e7, 1.6e7])  # P_p < P_a, P_a > p_set, Q_p=0
+    eq_conservation, eq_fb = valve.equations(x, idx)
+    assert abs(eq_conservation) < 1e-9
+    assert abs(eq_fb) < 1e-9
 
 
 # ---------------------------------------------------------------------------

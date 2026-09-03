@@ -644,6 +644,23 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>PressureReducingValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="40" />
+        <source>Pressure Reducing Valve</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="56" />
+        <source>Pressure Reducing Valve — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="58" />
+        <source>Setpoint pressure (Pa)</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>PressureSource</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pressure_source.py" line="21" />

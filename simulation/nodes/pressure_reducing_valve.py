@@ -7,6 +7,12 @@ flow to a T port when the INLET pressure exceeds its threshold, this
 valve is in series and simply restricts its own orifice. Modeled with
 the same Fischer-Burmeister smoothed complementarity ReliefValve and
 CheckValve already use, mirrored to sense P_A (outlet) instead of P_in.
+
+A third, closed regime is handled outside that FB pairing: if the
+outlet is already above p_set (e.g. from external backpressure, or a
+stale post-topology-change seed) while forward flow is at or below its
+zero lower bound, the FB pairing has no root, so equations() instead
+pins Q_P to zero directly.
 """
 
 import math
@@ -63,12 +69,23 @@ class PressureReducingValve(Node, HydraulicMixin):
 
         eq_conservation = (Q_p + Q_a) / Q_scale
 
-        # a >= 0: P_A never exceeds p_set. b >= 0: the valve only drops
-        # pressure (P_P >= P_A), never boosts it. Exactly one is zero:
-        # either fully open (b=0, P_A=P_P) or regulating (a=0, P_A=p_set).
-        a = (self.p_set - P_a) / P_scale
-        b = (P_p - P_a) / P_scale
-        eq_fb = a + b - math.sqrt(a * a + b * b)
+        if P_a > self.p_set and Q_p <= 0:
+            # Closed: outlet already above setpoint from something this
+            # valve cannot supply (external backpressure, or a stale
+            # solver seed right after a topology change) and there is no
+            # forward flow trying to happen. The 2-regime FB below has no
+            # root here (a = p_set - P_a stays negative regardless of b),
+            # which would otherwise fault the whole circuit for a state a
+            # real valve handles by simply staying shut. Pin Q_p to
+            # exactly zero instead of forcing the (infeasible) FB pairing.
+            eq_fb = Q_p / Q_scale
+        else:
+            # a >= 0: P_A never exceeds p_set. b >= 0: the valve only drops
+            # pressure (P_P >= P_A), never boosts it. Exactly one is zero:
+            # either fully open (b=0, P_A=P_P) or regulating (a=0, P_A=p_set).
+            a = (self.p_set - P_a) / P_scale
+            b = (P_p - P_a) / P_scale
+            eq_fb = a + b - math.sqrt(a * a + b * b)
 
         return [eq_conservation, eq_fb]
 

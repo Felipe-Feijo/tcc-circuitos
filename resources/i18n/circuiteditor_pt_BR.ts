@@ -815,6 +815,23 @@ Desenvolvido com PyQt6</translation>
         <translation>Linha de Pressão</translation>
     </message>
 </context><context>
+    <name>PressureReducingValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="40" />
+        <source>Pressure Reducing Valve</source>
+        <translation>Válvula Redutora de Pressão</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="56" />
+        <source>Pressure Reducing Valve — Properties</source>
+        <translation>Válvula Redutora de Pressão — Propriedades</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="58" />
+        <source>Setpoint pressure (Pa)</source>
+        <translation>Pressão de ajuste (Pa)</translation>
+    </message>
+</context><context>
     <name>PressureSource</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pressure_source.py" line="21" />

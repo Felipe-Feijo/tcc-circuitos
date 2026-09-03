@@ -660,6 +660,11 @@ Built with PyQt6</source>
         <source>Setpoint pressure (Pa)</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="93" />
+        <source>Tank port (T)</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>PressureSource</name>
     <message>

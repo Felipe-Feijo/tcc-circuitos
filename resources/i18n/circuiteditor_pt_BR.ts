@@ -831,6 +831,11 @@ Desenvolvido com PyQt6</translation>
         <source>Setpoint pressure (Pa)</source>
         <translation>Pressão de ajuste (Pa)</translation>
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="93" />
+        <source>Tank port (T)</source>
+        <translation>Via de tanque (T)</translation>
+    </message>
 </context><context>
     <name>PressureSource</name>
     <message>

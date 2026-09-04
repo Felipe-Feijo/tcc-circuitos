@@ -309,6 +309,189 @@ def test_relief_engages_when_p_a_pushed_above_p_set_externally():
 
 
 # ---------------------------------------------------------------------------
+# piloted=True: Y port (dead/sensing), effective_p_set = p_set + P_y
+#
+# Mirrors ReliefValve's own `piloted` feature exactly: Y carries no real
+# flow (always pinned to 0), and every place p_set is referenced in
+# equations() must use effective_p_set instead -- there are three such
+# places (see the module docstring's Scope note and the design spec).
+# ---------------------------------------------------------------------------
+
+def make_piloted_valve(p_set=1.5e7):
+    valve = PressureReducingValve(
+        "prv", domain="hydraulic", properties={"p_set": p_set, "piloted": True},
+    )
+    valve.add_anchor("P", domain="hydraulic")
+    valve.add_anchor("A", domain="hydraulic")
+    valve.add_anchor("Y", domain="hydraulic")
+    valve.anchors["P"].pressure_var = "P_P"
+    valve.anchors["A"].pressure_var = "P_A"
+    valve.anchors["Y"].pressure_var = "P_Y"
+    return valve
+
+
+def make_piloted_idx(valve):
+    return {
+        valve.flow_var_p: 0, valve.flow_var_a: 1, valve.flow_var_y: 2,
+        "P_P": 3, "P_A": 4, "P_Y": 5,
+    }
+
+
+def make_piloted_relieving_valve(p_set=1.5e7):
+    valve = PressureReducingValve(
+        "prv", domain="hydraulic",
+        properties={"p_set": p_set, "relieving": True, "piloted": True},
+    )
+    valve.add_anchor("P", domain="hydraulic")
+    valve.add_anchor("A", domain="hydraulic")
+    valve.add_anchor("T", domain="hydraulic")
+    valve.add_anchor("Y", domain="hydraulic")
+    valve.anchors["P"].pressure_var = "P_P"
+    valve.anchors["A"].pressure_var = "P_A"
+    valve.anchors["T"].pressure_var = "P_T"
+    valve.anchors["Y"].pressure_var = "P_Y"
+    return valve
+
+
+def make_piloted_relieving_idx(valve):
+    return {
+        valve.flow_var_p: 0, valve.flow_var_a: 1, valve.flow_var_t: 2, valve.flow_var_y: 3,
+        "P_P": 4, "P_A": 5, "P_T": 6, "P_Y": 7,
+    }
+
+
+def test_piloted_false_by_default_no_y_port():
+    valve = make_valve()
+    assert valve.piloted is False
+    assert not hasattr(valve, "flow_var_y")
+    assert set(valve.hydraulic_ports().keys()) == {"P", "A"}
+
+
+def test_piloted_true_adds_y_port():
+    valve = make_piloted_valve()
+    assert valve.piloted is True
+    assert set(valve.hydraulic_ports().keys()) == {"P", "A", "Y"}
+
+
+def test_variables_include_y_flow_and_pressure_when_piloted():
+    valve = make_piloted_valve(p_set=2e7)
+    assert set(valve.variables) == {
+        valve.flow_var_p, valve.flow_var_a, valve.flow_var_y, "P_P", "P_A", "P_Y",
+    }
+
+
+def test_bounds_unaffected_by_piloted():
+    valve = make_piloted_valve()
+    assert valve.bounds == {
+        valve.flow_var_p: (0.0, None),
+        valve.flow_var_a: (None, 0.0),
+    }
+
+
+def test_y_port_has_zero_flow_equation():
+    valve = make_piloted_valve(p_set=1.5e7)
+    idx = make_piloted_idx(valve)
+    # Fully open, well below effective p_set; Q_y trial nonzero (7.0)
+    # should NOT be a root -- Y is a dead sensing port.
+    x = np.array([1e-4, -1e-4, 7.0, 1.0e7, 1.0e7, 0.0])
+    eqs = valve.equations(x, idx)
+    eq_y = eqs[-1]
+    assert abs(eq_y - 7.0 / valve.q_ref) < 1e-9
+
+
+def test_fully_open_regime_uses_effective_p_set_with_pilot():
+    """P_A=P_P=1.55e7, just above p_set alone (1.5e7) -- without pilot
+    this violates a>=0 (not a root); with a pilot raising the effective
+    threshold above 1.55e7, it becomes a valid root again. Mirrors
+    ReliefValve's own effective-threshold test."""
+    p_set = 1.5e7
+    p_shared = 1.55e7  # P_P == P_A, above p_set alone
+
+    valve = make_valve(p_set=p_set)
+    idx = make_idx(valve)
+    x = np.array([1e-4, -1e-4, p_shared, p_shared])
+    _, eq_fb = valve.equations(x, idx)
+    assert abs(eq_fb) > 1e-6  # not a root -- p_shared already above p_set alone
+
+    piloted_valve = make_piloted_valve(p_set=p_set)
+    idx2 = make_piloted_idx(piloted_valve)
+    p_y = 1e6  # raises effective threshold to 1.6e7, above p_shared
+    x2 = np.array([1e-4, -1e-4, 0.0, p_shared, p_shared, p_y])
+    eq_conservation, eq_fb2, eq_y = piloted_valve.equations(x2, idx2)
+    assert abs(eq_conservation) < 1e-9
+    assert abs(eq_fb2) < 1e-9  # with the pilot, the raised threshold makes this a root again
+    assert abs(eq_y) < 1e-9
+
+
+def test_closed_regime_guard_uses_effective_p_set_with_pilot():
+    """P_a sits between p_set and p_set+p_y, with Q_p<=0 -- without the
+    guard correctly using the raised threshold, the valve would
+    incorrectly treat this as 'closed' (pin Q_p=0) instead of evaluating
+    the regular FB, even though the outlet hasn't actually exceeded the
+    (pilot-raised) cap yet."""
+    p_set = 1.5e7
+    p_y = 1e6  # effective threshold = 1.6e7
+    p_a = 1.55e7  # above p_set alone, below p_set + p_y
+    p_p = 1.0e7   # below p_a
+    q_p = -1e-6   # satisfies the guard's Q_p<=0 clause
+
+    valve = make_piloted_valve(p_set=p_set)
+    idx = make_piloted_idx(valve)
+    x = np.array([q_p, 1e-6, 0.0, p_p, p_a, p_y])
+    _, eq_supply, _ = valve.equations(x, idx)
+
+    # Correct (effective_p_set-aware) branch: p_a (1.55e7) does NOT
+    # exceed the effective threshold (1.6e7), so this must evaluate the
+    # regular FB -- NOT the closed branch's bare `Q_p/Q_scale`.
+    closed_branch_value = q_p / valve.q_ref
+    assert abs(eq_supply - closed_branch_value) > 1e-9
+
+
+def test_relieving_relief_regime_uses_effective_p_set_with_pilot():
+    """With relieving+piloted together, the relief FB's shared cap term
+    must use effective_p_set too: P_a between p_set and p_set+p_y, Q_t=0
+    -- not a root without the pilot, a root again with it."""
+    p_set = 1.5e7
+    p_y = 1e6  # effective threshold = 1.6e7
+    p_a = 1.55e7  # above p_set alone, below p_set + p_y
+
+    valve = make_relieving_valve(p_set=p_set)
+    idx = make_relieving_idx(valve)
+    x = np.array([0.0, 0.0, 0.0, 1.0e7, p_a, 0.0])
+    _, _, eq_relief = valve.equations(x, idx)
+    assert abs(eq_relief) > 1e-6  # not a root without pilot
+
+    piloted_valve = make_piloted_relieving_valve(p_set=p_set)
+    idx2 = make_piloted_relieving_idx(piloted_valve)
+    x2 = np.array([0.0, 0.0, 0.0, 0.0, 1.0e7, p_a, 0.0, p_y])
+    _, _, eq_relief2, eq_y = piloted_valve.equations(x2, idx2)
+    assert abs(eq_relief2) < 1e-9  # with the pilot, the raised threshold makes this a root
+    assert abs(eq_y) < 1e-9
+
+
+def test_relieving_supply_ridge_uses_effective_p_set_with_pilot():
+    """The supply ridge's reference point must track effective_p_set, not
+    the bare p_set -- otherwise it would fight a pilot-raised setpoint
+    exactly like it fought an externally-pinned high supply pressure
+    before this valve's ridge fix (see the design spec). At P_p exactly
+    equal to the effective threshold, the ridge's one-sided gate sits
+    right at its zero point (gap_above == 0), contributing nothing; a
+    pilot-unaware ridge would instead see P_p far above the bare p_set
+    and contribute a large nonzero pull."""
+    p_set = 1.5e7
+    p_y = 1e6  # effective threshold = 1.6e7
+    p_p = 1.6e7  # == effective_p_set exactly -- gap_above should be ~0
+
+    valve = make_piloted_relieving_valve(p_set=p_set)
+    idx = make_piloted_relieving_idx(valve)
+    # P_a == P_p == effective_p_set -- fully open/regulating boundary,
+    # Q_p small positive (no reverse-flow penalty), Q_t=0 (no relief).
+    x = np.array([1e-4, -1e-4, 0.0, 0.0, p_p, p_p, 0.0, p_y])
+    _, eq_supply, _, _ = valve.equations(x, idx)
+    assert abs(eq_supply) < 1e-6
+
+
+# ---------------------------------------------------------------------------
 # End-to-end: relief regime through the real SimulationEngine.
 #
 # This is the regression test for the bug this whole redesign fixed: an

@@ -10,6 +10,10 @@ Anchor T (base) : (width*134.5/200, height)    relief -> bottom
                   Measured from pressure_reducing_valve_relief.png's
                   opaque pixels: the line reaches the bottom edge at
                   x=132..137, center 134.5.
+Anchor Y (right): (width, height*53.5/162)     pilot  -> right
+                  present only when properties["piloted"] is True.
+                  Same position ReliefValve uses for its own pilot port
+                  -- the two valve bodies are geometrically identical.
 
 Sprites
 -------
@@ -17,6 +21,12 @@ pressure_reducing_valve.png        -- body (ISO schematic, single stage).
 pressure_reducing_valve_relief.png -- tank/relief port overlay (T port
                                        line), drawn on top of the body
                                        when relieving=True.
+pressure_reducing_valve_pilot.png  -- external pilot line overlay (Y port
+                                       line), drawn on top of the body
+                                       when piloted=True. Duplicated from
+                                       relief_valve_pilot.png rather than
+                                       shared, to keep the two valves'
+                                       resources isolated from each other.
 """
 
 from PyQt6.QtGui import QPixmap
@@ -56,6 +66,10 @@ class PressureReducingValve(NodeItem):
         self._relief_overlay = None
         self._update_relief_anchor()
 
+        self._pixmap_pilot = QPixmap(f"{_SPRITE_DIR}/pressure_reducing_valve_pilot.png")
+        self._pilot_overlay = None
+        self._update_pilot_anchor()
+
     def _update_relief_anchor(self) -> None:
         """Adds/removes the T anchor and the relief overlay based on
         self.properties. Called in setup() and whenever the property
@@ -70,8 +84,24 @@ class PressureReducingValve(NodeItem):
             self.remove_anchor("T")
             self._relief_overlay = None
 
+    def _update_pilot_anchor(self) -> None:
+        """Adds/removes the Y anchor and the pilot overlay based on
+        self.properties. Independent of relieving/T -- both can be
+        active at once. Called in setup() and whenever the property
+        changes (apply_properties / apply_properties_from_dialog)."""
+        if self.properties.get("piloted"):
+            self.add_anchor(AnchorItem(
+                "Y", QPointF(self.width, self.height*53.5/162), node=self, domain=self.domain,
+                exit_directions={"external": ["right"]},
+            ))
+            self._pilot_overlay = self._pixmap_pilot
+        else:
+            self.remove_anchor("Y")
+            self._pilot_overlay = None
+
     def apply_properties(self) -> None:
         self._update_relief_anchor()
+        self._update_pilot_anchor()
         self.update()
 
     def paint(self, painter, option, widget=None):
@@ -80,6 +110,11 @@ class PressureReducingValve(NodeItem):
             painter.save()
             painter.translate(self._visual_offset)
             self.draw_pixmap(painter, QPointF(0, 0), self._relief_overlay)
+            painter.restore()
+        if self._pilot_overlay is not None:
+            painter.save()
+            painter.translate(self._visual_offset)
+            self.draw_pixmap(painter, QPointF(0, 0), self._pilot_overlay)
             painter.restore()
 
     def build_properties_dialog(self):
@@ -92,11 +127,16 @@ class PressureReducingValve(NodeItem):
         dialog._field_relieving = dialog.add_bool_field(
             self.tr("Tank port (T)"), value=self.properties.get("relieving", False),
         )
+        dialog._field_piloted = dialog.add_bool_field(
+            self.tr("External pilot (Y)"), value=self.properties.get("piloted", False),
+        )
         return dialog
 
     def apply_properties_from_dialog(self, dialog):
         p_set_text = dialog._field_p_set.text().strip()
         self.properties["p_set"] = float(p_set_text) if p_set_text else None
         self.properties["relieving"] = dialog._field_relieving.isChecked()
+        self.properties["piloted"] = dialog._field_piloted.isChecked()
         self._update_relief_anchor()
+        self._update_pilot_anchor()
         self.update()

@@ -108,3 +108,69 @@ def test_apply_properties_from_dialog_updates_relieving_and_anchors():
     assert node.properties["p_set"] == 2e7
     assert node.properties["relieving"] is True
     assert "T" in node.anchors
+
+
+def test_piloted_false_by_default_no_y_anchor_or_overlay():
+    node = PressureReducingValve(domain="hydraulic")
+    assert "Y" not in node.anchors
+    assert node._pilot_overlay is None
+
+
+def test_piloted_true_adds_y_anchor_and_overlay():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["piloted"] = True
+    node.apply_properties()
+
+    assert "Y" in node.anchors
+    assert (node.anchors["Y"].pos().x(), node.anchors["Y"].pos().y()) == (
+        node.width, node.height * 53.5 / 162,
+    )
+    assert node._pilot_overlay is not None
+
+
+def test_toggling_piloted_back_to_false_removes_y_anchor():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["piloted"] = True
+    node.apply_properties()
+    assert "Y" in node.anchors
+
+    node.properties["piloted"] = False
+    node.apply_properties()
+    assert "Y" not in node.anchors
+    assert node._pilot_overlay is None
+
+
+def test_relieving_and_piloted_are_independent():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["relieving"] = True
+    node.properties["piloted"] = True
+    node.apply_properties()
+
+    assert "T" in node.anchors
+    assert "Y" in node.anchors
+    assert node._relief_overlay is not None
+    assert node._pilot_overlay is not None
+
+
+def test_build_properties_dialog_reflects_piloted_property():
+    node = PressureReducingValve(domain="hydraulic")
+    node.properties["p_set"] = 1.5e7
+    node.properties["piloted"] = True
+
+    dialog = node.build_properties_dialog()
+
+    assert dialog._field_p_set.text() == "15000000.0"
+    assert dialog._field_piloted.isChecked() is True
+
+
+def test_apply_properties_from_dialog_updates_piloted_and_anchors():
+    node = PressureReducingValve(domain="hydraulic")
+    dialog = node.build_properties_dialog()
+    dialog._field_p_set.setText("2e7")
+    dialog._field_piloted.setChecked(True)
+
+    node.apply_properties_from_dialog(dialog)
+
+    assert node.properties["p_set"] == 2e7
+    assert node.properties["piloted"] is True
+    assert "Y" in node.anchors

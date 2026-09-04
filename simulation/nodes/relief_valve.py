@@ -23,6 +23,14 @@ class ReliefValve(Node, HydraulicMixin):
     def p_hint(self) -> float:
         return self.p_set
 
+    def dead_ports(self) -> list:
+        """Sensing-only ports that must still be wired to something --
+        checked by GraphBuilder before simulation starts (see
+        `graph_builder.py`'s `_validate_dead_ports`)."""
+        if self.domain != "hydraulic":
+            return []
+        return ["Y"] if self.piloted else []
+
     @property
     def variables(self) -> list:
         if self.domain != "hydraulic":

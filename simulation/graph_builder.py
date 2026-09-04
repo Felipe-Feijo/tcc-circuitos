@@ -91,10 +91,31 @@ class GraphBuilder:
         return self.connections[connection.id]
 
     def raise_if_errors(self) -> None:
-        """Raises a consolidated ValueError if any node has missing required properties.
+        """Raises a consolidated ValueError if any node has missing required
+        properties or an unconnected dead (sensing-only) port.
 
         Raises:
             ValueError: Combined message of every accumulated error.
         """
+        self._validate_dead_ports()
         if self._errors:
             raise ValueError("\n".join(self._errors))
+
+    def _validate_dead_ports(self) -> None:
+        """Pre-flight check for sensing-only ports (e.g. a valve's pilot
+        line 'Y') that carry no flow but still must be wired to something.
+        Left unconnected, such a port silently seeds a default pressure
+        instead of failing -- checking here, before the engine exists,
+        turns that into one clear message instead of an exception raised
+        mid-solve. Optional hook: nodes without dead ports don't define
+        `dead_ports()` at all."""
+        for node in self.nodes.values():
+            dead_ports = getattr(node, "dead_ports", None)
+            if dead_ports is None:
+                continue
+            for port_name in dead_ports():
+                anchor = node.anchors.get(port_name)
+                if anchor is None or not anchor.connections:
+                    self._errors.append(
+                        f"{type(node).__name__} '{node.id}': port '{port_name}' is not connected to anything."
+                    )

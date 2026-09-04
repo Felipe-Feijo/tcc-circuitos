@@ -23,8 +23,8 @@ made A bidirectional for that case, but it was unnecessary for every
 realistic circuit tried and only widened the space of competing roots.
 
 Equations, when relieving=True: a dual Fischer-Burmeister pairing
-sharing the same cap term `a = (p_set - P_A)/P_scale`, one for the
-supply path (P vs A) and one for the relief path (T vs A) -- see
+sharing the same cap term `a = (effective_p_set - P_A)/P_scale`, one for
+the supply path (P vs A) and one for the relief path (T vs A) -- see
 `equations()` for the exact residuals and why each correction term
 (reverse-flow penalty, supply ridge, relief ridge) exists. This
 replaced an earlier hard-branch design (`if P_a > p_set and Q_p <= 0`)
@@ -36,6 +36,14 @@ for the full derivation, the numerical spike that validated this
 formulation, and the known trade-off in the supply ridge (Important:
 read that spec's "Remaining known limitation" before touching the
 tuning constants below).
+
+Optional property `piloted` (default False, independent of `relieving`,
+mirrors ReliefValve's own `piloted`) adds a dead/sensing-only port `Y`:
+its flow is pinned to zero, and its pressure P_y shifts the effective
+threshold to `effective_p_set = p_set + P_y` everywhere p_set gates the
+cap (the shared cap term `a`, the closed-regime guard, and the supply
+ridge's reference point). Lets an external pilot line raise the
+regulated outlet pressure above the valve's own fixed setpoint.
 """
 
 import math
@@ -56,10 +64,21 @@ class PressureReducingValve(Node, HydraulicMixin):
             self.relieving = bool(self.properties.get("relieving", False))
             if self.relieving:
                 self.flow_var_t = f"Q_{self.id}_T"
+            self.piloted = bool(self.properties.get("piloted", False))
+            if self.piloted:
+                self.flow_var_y = f"Q_{self.id}_Y"
 
     @property
     def p_hint(self) -> float:
         return self.p_set
+
+    def dead_ports(self) -> list:
+        """Sensing-only ports that must still be wired to something --
+        checked by GraphBuilder before simulation starts (see
+        `graph_builder.py`'s `_validate_dead_ports`)."""
+        if self.domain != "hydraulic":
+            return []
+        return ["Y"] if self.piloted else []
 
     @property
     def variables(self) -> list:
@@ -68,6 +87,8 @@ class PressureReducingValve(Node, HydraulicMixin):
         vars_ = [self.flow_var_p, self.flow_var_a]
         if self.relieving:
             vars_.append(self.flow_var_t)
+        if self.piloted:
+            vars_.append(self.flow_var_y)
         for anchor_name in self.hydraulic_ports().keys():
             anchor = self.anchors.get(anchor_name)
             if anchor and anchor.pressure_var:
@@ -97,6 +118,8 @@ class PressureReducingValve(Node, HydraulicMixin):
         ports = {"P": self.flow_var_p, "A": self.flow_var_a}
         if self.relieving:
             ports["T"] = self.flow_var_t
+        if self.piloted:
+            ports["Y"] = self.flow_var_y
         return ports
 
     def equations(self, x, idx):
@@ -108,21 +131,34 @@ class PressureReducingValve(Node, HydraulicMixin):
         Q_scale = self.q_ref
         P_scale = self.p_ref
 
+        # Pilot line shifts the threshold this valve regulates to -- a
+        # dead/sensing port, so its own flow equation (appended below) is
+        # independent of everything else here.
+        if self.piloted:
+            P_y = x[idx[self.anchors["Y"].pressure_var]]
+            effective_p_set = self.p_set + P_y
+        else:
+            effective_p_set = self.p_set
+
         if not self.relieving:
             # Unchanged from the shipped 2-port valve, closed-regime
-            # branch included: if the outlet is already above p_set with
-            # no forward flow trying to happen, the FB pairing below has
-            # no root (a = p_set - P_a stays negative regardless of b),
-            # so pin Q_p to zero directly instead of forcing an
-            # infeasible pairing.
+            # branch included: if the outlet is already above
+            # effective_p_set with no forward flow trying to happen, the
+            # FB pairing below has no root (a = effective_p_set - P_a
+            # stays negative regardless of b), so pin Q_p to zero
+            # directly instead of forcing an infeasible pairing.
             eq_conservation = (Q_p + Q_a) / Q_scale
-            if P_a > self.p_set and Q_p <= 0:
+            if P_a > effective_p_set and Q_p <= 0:
                 eq_supply = Q_p / Q_scale
             else:
-                a = (self.p_set - P_a) / P_scale
+                a = (effective_p_set - P_a) / P_scale
                 b = (P_p - P_a) / P_scale
                 eq_supply = a + b - math.sqrt(a * a + b * b)
-            return [eq_conservation, eq_supply]
+            eqs = [eq_conservation, eq_supply]
+            if self.piloted:
+                Q_y = x[idx[self.flow_var_y]]
+                eqs.append(Q_y / Q_scale)  # dead port -- sensing only
+            return eqs
 
         # relieving=True: dual Fischer-Burmeister pairing sharing the same
         # cap term `a`, instead of the branch-guard version above. Neither
@@ -135,7 +171,7 @@ class PressureReducingValve(Node, HydraulicMixin):
         Q_t = x[idx[self.flow_var_t]]
         eq_conservation = (Q_p + Q_a + Q_t) / Q_scale
 
-        a = (self.p_set - P_a) / P_scale  # shared cap term
+        a = (effective_p_set - P_a) / P_scale  # shared cap term
 
         b_supply = (P_p - P_a) / P_scale
         eq_supply = a + b_supply - math.sqrt(a * a + b_supply * b_supply)
@@ -147,29 +183,31 @@ class PressureReducingValve(Node, HydraulicMixin):
         # p_set (the minimal valid value) unless something else in the
         # network genuinely pins it higher.
         #
-        # Deliberately a function of P_p vs. the FIXED constant p_set,
-        # NOT of (P_p - P_a): an earlier version used b_supply directly,
-        # which let the solver "cheat" by raising P_a instead of lowering
-        # P_p whenever P_p was hard-pinned high by something upstream
-        # (e.g. a fixed-pressure reservoir) -- it dragged the capped
-        # outlet UP to match, defeating the valve's entire purpose. Since
-        # this term never mentions P_a, there is no such escape route.
+        # Deliberately a function of P_p vs. the FIXED constant
+        # effective_p_set, NOT of (P_p - P_a): an earlier version used
+        # b_supply directly, which let the solver "cheat" by raising P_a
+        # instead of lowering P_p whenever P_p was hard-pinned high by
+        # something upstream (e.g. a fixed-pressure reservoir) -- it
+        # dragged the capped outlet UP to match, defeating the valve's
+        # entire purpose. Since this term never mentions P_a, there is no
+        # such escape route.
         # Saturating (tanh), not linear: a linear ridge adds a residual
-        # proportional to (P_p - p_set), which never reaches zero when
-        # P_p is legitimately pinned far above p_set -- the solver then
-        # has to deviate P_a from the exact root (a=0) just to cancel
-        # that leftover constant. tanh caps the distortion at
-        # +-SUPPLY_RIDGE_WEIGHT regardless of how large the gap is, and
-        # vanishes exactly at P_p=p_set (the free/underdetermined case),
-        # so the exact root is reachable there with zero compromise.
-        # One-sided: smooth_max0 zeroes this out whenever P_p <= p_set, so
-        # the fully-open regime (P_p naturally below p_set, a legitimate,
-        # already well-determined state) is never disturbed -- only the
-        # genuinely underdetermined "P_p pinned above p_set" direction is
-        # discouraged. An earlier version used a plain tanh(...) without
-        # this gate and measurably distorted the fully-open regime too.
+        # proportional to (P_p - effective_p_set), which never reaches
+        # zero when P_p is legitimately pinned far above effective_p_set
+        # -- the solver then has to deviate P_a from the exact root (a=0)
+        # just to cancel that leftover constant. tanh caps the distortion
+        # at +-SUPPLY_RIDGE_WEIGHT regardless of how large the gap is, and
+        # vanishes exactly at P_p=effective_p_set (the free/underdetermined
+        # case), so the exact root is reachable there with zero compromise.
+        # One-sided: smooth_max0 zeroes this out whenever P_p <=
+        # effective_p_set, so the fully-open regime (P_p naturally below
+        # the threshold, a legitimate, already well-determined state) is
+        # never disturbed -- only the genuinely underdetermined "P_p
+        # pinned above the threshold" direction is discouraged. An earlier
+        # version used a plain tanh(...) without this gate and measurably
+        # distorted the fully-open regime too.
         SUPPLY_RIDGE_WEIGHT = 2.0
-        gap = (P_p - self.p_set) / P_scale
+        gap = (P_p - effective_p_set) / P_scale
         gap_above = (gap + math.sqrt(gap * gap + 1e-18)) / 2.0
         eq_supply += SUPPLY_RIDGE_WEIGHT * math.tanh(gap_above)
         # Reverse-flow exclusion at the equation level (not just via
@@ -185,7 +223,11 @@ class PressureReducingValve(Node, HydraulicMixin):
         RIDGE_WEIGHT = 0.0002
         eq_relief += RIDGE_WEIGHT * (Q_t / Q_scale)
 
-        return [eq_conservation, eq_supply, eq_relief]
+        eqs = [eq_conservation, eq_supply, eq_relief]
+        if self.piloted:
+            Q_y = x[idx[self.flow_var_y]]
+            eqs.append(Q_y / Q_scale)  # dead port -- sensing only
+        return eqs
 
     @property
     def initial_guess(self) -> dict:
@@ -202,6 +244,8 @@ class PressureReducingValve(Node, HydraulicMixin):
         }
         if self.relieving:
             guess[self.flow_var_t] = 0.0
+        if self.piloted:
+            guess[self.flow_var_y] = 0.0
         return guess
 
     def update(self, outputs=None):

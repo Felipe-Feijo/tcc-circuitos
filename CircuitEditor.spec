@@ -10,7 +10,7 @@
 # para spacing/offsets), e os *_layout_config.json de circuit_generator/ nao
 # sao coletados automaticamente pelo PyInstaller.
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 a = Analysis(
     ['app.py'],
@@ -27,6 +27,13 @@ a = Analysis(
         ('editor', 'editor'),
         ('persistence', 'persistence'),
         *collect_data_files('imageio_ffmpeg'),
+        # imageio/__init__.py reads its own version via
+        # importlib.metadata.version("imageio") at import time; PyInstaller's
+        # bundled hook-imageio.py only collects data files and plugin
+        # submodules, not the dist-info metadata that call needs, so without
+        # this the frozen app fails at startup with
+        # importlib.metadata.PackageNotFoundError.
+        *copy_metadata('imageio'),
     ],
     hiddenimports=[],
     hookspath=[],

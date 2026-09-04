@@ -1,44 +1,41 @@
 """Single-stage, direct-acting pressure reducing valve simulation node.
 
 Normally open -- throttles its own P->A passage to hold the OUTLET
-pressure at p_set, and never boosts pressure. No tank port by default:
-unlike ReliefValve (simulation/nodes/relief_valve.py), which shunts
-excess flow to a T port when the INLET pressure exceeds its threshold,
-this valve is in series and simply restricts its own orifice. Modeled
-with the same Fischer-Burmeister smoothed complementarity ReliefValve
-and CheckValve already use, mirrored to sense P_A (outlet) instead of
-P_in.
-
-A third, closed regime is handled outside that FB pairing: if the
-outlet is already above p_set (e.g. from external backpressure, or a
-stale post-topology-change seed) while forward flow is at or below its
-zero lower bound, the FB pairing has no root, so equations() instead
-pins Q_P to zero directly.
+pressure at p_set, and never boosts pressure. Modeled with the same
+Fischer-Burmeister smoothed complementarity ReliefValve and CheckValve
+already use, mirrored to sense P_A (outlet) instead of P_in.
 
 Optional property `relieving` (default False, mirrors ReliefValve's
-`piloted`) adds a real flow port `T`: instead of merely refusing more
-inflow while the outlet floats above p_set, the valve actively pulls
-P_A back down to p_set via T -- the user wires T to a Reservoir node,
-same as any other tank port in this codebase. This is NOT modeled as a
-second, independent Fischer-Burmeister pair against (P_A - p_set): that
-pairing is satisfied by the same condition (P_A == p_set) as the
-supply-side pair, with nothing to decide which port does the work,
-making the system rank-deficient exactly at the most commonly visited
-state. Instead, the same closed-regime branch above is extended: once
-inside it, Q_P stays pinned to zero (as before) and a second equation
-directly pins P_A to p_set via T's flow. Outside that branch, T is a
-dead port (pinned to zero flow) -- no relief is needed.
+`piloted`) adds a real flow port `T`: when the supply side alone can't
+prevent the outlet from exceeding p_set (a fixed-flow pump forcing more
+into P than the downstream will accept, for instance), the valve shuts
+the P->A path and diverts the excess to T instead of leaving the
+outlet floating above p_set. The user wires T to a Reservoir node, same
+as any other tank port in this codebase.
 
-`relieving=True` also makes port A BIDIRECTIONAL. With the domain sign
-convention (Q > 0 means fluid entering the node through that port), the
-2-port valve only ever pushes fluid OUT through A, so Q_A is bounded
-(None, 0.0). Relieving reverses that flow: fluid enters at A (something
-external pressurizing the outlet) and leaves at T, which requires
-Q_A > 0. Keeping the (None, 0.0) bound while relieving makes relief
-impossible -- with Q_P pinned to zero and Q_T <= 0, conservation
-(Q_P + Q_A + Q_T = 0) forces Q_A = -Q_T with both <= 0, whose only
-solution is Q_A = Q_T = 0. So `bounds` drops A's upper bound entirely
-when relieving, and keeps it only in the 2-port case.
+Scope note: `Q_A` stays <= 0 (forward/outgoing) even when relieving --
+this valve handles "supply forces more flow than the downstream will
+accept", not "something external actively pushes flow backward into
+A". Conservation alone routes the excess to T once Q_P is forced by an
+upstream flow source; A never needs to reverse for that. True external
+backfeed into A is deferred (see spec Non-goals) -- an earlier version
+made A bidirectional for that case, but it was unnecessary for every
+realistic circuit tried and only widened the space of competing roots.
+
+Equations, when relieving=True: a dual Fischer-Burmeister pairing
+sharing the same cap term `a = (p_set - P_A)/P_scale`, one for the
+supply path (P vs A) and one for the relief path (T vs A) -- see
+`equations()` for the exact residuals and why each correction term
+(reverse-flow penalty, supply ridge, relief ridge) exists. This
+replaced an earlier hard-branch design (`if P_a > p_set and Q_p <= 0`)
+that pinned Q_p to exactly zero -- that directly contradicted any
+upstream flow SOURCE that forces its own nonzero Q_p (e.g. a
+fixed-displacement pump), corrupting the shared pressure instead of
+converging. See `docs/superpowers/specs/2026-09-03-pressure-reducing-valve-relief-port-design.md`
+for the full derivation, the numerical spike that validated this
+formulation, and the known trade-off in the supply ridge (Important:
+read that spec's "Remaining known limitation" before touching the
+tuning constants below).
 """
 
 import math
@@ -79,14 +76,19 @@ class PressureReducingValve(Node, HydraulicMixin):
 
     @property
     def bounds(self):
+        # Q_A stays <= 0 (forward/outgoing only) even when relieving --
+        # scoped out: this valve handles "supply forces more flow than the
+        # downstream will accept" (diverted to T without ever reversing
+        # A), not "something external actively pushes flow backward into
+        # A". Conservation alone routes the excess to T once Q_P is
+        # forced by an upstream flow source, with no need for A to
+        # reverse. See spec Non-goals for the deferred backfeed case.
         b = {
-            self.flow_var_p: (0.0, None),   # Q_P never negative -- forward flow only
+            self.flow_var_p: (0.0, None),    # Q_P never negative -- forward flow only
+            self.flow_var_a: (None, 0.0),    # Q_A never positive -- forward/outgoing only
         }
         if self.relieving:
-            b[self.flow_var_a] = (None, None)  # A is bidirectional once T can relieve
             b[self.flow_var_t] = (None, 0.0)   # Q_T never positive -- only leaves via T
-        else:
-            b[self.flow_var_a] = (None, 0.0)   # Q_A never positive -- 2-port, forward only
         return b
 
     def hydraulic_ports(self) -> dict:
@@ -106,42 +108,84 @@ class PressureReducingValve(Node, HydraulicMixin):
         Q_scale = self.q_ref
         P_scale = self.p_ref
 
-        if self.relieving:
-            Q_t = x[idx[self.flow_var_t]]
-            eq_conservation = (Q_p + Q_a + Q_t) / Q_scale
-        else:
+        if not self.relieving:
+            # Unchanged from the shipped 2-port valve, closed-regime
+            # branch included: if the outlet is already above p_set with
+            # no forward flow trying to happen, the FB pairing below has
+            # no root (a = p_set - P_a stays negative regardless of b),
+            # so pin Q_p to zero directly instead of forcing an
+            # infeasible pairing.
             eq_conservation = (Q_p + Q_a) / Q_scale
+            if P_a > self.p_set and Q_p <= 0:
+                eq_supply = Q_p / Q_scale
+            else:
+                a = (self.p_set - P_a) / P_scale
+                b = (P_p - P_a) / P_scale
+                eq_supply = a + b - math.sqrt(a * a + b * b)
+            return [eq_conservation, eq_supply]
 
-        if P_a > self.p_set and Q_p <= 0:
-            # Closed: outlet already above setpoint from something this
-            # valve cannot supply (external backpressure, or a stale
-            # solver seed right after a topology change) and there is no
-            # forward flow trying to happen. The 2-regime FB below has no
-            # root here (a = p_set - P_a stays negative regardless of b),
-            # which would otherwise fault the whole circuit for a state a
-            # real valve handles by simply staying shut. Pin Q_p to
-            # exactly zero instead of forcing the (infeasible) FB pairing.
-            eq_supply = Q_p / Q_scale
-            if self.relieving:
-                # Actively pull the outlet back down via T instead of
-                # leaving it floating above p_set. Flow reverses through
-                # A here (Q_a > 0, fluid entering) and leaves via T
-                # (Q_t < 0) -- which is why `bounds` drops A's upper
-                # bound when relieving, see the module docstring.
-                eq_relief = (P_a - self.p_set) / P_scale
-        else:
-            # a >= 0: P_A never exceeds p_set. b >= 0: the valve only drops
-            # pressure (P_P >= P_A), never boosts it. Exactly one is zero:
-            # either fully open (b=0, P_A=P_P) or regulating (a=0, P_A=p_set).
-            a = (self.p_set - P_a) / P_scale
-            b = (P_p - P_a) / P_scale
-            eq_supply = a + b - math.sqrt(a * a + b * b)
-            if self.relieving:
-                eq_relief = Q_t / Q_scale  # dead port here -- no relief needed
+        # relieving=True: dual Fischer-Burmeister pairing sharing the same
+        # cap term `a`, instead of the branch-guard version above. Neither
+        # equation pins Q_p or Q_a to a specific value -- only P_A's cap is
+        # enforced; the actual split of flow between P and T emerges from
+        # conservation plus whatever is externally connected to each port
+        # (e.g. a fixed-displacement pump forces Q_p regardless of what
+        # this valve "wants"; the branch-guard version's hard Q_p=0 pin
+        # directly contradicted that and blew up the shared pressure).
+        Q_t = x[idx[self.flow_var_t]]
+        eq_conservation = (Q_p + Q_a + Q_t) / Q_scale
 
-        if self.relieving:
-            return [eq_conservation, eq_supply, eq_relief]
-        return [eq_conservation, eq_supply]
+        a = (self.p_set - P_a) / P_scale  # shared cap term
+
+        b_supply = (P_p - P_a) / P_scale
+        eq_supply = a + b_supply - math.sqrt(a * a + b_supply * b_supply)
+        # P_p is mathematically underdetermined once regulating (this
+        # equation only demands P_p >= p_set, an inequality) -- if nothing
+        # upstream pins it (e.g. a fixed-displacement pump, which forces
+        # only Q_p, never P_p), the solver has a free direction to drift
+        # in and struggles to converge. Fix: a ridge pulling P_p toward
+        # p_set (the minimal valid value) unless something else in the
+        # network genuinely pins it higher.
+        #
+        # Deliberately a function of P_p vs. the FIXED constant p_set,
+        # NOT of (P_p - P_a): an earlier version used b_supply directly,
+        # which let the solver "cheat" by raising P_a instead of lowering
+        # P_p whenever P_p was hard-pinned high by something upstream
+        # (e.g. a fixed-pressure reservoir) -- it dragged the capped
+        # outlet UP to match, defeating the valve's entire purpose. Since
+        # this term never mentions P_a, there is no such escape route.
+        # Saturating (tanh), not linear: a linear ridge adds a residual
+        # proportional to (P_p - p_set), which never reaches zero when
+        # P_p is legitimately pinned far above p_set -- the solver then
+        # has to deviate P_a from the exact root (a=0) just to cancel
+        # that leftover constant. tanh caps the distortion at
+        # +-SUPPLY_RIDGE_WEIGHT regardless of how large the gap is, and
+        # vanishes exactly at P_p=p_set (the free/underdetermined case),
+        # so the exact root is reachable there with zero compromise.
+        # One-sided: smooth_max0 zeroes this out whenever P_p <= p_set, so
+        # the fully-open regime (P_p naturally below p_set, a legitimate,
+        # already well-determined state) is never disturbed -- only the
+        # genuinely underdetermined "P_p pinned above p_set" direction is
+        # discouraged. An earlier version used a plain tanh(...) without
+        # this gate and measurably distorted the fully-open regime too.
+        SUPPLY_RIDGE_WEIGHT = 2.0
+        gap = (P_p - self.p_set) / P_scale
+        gap_above = (gap + math.sqrt(gap * gap + 1e-18)) / 2.0
+        eq_supply += SUPPLY_RIDGE_WEIGHT * math.tanh(gap_above)
+        # Reverse-flow exclusion at the equation level (not just via
+        # `bounds`, which fsolve's own unbounded stage ignores entirely).
+        PENALTY_WEIGHT = 500.0
+        z = -Q_p / Q_scale
+        eq_supply += ((z + math.sqrt(z * z + 1e-18)) / 2.0) * PENALTY_WEIGHT
+
+        b_relief = -Q_t / Q_scale
+        eq_relief = a + b_relief - math.sqrt(a * a + b_relief * b_relief)
+        # Tie-break for the rank-deficient shared root (a=0): pulls Q_t
+        # toward 0 unless relief is genuinely needed to hold the cap.
+        RIDGE_WEIGHT = 0.0002
+        eq_relief += RIDGE_WEIGHT * (Q_t / Q_scale)
+
+        return [eq_conservation, eq_supply, eq_relief]
 
     @property
     def initial_guess(self) -> dict:

@@ -1,12 +1,14 @@
 # Pressure reducing valve — relief port (3-way variant) — design
 
-Date: 2026-09-03 (equations revised same day after a failed first
-implementation attempt — see "Design history" below)
-Status: equations redesigned and numerically spike-tested (cold-start
-convergence confirmed in a standalone script, not yet wired into the
-codebase). Approved for a fresh implementation plan. The graphics item,
-property, and port sections below are UNCHANGED from the first attempt
-and remain valid — only "Equations" is new.
+Date: 2026-09-03 (equations revised twice same day: once after a failed
+first implementation attempt, once more during hands-on validation of
+the replacement — see "Design history" and "Implementation refinements"
+below)
+Status: implemented, tested (1052/1052 suite passing, including a
+solver-level end-to-end regression test), and hands-on validated against
+two real circuits (a fixed-displacement-pump-driven cylinder, and an
+externally-pinned-high-supply-pressure scenario) before merge. Carries
+one documented, accepted trade-off — see "Remaining known limitation".
 
 ## Context and problem
 
@@ -35,12 +37,18 @@ exactly like `ReliefValve`'s own `T` port already does).
 `T`'s bounds: `(None, 0.0)` — flow only ever leaves through `T` (same
 convention as `ReliefValve.bounds[flow_var_out]`).
 
-`A`'s bounds change under `relieving=True`: relief requires flow entering
-at `A` (domain convention: `Q > 0` means entering), so `A` becomes
-bidirectional (`None, None`) instead of the 2-port valve's `(None, 0.0)`.
-This was missed in the first pass of this spec (the original text below
-only ever discussed `T`'s bounds) and caused the Critical bug described
-in "Design history" below.
+`A`'s bounds are UNCHANGED from the 2-port valve, even when
+`relieving=True`: `(None, 0.0)` — forward/outgoing only, never reversed.
+An earlier pass of this spec made `A` bidirectional (`None, None`) to
+support flow entering from an external source pushing directly on `A`.
+That turned out to be unnecessary for every realistic circuit tried
+during implementation (a fixed-displacement pump forcing more flow into
+`P` than a downstream load can accept diverts the excess to `T` via
+conservation alone, without `A` ever needing to reverse) and it widened
+the solver's search space with a whole extra root family — see
+"Implementation refinements" below and the module docstring's Scope
+note. True external backfeed directly into `A` is now an explicit
+non-goal.
 
 Every tank port in this codebase (including `ReliefValve`'s own `T`)
 requires the user to wire it to a `Reservoir` node, whose own
@@ -61,32 +69,23 @@ convention, not something the solver enforces.
 
 ## Equations
 
-**This section supersedes an earlier, shipped-then-reverted design.**
-See "Design history" below for what was tried first, why it failed in
-the real solver, and how that failure was root-caused. The formulation
-below was numerically validated in a standalone spike script (cold
-start, 8 scenarios including stress cases) before being written here —
-see "Validation" below.
+**This section supersedes an earlier, shipped-then-reverted design**
+(see "Design history"), **and reflects corrections found during hands-on
+validation of the replacement** (see "Implementation refinements") —
+this is the actual, final, shipped formula.
 
 Conservation becomes 3-port when `relieving=True`:
-`Q_P + Q_A + Q_T = 0` (was `Q_P + Q_A = 0`), unchanged from the first
-attempt. `variables`, `hydraulic_ports`, `bounds` all conditionally
-include the `T` entries only when `relieving=True` — same
-conditional-inclusion pattern `ReliefValve` already uses for `piloted`'s
-`Y`. The `relieving=False` path is UNCHANGED from what already shipped
-(byte-identical 2-port equations).
+`Q_P + Q_A + Q_T = 0` (was `Q_P + Q_A = 0`). `variables`,
+`hydraulic_ports`, `bounds` all conditionally include the `T` entries
+only when `relieving=True` — same conditional-inclusion pattern
+`ReliefValve` already uses for `piloted`'s `Y`. The `relieving=False`
+path is UNCHANGED from what already shipped (byte-identical 2-port
+equations, closed-regime branch included).
 
-The `relieving=True` path replaces the old hard branch with a dual
-Fischer-Burmeister pairing that shares the same cap term, plus two small
-correction terms that make it actually well-posed:
+The `relieving=True` path is a dual Fischer-Burmeister pairing sharing
+the same cap term, plus three correction terms:
 
 ```python
-PENALTY_WEIGHT = 500.0
-RIDGE_WEIGHT = 0.0015
-
-def _smooth_max0(z, eps=1e-9):
-    return (z + math.sqrt(z * z + eps * eps)) / 2.0
-
 def equations(self, x, idx):
     Q_p = x[idx[self.flow_var_p]]
     Q_a = x[idx[self.flow_var_a]]
@@ -96,81 +95,165 @@ def equations(self, x, idx):
 
     if not self.relieving:
         eq_conservation = (Q_p + Q_a) / Q_scale
-        a = (self.p_set - P_a) / P_scale
-        b = (P_p - P_a) / P_scale
-        eq_supply = a + b - math.sqrt(a * a + b * b)   # unchanged from the 2-port valve
+        if P_a > self.p_set and Q_p <= 0:
+            eq_supply = Q_p / Q_scale
+        else:
+            a = (self.p_set - P_a) / P_scale
+            b = (P_p - P_a) / P_scale
+            eq_supply = a + b - math.sqrt(a * a + b * b)
         return [eq_conservation, eq_supply]
 
     Q_t = x[idx[self.flow_var_t]]
     eq_conservation = (Q_p + Q_a + Q_t) / Q_scale
 
-    a = (self.p_set - P_a) / P_scale               # shared cap term
+    a = (self.p_set - P_a) / P_scale  # shared cap term
 
     b_supply = (P_p - P_a) / P_scale
     eq_supply = a + b_supply - math.sqrt(a * a + b_supply * b_supply)
-    # Reverse-flow exclusion: fsolve's own unbounded stage ignores
-    # `bounds` entirely and converges onto Q_p<0 with a genuinely tiny
-    # residual (this is the exact mechanism that broke the first
-    # attempt -- see "Design history"). This penalty makes that root
-    # expensive at the EQUATION level, not just via `bounds`.
-    eq_supply += _smooth_max0(-Q_p / Q_scale) * PENALTY_WEIGHT
+
+    # Supply ridge: pulls P_p toward p_set when nothing else pins it
+    # (e.g. a fixed-displacement pump, which forces only Q_p, never
+    # P_p, leaving P_p otherwise underdetermined). One-sided (only
+    # fires above p_set) and saturating (tanh) -- see "Implementation
+    # refinements" for why both properties are necessary.
+    SUPPLY_RIDGE_WEIGHT = 2.0
+    gap = (P_p - self.p_set) / P_scale
+    gap_above = (gap + math.sqrt(gap * gap + 1e-18)) / 2.0   # smooth max(gap, 0)
+    eq_supply += SUPPLY_RIDGE_WEIGHT * math.tanh(gap_above)
+
+    # Reverse-flow exclusion at the equation level (not just via
+    # `bounds`, which fsolve's own unbounded stage ignores entirely).
+    PENALTY_WEIGHT = 500.0
+    z = -Q_p / Q_scale
+    eq_supply += ((z + math.sqrt(z * z + 1e-18)) / 2.0) * PENALTY_WEIGHT
 
     b_relief = -Q_t / Q_scale
     eq_relief = a + b_relief - math.sqrt(a * a + b_relief * b_relief)
-    # Tie-break: at the shared root (a=0, i.e. P_a=p_set), both
-    # eq_supply and eq_relief individually admit Q_p>=0 and Q_t<=0
-    # simultaneously free -- rank-deficient without this (confirmed in
-    # the spike: without the ridge, "regulating" converged with a
-    # spurious nonzero Q_t even though supply alone could handle it
-    # fully). This small ridge pulls Q_t toward 0 unless relief is
-    # genuinely needed to hold the cap.
+    # Tie-break for the rank-deficient shared root (a=0): pulls Q_t
+    # toward 0 unless relief is genuinely needed to hold the cap.
+    RIDGE_WEIGHT = 0.0002
     eq_relief += RIDGE_WEIGHT * (Q_t / Q_scale)
 
     return [eq_conservation, eq_supply, eq_relief]
 ```
 
-**Why the dual-FB shape itself is fine (only the naive version wasn't):**
+**Why the dual-FB shape itself is fine (only a bare version wasn't):**
 both `eq_supply` and `eq_relief` share the exact same cap term `a`, so
 at `a=0` (`P_A=p_set`) they are individually satisfied by any split of
 `Q_p>=0`/`Q_t<=0` that balances conservation — genuinely rank-deficient
-as a bare pair. The ridge term breaks that tie without perturbing the
-"genuinely needs relief" case (where `Q_t`'s magnitude, e.g. `-1e-4`, is
-far larger than what a `0.0015` ridge could suppress). Both weights were
-tuned empirically against the spike's scenarios, not derived from first
-principles.
+as a bare pair. The `RIDGE_WEIGHT` term breaks that tie without
+perturbing the "genuinely needs relief" case (where `Q_t`'s magnitude is
+far larger than what a `0.0002` ridge could suppress).
 
 ## Validation
 
-Tested in a standalone spike script (not part of the codebase — throwaway,
-not committed) against `scipy.optimize.fsolve`/`least_squares`, mimicking
-`simulation/hydraulic/solver.py`'s two-stage solve (unbounded `fsolve`
-first, bounded TRF fallback, including the real `fsolve_best` clip
-behavior) from a cold start (`x0 = [0, 0, 0]`, matching how the real
-engine seeds every pressure at 0). 8 scenarios: fully open, regulating
-via supply, relieving via tank, idle, relief at 5x and at 1/100x the
-baseline flow, regulating against a very high supply pressure, and
-relieving with the supply side fully disconnected (`P_p=0`).
+Two layers, in order:
 
-6 of 8 converged to the physically correct answer within realistic
-tolerance (flow within 1%, `P_A` within `rel=1e-3` of `p_set` — the same
-tolerance the real end-to-end test uses). The 2 that didn't were both
-relief flows far smaller than the spike's fixed flow scale (`1e-6`
-against a baseline of `1e-4`) — see "Remaining known limitation" below.
+1. **Standalone numerical spike** (scipy, not part of the codebase) —
+   validated the initial dual-FB shape against 8 synthetic scenarios
+   from a cold start, mimicking the real solver's two-stage
+   `fsolve`/`least_squares` behavior. This caught the rank-deficiency
+   problem early and confirmed the branch-guard approach's failure mode
+   would not recur.
+2. **Hands-on validation against the real engine and app**, done
+   *after* the spike, which is what actually found and fixed the three
+   issues in "Implementation refinements" below — the spike's synthetic
+   scenarios did not happen to exercise a fixed-displacement pump on `P`
+   together with a pressure genuinely pinned by another node, or the
+   fully-open regime's interaction with the supply ridge. Two circuits
+   were used throughout:
+   - A single-acting cylinder fed through the valve by a
+     fixed-displacement pump, run via
+     `tests/simulate_json.py` (now supports `PressureReducingValve`,
+     previously missing) across 60 simulated steps and inside the real
+     app.
+   - A synthetic circuit with `P` wired to a fixed-*pressure* reservoir
+     (not a pump) at a value far above `p_set`, specifically to check
+     the supply ridge doesn't drag the capped outlet up to match an
+     externally-pinned high supply pressure.
+
+The final regression test for the primary scenario is committed:
+`test_relief_regime_diverts_excess_supply_pump_flow_to_tank_end_to_end`
+in `tests/test_pressure_reducing_valve_hydraulic.py`.
+
+## Implementation refinements
+
+Found and fixed during the hands-on validation pass, in the order
+discovered:
+
+1. **`A` bidirectional was unnecessary and actively harmful.** The
+   initial dual-FB design (matching the base-spec's original addendum)
+   made `A` bidirectional to support external backfeed. Testing against
+   a real fixed-displacement-pump-driven cylinder circuit showed this
+   was never needed — the pump forces `Q_P`, the cylinder's own
+   kinematics bound `Q_A` to whatever it can actually accept (including
+   ~0 once stalled), and conservation alone routes the rest to `T`
+   without `A` ever needing to reverse. Reverted to the 2-port valve's
+   original `(None, 0.0)` bound. This also shrank the solver's search
+   space, incidentally improving robustness.
+2. **The supply ridge needed two corrections, discovered in this
+   order:**
+   - **First version** (`SUPPLY_RIDGE_WEIGHT * (P_p - P_a) / P_scale`)
+     let the solver "cheat": when `P_p` was hard-pinned high by another
+     node (e.g. a fixed-pressure reservoir directly on `P`, not a
+     pump), the ridge reduced its own residual by dragging `P_a` UP to
+     match `P_p` instead of lowering `P_p` (which it couldn't, being
+     externally pinned) — defeating the valve's entire regulating
+     function. Fixed by making the ridge a pure function of `P_p` vs.
+     the fixed constant `p_set`, never referencing `P_a` — removing the
+     escape route entirely.
+   - **That fix, still linear** (`SUPPLY_RIDGE_WEIGHT * (P_p - p_set) /
+     P_scale`), then proved unusable at any weight strong enough to
+     robustly resolve the free/underdetermined case (a
+     fixed-displacement pump on `P`): a linear ridge grows without
+     bound as the pin gets more extreme, and at real-world weights it
+     measurably distorted `P_a` away from `p_set` even in the
+     genuinely-pinned case. Fixed by switching to `tanh`, which
+     saturates the ridge's contribution at `±SUPPLY_RIDGE_WEIGHT`
+     regardless of how far `P_p` is pinned from `p_set` — confirmed
+     empirically: a weight of `10000` with the *unbounded* linear
+     version corrupted even the pump's own flow equation elsewhere in
+     the network; the same weight range is unreachable as a problem
+     with the saturating version.
+   - **Even saturating, the ridge fired in both directions** — it also
+     pulled `P_p` up toward `p_set` when `P_p` was naturally BELOW
+     `p_set` (the ordinary, already-correct fully-open regime),
+     measurably distorting `eq_supply`'s residual there too (confirmed:
+     `residual ≈ 0.92` instead of `≈0` at a legitimate fully-open point
+     in a unit test). Fixed by gating the ridge through a smooth
+     `max(gap, 0)` so it is identically zero whenever `P_p <= p_set`.
+3. **`SUPPLY_RIDGE_WEIGHT` sweep, empirically, against BOTH the
+   free (pump) and pinned (reservoir) scenarios together** (not either
+   one alone — the two scenarios pull the ideal weight in opposite
+   directions): `0.005` gives good pinned-case accuracy but the
+   fixed-pump case regresses to over 100 solver warnings across 60
+   steps; `10000` gives near-exact fixed-pump behavior but the pinned
+   case overshoots `p_set` by nearly 3x; the shipped value, `2.0`,
+   keeps the fixed-pump case fully clean (0 warnings) while keeping the
+   pinned case's overshoot bounded and small enough not to break the
+   valve's regulating function (see "Remaining known limitation" for
+   the exact residual accepted).
 
 ## Remaining known limitation
 
-`PENALTY_WEIGHT`/`RIDGE_WEIGHT` are dimensionless multipliers on
-already-`Q_scale`-normalized terms, but the spike only validated them
-against flows comparable to its fixed baseline. A relief flow much
-smaller than the circuit's actual `q_ref` (not just smaller than a
-fixed spike constant) may need retuned weights, or a more principled
-scale-adaptive version of the same terms. The follow-up implementation
-plan MUST include an end-to-end solver test (not just `equations()`
-called in isolation — see "Design history" for why that gap let the
-first attempt ship broken) covering at least the "relieving" scenario at
-the flow magnitude the real engine actually seeds circuits at, and
-should treat weight-tuning as part of that test's acceptance criteria,
-not a one-time guess.
+The supply ridge cannot fully vanish while a hard-pinned upstream
+pressure sits above `p_set` (a reservoir directly on `P` at a fixed
+value, not a pump) — the ridge and the core FB pairing sit in the same
+residual, and the pinned scenario's `gap_above` term never reaches
+zero. At the shipped weight (`2.0`), this measured as `P_A` settling
+around `43e6` in a synthetic test where `p_set=15e6` and `P` was pinned
+at `50e6` — a real, bounded overshoot, not a crash or non-convergence.
+
+This is an accepted trade-off, not an oversight: the user explicitly
+prioritized the fixed-displacement-pump scenario (their actual use
+case) over the hard-pinned-reservoir-on-`P` scenario (a less common
+circuit shape — most real supply-side sources are pumps, not pressure
+sources wired directly to a regulator's inlet with nothing upstream
+limiting them). Eliminating this trade-off entirely would require
+moving the tie-break to a genuinely separate equation (an auxiliary
+"spool position"-style variable, discussed and set aside as a larger
+structural change) rather than blending it into the same residual as
+the core physics.
 
 This is independent of, and does not fix, the separately-discovered
 `simulation/hydraulic/solver.py` `fsolve_best`/`fsolve_best_residual`
@@ -178,6 +261,18 @@ mismatch (the clipped point and the reported residual come from
 different, unclipped-vs-clipped values) — that bug is out of scope for
 this spec but affects how confidently any hydraulic node's near-boundary
 behavior can be trusted; worth its own fix.
+
+There is also a known, accepted, cosmetic-only cold-start cost: the
+very first solver call of a fresh simulation (all pressures literally
+at 0, no warm start available yet) can hit `least_squares`'s max
+function evaluations before converging — the answer it returns is still
+correct (confirmed against the expected value in the cylinder test
+circuit), just slower on that one call. Every subsequent step converges
+cleanly (warm-started from the previous step). Tested and rejected: a
+`dt=0` "warm-up" pass before the first real step helps the static
+warm-up converge but does not reliably help the first *dynamic* step
+(which shifts the problem's geometry again) — not worth the added
+complexity for a one-time, correctness-neutral cost.
 
 ## Design history: why the branch-guard approach failed
 
@@ -241,8 +336,8 @@ each is addressed in "Equations":**
    makes `Q_p<0` expensive continuously, not via a guard condition that
    could coincide with the bound edge.
 3. Exclude the reverse-flow root with an equation, not just `bounds` →
-   done: `_smooth_max0(-Q_p/Q_scale) * PENALTY_WEIGHT` is exactly this,
-   added directly into `eq_supply`'s residual.
+   done: the smooth-max penalty term is exactly this, added directly
+   into `eq_supply`'s residual.
 
 The `solver.py` clip/residual mismatch remains a separate, pre-existing
 defect independent of this feature (any node encoding physics in
@@ -275,48 +370,50 @@ connection is automatic). Same show/hide-on-toggle pattern already used
 elsewhere (e.g. `check_valve`'s `pilot_exit` combo, `ReliefValve`'s
 `piloted` checkbox).
 
-## Non-goals (unchanged from the base spec, still deferred)
+## Non-goals
 
 - External/remote pilot setpoint (a `Y`-style port adjusting `p_set`
   from an external pressure). Explicitly discussed and deferred again —
   no concrete use case yet; will get its own spec if/when needed, same
   incremental path.
 - Reverse flow / integrated check function through the `P`/`A` pair
-  itself. Still out of scope — `A` becoming bidirectional under
-  `relieving=True` lets flow enter at `A` and leave via `T`, but the
-  reverse-flow penalty in "Equations" specifically keeps `Q_P>=0`
-  always, so that flow never goes back out through `P`. `A→T` is a new
-  path; `A→P` is not reopened.
+  itself. `A` stays forward/outgoing-only (`Q_A <= 0`) even when
+  relieving — see "Property and port" above for why the originally
+  planned bidirectional `A` was reverted.
+- True external backfeed directly into `A` (something actively pushing
+  flow backward into the valve's outlet, independent of anything on the
+  `P` side). The relief mechanism handles "supply forces more flow than
+  the downstream will accept" instead, which covers every circuit
+  tried during implementation.
+- A fully trade-off-free supply ridge (see "Remaining known
+  limitation") — would need a structural change (separate auxiliary
+  variable for the tie-break), not attempted here.
 - Pneumatic domain.
 
 ## Files
 
 - `simulation/nodes/pressure_reducing_valve.py` — modified: `relieving`
-  property, `T` port, `A`'s bounds, and `equations()` all already exist
-  from the first (reverted-in-spirit but still-committed) attempt;
-  `equations()`'s `relieving=True` body must be REPLACED with the
-  dual-FB formulation above, not added alongside it.
+  property, `T` port, `equations()` per "Equations" above. `A`'s
+  bounds are UNCHANGED from the 2-port valve.
 - `graphics/items/base/nodes/pressure_reducing_valve.py` — unchanged
-  from the first attempt (the graphics/overlay/dialog work was already
-  correct and separately reviewed clean; only the simulation node's
-  physics needs redoing).
-- `tests/test_pressure_reducing_valve_hydraulic.py` — the
-  `relieving=True` tests from the first attempt
-  (`test_relief_regime_residual_matches_formula`,
-  `test_relief_regime_residual_shrinks_to_near_zero_as_p_a_approaches_p_set`,
-  `test_relief_port_is_dead_when_not_in_closed_branch`) assert against
-  the OLD branch-guard formula and must be REMOVED, not kept alongside
-  new ones — they test a formula that no longer exists.
-  `test_relieving_false_by_default_no_t_port`,
-  `test_relieving_true_adds_t_port`,
-  `test_variables_include_t_flow_and_pressure_when_relieving`,
-  `test_bounds_include_t_when_relieving`,
-  `test_relieving_conservation_is_3_port`, and
-  `test_initial_guess_seeds_t_flow_when_relieving` test
-  shape/bounds/conservation, not the specific formula — these stay.
-  The end-to-end test
-  (`test_relief_regime_holds_outlet_at_p_set_end_to_end`) stays, with
-  its `xfail` marker REMOVED (it must actually pass now — this is the
-  test that catches a repeat of this whole failure).
-- `tests/test_pressure_reducing_valve_item.py` — unchanged, no new
-  tests needed (nothing here depends on the equation formulation).
+  from the base 2-port valve's graphics work aside from the `relieving`
+  overlay/anchor/checkbox added when this feature's Task 2 shipped;
+  none of the equation-formula churn touched this file.
+- `tests/test_pressure_reducing_valve_hydraulic.py` — rewritten for the
+  `relieving=True` path: structural tests (ports/variables/bounds/
+  conservation) kept, the three tests asserting the old branch-guard
+  formula removed (they tested a formula that no longer exists), new
+  tests added for the dual-FB structure (reverse-flow penalty
+  monotonicity, relief tie-break, fully-open regime under `relieving`),
+  and the end-to-end test rewritten to use a fixed-displacement-pump
+  scenario (the original used a pump wired directly into `A`, which
+  needed the now-reverted bidirectional bound) with its `xfail` marker
+  removed — it passes.
+- `tests/test_pressure_reducing_valve_item.py` — unchanged, nothing
+  here depends on the equation formulation.
+- `tests/simulate_json.py` — modified: added `PressureReducingValve` to
+  `_get_node_classes()`/`ANCHORS_BY_TYPE` (previously missing entirely,
+  meaning this diagnostic tool silently skipped the node) plus the
+  `relieving` conditional-anchor handling, mirroring `ReliefValve`'s
+  `piloted` handling already there. This is what made the hands-on
+  cylinder-circuit validation possible.

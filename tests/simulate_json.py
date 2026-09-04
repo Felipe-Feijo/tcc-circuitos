@@ -35,6 +35,7 @@ from simulation.simulation_engine import SimulationEngine
 def _get_node_classes():
     from simulation.nodes.reservoir import Reservoir
     from simulation.nodes.relief_valve import ReliefValve
+    from simulation.nodes.pressure_reducing_valve import PressureReducingValve
     from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.nodes.directional_valve.valve_3_2_ways import Valve_3_2_Ways
     from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
@@ -45,6 +46,7 @@ def _get_node_classes():
     return {
         "Reservoir":                  Reservoir,
         "ReliefValve":                ReliefValve,
+        "PressureReducingValve":      PressureReducingValve,
         "FixedDisplacementPump":      FixedDisplacementPump,
         "Valve_3_2_Ways":             Valve_3_2_Ways,
         "Valve_4_2_Ways":             Valve_4_2_Ways,
@@ -60,6 +62,7 @@ def _get_node_classes():
 ANCHORS_BY_TYPE = {
     "Reservoir":                 ["T"],
     "ReliefValve":               ["P", "T"],
+    "PressureReducingValve":     ["P", "A"],
     "FixedDisplacementPump":     ["P", "S"],
     "Valve_3_2_Ways":            ["P", "A", "R"],
     "Valve_4_2_Ways":            ["P", "A", "B", "T"],
@@ -103,6 +106,8 @@ def load_circuit(path: str) -> tuple[dict, list]:
         anchor_names = ANCHORS_BY_TYPE.get(ntype, [])
         if ntype == "ReliefValve" and props.get("piloted"):
             anchor_names = anchor_names + ["Y"]
+        if ntype == "PressureReducingValve" and props.get("relieving"):
+            anchor_names = anchor_names + ["T"]
         for aname in anchor_names:
             anchor = node.add_anchor(aname, domain)
             anchor_index[(nid, aname)] = anchor

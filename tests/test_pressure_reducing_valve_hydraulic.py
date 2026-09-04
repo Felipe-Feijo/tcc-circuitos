@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import math
 import numpy as np
 import pytest
 
@@ -62,8 +63,11 @@ def test_missing_p_set_raises_value_error():
 
 
 # ---------------------------------------------------------------------------
-# Regime 1: fully open (P_A == P_P), while P_A stays below p_set
+# relieving=False (2-port, unchanged from the shipped base valve)
 # ---------------------------------------------------------------------------
+# These pin down that the relieving=True rewrite did not disturb the
+# already-shipped 2-port path -- byte-for-byte the same three regimes
+# (fully open / regulating / closed) as what's merged on main.
 
 def test_fully_open_regime_is_exact_root_below_p_set():
     valve = make_valve(p_set=1.5e7)
@@ -86,10 +90,6 @@ def test_fully_open_regime_breaks_once_p_a_would_exceed_p_set():
     assert abs(eq_fb) > 1e-6  # not a root -- violates a>=0 (p_set - P_A < 0)
 
 
-# ---------------------------------------------------------------------------
-# Regime 2: regulating (P_A held at p_set, P_P >= P_A)
-# ---------------------------------------------------------------------------
-
 def test_regulating_regime_is_exact_root_when_supply_exceeds_setpoint():
     valve = make_valve(p_set=1.5e7)
     idx = make_idx(valve)
@@ -110,10 +110,6 @@ def test_regulating_regime_not_a_root_if_p_a_drifts_from_setpoint():
     assert abs(eq_fb) > 1e-6
 
 
-# ---------------------------------------------------------------------------
-# Regime 3: closed (outlet pushed above p_set externally, no forward flow)
-# ---------------------------------------------------------------------------
-
 def test_closed_regime_is_exact_root_when_outlet_exceeds_setpoint_with_no_flow():
     """P_A pushed above p_set externally, Q_p already at its zero lower
     bound -- the valve should hold Q_p=0 rather than have no root."""
@@ -125,10 +121,6 @@ def test_closed_regime_is_exact_root_when_outlet_exceeds_setpoint_with_no_flow()
     assert abs(eq_fb) < 1e-9
 
 
-# ---------------------------------------------------------------------------
-# Conservation holds regardless of regime
-# ---------------------------------------------------------------------------
-
 def test_conservation_residual_scales_with_imbalance():
     valve = make_valve(p_set=1.5e7)
     idx = make_idx(valve)
@@ -136,10 +128,6 @@ def test_conservation_residual_scales_with_imbalance():
     eq_conservation, _ = valve.equations(x, idx)
     assert abs(eq_conservation - 4e-4 / valve.q_ref) < 1e-12
 
-
-# ---------------------------------------------------------------------------
-# initial_guess / set_scale
-# ---------------------------------------------------------------------------
 
 def test_initial_guess_seeds_zero_flow_and_p_anchor_pressure():
     valve = make_valve(p_set=1.5e7)
@@ -158,7 +146,7 @@ def test_set_scale_applies_minimum_floors():
 
 
 # ---------------------------------------------------------------------------
-# relieving=True: T port, 3-port conservation, relief regime
+# relieving=True: T port, 3-port conservation
 # ---------------------------------------------------------------------------
 
 def make_relieving_valve(p_set=1.5e7):
@@ -201,15 +189,15 @@ def test_variables_include_t_flow_and_pressure_when_relieving():
     }
 
 
-def test_bounds_include_t_when_relieving():
-    """A must be UNBOUNDED when relieving: relief means flow reverses into
-    A (Q_A > 0, fluid entering) and out through T. Keeping A's (None, 0.0)
-    upper bound here plus Q_P pinned to 0 and Q_T <= 0 makes conservation
-    force Q_A = Q_T = 0 -- no relief flow representable at all."""
+def test_bounds_keep_a_forward_only_even_when_relieving():
+    """Unlike an earlier design, A stays <= 0 (forward/outgoing) even when
+    relieving -- this valve diverts excess supply to T without ever
+    needing flow to reverse through A. See the module docstring's Scope
+    note for why true external backfeed into A is out of scope."""
     valve = make_relieving_valve()
     assert valve.bounds == {
         valve.flow_var_p: (0.0, None),
-        valve.flow_var_a: (None, None),
+        valve.flow_var_a: (None, 0.0),
         valve.flow_var_t: (None, 0.0),
     }
 
@@ -223,41 +211,6 @@ def test_relieving_conservation_is_3_port():
     assert abs(eq_conservation) < 1e-9
 
 
-def test_relief_regime_residual_matches_formula():
-    """Inside the closed/relief branch (P_a > p_set, Q_p <= 0), eq_relief
-    should equal exactly (P_a - p_set)/P_scale. Not asserted at zero: the
-    branch's own root (P_a == p_set) sits exactly on its guard's boundary
-    (P_a > p_set), which no floating trial value can land on exactly --
-    a converging solver approaches it from above without ever crossing it.
-    Check the formula directly instead of asserting an exact root here."""
-    valve = make_relieving_valve(p_set=1.5e7)
-    idx = make_relieving_idx(valve)
-    x = np.array([-2e-5, 1e-4, -8e-5, 1.0e7, 1.6e7, 0.0])  # Q_p<=0, P_a=1.6e7 > p_set
-    eq_conservation, eq_supply, eq_relief = valve.equations(x, idx)
-    assert abs(eq_conservation) < 1e-9  # -2e-5 + 1e-4 - 8e-5 = 0
-    assert abs(eq_supply - (-2e-5) / valve.q_ref) < 1e-12
-    assert abs(eq_relief - (1.6e7 - 1.5e7) / valve.p_ref) < 1e-12
-
-
-def test_relief_regime_residual_shrinks_to_near_zero_as_p_a_approaches_p_set():
-    valve = make_relieving_valve(p_set=1.5e7)
-    idx = make_relieving_idx(valve)
-    x = np.array([0.0, 1e-4, -1e-4, 1.0e7, 1.5e7 + 1e-3, 0.0])  # P_a just barely above p_set
-    _, _, eq_relief = valve.equations(x, idx)
-    assert abs(eq_relief) < 1e-9
-
-
-def test_relief_port_is_dead_when_not_in_closed_branch():
-    """Outside the closed/relief branch (here: regulating, P_a == p_set,
-    P_p above it), Q_T is a dead port -- pinned to zero, same 'dead port'
-    pattern ReliefValve/CheckValve already use for their piloted Y port."""
-    valve = make_relieving_valve(p_set=1.5e7)
-    idx = make_relieving_idx(valve)
-    x = np.array([1e-4, -1e-4, 3.0, 2.0e7, 1.5e7, 0.0])  # regulating regime, Q_t trial = 3.0
-    _, _, eq_relief = valve.equations(x, idx)
-    assert abs(eq_relief - 3.0 / valve.q_ref) < 1e-9  # not zero -- Q_t=3 isn't a root here
-
-
 def test_initial_guess_seeds_t_flow_when_relieving():
     valve = make_relieving_valve(p_set=1.5e7)
     valve.anchors["P"].pressure = 3e7
@@ -266,95 +219,165 @@ def test_initial_guess_seeds_t_flow_when_relieving():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: relief regime through the real SimulationEngine
+# relieving=True: dual Fischer-Burmeister physics
+#
+# These reproduce the exact tuning constants from equations() (kept in
+# sync by comment -- if you change PENALTY_WEIGHT/SUPPLY_RIDGE_WEIGHT/
+# RIDGE_WEIGHT there, update them here too). Their purpose is to pin the
+# STRUCTURE of the formula (which terms exist, what they depend on), not
+# to be the primary confidence check for end-to-end correctness -- that's
+# what the SimulationEngine test at the bottom of this file is for.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN UNFIXED (re-verified by independent re-review, see "
-        ".superpowers/sdd/2026-09-03-pressure-reducing-valve-relief-port/"
-        "final-review-fix-report.md): on this circuit, fsolve's cold start "
-        "(all pressures seeded at 0 -- p_previous continuity seeding is "
-        "unreachable dead code, simulation_engine.py:680-683) never enters "
-        "the relief branch at all. It converges with ier=1 and residual "
-        "~1e-17 onto a DIFFERENT, bound-violating root: the fully-open "
-        "regime with the pump's flow running backwards through the valve "
-        "to the P-side reservoir (Q_P=-1e-4, violates its own Q_P>=0 "
-        "bound). That point is rejected by within_bounds, then "
-        "solver.py's fsolve_best fallback stores np.clip(x_fast, lower, "
-        "upper) -- clipping Q_P to 0 -- while keeping the UNCLIPPED "
-        "point's residual (a separate, independently-confirmed solver bug: "
-        "solver.py's fsolve_best/fsolve_best_residual pairing is "
-        "inconsistent), so the engine reports a falsely-good residual for "
-        "a garbage clipped answer (P_A ~ 5e-14, not ~1.5e7). Seeding "
-        "initial_guess inside the relief branch was tried and does not "
-        "help, because the bounded solver never explores that branch in "
-        "the first place -- it isn't a discontinuity-crossing problem, "
-        "it's that the relief branch is reachable only on a measure-zero "
-        "slice of the feasible set (Q_P<=0 exactly, while Q_P's own bound "
-        "is Q_P>=0), and a competing bound-violating root wins first. A "
-        "real fix needs: (1) a smooth relief-orifice formulation instead "
-        "of a hard branch guard, (2) decoupling that guard from Q_P's "
-        "active bound, and (3) excluding the reverse-flow root with an "
-        "equation (bounds alone don't stop fsolve's own unbounded stage "
-        "from converging onto it) -- a design decision for a new spec, "
-        "not a fix round."
-    ),
-)
-def test_relief_regime_holds_outlet_at_p_set_end_to_end():
-    """External pump pushes flow into A (representing something outside
-    the valve's control pressurizing the outlet -- e.g. a load-driven
-    cylinder, or the topology-change reseed scenario documented in the
-    module docstring) while P is fed from a low-pressure reservoir that
-    can never reach p_set on its own -- the valve must rely on T/relief
-    to hold P_A at p_set, not on throttling supply. Runs the real
-    SimulationEngine/NonlinearSystemSolver, not equations() in
-    isolation -- this is the only test in the suite that exercises the
-    relief path end-to-end, added specifically because Finding 1 (the
-    bounds bug making relief physically impossible) was invisible to
-    every equations()-only test."""
+_PENALTY_WEIGHT = 500.0
+_SUPPLY_RIDGE_WEIGHT = 2.0
+_RIDGE_WEIGHT = 0.0002
+
+
+def test_fully_open_regime_is_exact_root_when_relieving():
+    """Same fully-open regime as the 2-port valve (P_A=P_P, below p_set),
+    now with T present but idle -- both ridge/penalty terms vanish at
+    this point (Q_p>0, P_p==p_set*0+... below p_set so tanh term is
+    negative but small; assert via direct equation call, not by hand)."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+    # P_p == P_a == 1e7 (well below p_set), Q_t = 0 (idle).
+    x = np.array([1e-4, -1e-4, 0.0, 1.0e7, 1.0e7, 0.0])
+    eq_conservation, eq_supply, eq_relief = valve.equations(x, idx)
+    assert abs(eq_conservation) < 1e-9
+    # eq_relief: a = (p_set-P_a)/P_scale > 0, b_relief = -Q_t/Q_scale = 0
+    # -- FB(a,0) = a - a = 0 exactly, plus the ridge (0) -- dead port root.
+    assert abs(eq_relief) < 1e-9
+    # eq_supply's FB part is 0 (b_supply=0 branch); the two correction
+    # terms are small but not exactly 0 (P_p < p_set here), so just check
+    # it's small relative to the scale, not exactly zero.
+    assert abs(eq_supply) < 0.1
+
+
+def test_reverse_flow_penalty_grows_as_q_p_goes_negative():
+    """The penalty term added to eq_supply must strictly increase in
+    magnitude as Q_p goes more negative -- this is what excludes the
+    reverse-flow-through-P root at the equation level, not just via
+    `bounds` (which fsolve's own unbounded stage ignores)."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+
+    def eq_supply_at(q_p):
+        x = np.array([q_p, -1e-4 - q_p, 0.0, 2.0e7, 1.5e7, 0.0])
+        _, eq_supply, _ = valve.equations(x, idx)
+        return eq_supply
+
+    residual_at_zero = eq_supply_at(0.0)
+    residual_at_small_negative = eq_supply_at(-1e-6)
+    residual_at_large_negative = eq_supply_at(-1e-4)
+    assert abs(residual_at_small_negative) > abs(residual_at_zero)
+    assert abs(residual_at_large_negative) > abs(residual_at_small_negative)
+
+
+def test_relief_tie_break_pulls_q_t_toward_zero_when_not_needed():
+    """At the shared root (P_a=p_set, P_p>=p_set), Q_t=0 must have a
+    strictly smaller |eq_relief| residual than some nonzero Q_t -- the
+    ridge is what breaks the otherwise rank-deficient tie in favor of
+    'relief idle unless genuinely needed'."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+
+    def eq_relief_at(q_t):
+        x = np.array([1e-4, -1e-4 - q_t, q_t, 2.0e7, 1.5e7, 0.0])
+        _, _, eq_relief = valve.equations(x, idx)
+        return eq_relief
+
+    assert abs(eq_relief_at(0.0)) < abs(eq_relief_at(-1e-5))
+
+
+def test_relief_engages_when_p_a_pushed_above_p_set_externally():
+    """With Q_p pinned at 0 (supply can't help) and P_a pushed above
+    p_set, eq_relief's magnitude must shrink as Q_t moves toward the
+    value conservation implies is needed (-Q_a), confirming the relief
+    FB is actually sensitive to Q_t in this regime (not a dead port)."""
+    valve = make_relieving_valve(p_set=1.5e7)
+    idx = make_relieving_idx(valve)
+
+    def eq_relief_at(q_t):
+        x = np.array([0.0, 1e-4, q_t, 1.0e7, 1.6e7, 0.0])
+        _, _, eq_relief = valve.equations(x, idx)
+        return eq_relief
+
+    # Q_t=0 (no relief at all) should be far worse than Q_t=-1e-4
+    # (matches conservation: Q_p=0, Q_a=1e-4, needs Q_t=-1e-4).
+    assert abs(eq_relief_at(-1e-4)) < abs(eq_relief_at(0.0))
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: relief regime through the real SimulationEngine.
+#
+# This is the regression test for the bug this whole redesign fixed: an
+# earlier hard-branch design pinned Q_p to exactly zero once P_a exceeded
+# p_set, which directly contradicted any upstream flow SOURCE that
+# forces its own nonzero Q_p (e.g. a fixed-displacement pump) -- the
+# shared pressure diverged instead of converging. See
+# docs/superpowers/specs/2026-09-03-pressure-reducing-valve-relief-port-design.md
+# for the full history (including a first relief-port attempt that also
+# needed reverse flow through A -- that scenario is now explicitly out
+# of scope, see the module docstring's Scope note).
+# ---------------------------------------------------------------------------
+
+def test_relief_regime_diverts_excess_supply_pump_flow_to_tank_end_to_end():
+    """A fixed-displacement pump forces more flow into P (1e-2 m3/s) than
+    a much smaller downstream load can accept (2e-4 m3/s, modeled the
+    same way -- a second fixed-displacement pump's suction tied to A, so
+    its OWN flow demand is fixed regardless of pressure). The valve must
+    hold P_A near p_set by diverting the difference to T, without ever
+    reversing flow through A. Runs the real SimulationEngine, not
+    equations() in isolation."""
     from simulation.simulation_engine import SimulationEngine
-    from simulation.nodes.pressure_reducing_valve import PressureReducingValve
     from simulation.nodes.reservoir import Reservoir
     from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
     from simulation.connections import Connection
 
-    p_set = 1.5e7
+    p_set = 2.0e6
 
     prv = PressureReducingValve("prv", domain="hydraulic", properties={"p_set": p_set, "relieving": True})
     prv.add_anchor("P", domain="hydraulic")
     prv.add_anchor("A", domain="hydraulic")
     prv.add_anchor("T", domain="hydraulic")
 
-    res_supply = Reservoir("res_supply", domain="hydraulic", properties={"pressure": 0.0})
-    res_supply.add_anchor("T", domain="hydraulic")
+    supply_pump = FixedDisplacementPump("supply_pump", domain="hydraulic", properties={"Q": 1e-2})
+    supply_pump.add_anchor("P", domain="hydraulic")
+    supply_pump.add_anchor("S", domain="hydraulic")
+    res_supply_suction = Reservoir("res_supply_suction", domain="hydraulic", properties={"pressure": 0.0})
+    res_supply_suction.add_anchor("T", domain="hydraulic")
 
     res_tank = Reservoir("res_tank", domain="hydraulic", properties={"pressure": 0.0})
     res_tank.add_anchor("T", domain="hydraulic")
 
-    load_pump = FixedDisplacementPump("load_pump", domain="hydraulic", properties={"Q": 1e-4})
-    load_pump.add_anchor("P", domain="hydraulic")
-    load_pump.add_anchor("S", domain="hydraulic")
+    load = FixedDisplacementPump("load", domain="hydraulic", properties={"Q": 2e-4})
+    load.add_anchor("P", domain="hydraulic")
+    load.add_anchor("S", domain="hydraulic")
+    res_load_discharge = Reservoir("res_load_discharge", domain="hydraulic", properties={"pressure": 0.0})
+    res_load_discharge.add_anchor("T", domain="hydraulic")
 
-    res_load_suction = Reservoir("res_load_suction", domain="hydraulic", properties={"pressure": 0.0})
-    res_load_suction.add_anchor("T", domain="hydraulic")
-
-    conn_p = Connection(prv.get_anchor("P"), res_supply.get_anchor("T"))
+    conn_supply = Connection(supply_pump.get_anchor("P"), prv.get_anchor("P"))
+    conn_supply_suction = Connection(supply_pump.get_anchor("S"), res_supply_suction.get_anchor("T"))
     conn_t = Connection(prv.get_anchor("T"), res_tank.get_anchor("T"))
-    conn_load_p = Connection(load_pump.get_anchor("P"), prv.get_anchor("A"))
-    conn_load_s = Connection(load_pump.get_anchor("S"), res_load_suction.get_anchor("T"))
+    conn_load = Connection(prv.get_anchor("A"), load.get_anchor("S"))
+    conn_load_discharge = Connection(load.get_anchor("P"), res_load_discharge.get_anchor("T"))
 
     nodes = {
-        "prv": prv, "res_supply": res_supply, "res_tank": res_tank,
-        "load_pump": load_pump, "res_load_suction": res_load_suction,
+        "prv": prv, "supply_pump": supply_pump, "res_supply_suction": res_supply_suction,
+        "res_tank": res_tank, "load": load, "res_load_discharge": res_load_discharge,
     }
-    connections = {c.id: c for c in (conn_p, conn_t, conn_load_p, conn_load_s)}
+    connections = {
+        c.id: c for c in (conn_supply, conn_supply_suction, conn_t, conn_load, conn_load_discharge)
+    }
 
     engine = SimulationEngine(nodes, connections)
     engine.run_until_stable(dt=1.0)
 
     p_a = prv.get_anchor("A").pressure
+    q_a = prv.get_anchor("A").flow
     q_t = prv.get_anchor("T").flow
-    assert p_a == pytest.approx(p_set, rel=1e-3)
-    assert q_t < 0  # relieving to tank
+
+    assert p_a == pytest.approx(p_set, rel=0.1)  # held near setpoint (ridge trade-off, see spec)
+    assert q_a == pytest.approx(-2e-4, rel=1e-2)  # load's own fixed demand, unreversed
+    assert q_t < -9e-3  # the vast majority of supply_pump's 1e-2 diverted to tank

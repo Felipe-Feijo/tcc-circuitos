@@ -222,7 +222,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="318" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="317" />
         <source>A sensor named '{0}' already exists.</source>
         <translation type="unfinished" />
     </message>
@@ -637,6 +637,13 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>PressureGauge</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_gauge.py" line="25" />
+        <source>Pressure Gauge</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>PressureLine</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\expandable\pressure_line.py" line="51" />
@@ -646,23 +653,28 @@ Built with PyQt6</source>
 </context><context>
     <name>PressureReducingValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="43" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="53" />
         <source>Pressure Reducing Valve</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="86" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="121" />
         <source>Pressure Reducing Valve — Properties</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="88" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="123" />
         <source>Setpoint pressure (Pa)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="93" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="128" />
         <source>Tank port (T)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="131" />
+        <source>External pilot (Y)</source>
         <translation type="unfinished" />
     </message>
 </context><context>

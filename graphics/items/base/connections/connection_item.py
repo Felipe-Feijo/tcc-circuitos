@@ -151,15 +151,24 @@ class ConnectionItem(DiagramItemBase):
         if self.isSelected():
             return QPen(Qt.GlobalColor.blue, 3)
         if self.domain == "pneumatic" and self.state == 1:
-            return QPen(Qt.GlobalColor.green, width)
+            # Pure green is ~1.4:1 contrast on white -- darken in light
+            # theme, keep pure green on dark.
+            color = QColor(0, 128, 0) if self.use_light_theme else QColor(Qt.GlobalColor.green)
+            return QPen(color, width)
         if self.domain == "electric" and self.state == 1:
-            return QPen(Qt.GlobalColor.yellow, width)
+            # Pure yellow is nearly invisible on a white canvas -- darken
+            # to amber in light theme, keep pure yellow on dark.
+            color = QColor(184, 132, 0) if self.use_light_theme else QColor(Qt.GlobalColor.yellow)
+            return QPen(color, width)
         if self.domain == "hydraulic":
             if self.state == "ERR":          return QPen(Qt.GlobalColor.red, 3)
             if self.state == "PRESSURIZING": return QPen(QColor(255, 140, 0), 3)
             if self.state > 0:               return QPen(Qt.GlobalColor.blue, width)
             if self.state < 0:               return QPen(QColor(100, 180, 255), width)
-            return QPen(Qt.GlobalColor.cyan, 3)
+            # Idle-hydraulic cyan nearly disappears on white -- teal in
+            # light theme, keep pure cyan on dark.
+            color = QColor(0, 137, 123) if self.use_light_theme else QColor(Qt.GlobalColor.cyan)
+            return QPen(color, 3)
         # Default pen — white on dark theme, black on light theme.
         if self.domain != "hydraulic":
             color = Qt.GlobalColor.black if self.use_light_theme else Qt.GlobalColor.white

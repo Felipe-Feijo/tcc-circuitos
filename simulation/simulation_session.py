@@ -115,7 +115,7 @@ class SimulationSession:
         try:
             if self._recorder is not None:
                 data = self._recorder.finalize()
-                report_builder.build(data.frames, data.temp_dir)
+                report_builder.build(data.frames, data.temp_dir, data.node_names)
                 result = ReportResult(report_dir=data.temp_dir)
         except Exception:
             logger.exception("failed to build the simulation report")

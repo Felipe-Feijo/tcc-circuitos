@@ -449,7 +449,7 @@ class CylinderItem(NodeItem):
             # already cataloged for the context-menu toggle titles.
             side_label = _("Retracted sensor") if pos == "retracted" else _("Extended sensor")
             checkbox = dialog.add_bool_field(side_label, value=current_enabled)
-            name_field = dialog.add_text_field(_("  Name"), placeholder="ex: A1", value=current_name)
+            name_field = dialog.add_text_field(_("  Signal name"), placeholder="ex: A1", value=current_name)
             name_field.setEnabled(current_enabled)
 
             def on_enabled_changed(_state, checkbox=checkbox):

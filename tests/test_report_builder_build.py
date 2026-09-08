@@ -35,14 +35,31 @@ def test_build_writes_html_pdf_and_video(tmp_path):
     html_path = out_dir / "relatorio.html"
     pdf_path = out_dir / "graficos.pdf"
     video_path = out_dir / "video.mp4"
+    data_path = out_dir / "dados.txt"
 
     assert html_path.exists() and html_path.stat().st_size > 0
     assert pdf_path.exists() and pdf_path.stat().st_size > 0
     assert video_path.exists() and video_path.stat().st_size > 0
+    assert data_path.exists() and data_path.stat().st_size > 0
 
     html = html_path.read_text(encoding="utf-8")
     assert "<video" in html
     assert 'href="graficos.pdf"' in html
+
+    data_txt = data_path.read_text(encoding="utf-8")
+    assert "# Posição do pistão — Cilindro 1" in data_txt
+    assert "tempo_s,posicao" in data_txt
+
+
+def test_build_uses_given_node_names_in_data_txt(tmp_path):
+    frames = _frames_with_images(tmp_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    build(frames, str(out_dir), node_names={"c1": "Cilindro A"})
+
+    data_txt = (out_dir / "dados.txt").read_text(encoding="utf-8")
+    assert "# Posição do pistão — Cilindro A" in data_txt
 
 
 def test_build_includes_gauge_chart_in_html(tmp_path):
@@ -83,6 +100,7 @@ def test_build_handles_no_frames(tmp_path):
 
     assert (out_dir / "relatorio.html").exists()
     assert (out_dir / "graficos.pdf").exists()
+    assert (out_dir / "dados.txt").read_text(encoding="utf-8") == "# Nenhum dado registrado\n"
 
 
 def test_build_deletes_frame_pngs_from_out_dir(tmp_path):

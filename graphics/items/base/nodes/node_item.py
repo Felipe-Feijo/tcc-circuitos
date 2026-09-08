@@ -1,6 +1,6 @@
 import uuid
 import copy
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QMenu, QLineEdit
 from PyQt6.QtCore import (
     Qt, QRectF, QPointF, QTimer, QCoreApplication, pyqtSignal, pyqtProperty,
 )
@@ -123,6 +123,11 @@ class NodeItem(DiagramItemBase):
 
         # Identity & topology
         self.id: str = str(uuid.uuid4())
+        # User-facing display name -- distinct from `id` (an opaque
+        # UUID). Blank by default; editable via the properties dialog,
+        # used instead of `id` wherever a node is shown to the user
+        # (e.g. report chart titles).
+        self.name: str = ""
         self.domain: str | None = domain
         self.sensor_registry: SensorRegistry | None = sensor_registry
         self.anchors: dict[str, AnchorItem] = {}
@@ -298,6 +303,7 @@ class NodeItem(DiagramItemBase):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "name": self.name,
             "type": self.__class__.__name__,
             "domain": self.domain,
             "position": {"x": self.pos().x(), "y": self.pos().y()},
@@ -346,6 +352,7 @@ class NodeItem(DiagramItemBase):
 
         if keep_id:
             node.id = data["id"]
+        node.name = data.get("name", "")
 
         pos = data["position"]
         node.setPos(float(pos["x"]), float(pos["y"]))
@@ -600,14 +607,24 @@ class NodeItem(DiagramItemBase):
             conn.prepareGeometryChange()
             conn.update()
 
+    def _prep_properties_dialog(self) -> tuple[PropertiesDialog, QLineEdit]:
+        """Builds this node's properties dialog (the subclass's own
+        fields, or a blank dialog if it has none) plus the generic
+        "Component name" field every node gets, prepended above
+        whatever the subclass added. Returns (dialog, name_field) -- the caller
+        applies name_field's text back onto self.name after a
+        confirmed exec()."""
+        dialog = self.build_properties_dialog() or PropertiesDialog()
+        name_field = dialog.add_text_field(
+            QCoreApplication.translate("NodeItem", "Component name"), value=self.name, at_top=True
+        )
+        return dialog, name_field
+
     def mouseDoubleClickEvent(self, event) -> None:
         if self.simulation_mode:
             event.ignore()
             return
-        dialog = self.build_properties_dialog()
-        if dialog is None:
-            event.ignore()
-            return
+        dialog, name_field = self._prep_properties_dialog()
 
         # Captures a snapshot before opening the dialog -- only pushed if the user confirms
         scene = self.scene()
@@ -615,6 +632,7 @@ class NodeItem(DiagramItemBase):
         before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
 
         if dialog.exec():
+            self.name = name_field.text().strip()
             self.apply_properties_from_dialog(dialog)
             if before is not None:
                 # Deferred (same QTimer.singleShot(0, ...) queue used by
@@ -746,16 +764,14 @@ class NodeItem(DiagramItemBase):
         super().extend_context_menu(menu)
 
     def _open_properties_dialog(self) -> None:
-        dialog = self.build_properties_dialog()
-        if dialog is None:
-            dialog = PropertiesDialog()
-            dialog.add_no_properties_message()
+        dialog, name_field = self._prep_properties_dialog()
 
         scene = self.scene()
         undo_stack = getattr(getattr(self, "editor", None), "undo_stack", None)
         before = undo_stack.snapshot(scene) if (undo_stack and scene) else None
 
         if dialog.exec():
+            self.name = name_field.text().strip()
             self.apply_properties_from_dialog(dialog)
             if before is not None:
                 undo_stack.push_snapshot(scene, self.editor, before, "Editar propriedades")

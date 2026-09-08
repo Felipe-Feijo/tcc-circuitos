@@ -64,11 +64,15 @@ class PropertiesDialog(QDialog):
         # extra buttons between Cancel and OK/Apply.
         self._btn_layout = btn_layout
 
-    def add_text_field(self, label: str, placeholder: str = "", value: str = "") -> QLineEdit:
+    def add_text_field(self, label: str, placeholder: str = "", value: str = "",
+                        at_top: bool = False) -> QLineEdit:
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
         field.setText(value)
-        self._form_layout.addRow(label, field)
+        if at_top:
+            self._form_layout.insertRow(0, label, field)
+        else:
+            self._form_layout.addRow(label, field)
         return field
 
     def add_combo_field(
@@ -96,15 +100,6 @@ class PropertiesDialog(QDialog):
         field.setChecked(value)
         self._form_layout.addRow(label, field)
         return field
-
-    def add_no_properties_message(self):
-        msg = QLabel(QCoreApplication.translate(
-            "PropertiesDialog", "This node has no editable properties."
-        ))
-        msg.setStyleSheet("color: gray; font-style: italic;")
-        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._main_layout.insertWidget(2, msg)  # after the separator
-        self._ok_btn.setEnabled(False)
 
     def add_number_field(
         self,

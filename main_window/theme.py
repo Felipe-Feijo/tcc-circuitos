@@ -45,6 +45,12 @@ def _dark_palette() -> QPalette:
     palette.setColor(QPalette.ColorRole.Link, highlight)
     palette.setColor(QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+    # QPalette(color) also derives Accent -- the role "windows11" paints
+    # checked checkboxes/radio buttons/sliders with -- as a shade of
+    # `window`, which came out pure black here. Pin it to the same color
+    # as Highlight instead (reported: checked checkboxes rendered with
+    # no visible check at all).
+    palette.setColor(QPalette.ColorRole.Accent, highlight)
 
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
@@ -73,6 +79,11 @@ def _light_palette() -> QPalette:
     palette.setColor(QPalette.ColorRole.Link, highlight)
     palette.setColor(QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+    # See _dark_palette() -- QPalette(color) derives Accent as a shade of
+    # `window`, which came out pure white here (matching Base), so
+    # checked checkboxes rendered as a blank white square instead of a
+    # visible check.
+    palette.setColor(QPalette.ColorRole.Accent, highlight)
 
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
     palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)

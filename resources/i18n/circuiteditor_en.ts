@@ -145,7 +145,7 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="111" />
-        <source>Sensor name</source>
+        <source>Signal name</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -582,6 +582,11 @@ Built with PyQt6</source>
 </context><context>
     <name>NodeItem</name>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="619" />
+        <source>Component name</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\node_item.py" line="700" />
         <source>Simulate defect...</source>
         <translation type="unfinished" />
@@ -699,11 +704,6 @@ Built with PyQt6</source>
     <message>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="55" />
         <source>OK</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="101" />
-        <source>This node has no editable properties.</source>
         <translation type="unfinished" />
     </message>
 </context><context>

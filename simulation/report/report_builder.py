@@ -1,4 +1,4 @@
-"""Builds the simulation report's final artifacts: charts, PDF, video and HTML."""
+"""Builds the simulation report's final artifacts: charts, PDF, video, HTML and data txt."""
 
 import base64
 import io
@@ -14,21 +14,64 @@ from matplotlib.backends.backend_pdf import PdfPages
 logger = logging.getLogger(__name__)
 
 
-def build_charts(frames: list) -> list:
+def _collect_piston_series(frames: list) -> dict[str, list[tuple[float, float]]]:
+    """Groups (sim_time, position) points per piston node_id, in frame order."""
+    series: dict[str, list[tuple[float, float]]] = {}
+    for frame in frames:
+        for node_id, position in frame.piston_positions.items():
+            series.setdefault(node_id, []).append((frame.sim_time, position))
+    return series
+
+
+def _collect_gauge_series(frames: list) -> dict[str, list[tuple[float, float | bool]]]:
+    """Groups (sim_time, reading) points per gauge node_id, in frame order."""
+    series: dict[str, list[tuple[float, float | bool]]] = {}
+    for frame in frames:
+        for node_id, reading in frame.gauge_readings.items():
+            series.setdefault(node_id, []).append((frame.sim_time, reading))
+    return series
+
+
+def _assign_display_names(node_ids: list, node_names: dict | None, type_label: str) -> dict[str, str]:
+    """Resolves each node_id to a display name for report titles: the
+    user-given name if set, otherwise an auto-numbered fallback
+    ("Cilindro 1", "Cilindro 2", ...) in the given order -- report
+    titles must never show the raw node_id (an opaque UUID).
+
+    `node_ids` must be given in the same order across build_charts/
+    build_gauge_charts/build_data_txt (currently `sorted(series)`) so
+    the chart, PDF and data txt agree on which number goes to which
+    node.
+    """
+    node_names = node_names or {}
+    display = {}
+    counter = 0
+    for node_id in node_ids:
+        name = node_names.get(node_id)
+        if not name:
+            counter += 1
+            name = f"{type_label} {counter}"
+        display[node_id] = name
+    return display
+
+
+def build_charts(frames: list, node_names: dict | None = None) -> list:
     """Builds a position-vs-time chart per piston present in the frames.
 
     Args:
         frames: List of `Frame` (see `frame_recorder.Frame`), in
             increasing `sim_time` order.
+        node_names: Optional node_id -> user-given display name map
+            (see `frame_recorder.FrameRecorder._collect_node_names`).
+            Pistons with no entry get an auto-numbered "Cilindro N"
+            title -- never the raw node_id.
 
     Returns:
         One `matplotlib.figure.Figure` per piston `node_id` found, in
         alphabetical id order. Empty list if `frames` is empty.
     """
-    series: dict[str, list[tuple[float, float]]] = {}
-    for frame in frames:
-        for node_id, position in frame.piston_positions.items():
-            series.setdefault(node_id, []).append((frame.sim_time, position))
+    series = _collect_piston_series(frames)
+    display_names = _assign_display_names(sorted(series), node_names, "Cilindro")
 
     figures = []
     for node_id in sorted(series):
@@ -38,7 +81,7 @@ def build_charts(frames: list) -> list:
 
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(times, positions, marker="o", markersize=3)
-        ax.set_title(f"Posição do pistão — {node_id}")
+        ax.set_title(f"Posição do pistão — {display_names[node_id]}")
         ax.set_xlabel("Tempo (s)")
         ax.set_ylabel("Posição (0 = recuado, 1 = avançado)")
         ax.set_ylim(-0.05, 1.05)
@@ -49,7 +92,7 @@ def build_charts(frames: list) -> list:
     return figures
 
 
-def build_gauge_charts(frames: list) -> list:
+def build_gauge_charts(frames: list, node_names: dict | None = None) -> list:
     """Builds a reading-vs-time chart per pressure gauge present in the frames.
 
     Hydraulic gauges (numeric readings, in Pa) get a continuous line;
@@ -60,15 +103,16 @@ def build_gauge_charts(frames: list) -> list:
     Args:
         frames: List of `Frame` (see `frame_recorder.Frame`), in
             increasing `sim_time` order.
+        node_names: Optional node_id -> user-given display name map.
+            Gauges with no entry get an auto-numbered "Manômetro N"
+            title -- never the raw node_id.
 
     Returns:
         One `matplotlib.figure.Figure` per gauge `node_id` found, in
         alphabetical id order. Empty list if `frames` is empty.
     """
-    series: dict[str, list[tuple[float, float | bool]]] = {}
-    for frame in frames:
-        for node_id, reading in frame.gauge_readings.items():
-            series.setdefault(node_id, []).append((frame.sim_time, reading))
+    series = _collect_gauge_series(frames)
+    display_names = _assign_display_names(sorted(series), node_names, "Manômetro")
 
     figures = []
     for node_id in sorted(series):
@@ -81,12 +125,12 @@ def build_gauge_charts(frames: list) -> list:
         if is_binary:
             ax.plot(times, [1.0 if r else 0.0 for r in readings],
                     drawstyle="steps-post", marker="o", markersize=3)
-            ax.set_title(f"Pressão — {node_id}")
+            ax.set_title(f"Pressão — {display_names[node_id]}")
             ax.set_ylabel("Despressurizado (0) / Pressurizado (1)")
             ax.set_ylim(-0.05, 1.05)
         else:
             ax.plot(times, readings, marker="o", markersize=3)
-            ax.set_title(f"Pressão — {node_id}")
+            ax.set_title(f"Pressão — {display_names[node_id]}")
             ax.set_ylabel("Pressão (Pa)")
         ax.set_xlabel("Tempo (s)")
         ax.grid(True, alpha=0.3)
@@ -94,6 +138,63 @@ def build_gauge_charts(frames: list) -> list:
         figures.append(fig)
 
     return figures
+
+
+def _series_section(title: str, xlabel: str, ylabel: str, column: str, points: list) -> str:
+    """Formats one chart's data as a commented header plus a CSV table."""
+    header = f"# {title}\n# xlabel: {xlabel}\n# ylabel: {ylabel}\ntempo_s,{column}\n"
+    rows = "\n".join(f"{t},{1 if v is True else 0 if v is False else v}" for t, v in points)
+    return header + rows + "\n"
+
+
+def build_data_txt(frames: list, node_names: dict | None = None) -> str:
+    """Builds a plain-text dump of every chart's underlying x/y data and
+    title metadata, so the charts can be redrawn independently later.
+
+    Args:
+        frames: List of `Frame` (see `frame_recorder.Frame`), in
+            increasing `sim_time` order.
+        node_names: Optional node_id -> user-given display name map --
+            same fallback/numbering rules as `build_charts`, and same
+            resulting names, since both share `_assign_display_names`
+            over the same sorted id order.
+
+    Returns:
+        One section per piston/gauge, each a `#`-commented header
+        (title, xlabel, ylabel) followed by a CSV table (`tempo_s,<col>`).
+        Sections are separated by a blank line, in the same alphabetical
+        order as `build_charts`/`build_gauge_charts`. A placeholder
+        comment if no series was recorded.
+    """
+    piston_series = _collect_piston_series(frames)
+    gauge_series = _collect_gauge_series(frames)
+
+    if not piston_series and not gauge_series:
+        return "# Nenhum dado registrado\n"
+
+    piston_names = _assign_display_names(sorted(piston_series), node_names, "Cilindro")
+    gauge_names = _assign_display_names(sorted(gauge_series), node_names, "Manômetro")
+
+    sections = []
+    for node_id in sorted(piston_series):
+        sections.append(_series_section(
+            f"Posição do pistão — {piston_names[node_id]}", "Tempo (s)",
+            "Posição (0 = recuado, 1 = avançado)", "posicao", piston_series[node_id],
+        ))
+    for node_id in sorted(gauge_series):
+        points = gauge_series[node_id]
+        is_binary = isinstance(points[0][1], bool)
+        if is_binary:
+            sections.append(_series_section(
+                f"Pressão — {gauge_names[node_id]}", "Tempo (s)",
+                "Despressurizado (0) / Pressurizado (1)", "pressurizado", points,
+            ))
+        else:
+            sections.append(_series_section(
+                f"Pressão — {gauge_names[node_id]}", "Tempo (s)", "Pressão (Pa)", "pressao_pa", points,
+            ))
+
+    return "\n".join(sections)
 
 
 def save_pdf(figures: list, path: str) -> None:
@@ -201,9 +302,9 @@ def _delete_frame_images(frames: list) -> None:
             pass
 
 
-def build(frames: list, out_dir: str) -> None:
-    """Builds the report's 3 artifacts (`relatorio.html`, `graficos.pdf`,
-    `video.mp4`) in `out_dir`.
+def build(frames: list, out_dir: str, node_names: dict | None = None) -> None:
+    """Builds the report's artifacts (`relatorio.html`, `graficos.pdf`,
+    `video.mp4`, `dados.txt`) in `out_dir`.
 
     A failure building the video doesn't stop the HTML/PDF from being
     generated -- the HTML reflects the video's absence (see `build_html`).
@@ -211,9 +312,12 @@ def build(frames: list, out_dir: str) -> None:
     Args:
         frames: Frames recorded by the `FrameRecorder` (can be empty).
         out_dir: Directory the files will be written to (must already exist).
+        node_names: Optional node_id -> user-given display name map
+            (see `frame_recorder.ReportData.node_names`), used for
+            chart/PDF/data-txt titles instead of the raw node_id.
     """
-    figures = build_charts(frames)
-    gauge_figures = build_gauge_charts(frames)
+    figures = build_charts(frames, node_names)
+    gauge_figures = build_gauge_charts(frames, node_names)
     all_figures = figures + gauge_figures
     try:
         if all_figures:
@@ -240,3 +344,6 @@ def build(frames: list, out_dir: str) -> None:
     html = build_html(chart_pngs, has_video, gauge_pngs)
     with open(os.path.join(out_dir, "relatorio.html"), "w", encoding="utf-8") as fh:
         fh.write(html)
+
+    with open(os.path.join(out_dir, "dados.txt"), "w", encoding="utf-8") as fh:
+        fh.write(build_data_txt(frames, node_names))

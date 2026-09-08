@@ -30,6 +30,7 @@ class ReportData:
     """Data collected by a `FrameRecorder`, ready for `report_builder`."""
     frames: list = field(default_factory=list)
     temp_dir: str = ""
+    node_names: dict = field(default_factory=dict)
 
 
 class FrameRecorder:
@@ -114,7 +115,29 @@ class FrameRecorder:
         Subsequent calls to `capture_step()` are ignored.
         """
         self._finalized = True
-        return ReportData(frames=list(self._frames), temp_dir=self._temp_dir)
+        return ReportData(
+            frames=list(self._frames),
+            temp_dir=self._temp_dir,
+            node_names=self._collect_node_names(),
+        )
+
+    def _collect_node_names(self) -> dict[str, str]:
+        """Maps node_id -> user-given display name, read off `self.scene`'s
+        items (duck-typed: any item with non-blank `.id`/`.name`, not just
+        NodeItem -- keeps this module decoupled from the graphics package).
+
+        Blank/unset names are omitted -- report_builder falls back to an
+        auto-generated display name for those, never the raw id.
+        """
+        names = {}
+        for item in self.scene.items():
+            node_id = getattr(item, "id", None)
+            if not isinstance(node_id, str):
+                continue
+            name = getattr(item, "name", "")
+            if name and name.strip():
+                names[node_id] = name.strip()
+        return names
 
     def discard(self) -> None:
         """Deletes the temp directory holding every recorded frame."""

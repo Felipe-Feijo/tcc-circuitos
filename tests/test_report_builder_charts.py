@@ -7,7 +7,9 @@ import matplotlib
 matplotlib.use("Agg")
 
 from simulation.report.frame_recorder import Frame
-from simulation.report.report_builder import build_charts, save_pdf, save_chart_pngs, build_gauge_charts
+from simulation.report.report_builder import (
+    build_charts, save_pdf, save_chart_pngs, build_gauge_charts, build_data_txt,
+)
 
 
 def _frames():
@@ -82,3 +84,79 @@ def test_build_gauge_charts_plots_binary_step_for_boolean_readings():
     line = ax.lines[0]
     assert list(line.get_ydata()) == [0.0, 1.0, 0.0]
     assert ax.get_ylim() == pytest.approx((-0.05, 1.05))
+
+
+def test_build_data_txt_handles_no_frames():
+    assert build_data_txt([]) == "# Nenhum dado registrado\n"
+
+
+def test_build_data_txt_has_one_section_per_piston_with_title_and_csv_rows():
+    text = build_data_txt(_frames())
+
+    assert "# Posição do pistão — Cilindro 1" in text
+    assert "# xlabel: Tempo (s)" in text
+    assert "# ylabel: Posição (0 = recuado, 1 = avançado)" in text
+    assert "tempo_s,posicao" in text
+    assert "0.0,0.0" in text
+    assert "0.1,0.5" in text
+    assert "0.2,1.0" in text
+
+
+def test_build_data_txt_writes_pa_column_for_numeric_gauge():
+    text = build_data_txt(_gauge_frames())
+
+    assert "# Pressão — Manômetro 1" in text
+    assert "# ylabel: Pressão (Pa)" in text
+    assert "tempo_s,pressao_pa" in text
+    assert "0.1,5000000.0" in text
+
+
+def test_build_data_txt_writes_0_1_column_for_binary_gauge():
+    text = build_data_txt(_gauge_frames())
+
+    assert "# Pressão — Manômetro 2" in text
+    assert "# ylabel: Despressurizado (0) / Pressurizado (1)" in text
+    assert "tempo_s,pressurizado" in text
+    assert "0.0,0\n" in text
+    assert "0.1,1\n" in text
+
+
+def test_build_data_txt_sections_are_separated_by_a_blank_line():
+    text = build_data_txt(_gauge_frames())
+    assert "\n\n#" in text
+
+
+def test_build_charts_title_uses_given_display_name():
+    figures = build_charts(_frames(), node_names={"c1": "Cilindro A"})
+    fig = dict(zip(sorted({"c1", "c2"}), figures))["c1"]
+    assert "Cilindro A" in fig.axes[0].get_title()
+
+
+def test_build_charts_title_falls_back_to_auto_numbered_name_without_display_name():
+    """No display name given for either piston -- title must never show
+    the raw node_id, and numbering follows the same alphabetical id
+    order build_charts already iterates in."""
+    figures = build_charts(_frames())
+    by_id = dict(zip(sorted({"c1", "c2"}), figures))
+    assert "Cilindro 1" in by_id["c1"].axes[0].get_title()
+    assert "Cilindro 2" in by_id["c2"].axes[0].get_title()
+    assert "c1" not in by_id["c1"].axes[0].get_title()
+
+
+def test_build_gauge_charts_title_uses_given_display_name():
+    figures = build_gauge_charts(_gauge_frames(), node_names={"g_hyd": "Manômetro da bomba"})
+    fig = dict(zip(sorted({"g_hyd", "g_pneu"}), figures))["g_hyd"]
+    assert "Manômetro da bomba" in fig.axes[0].get_title()
+
+
+def test_build_gauge_charts_title_falls_back_to_auto_numbered_name():
+    figures = build_gauge_charts(_gauge_frames())
+    by_id = dict(zip(sorted({"g_hyd", "g_pneu"}), figures))
+    assert "Manômetro 1" in by_id["g_hyd"].axes[0].get_title()
+    assert "Manômetro 2" in by_id["g_pneu"].axes[0].get_title()
+
+
+def test_build_data_txt_title_uses_given_display_name():
+    text = build_data_txt(_frames(), node_names={"c1": "Cilindro A", "c2": "Cilindro B"})
+    assert "# Posição do pistão — Cilindro A" in text
+    assert "# Posição do pistão — Cilindro B" in text

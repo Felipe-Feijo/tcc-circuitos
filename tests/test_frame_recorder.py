@@ -259,3 +259,48 @@ def test_set_dt_changes_subsequent_sim_time():
     assert [f.sim_time for f in data.frames] == [0.0, 1.0]
 
     recorder.discard()
+
+
+def _add_named_item(scene, node_id, name):
+    """A scene item carrying `.id`/`.name`, duck-typed like a NodeItem --
+    frame_recorder stays decoupled from the graphics module, so a plain
+    QGraphicsRectItem stands in here instead of a real NodeItem."""
+    item = QGraphicsRectItem(0, 0, 10, 10)
+    item.id = node_id
+    item.name = name
+    scene.addItem(item)
+    return item
+
+
+def test_finalize_collects_display_names_from_named_scene_items():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    _add_named_item(scene, "c1", "Cilindro A")
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.node_names == {"c1": "Cilindro A"}
+
+
+def test_finalize_omits_items_with_blank_name():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    _add_named_item(scene, "c1", "")
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.node_names == {}
+
+
+def test_finalize_node_names_is_empty_dict_without_any_named_items():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    data = recorder.finalize()
+
+    assert data.node_names == {}

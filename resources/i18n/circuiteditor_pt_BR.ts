@@ -145,8 +145,8 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="111" />
-        <source>Sensor name</source>
-        <translation>Nome do sensor</translation>
+        <source>Signal name</source>
+        <translation>Nome do sinal</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="200" />
@@ -256,8 +256,8 @@
         <translation>Cilindro — Propriedades</translation>
     </message>
     <message>
-        <source>  Name</source>
-        <translation>  Nome</translation>
+        <source>  Signal name</source>
+        <translation>  Nome do sinal</translation>
     </message>
 </context><context>
     <name>DefectDialog</name>
@@ -753,6 +753,11 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>NodeItem</name>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="619" />
+        <source>Component name</source>
+        <translation>Nome do componente</translation>
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\node_item.py" line="700" />
         <source>Simulate defect...</source>
         <translation>Simular defeito...</translation>
@@ -871,11 +876,6 @@ Desenvolvido com PyQt6</translation>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="55" />
         <source>OK</source>
         <translation>OK</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="101" />
-        <source>This node has no editable properties.</source>
-        <translation>Este nó não possui propriedades editáveis.</translation>
     </message>
 </context><context>
     <name>RelayCoil</name>

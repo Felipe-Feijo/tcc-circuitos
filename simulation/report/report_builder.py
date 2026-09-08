@@ -55,7 +55,8 @@ def _assign_display_names(node_ids: list, node_names: dict | None, type_label: s
     return display
 
 
-def build_charts(frames: list, node_names: dict | None = None) -> list:
+def build_charts(frames: list, node_names: dict | None = None,
+                  digital_pistons: set | None = None) -> list:
     """Builds a position-vs-time chart per piston present in the frames.
 
     Args:
@@ -65,6 +66,12 @@ def build_charts(frames: list, node_names: dict | None = None) -> list:
             (see `frame_recorder.FrameRecorder._collect_node_names`).
             Pistons with no entry get an auto-numbered "Cilindro N"
             title -- never the raw node_id.
+        digital_pistons: Optional set of node_ids with no continuous
+            position -- non-hydraulic (pneumatic) pistons jump straight
+            to 0 or 1, never passing through an intermediate value (see
+            `frame_recorder.FrameRecorder._collect_digital_pistons`).
+            Plotted as a step, not a linearly-interpolated ramp that
+            never physically existed.
 
     Returns:
         One `matplotlib.figure.Figure` per piston `node_id` found, in
@@ -72,15 +79,17 @@ def build_charts(frames: list, node_names: dict | None = None) -> list:
     """
     series = _collect_piston_series(frames)
     display_names = _assign_display_names(sorted(series), node_names, "Cilindro")
+    digital_pistons = digital_pistons or set()
 
     figures = []
     for node_id in sorted(series):
         points = series[node_id]
         times = [t for t, _ in points]
         positions = [p for _, p in points]
+        drawstyle = "steps-post" if node_id in digital_pistons else "default"
 
         fig, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(times, positions, marker="o", markersize=3)
+        ax.plot(times, positions, marker="o", markersize=3, drawstyle=drawstyle)
         ax.set_title(f"Posição do pistão — {display_names[node_id]}")
         ax.set_xlabel("Tempo (s)")
         ax.set_ylabel("Posição (0 = recuado, 1 = avançado)")
@@ -302,7 +311,8 @@ def _delete_frame_images(frames: list) -> None:
             pass
 
 
-def build(frames: list, out_dir: str, node_names: dict | None = None) -> None:
+def build(frames: list, out_dir: str, node_names: dict | None = None,
+          digital_pistons: set | None = None) -> None:
     """Builds the report's artifacts (`relatorio.html`, `graficos.pdf`,
     `video.mp4`, `dados.txt`) in `out_dir`.
 
@@ -315,8 +325,11 @@ def build(frames: list, out_dir: str, node_names: dict | None = None) -> None:
         node_names: Optional node_id -> user-given display name map
             (see `frame_recorder.ReportData.node_names`), used for
             chart/PDF/data-txt titles instead of the raw node_id.
+        digital_pistons: Optional set of node_ids with no continuous
+            position (see `frame_recorder.ReportData.digital_pistons`),
+            plotted as a step instead of an interpolated ramp.
     """
-    figures = build_charts(frames, node_names)
+    figures = build_charts(frames, node_names, digital_pistons)
     gauge_figures = build_gauge_charts(frames, node_names)
     all_figures = figures + gauge_figures
     try:

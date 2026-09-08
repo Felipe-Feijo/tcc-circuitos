@@ -62,6 +62,27 @@ def test_build_uses_given_node_names_in_data_txt(tmp_path):
     assert "# Posição do pistão — Cilindro A" in data_txt
 
 
+def test_build_forwards_digital_pistons_to_build_charts(tmp_path, monkeypatch):
+    import simulation.report.report_builder as rb
+
+    received = {}
+    original_build_charts = rb.build_charts
+
+    def spy_build_charts(frames, node_names=None, digital_pistons=None):
+        received["digital_pistons"] = digital_pistons
+        return original_build_charts(frames, node_names, digital_pistons)
+
+    monkeypatch.setattr(rb, "build_charts", spy_build_charts)
+
+    frames = _frames_with_images(tmp_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    build(frames, str(out_dir), digital_pistons={"c1"})
+
+    assert received["digital_pistons"] == {"c1"}
+
+
 def test_build_includes_gauge_chart_in_html(tmp_path):
     gauge_readings = [{"g1": 0.0}, {"g1": 5e6}, {"g1": 3e6}]
     frames = _frames_with_images(tmp_path, gauge_readings=gauge_readings)

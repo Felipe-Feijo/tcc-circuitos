@@ -62,25 +62,32 @@ class ScaleContext:
 
     Attributes
     ----------
-    p_ref : reference pressure in Pa
-    q_ref : reference flow in m3/s
-    zc    : the virtual capacitor's impedance in Pa*s/m3
+    p_ref     : reference pressure in Pa
+    q_ref     : reference flow in m3/s
+    zc        : the virtual capacitor's impedance in Pa*s/m3
+    max_nfev  : least_squares() function-evaluation budget for this
+                attempt (see NfevScheduler). Defaults to the ladder's
+                top rung so code that builds a ScaleContext directly
+                (e.g. tests) keeps the old fixed-budget behavior.
     """
     p_ref: float
     q_ref: float
     zc: float
+    max_nfev: int = 6000
 
     def __post_init__(self):
         assert self.p_ref > 0, f"p_ref must be positive, got {self.p_ref}"
         assert self.q_ref > 0, f"q_ref must be positive, got {self.q_ref}"
         assert self.zc > 0,    f"zc must be positive, got {self.zc}"
+        assert self.max_nfev > 0, f"max_nfev must be positive, got {self.max_nfev}"
 
     def __repr__(self) -> str:
         return (
             f"ScaleContext("
             f"p_ref={self.p_ref:.2e} Pa, "
             f"q_ref={self.q_ref:.2e} m³/s, "
-            f"zc={self.zc:.2e} Pa·s/m³)"
+            f"zc={self.zc:.2e} Pa·s/m³, "
+            f"max_nfev={self.max_nfev})"
         )
 
 
@@ -139,6 +146,77 @@ class ZcScheduler:
         gain = 10 ** (iteration / self.tau)
         cap  = 10 ** self.max_decades
         return base * min(gain, cap)
+
+
+# ---------------------------------------------------------------------------
+# NfevScheduler
+# ---------------------------------------------------------------------------
+
+#: least_squares() max_nfev budget per rung. Deliberately cheap: profiling
+#: a real circuit's cold start showed the flat old default (6000) burning
+#: the FULL budget on almost every zc-escalation retry without ever
+#: reaching a good residual (stuck ~5e-4, 16.8s for one step) -- while a
+#: circuit that's actually close to its solution balances to ~1e-11 with
+#: as few as 5-10 evaluations. The top rung is a safety net for circuits
+#: harder than the ones this was tuned against, not a value expected to
+#: be needed often.
+DEFAULT_NFEV_LADDER: tuple[int, ...] = (30, 150, 1500)
+
+#: A previous attempt's normalized residual below this is "close enough"
+#: to converging that spending more evaluations on the SAME zc is likely
+#: to finish the job. At or above it, the zc/topology guess itself is the
+#: problem -- more evaluations on it are wasted; only the next zc
+#: escalation (or a topology change) helps.
+DEFAULT_NFEV_CLOSE_THRESHOLD: float = 1e-2
+
+
+class NfevScheduler:
+    """
+    Escalates the least_squares() max_nfev budget across the hydraulic
+    domain's zc-escalation retries -- but only when the PREVIOUS
+    attempt's normalized residual suggests it was close to converging.
+
+    Unlike ZcScheduler (which grows deterministically with the iteration
+    count), this is residual-driven: a huge residual means the current
+    zc/topology guess is fundamentally wrong, and no amount of extra
+    Newton/TRF iterations fixes that -- only escalating zc does. Only an
+    attempt that was already close deserves a bigger budget to finish.
+
+    Parameters
+    ----------
+    ladder          : max_nfev budget per rung, cheapest first.
+    close_threshold : previous normalized residual below this escalates
+                       one rung; at or above it, resets to rung 0.
+    """
+
+    def __init__(
+        self,
+        ladder: tuple[int, ...] = DEFAULT_NFEV_LADDER,
+        close_threshold: float = DEFAULT_NFEV_CLOSE_THRESHOLD,
+    ):
+        self.ladder = ladder
+        self.close_threshold = close_threshold
+
+    def advance(self, rung: int, previous_residual_norm: float | None) -> tuple[int, int]:
+        """
+        Resolves the rung to use for this attempt and its max_nfev budget.
+
+        Parameters
+        ----------
+        rung                    : the rung the previous attempt used (0 if none yet).
+        previous_residual_norm  : the previous attempt's normalized residual,
+                                   or None if this is the first attempt.
+
+        Returns
+        -------
+        (max_nfev, rung) : the budget for this attempt, and the rung it
+                            was resolved to (persist this for the next call).
+        """
+        if previous_residual_norm is not None and previous_residual_norm < self.close_threshold:
+            rung = min(rung + 1, len(self.ladder) - 1)
+        else:
+            rung = 0
+        return self.ladder[rung], rung
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +309,7 @@ class ScaleManager:
         nodes: list,
         iteration: int,
         scheduler: ZcScheduler | None = None,
+        max_nfev: int | None = None,
     ) -> ScaleContext:
         """
         Builds a complete ScaleContext for the current solve.
@@ -240,6 +319,11 @@ class ScaleManager:
         nodes     : list of the circuit's HydraulicNode instances
         iteration : the current hydraulic convergence loop's iteration
         scheduler : a custom ZcScheduler (uses the default if None)
+        max_nfev  : least_squares() budget for this attempt (see
+                    NfevScheduler). Uses ScaleContext's own default when
+                    None -- callers that don't manage an NfevScheduler
+                    (e.g. tests building a ScaleContext for a single,
+                    known-easy solve) get the old fixed-budget behavior.
         """
         if scheduler is None:
             scheduler = ZcScheduler()
@@ -247,7 +331,10 @@ class ScaleManager:
         p_ref, q_ref = self.estimate(nodes)
         zc = scheduler.zc_at(iteration, p_ref, q_ref)
 
-        return ScaleContext(p_ref=p_ref, q_ref=q_ref, zc=zc)
+        kwargs = {"p_ref": p_ref, "q_ref": q_ref, "zc": zc}
+        if max_nfev is not None:
+            kwargs["max_nfev"] = max_nfev
+        return ScaleContext(**kwargs)
 
     # ------------------------------------------------------------------
     # Internal

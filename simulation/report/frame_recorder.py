@@ -31,6 +31,7 @@ class ReportData:
     frames: list = field(default_factory=list)
     temp_dir: str = ""
     node_names: dict = field(default_factory=dict)
+    digital_pistons: set = field(default_factory=set)
 
 
 class FrameRecorder:
@@ -119,7 +120,22 @@ class FrameRecorder:
             frames=list(self._frames),
             temp_dir=self._temp_dir,
             node_names=self._collect_node_names(),
+            digital_pistons=self._collect_digital_pistons(),
         )
+
+    def _collect_digital_pistons(self) -> set[str]:
+        """Piston node_ids with no continuous position -- non-hydraulic
+        domains (pneumatic) jump the piston straight to 0 or 1 in
+        `update()` (see DoubleActingCylinder/SingleActingCylinder),
+        never passing through an intermediate value. report_builder
+        plots these as a step function; a linearly-interpolated line
+        would draw a ramp that never physically existed.
+        """
+        return {
+            node_id for node_id, node in self.engine.nodes.items()
+            if getattr(node, "type", None) in PISTON_TYPES
+            and getattr(node, "domain", None) != "hydraulic"
+        }
 
     def _collect_node_names(self) -> dict[str, str]:
         """Maps node_id -> user-given display name, read off `self.scene`'s

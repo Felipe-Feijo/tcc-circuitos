@@ -17,6 +17,7 @@ from simulation.hydraulic import (
     ScaleContext,
     ScaleManager,
     ZcScheduler,
+    NfevScheduler,
     ConvergenceMonitor,
     ConvergenceResult,
 )
@@ -51,6 +52,17 @@ class SimulationEngine:
         self._scale_manager = ScaleManager()
         self._zc_scheduler  = ZcScheduler()
         self._conv_monitor  = ConvergenceMonitor()
+
+        # Adaptive least_squares() nfev budget across zc-escalation
+        # retries -- see NfevScheduler. _nfev_rung is the ladder rung the
+        # LAST attempt used; _last_residual_norm is the worst normalized
+        # residual observed across all circuits in the last round, fed
+        # into the next round's NfevScheduler.advance(). Both reset to
+        # their cold-start values whenever the hydraulic domain converges
+        # (or gives up), alongside _hydraulic_iteration.
+        self._nfev_scheduler = NfevScheduler()
+        self._nfev_rung = 0
+        self._last_residual_norm: float | None = None
 
     def run_until_stable(self, dt=0.1):
         """Runs fixed-point iterations until all three domains stabilize.
@@ -433,28 +445,45 @@ class SimulationEngine:
         anchor_to_pressure_var = self._assign_pressure_vars()
         circuits = self._partition_circuits(hydraulic_nodes, anchor_to_pressure_var)
 
+        max_nfev, self._nfev_rung = self._nfev_scheduler.advance(
+            self._nfev_rung, self._last_residual_norm
+        )
+        round_residuals: list[float] = []
+
         for i, (circuit_pvars, circuit_nodes) in enumerate(circuits):
             ctx = self._scale_manager.build_context(
                 list(circuit_nodes),
                 self._hydraulic_iteration,
                 self._zc_scheduler,
+                max_nfev=max_nfev,
             )
-            self._solve_circuit(
+            residual_norm = self._solve_circuit(
                 i + 1, circuit_nodes, circuit_pvars, anchor_to_pressure_var,
                 ctx=ctx,
                 debug=False,
             )
+            if residual_norm is not None:
+                round_residuals.append(residual_norm)
+
+        # Worst circuit this round feeds the NEXT round's budget decision --
+        # one circuit still far off shouldn't let another's good residual
+        # trick the scheduler into escalating prematurely.
+        self._last_residual_norm = max(round_residuals) if round_residuals else None
 
         converged = self._check_flow_conservation(hydraulic_nodes, anchor_to_pressure_var)
 
         if converged:
             self._hydraulic_iteration = 0
+            self._nfev_rung = 0
+            self._last_residual_norm = None
             return False
 
         self._hydraulic_iteration += 1
 
         if self._hydraulic_iteration >= self._hydraulic_max_iterations:
             self._hydraulic_iteration = 0
+            self._nfev_rung = 0
+            self._last_residual_norm = None
             logger.warning(
                 "hydraulic domain did not converge after %d iterations.",
                 self._hydraulic_max_iterations,
@@ -556,7 +585,12 @@ class SimulationEngine:
 
         return circuits
 
-    def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var, ctx: ScaleContext, debug=False):
+    def _solve_circuit(self, index, circuit_nodes, circuit_pvars, anchor_to_pressure_var, ctx: ScaleContext, debug=False) -> float | None:
+        """Solves one circuit and returns the normalized residual the
+        solver achieved (see NonlinearSystemSolver.last_residual_norm),
+        or None if the solver was never invoked (dead circuit) or failed
+        outright -- fed into the engine's NfevScheduler for the next
+        attempt."""
         circuit_list = list(circuit_nodes)
         new_nodes_set = set(circuit_list)
 
@@ -584,7 +618,7 @@ class SimulationEngine:
             if debug:
                 _print_circuit_state(index, circuit_list, anchor_to_pressure_var, sol)
             self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
-            return
+            return None
 
         # active circuit -- checks for a topology change
         for pvar in circuit_pvars:
@@ -601,7 +635,7 @@ class SimulationEngine:
                     cont.p_previous = ctx.p_ref
             self._prev_circuit_map[pvar] = new_nodes_set
 
-        sol = self._try_solve(index, circuit_list, anchor_to_pressure_var, ctx=ctx)
+        sol, residual_norm = self._try_solve(index, circuit_list, anchor_to_pressure_var, ctx=ctx)
 
         if debug and sol:
             _print_circuit_state(index, circuit_list, anchor_to_pressure_var, sol)
@@ -609,7 +643,7 @@ class SimulationEngine:
         if sol is None:
             self._reset_circuit_continuities(circuit_pvars)
             self._mark_circuit_fault(circuit_list, circuit_pvars, anchor_to_pressure_var)
-            return
+            return None
 
         for pvar, continuity in self._continuities.items():
             if pvar in circuit_pvars:
@@ -638,6 +672,7 @@ class SimulationEngine:
             )
 
         self._write_circuit_results(circuit_list, circuit_pvars, anchor_to_pressure_var, sol)
+        return residual_norm
 
     def _try_solve(self, index, circuit_list, anchor_to_pressure_var, ctx: ScaleContext):
         group_flows = defaultdict(list)
@@ -683,10 +718,11 @@ class SimulationEngine:
                 x0[pvar] = cont.p_previous if cont.p_previous > 1.0 else ctx.zc * ctx.q_ref
 
         try:
-            return solver.solve(x0, ctx)
+            sol = solver.solve(x0, ctx)
+            return sol, solver.last_residual_norm
         except Exception as e:
             logger.warning("circuito %d: solver falhou — %s", index, e)
-            return None
+            return None, None
 
     def _write_circuit_results(self, circuit_nodes, circuit_pvars, anchor_to_pressure_var, sol):
         for anchor, pvar in anchor_to_pressure_var.items():

@@ -36,6 +36,25 @@ def test_build_charts_returns_one_figure_per_piston():
     assert len(figures) == 2
 
 
+def test_build_charts_uses_continuous_line_by_default():
+    """No digital_pistons given -- every piston stays a linearly
+    interpolated line (the hydraulic case: a real continuous ramp)."""
+    figures = build_charts(_frames())
+    for fig in figures:
+        assert fig.axes[0].lines[0].get_drawstyle() == "default"
+
+
+def test_build_charts_uses_step_line_for_digital_pistons():
+    """A digital (non-hydraulic) piston jumps 0/1 instantly -- no
+    intermediate position ever existed, so it must render as a step,
+    not an interpolated ramp."""
+    figures = build_charts(_frames(), digital_pistons={"c1"})
+    by_id = dict(zip(sorted({"c1", "c2"}), figures))
+
+    assert by_id["c1"].axes[0].lines[0].get_drawstyle() == "steps-post"
+    assert by_id["c2"].axes[0].lines[0].get_drawstyle() == "default"
+
+
 def test_build_charts_handles_no_frames():
     assert build_charts([]) == []
 

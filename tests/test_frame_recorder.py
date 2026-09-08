@@ -304,3 +304,34 @@ def test_finalize_node_names_is_empty_dict_without_any_named_items():
     data = recorder.finalize()
 
     assert data.node_names == {}
+
+
+def test_finalize_marks_pneumatic_piston_as_digital():
+    """domain != "hydraulic" pistons jump 0/1 instantly (see
+    SingleActingCylinder.update()) -- no intermediate position ever
+    exists, so report_builder must plot them as a step, not a ramp."""
+    engine, cyl = _build_engine_with_piston()  # domain=None -- "digital"
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.digital_pistons == {"c1"}
+
+
+def test_finalize_does_not_mark_hydraulic_piston_as_digital():
+    from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
+
+    hyd = SingleActingCylinder(
+        "h1", domain="hydraulic",
+        properties={"bore": 0.05, "stroke": 0.1, "spring_k": 1000.0},
+    )
+    engine = SimulationEngine(nodes={"h1": hyd}, connections={})
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.digital_pistons == set()

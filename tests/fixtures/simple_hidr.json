@@ -1,0 +1,510 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "502c62a5-7eb9-44d4-b299-cdbd7ecd4e31",
+      "name": "",
+      "type": "JunctionNodeItem",
+      "domain": "hydraulic",
+      "position": {
+        "x": -475.20000000000005,
+        "y": -447.20000000000005
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "J": {
+          "x": 4.0,
+          "y": -29.0
+        }
+      }
+    },
+    {
+      "id": "c809e5ce-98db-457a-8e44-bffc49444bfd",
+      "name": "Pistão (A)",
+      "type": "PressureGauge",
+      "domain": "hydraulic",
+      "position": {
+        "x": -505.07584,
+        "y": -544.78112
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "P": {
+          "x": -51.0,
+          "y": 4.327679999999987
+        }
+      }
+    },
+    {
+      "id": "cccf0560-d12d-4fd9-84ca-2edfae8d25c6",
+      "name": "",
+      "type": "JunctionNodeItem",
+      "domain": "hydraulic",
+      "position": {
+        "x": -482.01728,
+        "y": -118.99999999999997
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "J": {
+          "x": 4.0,
+          "y": -29.0
+        }
+      }
+    },
+    {
+      "id": "c35481e3-fa1d-437e-aa6a-4e9cae42f681",
+      "name": "Bomba",
+      "type": "PressureGauge",
+      "domain": "hydraulic",
+      "position": {
+        "x": -511.9436800000001,
+        "y": -209.98304
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "P": {
+          "x": -51.0,
+          "y": 4.0
+        }
+      }
+    },
+    {
+      "id": "d444f377-b44f-4446-84af-d6687f7a3d2f",
+      "name": "",
+      "type": "JunctionNodeItem",
+      "domain": "hydraulic",
+      "position": {
+        "x": -351.5,
+        "y": -118.99999999999997
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "J": {
+          "x": 4.0,
+          "y": -29.0
+        }
+      }
+    },
+    {
+      "id": "383e1843-64db-47c6-a0b6-0fdfff8ac9d6",
+      "name": "",
+      "type": "DoubleActingCylinder",
+      "domain": "hydraulic",
+      "position": {
+        "x": -601.0625,
+        "y": -733.7125
+      },
+      "rotation": 0.0,
+      "properties": {
+        "sensors": {
+          "retracted": {
+            "enabled": false,
+            "name": ""
+          },
+          "extended": {
+            "enabled": false,
+            "name": ""
+          }
+        },
+        "default_state": "retracted",
+        "external_force": 1.0,
+        "bore": 0.05,
+        "rod_diameter": 0.015,
+        "stroke": 0.5
+      },
+      "labels": {},
+      "anchor_labels": {
+        "A": {
+          "x": -189.5,
+          "y": 2.5
+        },
+        "B": {
+          "x": 21.75,
+          "y": -3.0
+        }
+      }
+    },
+    {
+      "id": "46f251ef-d029-4043-8750-4ed10d31aec5",
+      "name": "",
+      "type": "Valve_4_2_Ways",
+      "domain": "hydraulic",
+      "position": {
+        "x": -543.5,
+        "y": -405.0
+      },
+      "rotation": 0.0,
+      "properties": {
+        "actuators": {
+          "left": {
+            "type": "button",
+            "mode": "latch"
+          },
+          "right": {
+            "type": "spring"
+          }
+        },
+        "default_side": "right",
+        "k": 5.6e-07
+      },
+      "labels": {},
+      "anchor_labels": {
+        "P": {
+          "x": -115.0,
+          "y": 2.0
+        },
+        "A": {
+          "x": -186.0,
+          "y": -21.0
+        },
+        "B": {
+          "x": 8.0,
+          "y": -32.0
+        },
+        "R": {
+          "x": 16.0,
+          "y": 1.5999999999999943
+        }
+      }
+    },
+    {
+      "id": "8a32c21b-bcdd-4be1-8550-b3817717dea8",
+      "name": "",
+      "type": "FixedDisplacementPump",
+      "domain": "hydraulic",
+      "position": {
+        "x": -380.5,
+        "y": -28.5
+      },
+      "rotation": 0.0,
+      "properties": {
+        "Q": 0.000157
+      },
+      "labels": {},
+      "anchor_labels": {
+        "S": {
+          "x": 22.0,
+          "y": 7.0
+        },
+        "P": {
+          "x": -113.80000000000001,
+          "y": -27.400000000000006
+        }
+      }
+    },
+    {
+      "id": "6a1e90fc-d565-44f1-84c2-e262ec331482",
+      "name": "",
+      "type": "ReliefValve",
+      "domain": "hydraulic",
+      "position": {
+        "x": -647.0,
+        "y": -57.0
+      },
+      "rotation": 0.0,
+      "properties": {
+        "piloted": false,
+        "p_set": 600000.0
+      },
+      "labels": {},
+      "anchor_labels": {
+        "T": {
+          "x": -113.60000000000002,
+          "y": -14.800000000000004
+        },
+        "P": {
+          "x": -173.0000000000001,
+          "y": -34.0
+        }
+      }
+    },
+    {
+      "id": "c67b0589-eefe-4b45-b1eb-bb1ee5706692",
+      "name": "",
+      "type": "Reservoir",
+      "domain": "hydraulic",
+      "position": {
+        "x": -231.79999999999995,
+        "y": -19.0
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "T": {
+          "x": 0.0,
+          "y": 18.0
+        }
+      }
+    },
+    {
+      "id": "b78afc9c-4cce-4b97-8ec5-06bd42f230ff",
+      "name": "",
+      "type": "Reservoir",
+      "domain": "hydraulic",
+      "position": {
+        "x": -427.60000000000014,
+        "y": 146.79999999999998
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "T": {
+          "x": -2.0,
+          "y": 12.0
+        }
+      }
+    },
+    {
+      "id": "f623ecd2-5c8b-477b-b390-3e317dc09005",
+      "name": "",
+      "type": "Reservoir",
+      "domain": "hydraulic",
+      "position": {
+        "x": -623.2,
+        "y": 145.99999999999997
+      },
+      "rotation": 0.0,
+      "properties": {},
+      "labels": {},
+      "anchor_labels": {
+        "T": {
+          "x": -9.0,
+          "y": 14.0
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": {
+        "node": "c809e5ce-98db-457a-8e44-bffc49444bfd",
+        "anchor": "P"
+      },
+      "target": {
+        "node": "502c62a5-7eb9-44d4-b299-cdbd7ecd4e31",
+        "anchor": "J"
+      },
+      "waypoints": [
+        {
+          "x": -475.13792,
+          "y": -448.78112
+        },
+        {
+          "x": -475.13792,
+          "y": -453.20000000000005
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "502c62a5-7eb9-44d4-b299-cdbd7ecd4e31",
+        "anchor": "J"
+      },
+      "target": {
+        "node": "46f251ef-d029-4043-8750-4ed10d31aec5",
+        "anchor": "A"
+      },
+      "waypoints": [
+        {
+          "x": -352.5,
+          "y": -447.20000000000005
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "383e1843-64db-47c6-a0b6-0fdfff8ac9d6",
+        "anchor": "A"
+      },
+      "target": {
+        "node": "502c62a5-7eb9-44d4-b299-cdbd7ecd4e31",
+        "anchor": "J"
+      },
+      "waypoints": [
+        {
+          "x": -583.0262826961771,
+          "y": -447.20000000000005
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "c35481e3-fa1d-437e-aa6a-4e9cae42f681",
+        "anchor": "P"
+      },
+      "target": {
+        "node": "cccf0560-d12d-4fd9-84ca-2edfae8d25c6",
+        "anchor": "J"
+      },
+      "waypoints": [
+        {
+          "x": -481.98048000000006,
+          "y": -113.98303999999999
+        },
+        {
+          "x": -481.98048000000006,
+          "y": -124.99999999999997
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "cccf0560-d12d-4fd9-84ca-2edfae8d25c6",
+        "anchor": "J"
+      },
+      "target": {
+        "node": "d444f377-b44f-4446-84af-d6687f7a3d2f",
+        "anchor": "J"
+      }
+    },
+    {
+      "source": {
+        "node": "6a1e90fc-d565-44f1-84c2-e262ec331482",
+        "anchor": "P"
+      },
+      "target": {
+        "node": "cccf0560-d12d-4fd9-84ca-2edfae8d25c6",
+        "anchor": "J"
+      },
+      "waypoints": [
+        {
+          "x": -547.5025125628141,
+          "y": -118.99999999999997
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "46f251ef-d029-4043-8750-4ed10d31aec5",
+        "anchor": "R"
+      },
+      "target": {
+        "node": "c67b0589-eefe-4b45-b1eb-bb1ee5706692",
+        "anchor": "T"
+      },
+      "waypoints": [
+        {
+          "x": -287.5,
+          "y": -172.0
+        },
+        {
+          "x": -156.79999999999995,
+          "y": -172.0
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "8a32c21b-bcdd-4be1-8550-b3817717dea8",
+        "anchor": "S"
+      },
+      "target": {
+        "node": "b78afc9c-4cce-4b97-8ec5-06bd42f230ff",
+        "anchor": "T"
+      },
+      "waypoints": [
+        {
+          "x": -352.1666666666667,
+          "y": 103.99999999999999
+        },
+        {
+          "x": -352.60000000000014,
+          "y": 103.99999999999999
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "6a1e90fc-d565-44f1-84c2-e262ec331482",
+        "anchor": "T"
+      },
+      "target": {
+        "node": "f623ecd2-5c8b-477b-b390-3e317dc09005",
+        "anchor": "T"
+      },
+      "waypoints": [
+        {
+          "x": -547.5025125628141,
+          "y": 121.25481155778893
+        },
+        {
+          "x": -548.2,
+          "y": 121.25481155778893
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "d444f377-b44f-4446-84af-d6687f7a3d2f",
+        "anchor": "J"
+      },
+      "target": {
+        "node": "46f251ef-d029-4043-8750-4ed10d31aec5",
+        "anchor": "P"
+      },
+      "waypoints": [
+        {
+          "x": -351.5,
+          "y": -172.0
+        },
+        {
+          "x": -352.5,
+          "y": -172.0
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "8a32c21b-bcdd-4be1-8550-b3817717dea8",
+        "anchor": "P"
+      },
+      "target": {
+        "node": "d444f377-b44f-4446-84af-d6687f7a3d2f",
+        "anchor": "J"
+      },
+      "waypoints": [
+        {
+          "x": -352.1666666666667,
+          "y": -73.74999999999999
+        },
+        {
+          "x": -351.5,
+          "y": -73.74999999999999
+        }
+      ]
+    },
+    {
+      "source": {
+        "node": "46f251ef-d029-4043-8750-4ed10d31aec5",
+        "anchor": "B"
+      },
+      "target": {
+        "node": "383e1843-64db-47c6-a0b6-0fdfff8ac9d6",
+        "anchor": "B"
+      },
+      "waypoints": [
+        {
+          "x": -287.5,
+          "y": -449.6
+        },
+        {
+          "x": -192.2415744466801,
+          "y": -449.6
+        }
+      ]
+    }
+  ]
+}

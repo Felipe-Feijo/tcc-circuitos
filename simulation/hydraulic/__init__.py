@@ -10,6 +10,7 @@ HydraulicMixin    : Mixin with defaults for optional members
 ScaleContext      : immutable scale context per solve
 ScaleManager      : estimates p_ref and q_ref from the nodes
 ZcScheduler       : computes zc as a function of the iteration
+NfevScheduler     : computes the least_squares nfev budget from the previous residual
 NodeContinuity    : virtual pressurization capacitor
 NonlinearSystemSolver : solves the equation system
 ConvergenceMonitor    : checks flow conservation
@@ -21,6 +22,7 @@ from simulation.hydraulic.scale_context import (
     ScaleContext,
     ScaleManager,
     ZcScheduler,
+    NfevScheduler,
     DEFAULT_P_REF,
     DEFAULT_Q_REF,
 )
@@ -33,6 +35,7 @@ __all__ = [
     "ScaleContext",
     "ScaleManager",
     "ZcScheduler",
+    "NfevScheduler",
     "DEFAULT_P_REF",
     "DEFAULT_Q_REF",
     "NodeContinuity",

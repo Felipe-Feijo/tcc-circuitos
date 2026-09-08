@@ -121,6 +121,11 @@ class NonlinearSystemSolver:
         self.components = components
         self.var_index: dict[str, int] = {}
         self.index_var: list[str] = []
+        # Normalized residual achieved by the last solve() call -- read
+        # by the engine after solve() returns and fed into the NEXT
+        # attempt's NfevScheduler.advance() (see simulation_engine.py).
+        # None until solve() has run at least once.
+        self.last_residual_norm: float | None = None
 
     def register_variables(self) -> None:
         for comp in self.components:
@@ -212,6 +217,7 @@ class NonlinearSystemSolver:
             residual_norm = residual_fast / _mixed_scale
             if ier == 1 and residual_norm < 1e-6 and within_bounds and sane:
                 print(f"  fsolve: converged | residual_norm={residual_norm:.2e} (raw={residual_fast:.2e})")
+                self.last_residual_norm = residual_norm
                 return {var: x_fast[i] for var, i in self.var_index.items()}
 
             if sane:
@@ -251,7 +257,7 @@ class NonlinearSystemSolver:
             ftol=1e-10,
             xtol=1e-10,
             gtol=1e-10,
-            max_nfev=6000,
+            max_nfev=ctx.max_nfev,
         )
 
         residual = np.max(np.abs(result.fun))
@@ -269,10 +275,13 @@ class NonlinearSystemSolver:
         # TRF solution and flagging ERR.
         ls_residual_norm = residual / _mixed_scale
         if ls_residual_norm > 1e-4 and fsolve_best is not None:
-            if fsolve_best_residual / _mixed_scale < ls_residual_norm:
+            fsolve_best_residual_norm = fsolve_best_residual / _mixed_scale
+            if fsolve_best_residual_norm < ls_residual_norm:
                 print(f"  least_squares: falling back to fsolve (lower residual)")
+                self.last_residual_norm = fsolve_best_residual_norm
                 return {var: fsolve_best[i] for var, i in self.var_index.items()}
 
+        self.last_residual_norm = ls_residual_norm
         return {var: result.x[i] for var, i in self.var_index.items()}
 
     def build_initial_guess(

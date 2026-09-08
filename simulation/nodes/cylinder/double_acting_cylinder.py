@@ -66,13 +66,21 @@ class DoubleActingCylinder(Node, HydraulicMixin):
                 vars.append(pvar)
         return vars
 
-    @property
-    def flow_hint(self) -> float:
-        if self.locked_fwd or self.locked_bwd:
-            return 0.0
-        F_net = self.external_force
-        hint = abs(F_net / self.friction * self.area_a)
-        return hint if hint > 1e-10 else 0.0
+    # No flow_hint override: self.friction is a hidden, artificially tiny
+    # regularization constant (see __init__), not a real physical value --
+    # F_net/friction blows up to several orders of magnitude above any
+    # real circuit flow for virtually any nonzero external_force (e.g.
+    # 1N -> ~1.96 m3/s vs a typical pump flow of ~1.57e-4 m3/s).
+    # ScaleManager._estimate_flow() takes the MAX flow_hint across every
+    # hydraulic node with no priority given to the pump's correct hint,
+    # so this one bogus value silently corrupted the whole circuit's
+    # flow scale -- reproduced for real: with any external_force set, the
+    # solver accepted a solution that didn't conserve flow at this
+    # cylinder's own ports. initial_guess() below already computes its
+    # own estimate from the pressure balance and never used this
+    # property, so it has no correct purpose left -- falls back to
+    # HydraulicMixin's default (0.0), same as SingleActingCylinder
+    # (which never overrode it either).
 
     @property
     def initial_guess(self):

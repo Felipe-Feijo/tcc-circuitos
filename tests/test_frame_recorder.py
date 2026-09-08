@@ -335,3 +335,64 @@ def test_finalize_does_not_mark_hydraulic_piston_as_digital():
     data = recorder.finalize()
 
     assert data.digital_pistons == set()
+
+
+def _build_engine_with_hydraulic_piston(default_state="extended", stroke=0.5):
+    """A hydraulic piston with a real x/stroke -- get_visual_state()
+    normalizes this to 0-1 for the sprite, but the report needs the raw
+    x in meters (real physical length), not the normalized fraction."""
+    from simulation.nodes.cylinder.single_acting_cylinder import SingleActingCylinder
+
+    cyl = SingleActingCylinder(
+        "h1", domain="hydraulic",
+        properties={
+            "bore": 0.05, "stroke": stroke, "spring_k": 1000.0,
+            "default_state": default_state,
+        },
+    )
+    engine = SimulationEngine(nodes={"h1": cyl}, connections={})
+    return engine, cyl
+
+
+def test_capture_step_records_hydraulic_piston_real_length_in_meters():
+    engine, cyl = _build_engine_with_hydraulic_piston(default_state="extended", stroke=0.5)
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.frames[0].piston_lengths["h1"] == pytest.approx(0.5)
+
+
+def test_piston_lengths_omits_pneumatic_pistons():
+    engine, cyl = _build_engine_with_piston()  # domain=None -- digital
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert "c1" not in data.frames[0].piston_lengths
+
+
+def test_finalize_collects_stroke_for_hydraulic_pistons():
+    engine, cyl = _build_engine_with_hydraulic_piston(stroke=0.5)
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.piston_strokes == {"h1": 0.5}
+
+
+def test_piston_strokes_omits_pneumatic_pistons():
+    engine, cyl = _build_engine_with_piston()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.piston_strokes == {}

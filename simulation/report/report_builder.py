@@ -13,6 +13,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 logger = logging.getLogger(__name__)
 
+#: Hydraulic pressure is stored/simulated in Pa internally, but read in
+#: bar in practice -- raw Pa (1e5-1e7 range for any real circuit) forces
+#: matplotlib into a floating "1e6"-style scientific-notation axis
+#: offset. Report-only conversion; nothing else in the app (live anchor
+#: labels, properties dialogs) changes.
+PA_PER_BAR = 1e5
+
 
 def _collect_piston_series(frames: list) -> dict[str, list[tuple[float, float]]]:
     """Groups (sim_time, position) points per piston node_id, in frame order."""
@@ -20,6 +27,17 @@ def _collect_piston_series(frames: list) -> dict[str, list[tuple[float, float]]]
     for frame in frames:
         for node_id, position in frame.piston_positions.items():
             series.setdefault(node_id, []).append((frame.sim_time, position))
+    return series
+
+
+def _collect_piston_length_series(frames: list) -> dict[str, list[tuple[float, float]]]:
+    """Groups (sim_time, x) points per hydraulic piston node_id, in
+    frame order -- x is the real position in meters (frame.piston_lengths),
+    not the 0-1 fraction _collect_piston_series reads."""
+    series: dict[str, list[tuple[float, float]]] = {}
+    for frame in frames:
+        for node_id, length in frame.piston_lengths.items():
+            series.setdefault(node_id, []).append((frame.sim_time, length))
     return series
 
 
@@ -56,7 +74,8 @@ def _assign_display_names(node_ids: list, node_names: dict | None, type_label: s
 
 
 def build_charts(frames: list, node_names: dict | None = None,
-                  digital_pistons: set | None = None) -> list:
+                  digital_pistons: set | None = None,
+                  piston_strokes: dict | None = None) -> list:
     """Builds a position-vs-time chart per piston present in the frames.
 
     Args:
@@ -72,28 +91,49 @@ def build_charts(frames: list, node_names: dict | None = None,
             `frame_recorder.FrameRecorder._collect_digital_pistons`).
             Plotted as a step, not a linearly-interpolated ramp that
             never physically existed.
+        piston_strokes: Optional node_id -> stroke (m) map (see
+            `frame_recorder.ReportData.piston_strokes`). A piston with
+            an entry here plots its REAL length in meters (frame.
+            piston_lengths), y-axis fixed to [0, stroke] -- the 0-1
+            fraction is meaningless as a physical quantity for a
+            hydraulic piston with a real, measurable travel range.
+            Pistons with no entry (pneumatic, or no stroke info given)
+            keep the normalized 0-1 fraction chart.
 
     Returns:
         One `matplotlib.figure.Figure` per piston `node_id` found, in
         alphabetical id order. Empty list if `frames` is empty.
     """
     series = _collect_piston_series(frames)
+    length_series = _collect_piston_length_series(frames)
     display_names = _assign_display_names(sorted(series), node_names, "Cilindro")
     digital_pistons = digital_pistons or set()
+    piston_strokes = piston_strokes or {}
 
     figures = []
     for node_id in sorted(series):
-        points = series[node_id]
-        times = [t for t, _ in points]
-        positions = [p for _, p in points]
-        drawstyle = "steps-post" if node_id in digital_pistons else "default"
-
         fig, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(times, positions, marker="o", markersize=3, drawstyle=drawstyle)
+        stroke = piston_strokes.get(node_id)
+
+        if stroke is not None:
+            points = length_series[node_id]
+            times = [t for t, _ in points]
+            lengths = [x for _, x in points]
+            ax.plot(times, lengths, marker="o", markersize=3)
+            ax.set_ylabel("Posição (m)")
+            margin = stroke * 0.05
+            ax.set_ylim(-margin, stroke + margin)
+        else:
+            points = series[node_id]
+            times = [t for t, _ in points]
+            positions = [p for _, p in points]
+            drawstyle = "steps-post" if node_id in digital_pistons else "default"
+            ax.plot(times, positions, marker="o", markersize=3, drawstyle=drawstyle)
+            ax.set_ylabel("Posição (0 = recuado, 1 = avançado)")
+            ax.set_ylim(-0.05, 1.05)
+
         ax.set_title(f"Posição do pistão — {display_names[node_id]}")
         ax.set_xlabel("Tempo (s)")
-        ax.set_ylabel("Posição (0 = recuado, 1 = avançado)")
-        ax.set_ylim(-0.05, 1.05)
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
         figures.append(fig)
@@ -104,7 +144,8 @@ def build_charts(frames: list, node_names: dict | None = None,
 def build_gauge_charts(frames: list, node_names: dict | None = None) -> list:
     """Builds a reading-vs-time chart per pressure gauge present in the frames.
 
-    Hydraulic gauges (numeric readings, in Pa) get a continuous line;
+    Hydraulic gauges (numeric readings, stored in Pa but plotted in bar
+    -- see PA_PER_BAR) get a continuous line;
     pneumatic gauges (boolean readings) get a 0/1 step chart labeled
     Despressurizado/Pressurizado, since the pneumatic domain has no
     real pressure magnitude to plot.
@@ -138,9 +179,9 @@ def build_gauge_charts(frames: list, node_names: dict | None = None) -> list:
             ax.set_ylabel("Despressurizado (0) / Pressurizado (1)")
             ax.set_ylim(-0.05, 1.05)
         else:
-            ax.plot(times, readings, marker="o", markersize=3)
+            ax.plot(times, [r / PA_PER_BAR for r in readings], marker="o", markersize=3)
             ax.set_title(f"Pressão — {display_names[node_id]}")
-            ax.set_ylabel("Pressão (Pa)")
+            ax.set_ylabel("Pressão (bar)")
         ax.set_xlabel("Tempo (s)")
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
@@ -156,7 +197,8 @@ def _series_section(title: str, xlabel: str, ylabel: str, column: str, points: l
     return header + rows + "\n"
 
 
-def build_data_txt(frames: list, node_names: dict | None = None) -> str:
+def build_data_txt(frames: list, node_names: dict | None = None,
+                    piston_strokes: dict | None = None) -> str:
     """Builds a plain-text dump of every chart's underlying x/y data and
     title metadata, so the charts can be redrawn independently later.
 
@@ -167,6 +209,9 @@ def build_data_txt(frames: list, node_names: dict | None = None) -> str:
             same fallback/numbering rules as `build_charts`, and same
             resulting names, since both share `_assign_display_names`
             over the same sorted id order.
+        piston_strokes: Optional node_id -> stroke (m) map -- same
+            real-length-vs-normalized-fraction switch as `build_charts`,
+            so the dump always matches what the chart actually plots.
 
     Returns:
         One section per piston/gauge, each a `#`-commented header
@@ -176,7 +221,9 @@ def build_data_txt(frames: list, node_names: dict | None = None) -> str:
         comment if no series was recorded.
     """
     piston_series = _collect_piston_series(frames)
+    length_series = _collect_piston_length_series(frames)
     gauge_series = _collect_gauge_series(frames)
+    piston_strokes = piston_strokes or {}
 
     if not piston_series and not gauge_series:
         return "# Nenhum dado registrado\n"
@@ -186,10 +233,17 @@ def build_data_txt(frames: list, node_names: dict | None = None) -> str:
 
     sections = []
     for node_id in sorted(piston_series):
-        sections.append(_series_section(
-            f"Posição do pistão — {piston_names[node_id]}", "Tempo (s)",
-            "Posição (0 = recuado, 1 = avançado)", "posicao", piston_series[node_id],
-        ))
+        stroke = piston_strokes.get(node_id)
+        if stroke is not None:
+            sections.append(_series_section(
+                f"Posição do pistão — {piston_names[node_id]}", "Tempo (s)",
+                "Posição (m)", "posicao_m", length_series[node_id],
+            ))
+        else:
+            sections.append(_series_section(
+                f"Posição do pistão — {piston_names[node_id]}", "Tempo (s)",
+                "Posição (0 = recuado, 1 = avançado)", "posicao", piston_series[node_id],
+            ))
     for node_id in sorted(gauge_series):
         points = gauge_series[node_id]
         is_binary = isinstance(points[0][1], bool)
@@ -199,8 +253,9 @@ def build_data_txt(frames: list, node_names: dict | None = None) -> str:
                 "Despressurizado (0) / Pressurizado (1)", "pressurizado", points,
             ))
         else:
+            points_bar = [(t, p / PA_PER_BAR) for t, p in points]
             sections.append(_series_section(
-                f"Pressão — {gauge_names[node_id]}", "Tempo (s)", "Pressão (Pa)", "pressao_pa", points,
+                f"Pressão — {gauge_names[node_id]}", "Tempo (s)", "Pressão (bar)", "pressao_bar", points_bar,
             ))
 
     return "\n".join(sections)
@@ -312,7 +367,8 @@ def _delete_frame_images(frames: list) -> None:
 
 
 def build(frames: list, out_dir: str, node_names: dict | None = None,
-          digital_pistons: set | None = None) -> None:
+          digital_pistons: set | None = None,
+          piston_strokes: dict | None = None) -> None:
     """Builds the report's artifacts (`relatorio.html`, `graficos.pdf`,
     `video.mp4`, `dados.txt`) in `out_dir`.
 
@@ -328,8 +384,12 @@ def build(frames: list, out_dir: str, node_names: dict | None = None,
         digital_pistons: Optional set of node_ids with no continuous
             position (see `frame_recorder.ReportData.digital_pistons`),
             plotted as a step instead of an interpolated ramp.
+        piston_strokes: Optional node_id -> stroke (m) map (see
+            `frame_recorder.ReportData.piston_strokes`), used to plot a
+            hydraulic piston's real length instead of its normalized
+            0-1 fraction.
     """
-    figures = build_charts(frames, node_names, digital_pistons)
+    figures = build_charts(frames, node_names, digital_pistons, piston_strokes)
     gauge_figures = build_gauge_charts(frames, node_names)
     all_figures = figures + gauge_figures
     try:
@@ -359,4 +419,4 @@ def build(frames: list, out_dir: str, node_names: dict | None = None,
         fh.write(html)
 
     with open(os.path.join(out_dir, "dados.txt"), "w", encoding="utf-8") as fh:
-        fh.write(build_data_txt(frames, node_names))
+        fh.write(build_data_txt(frames, node_names, piston_strokes))

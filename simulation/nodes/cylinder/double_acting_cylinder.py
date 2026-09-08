@@ -143,8 +143,12 @@ class DoubleActingCylinder(Node, HydraulicMixin):
 
         EPS = self.stroke * 1e-4
 
-        # Conservation always holds
-        eq_conservation = Q_a + Q_b
+        # Conservation always holds -- area-weighted, not equal-and-
+        # opposite: the piston moves at the same velocity on both sides
+        # (v = Q_a/area_a = -Q_b/area_b), but the rod makes area_b <
+        # area_a, so the chambers don't swap equal volumes. Q_a + Q_b = 0
+        # would be correct only if area_a == area_b (no rod).
+        eq_conservation = (self.area_b / self.area_a) * Q_a + Q_b
 
         if self.x <= EPS:
             # Forbidden: Q_a < 0 (can't retract past the end stop)

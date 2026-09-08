@@ -87,13 +87,17 @@ def test_build_gauge_charts_handles_no_frames():
     assert build_gauge_charts([]) == []
 
 
-def test_build_gauge_charts_plots_pa_for_numeric_readings():
+def test_build_gauge_charts_plots_bar_for_numeric_readings():
+    """bar, not raw Pa -- Pa-scale values (1e5-1e7) force matplotlib
+    into a floating "1e6" scientific-notation offset on the axis;
+    bar (Pa/1e5) is the unit hydraulic pressure is actually read in,
+    and stays in a small, readable range (1-300ish) for any real circuit."""
     figures = build_gauge_charts(_gauge_frames())
     fig = dict(zip(sorted({"g_hyd", "g_pneu"}), figures))["g_hyd"]
     ax = fig.axes[0]
-    assert "Pa" in ax.get_ylabel()
+    assert ax.get_ylabel() == "Pressão (bar)"
     line = ax.lines[0]
-    assert list(line.get_ydata()) == [0.0, 5e6, 3e6]
+    assert list(line.get_ydata()) == [0.0, 50.0, 30.0]
 
 
 def test_build_gauge_charts_plots_binary_step_for_boolean_readings():
@@ -121,13 +125,13 @@ def test_build_data_txt_has_one_section_per_piston_with_title_and_csv_rows():
     assert "0.2,1.0" in text
 
 
-def test_build_data_txt_writes_pa_column_for_numeric_gauge():
+def test_build_data_txt_writes_bar_column_for_numeric_gauge():
     text = build_data_txt(_gauge_frames())
 
     assert "# Pressão — Manômetro 1" in text
-    assert "# ylabel: Pressão (Pa)" in text
-    assert "tempo_s,pressao_pa" in text
-    assert "0.1,5000000.0" in text
+    assert "# ylabel: Pressão (bar)" in text
+    assert "tempo_s,pressao_bar" in text
+    assert "0.1,50.0" in text
 
 
 def test_build_data_txt_writes_0_1_column_for_binary_gauge():
@@ -179,3 +183,61 @@ def test_build_data_txt_title_uses_given_display_name():
     text = build_data_txt(_frames(), node_names={"c1": "Cilindro A", "c2": "Cilindro B"})
     assert "# Posição do pistão — Cilindro A" in text
     assert "# Posição do pistão — Cilindro B" in text
+
+
+def _hydraulic_length_frames():
+    """A hydraulic piston with real x/stroke -- piston_positions still
+    carries the normalized 0-1 fraction (sprite/legacy consumers),
+    piston_lengths carries the raw x in meters."""
+    return [
+        Frame(step_index=0, sim_time=0.0, piston_positions={"h1": 0.0},
+              piston_lengths={"h1": 0.0}, image_path=""),
+        Frame(step_index=1, sim_time=0.1, piston_positions={"h1": 0.5},
+              piston_lengths={"h1": 0.25}, image_path=""),
+        Frame(step_index=2, sim_time=0.2, piston_positions={"h1": 1.0},
+              piston_lengths={"h1": 0.5}, image_path=""),
+    ]
+
+
+def test_build_charts_plots_real_length_in_meters_when_stroke_given():
+    figures = build_charts(_hydraulic_length_frames(), piston_strokes={"h1": 0.5})
+    ax = figures[0].axes[0]
+
+    assert ax.get_ylabel() == "Posição (m)"
+    assert list(ax.lines[0].get_ydata()) == [0.0, 0.25, 0.5]
+
+
+def test_build_charts_length_chart_ylim_matches_stroke():
+    figures = build_charts(_hydraulic_length_frames(), piston_strokes={"h1": 0.5})
+    ax = figures[0].axes[0]
+
+    lo, hi = ax.get_ylim()
+    assert lo < 0 < 0.5 < hi
+    assert hi == pytest.approx(0.5, rel=0.2)
+
+
+def test_build_charts_uses_normalized_chart_without_piston_strokes():
+    """No stroke info given for h1 -- falls back to the existing 0-1
+    fraction chart, plotting piston_positions instead of piston_lengths."""
+    figures = build_charts(_hydraulic_length_frames())
+    ax = figures[0].axes[0]
+
+    assert ax.get_ylabel() == "Posição (0 = recuado, 1 = avançado)"
+    assert list(ax.lines[0].get_ydata()) == [0.0, 0.5, 1.0]
+
+
+def test_build_data_txt_uses_real_length_column_when_stroke_given():
+    text = build_data_txt(_hydraulic_length_frames(), piston_strokes={"h1": 0.5})
+
+    assert "# ylabel: Posição (m)" in text
+    assert "tempo_s,posicao_m" in text
+    assert "0.1,0.25" in text
+    assert "0.2,0.5" in text
+
+
+def test_build_data_txt_uses_normalized_column_without_piston_strokes():
+    text = build_data_txt(_hydraulic_length_frames())
+
+    assert "# ylabel: Posição (0 = recuado, 1 = avançado)" in text
+    assert "tempo_s,posicao" in text
+    assert "0.1,0.5" in text

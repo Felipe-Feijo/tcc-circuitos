@@ -597,6 +597,7 @@ class NodeItem(DiagramItemBase):
             hydraulic_label = getattr(anchor, "_label_hydraulic", None)
             if hydraulic_label is not None:
                 hydraulic_label.apply_theme(is_light)
+            anchor.refresh_junction_dot()
         self.update()
 
     def update_connections(self) -> None:

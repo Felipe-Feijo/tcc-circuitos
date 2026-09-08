@@ -23,6 +23,12 @@ class Frame:
     piston_positions: dict
     image_path: str
     gauge_readings: dict = field(default_factory=dict)
+    # Real position in meters, hydraulic pistons only (see
+    # FrameRecorder.capture_step). piston_positions stays the
+    # normalized 0-1 fraction for every piston (used by the sprite,
+    # and still what pneumatic pistons plot) -- this is additive, not
+    # a replacement.
+    piston_lengths: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -32,6 +38,9 @@ class ReportData:
     temp_dir: str = ""
     node_names: dict = field(default_factory=dict)
     digital_pistons: set = field(default_factory=set)
+    # node_id -> stroke (m), hydraulic pistons only -- lets report_builder
+    # fix the length chart's y-axis to the piston's real travel range.
+    piston_strokes: dict = field(default_factory=dict)
 
 
 class FrameRecorder:
@@ -86,6 +95,12 @@ class FrameRecorder:
             for node_id, node in self.engine.nodes.items()
             if getattr(node, "type", None) in PISTON_TYPES
         }
+        lengths = {
+            node_id: node.x
+            for node_id, node in self.engine.nodes.items()
+            if getattr(node, "type", None) in PISTON_TYPES
+            and getattr(node, "domain", None) == "hydraulic"
+        }
         gauge_readings = {
             node_id: node.get_visual_state()
             for node_id, node in self.engine.nodes.items()
@@ -107,6 +122,7 @@ class FrameRecorder:
             piston_positions=positions,
             image_path=image_path,
             gauge_readings=gauge_readings,
+            piston_lengths=lengths,
         ))
         self._step_index += 1
 
@@ -121,7 +137,20 @@ class FrameRecorder:
             temp_dir=self._temp_dir,
             node_names=self._collect_node_names(),
             digital_pistons=self._collect_digital_pistons(),
+            piston_strokes=self._collect_piston_strokes(),
         )
+
+    def _collect_piston_strokes(self) -> dict[str, float]:
+        """Maps node_id -> stroke (m) for hydraulic pistons -- stroke is
+        a required property for a hydraulic cylinder (validated at
+        construction), so this is always populated once there's any
+        length data for that node_id."""
+        return {
+            node_id: node.stroke
+            for node_id, node in self.engine.nodes.items()
+            if getattr(node, "type", None) in PISTON_TYPES
+            and getattr(node, "domain", None) == "hydraulic"
+        }
 
     def _collect_digital_pistons(self) -> set[str]:
         """Piston node_ids with no continuous position -- non-hydraulic

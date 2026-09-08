@@ -138,7 +138,12 @@ class AnchorItem(QGraphicsEllipseItem):
         GraphicsView.split_connection_at, ConnectionItem.prepare_delete)."""
         if self.always_visible or self.connection_count() >= 3:
             self.setBrush(Qt.GlobalColor.lightGray)
-            self.setPen(QPen(Qt.GlobalColor.white, 1))
+            # White on dark, black on light -- same convention as the
+            # default connection pen (ConnectionItem._get_pen) -- a white
+            # outline was invisible against a light-theme canvas.
+            is_light = getattr(self.node, "use_light_theme", False)
+            outline = Qt.GlobalColor.black if is_light else Qt.GlobalColor.white
+            self.setPen(QPen(outline, 1))
         else:
             self.setBrush(Qt.GlobalColor.transparent)
             self.setPen(QPen(Qt.PenStyle.NoPen))

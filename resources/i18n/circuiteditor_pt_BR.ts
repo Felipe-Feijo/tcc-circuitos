@@ -1014,6 +1014,23 @@ Desenvolvido com PyQt6</translation>
         <translation>Delay steps (sentido restrito)</translation>
     </message>
 </context><context>
+    <name>ThrottleValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="33" />
+        <source>Throttle Valve</source>
+        <translation>Estrangulamento</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="57" />
+        <source>Throttle Valve — Properties</source>
+        <translation>Estrangulamento — Propriedades</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="59" />
+        <source>Conductance k (m³/s/√Pa)</source>
+        <translation>Condutância k (m³/s/√Pa)</translation>
+    </message>
+</context><context>
     <name>Valve_2_2_Ways</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\directional_valve\valve_2_2_ways.py" line="30" />

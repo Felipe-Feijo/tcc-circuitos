@@ -13,11 +13,14 @@ from graphics.items.base.nodes.directional_valve.valve_3_2_ways import Valve_3_2
 class _FakeDomainNode:
     def __init__(self, k, stuck=False):
         self.k = k
-        self._stuck_defect = stuck
+        self.stuck_defect = stuck
         self.anchors = {}
         self.defect_active = stuck
         self.bits = {"left": 0, "right": 0}  # exigido por DirectionalValveItem.update_from_domain()
         self.body_state = 0  # idem
+
+    def defect_value(self, key):
+        return {"k": self.k, "stuck": self.stuck_defect}.get(key)
 
 
 def test_pneumatic_valve_has_no_defect_dialog():
@@ -30,7 +33,7 @@ def test_hydraulic_valve_prefills_k_from_properties_before_any_simulation_step()
     item.properties["k"] = 2.5e-8
     dialog = item.build_defect_dialog()
     assert dialog is not None
-    assert float(dialog._field_k.text()) == 2.5e-8
+    assert float(dialog.defect_widget("k").text()) == 2.5e-8
 
 
 def test_hydraulic_valve_prefills_k_from_live_domain_node_after_sync():
@@ -38,22 +41,22 @@ def test_hydraulic_valve_prefills_k_from_live_domain_node_after_sync():
     item.properties["k"] = 2.5e-8
     item.update_from_domain(_FakeDomainNode(k=9.9e-9))
     dialog = item.build_defect_dialog()
-    assert float(dialog._field_k.text()) == 9.9e-9
+    assert float(dialog.defect_widget("k").text()) == 9.9e-9
 
 
 def test_hydraulic_valve_prefills_stuck_checkbox_from_live_domain_node():
     item = Valve_3_2_Ways(domain="hydraulic")
     item.update_from_domain(_FakeDomainNode(k=1e-7, stuck=True))
     dialog = item.build_defect_dialog()
-    assert dialog._field_stuck.isChecked() is True
+    assert dialog.defect_widget("stuck").isChecked() is True
 
 
 def test_apply_defect_from_dialog_emits_set_defect_command():
     item = Valve_3_2_Ways(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("3.3e-8")
-    dialog._field_stuck.setChecked(True)
+    dialog.defect_widget("k").setText("3.3e-8")
+    dialog.defect_widget("stuck").setChecked(True)
 
     received = []
     item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
@@ -82,7 +85,7 @@ def test_build_defect_dialog_k_field_rejects_zero():
     item = Valve_3_2_Ways(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("0")
+    dialog.defect_widget("k").setText("0")
     dialog._refresh_ok_button()
     assert dialog._ok_btn.isEnabled() is False
 
@@ -91,7 +94,7 @@ def test_build_defect_dialog_k_field_rejects_negative():
     item = Valve_3_2_Ways(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("-3")
+    dialog.defect_widget("k").setText("-3")
     dialog._refresh_ok_button()
     assert dialog._ok_btn.isEnabled() is False
 
@@ -100,7 +103,7 @@ def test_build_defect_dialog_k_field_accepts_small_positive():
     item = Valve_3_2_Ways(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("0.001")
+    dialog.defect_widget("k").setText("0.001")
     dialog._refresh_ok_button()
     assert dialog._ok_btn.isEnabled() is True
 
@@ -118,8 +121,8 @@ def test_apply_defect_from_dialog_drives_real_domain_node_via_command_channel():
     item.command.connect(lambda node_id, payload: domain_node.handle_command(payload))
 
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("3.3e-8")
-    dialog._field_stuck.setChecked(True)
+    dialog.defect_widget("k").setText("3.3e-8")
+    dialog.defect_widget("stuck").setChecked(True)
 
     item.apply_defect_from_dialog(dialog)
 

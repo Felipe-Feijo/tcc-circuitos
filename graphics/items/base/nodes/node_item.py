@@ -10,7 +10,7 @@ from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.labels.label import LabelItem
 from graphics.sensor_registry.sensor_registry import SensorRegistry
 from graphics.utils.properties_dialog import PropertiesDialog
-from graphics.utils.defect_dialog import DefectDialog
+from graphics.utils.defect_dialog import DefectDialog, DefectFieldSpec
 from graphics.utils.pixmap_utils import recolor_pixmap_black
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 
@@ -282,23 +282,56 @@ class NodeItem(DiagramItemBase):
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
         """Read values from dialog and apply them (called on dialog accept)."""
 
-    def build_defect_dialog(self) -> DefectDialog | None:
-        """Return a DefectDialog for this node during simulation, or None.
+    def defect_fields(self) -> list[DefectFieldSpec]:
+        """Defects this node offers during simulation (opt-in per subclass).
 
-        Unlike build_properties_dialog(), this is read during simulation
-        (simulation_mode=True) and must reflect LIVE domain state -- use
-        self._domain_node (cached by update_from_domain) to prefill fields,
-        never self.properties. Default: no defect dialog (opt-in per subclass).
+        Each spec's key must match the domain node's DEFECT_FIELDS (see
+        simulation/nodes/defect.py). Empty list: no "Simulate defect..."
+        entry.
         """
-        return None
+        return []
+
+    def build_defect_dialog(self) -> DefectDialog | None:
+        """Return a DefectDialog built from defect_fields(), or None.
+
+        Fields are prefilled from the LIVE domain node
+        (self._domain_node, cached by update_from_domain) -- falling back
+        to self.properties before the first sync. Override only for a
+        dialog defect_fields() can't express.
+        """
+        specs = self.defect_fields()
+        if not specs:
+            return None
+
+        meta = type(self).palette_meta()
+        label = (meta.name if meta else None) or type(self).__name__
+        dialog = DefectDialog(
+            title=QCoreApplication.translate("NodeItem", "Simulate defect — {0}").format(label)
+        )
+        domain_node = self._domain_node
+        for spec in specs:
+            if domain_node is not None and hasattr(domain_node, "defect_value"):
+                value = domain_node.defect_value(spec.key)
+            else:
+                value = self.properties.get(spec.key)
+            dialog.add_defect_field(spec, value)
+        dialog.add_note_field()
+        return dialog
 
     def apply_defect_from_dialog(self, dialog: DefectDialog) -> None:
-        """Read values from an accepted DefectDialog and emit a command.
+        """Emit set_defect/clear_defect from an accepted DefectDialog.
 
-        Must emit self.command with {"action": "set_defect", ...} or
-        {"action": "clear_defect"} -- never mutate self.properties (defect
-        state is transient, tied to the current simulation session only).
+        Never mutates self.properties -- defect state is transient, tied
+        to the current simulation session only.
         """
+        if dialog.restore_requested:
+            payload = {"action": "clear_defect"}
+        else:
+            payload = {"action": "set_defect", **dialog.defect_values()}
+        note = dialog.note_text()
+        if note:
+            payload["note"] = note
+        self.command.emit(self.id, payload)
 
     def to_dict(self) -> dict:
         return {

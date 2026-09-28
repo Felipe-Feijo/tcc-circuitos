@@ -276,6 +276,16 @@
         <source>Restore</source>
         <translation>Restaurar</translation>
     </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="103" />
+        <source>Note (optional)</source>
+        <translation>Nota (opcional)</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="104" />
+        <source>e.g. debris in the orifice</source>
+        <translation>ex.: sujeira no orifício</translation>
+    </message>
 </context><context>
     <name>DirectionalValveItem</name>
     <message>
@@ -781,6 +791,11 @@ Desenvolvido com PyQt6</translation>
         <location filename="..\..\graphics\items\base\nodes\node_item.py" line="732" />
         <source>Add label</source>
         <translation>Adicionar label</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="309" />
+        <source>Simulate defect — {0}</source>
+        <translation>Simular defeito — {0}</translation>
     </message>
 </context><context>
     <name>NodePalette</name>

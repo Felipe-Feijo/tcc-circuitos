@@ -42,7 +42,7 @@ def test_hydraulic_valve_defect_dialog_prefills_k_from_properties(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 2.5e-8
     dialog = item.build_defect_dialog()
-    assert float(dialog._field_k.text()) == 2.5e-8
+    assert float(dialog.defect_widget("k").text()) == 2.5e-8
 
 
 @pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
@@ -50,8 +50,8 @@ def test_apply_defect_from_dialog_emits_set_defect(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("3.3e-8")
-    dialog._field_stuck.setChecked(True)
+    dialog.defect_widget("k").setText("3.3e-8")
+    dialog.defect_widget("stuck").setChecked(True)
 
     received = []
     item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
@@ -79,8 +79,8 @@ def test_apply_defect_from_dialog_includes_note_when_given(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("3.3e-8")
-    dialog._field_note.setText("sujeira no orifício")
+    dialog.defect_widget("k").setText("3.3e-8")
+    dialog.note_field.setText("sujeira no orifício")
 
     received = []
     item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
@@ -96,7 +96,7 @@ def test_apply_defect_from_dialog_omits_note_key_when_blank(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_k.setText("3.3e-8")
+    dialog.defect_widget("k").setText("3.3e-8")
 
     received = []
     item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
@@ -110,7 +110,7 @@ def test_clear_defect_on_restore_includes_note_when_given(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
-    dialog._field_note.setText("corrigido")
+    dialog.note_field.setText("corrigido")
     dialog.restore_requested = True
 
     received = []

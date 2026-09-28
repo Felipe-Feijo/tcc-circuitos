@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QMenu
 
 from graphics.items.base.nodes.node_item import NodeItem, THREE_POSITION_SIDE_MAP
 from graphics.utils.properties_dialog import PropertiesDialog
-from graphics.utils.defect_dialog import DefectDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from .....anchors.anchor import AnchorItem
 from graphics.labels.label import LabelItem
 
@@ -939,69 +939,21 @@ class DirectionalValveItem(NodeItem):
             self.update()
 
     # -- Simulate defect (shared by all directional valves) ----------------
-    # Promoted up here (instead of duplicated per subtype) because the 5
-    # hydraulic directional valves (2/2, 3/2, 4/2, 4/3, 5/2) use exactly
-    # the same protocol -- only k (conductance) and the "stuck" flag
-    # change physical meaning between them, never the dialog/command
-    # mechanics. Each subtype already exposes its name via
-    # palette_meta(), reused here as the title.
+    # Dialog/command mechanics live in NodeItem; keys match
+    # DirectionalValve.DEFECT_FIELDS. Hydraulic only for now.
 
-    def build_defect_dialog(self):
+    def defect_fields(self):
         if self.domain != "hydraulic":
-            return None
-
-        domain_node = self._domain_node
-        current_k = domain_node.k if domain_node is not None else self.properties.get("k")
-        current_stuck = bool(getattr(domain_node, "_stuck_defect", False)) if domain_node is not None else False
-
-        meta = type(self).palette_meta()
-        # meta can be None (NodeItem.palette_meta()'s default for
-        # abstract classes) and meta.name can be None (PaletteMeta
-        # documents "uses cls.__name__" in that case, a convention
-        # node_registry.py already follows) -- same fallback here, so
-        # the context menu never breaks.
-        label = (meta.name if meta else None) or type(self).__name__
-        dialog = DefectDialog(
-            title=QCoreApplication.translate(
-                "DirectionalValveItem", "Simulate defect — {0}"
-            ).format(label)
-        )
-        dialog._field_k = dialog.add_number_field(
-            QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
-            placeholder="ex: 1.5e-8",
-            value=current_k, required=True, min_value=0,
-        )
-        dialog._field_stuck = dialog.add_bool_field(
-            QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
-            value=current_stuck,
-        )
-        # Free-text personal annotation, e.g. "sujeira no orifício" --
-        # shown on the report charts (as a marker at the moment this
-        # defect was applied/cleared) only when non-empty, so leaving it
-        # blank never clutters the chart. Shared by both Apply and
-        # Restore, since either can end up wanting to leave a note.
-        dialog._field_note = dialog.add_text_field(
-            QCoreApplication.translate("DirectionalValveItem", "Note (optional)"),
-            placeholder=QCoreApplication.translate("DirectionalValveItem", "e.g. debris in the orifice"),
-        )
-        return dialog
-
-    def apply_defect_from_dialog(self, dialog):
-        note = dialog._field_note.text().strip()
-
-        if dialog.restore_requested:
-            payload = {"action": "clear_defect"}
-            if note:
-                payload["note"] = note
-            self.command.emit(self.id, payload)
-            return
-
-        k_text = dialog._field_k.text().strip()
-        payload = {
-            "action": "set_defect",
-            "k": float(k_text),
-            "stuck": dialog._field_stuck.isChecked(),
-        }
-        if note:
-            payload["note"] = note
-        self.command.emit(self.id, payload)
+            return []
+        return [
+            DefectFieldSpec(
+                "k",
+                QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
+                "number", placeholder="ex: 1.5e-8", min_value=0,
+            ),
+            DefectFieldSpec(
+                "stuck",
+                QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
+                "bool",
+            ),
+        ]

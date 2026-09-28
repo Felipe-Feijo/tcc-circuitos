@@ -268,6 +268,16 @@
         <source>Restore</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="103" />
+        <source>Note (optional)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="104" />
+        <source>e.g. debris in the orifice</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>DirectionalValveItem</name>
     <message>
@@ -609,6 +619,11 @@ Built with PyQt6</source>
     <message>
         <location filename="..\..\graphics\items\base\nodes\node_item.py" line="732" />
         <source>Add label</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="309" />
+        <source>Simulate defect — {0}</source>
         <translation type="unfinished" />
     </message>
 </context><context>

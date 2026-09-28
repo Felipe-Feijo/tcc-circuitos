@@ -300,6 +300,7 @@ def test_directional_valve_item_defect_dialog_translates():
         labels = _form_label_texts(dialog_en)
         assert "Conductance k (m³/s/√Pa)" in labels
         assert "Valve stuck (won't switch)" in labels
+        assert "Note (optional)" in labels
     finally:
         dialog_en.close()
 
@@ -311,6 +312,7 @@ def test_directional_valve_item_defect_dialog_translates():
             labels = _form_label_texts(dialog_pt)
             assert "Condutância k (m³/s/√Pa)" in labels
             assert "Válvula travada (não comuta)" in labels
+            assert "Nota (opcional)" in labels
         finally:
             dialog_pt.close()
     finally:

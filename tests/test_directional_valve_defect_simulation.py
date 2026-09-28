@@ -17,7 +17,7 @@ def _make_valve(k=1e-7, body_state=0):
 def test_fresh_instance_has_no_defect():
     valve = _make_valve()
     assert valve.defect_active is False
-    assert valve._stuck_defect is False
+    assert valve.stuck_defect is False
 
 
 def test_set_defect_changes_k():
@@ -30,7 +30,7 @@ def test_set_defect_changes_k():
 def test_set_defect_sets_stuck_flag():
     valve = _make_valve()
     valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": True})
-    assert valve._stuck_defect is True
+    assert valve.stuck_defect is True
     assert valve.defect_active is True
 
 
@@ -39,7 +39,7 @@ def test_clear_defect_restores_original_k_and_unstucks():
     valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": True})
     valve.handle_command({"action": "clear_defect"})
     assert valve.k == 1e-7
-    assert valve._stuck_defect is False
+    assert valve.stuck_defect is False
     assert valve.defect_active is False
 
 
@@ -65,7 +65,7 @@ def test_stuck_defect_applies_even_without_k_attribute_pneumatic_domain():
     valve = Valve_4_2_Ways("v42", domain="pneumatic", properties={})
     valve.handle_command({"action": "set_defect", "k": 999.0, "stuck": True})
     assert not hasattr(valve, "k")
-    assert valve._stuck_defect is True
+    assert valve.stuck_defect is True
 
 
 def test_unknown_action_is_noop():
@@ -73,7 +73,7 @@ def test_unknown_action_is_noop():
     original_k = valve.k
     valve.handle_command({"action": "does_not_exist"})
     assert valve.k == original_k
-    assert valve._stuck_defect is False
+    assert valve.stuck_defect is False
 
 
 def test_new_instance_never_inherits_defect_from_a_previous_one():
@@ -81,24 +81,24 @@ def test_new_instance_never_inherits_defect_from_a_previous_one():
     stale.handle_command({"action": "set_defect", "k": 1e-9, "stuck": True})
     fresh = _make_valve()
     assert fresh.defect_active is False
-    assert fresh._stuck_defect is False
+    assert fresh.stuck_defect is False
 
 
 def test_fresh_instance_has_no_defect_note():
     valve = _make_valve()
-    assert valve._defect_note == ""
+    assert valve.defect_note == ""
 
 
 def test_set_defect_stores_note_when_given():
     valve = _make_valve()
     valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
-    assert valve._defect_note == "sujeira no orifício"
+    assert valve.defect_note == "sujeira no orifício"
 
 
 def test_set_defect_without_note_leaves_it_blank():
     valve = _make_valve()
     valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False})
-    assert valve._defect_note == ""
+    assert valve.defect_note == ""
 
 
 def test_clear_defect_stores_its_own_note_when_given():
@@ -107,11 +107,11 @@ def test_clear_defect_stores_its_own_note_when_given():
     valve = _make_valve()
     valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
     valve.handle_command({"action": "clear_defect", "note": "corrigido"})
-    assert valve._defect_note == "corrigido"
+    assert valve.defect_note == "corrigido"
 
 
 def test_clear_defect_without_note_clears_the_note_too():
     valve = _make_valve()
     valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
     valve.handle_command({"action": "clear_defect"})
-    assert valve._defect_note == ""
+    assert valve.defect_note == ""

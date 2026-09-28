@@ -149,8 +149,7 @@ class FrameRecorder:
         """Detects defect_active transitions since the last capture_step()
         call, recording one DefectEvent per transition -- applied
         (False->True) or cleared (True->False). Nodes with no
-        `defect_active` (most node types -- only DirectionalValve has
-        one today) are silently skipped.
+        `defect_active` (nodes without DefectMixin) are silently skipped.
         """
         for node_id, node in self.engine.nodes.items():
             active = getattr(node, "defect_active", None)
@@ -160,12 +159,12 @@ class FrameRecorder:
             if active and not was_active:
                 self._defect_events.append(DefectEvent(
                     sim_time=sim_time, node_id=node_id, kind="applied",
-                    note=getattr(node, "_defect_note", ""),
+                    note=getattr(node, "defect_note", ""),
                 ))
             elif was_active and not active:
                 self._defect_events.append(DefectEvent(
                     sim_time=sim_time, node_id=node_id, kind="cleared",
-                    note=getattr(node, "_defect_note", ""),
+                    note=getattr(node, "defect_note", ""),
                 ))
             self._defect_active_last[node_id] = active
 

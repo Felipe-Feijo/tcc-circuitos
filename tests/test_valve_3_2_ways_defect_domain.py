@@ -1,4 +1,4 @@
-"""Confere que Valve_3_2_Ways captura _k_default (igual Valve_4_2_Ways) --
+"""Confere que Valve_3_2_Ways restaura k via DefectMixin (igual Valve_4_2_Ways) --
 sem isso, defect_active/_clear_defect (definidos em DirectionalValve, a
 classe base compartilhada) silenciosamente não restauram k nem detectam
 desvio, exatamente a armadilha apontada na revisão final da feature original
@@ -22,7 +22,7 @@ def _make_valve(k=1e-7, body_state=0):
 def test_fresh_instance_has_no_defect():
     valve = _make_valve()
     assert valve.defect_active is False
-    assert valve._stuck_defect is False
+    assert valve.stuck_defect is False
 
 
 def test_set_defect_changes_k_and_marks_active():
@@ -37,7 +37,7 @@ def test_clear_defect_restores_original_k():
     valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": True})
     valve.handle_command({"action": "clear_defect"})
     assert valve.k == 1e-7
-    assert valve._stuck_defect is False
+    assert valve.stuck_defect is False
     assert valve.defect_active is False
 
 

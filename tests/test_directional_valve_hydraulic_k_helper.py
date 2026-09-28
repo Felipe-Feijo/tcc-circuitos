@@ -1,7 +1,5 @@
-"""Testa o helper compartilhado _init_hydraulic_k() (DirectionalValve base)
-e confere que as 5 válvulas direcionais concretas o usam corretamente --
-i.e. nenhuma reintroduz a "armadilha de extensão" (self.k sem
-self._k_default, que quebra silenciosamente defect_active/_clear_defect)."""
+"""Tests the shared _init_hydraulic_k() helper (DirectionalValve base) and
+that all 5 concrete directional valves restore k via DefectMixin."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,10 +24,10 @@ def test_missing_k_raises_value_error_naming_the_class(cls):
 
 
 @pytest.mark.parametrize("cls", ALL_HYDRAULIC_VALVE_CLASSES)
-def test_k_and_k_default_both_set_and_equal_on_construction(cls):
+def test_k_set_on_construction_and_no_defect_active(cls):
     valve = cls("v", domain="hydraulic", properties={"k": 1e-7})
     assert valve.k == 1e-7
-    assert valve._k_default == 1e-7
+    assert valve.defect_active is False
 
 
 @pytest.mark.parametrize("cls", ALL_HYDRAULIC_VALVE_CLASSES)
@@ -48,4 +46,3 @@ def test_set_defect_then_clear_defect_restores_k(cls):
 def test_pneumatic_domain_never_sets_k(cls):
     valve = cls("v", domain="pneumatic", properties={})
     assert not hasattr(valve, "k")
-    assert not hasattr(valve, "_k_default")

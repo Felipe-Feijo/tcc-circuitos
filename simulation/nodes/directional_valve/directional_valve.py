@@ -1,9 +1,12 @@
 """Base simulation class for directional valves."""
 
+from simulation.nodes.defect import DefectMixin
 from simulation.nodes.nodes import Node
 
-class DirectionalValve(Node):
+class DirectionalValve(DefectMixin, Node):
     THREE_POSITION = False
+    # k only exists in the hydraulic domain; DefectMixin skips it elsewhere.
+    DEFECT_FIELDS = {"k": "k", "stuck": "stuck_defect"}
 
     def __init__(self, node_id: str, node_type: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, node_type, domain=domain, properties=properties)
@@ -23,15 +26,8 @@ class DirectionalValve(Node):
         # Timer actuator state: steps remaining per side (0 = idle)
         self._timer_steps: dict[str, int] = {"left": 0, "right": 0}
 
-        # Defect injected during simulation (never persisted to
-        # self.properties -- lives only in this domain instance).
-        self._stuck_defect = False
-        # Free-text note attached to the last set_defect/clear_defect
-        # command (blank if none was given). Read by FrameRecorder at
-        # the moment it detects a defect_active transition, to label
-        # the report chart's marker -- see DirectionalValveItem's
-        # defect dialog for where this comes from.
-        self._defect_note = ""
+        # "Stuck valve" defect: body stops reacting to bits (see DefectMixin).
+        self.stuck_defect = False
 
     def _init_hydraulic_k(self, k) -> None:
         """Validates and stores the hydraulic conductance k.
@@ -43,21 +39,13 @@ class DirectionalValve(Node):
                 self._init_hydraulic_k(self.properties.get("k"))
                 self._flow_vars = {...}  # subclass-specific rest
 
-        Besides validating (required, must be numeric) and setting
-        self.k, captures the original value in self._k_default -- used
-        by defect_active/_clear_defect (defined below, in this base
-        class) to restore/detect a k deviated by "Simular defeito...".
-        Without this capture, defect_active and _clear_defect silently
-        don't work for the subclass (already happened with three of the
-        five valves -- 2/2, 4/3 and 5/2 -- before this extraction, from
-        setting self.k directly without calling this).
+        Validates (required, must be numeric) and sets self.k.
         """
         if k is None:
             raise ValueError(
                 f"{type(self).__name__} '{self.id}': required property 'k' is not set."
             )
         self.k = float(k)
-        self._k_default = self.k
 
     def handle_command(self, command: dict):
         """
@@ -66,23 +54,11 @@ class DirectionalValve(Node):
         side: "left" | "right"
         value: 0 | 1
 
-        Or, for defect simulation:
-        action: "set_defect"
-        k: float      (new flow coefficient; only affects nodes that
-                        define self.k -- hydraulic domain)
-        stuck: bool   (True locks the valve's body at its current position)
-        note: str     (optional; see _defect_note)
-
-        action: "clear_defect"
-        note: str     (optional -- independent of set_defect's note)
-        (other fields: restores the original k and unlocks)
+        Or, for defect simulation (handled by DefectMixin):
+        action: "set_defect", k: float (hydraulic only), stuck: bool, note?: str
+        action: "clear_defect", note?: str
         """
-        action = command.get("action")
-        if action == "set_defect":
-            self._apply_defect_command(command)
-            return
-        if action == "clear_defect":
-            self._clear_defect(command.get("note", ""))
+        if self.handle_defect_command(command):
             return
 
         if command.get("type") != "actuator":
@@ -98,34 +74,6 @@ class DirectionalValve(Node):
             return
 
         self.bits[side] = value
-
-    def _apply_defect_command(self, command: dict) -> None:
-        """Applies a defect injected during simulation.
-
-        k only affects hydraulic nodes (which define self.k in __init__);
-        in the pneumatic domain, or if self.k was never defined, the
-        field is silently ignored.
-        """
-        if hasattr(self, "k"):
-            k = command.get("k")
-            if k is not None:
-                self.k = float(k)
-        self._stuck_defect = bool(command.get("stuck", False))
-        self._defect_note = command.get("note", "")
-
-    def _clear_defect(self, note: str = "") -> None:
-        """Clears any active defect, restoring the original k."""
-        if hasattr(self, "_k_default"):
-            self.k = self._k_default
-        self._stuck_defect = False
-        self._defect_note = note
-
-    @property
-    def defect_active(self) -> bool:
-        """True if any defect is active (k deviated from the original, or locked)."""
-        k_default = getattr(self, "_k_default", None)
-        k_changed = k_default is not None and getattr(self, "k", k_default) != k_default
-        return bool(self._stuck_defect or k_changed)
 
     def _update_pilots(self):
         for side in ("left", "right"):
@@ -179,7 +127,7 @@ class DirectionalValve(Node):
             self.bits[side] = 1 if payload.get("value") else 0
 
     def _compute_body_state(self):
-        if self._stuck_defect:
+        if self.stuck_defect:
             return  # "stuck valve" defect -- body no longer reacts to bits
 
         left = self.bits["left"]

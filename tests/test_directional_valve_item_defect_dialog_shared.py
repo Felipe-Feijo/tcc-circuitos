@@ -23,9 +23,75 @@ ALL_VALVE_ITEM_CLASSES = [
 
 
 @pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
-def test_pneumatic_valve_has_no_defect_dialog(cls):
+def test_pneumatic_valve_defect_dialog_has_only_stuck(cls):
     item = cls(domain="pneumatic")
-    assert item.build_defect_dialog() is None
+    dialog = item.build_defect_dialog()
+    assert dialog is not None
+    assert dialog.defect_widget("stuck") is not None
+    assert list(dialog.defect_values().keys()) == ["stuck"]
+    assert dialog.note_field is not None
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_pneumatic_apply_defect_from_dialog_emits_set_defect_stuck_only(cls):
+    item = cls(domain="pneumatic")
+    dialog = item.build_defect_dialog()
+    dialog.defect_widget("stuck").setChecked(True)
+
+    received = []
+    item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
+    item.apply_defect_from_dialog(dialog)
+
+    assert received == [(item.id, {"action": "set_defect", "stuck": True})]
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_pneumatic_apply_defect_from_dialog_emits_clear_defect_on_restore(cls):
+    item = cls(domain="pneumatic")
+    dialog = item.build_defect_dialog()
+    dialog.restore_requested = True
+
+    received = []
+    item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
+    item.apply_defect_from_dialog(dialog)
+
+    assert received == [(item.id, {"action": "clear_defect"})]
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_pneumatic_context_menu_during_simulation_offers_defect_entry(cls):
+    item = cls(domain="pneumatic")
+    item.simulation_mode = True
+
+    menu = QMenu()
+    item.extend_context_menu(menu)
+    labels = [a.text() for a in menu.actions()]
+
+    assert "Simulate defect..." in labels
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_pneumatic_apply_and_restore_defect_drives_real_domain_node(cls):
+    item = cls(domain="pneumatic")
+
+    domain_node = cls.simulation_cls(f"{cls.node_type}_1", domain="pneumatic", properties={})
+    item.command.connect(lambda node_id, payload: domain_node.handle_command(payload))
+
+    dialog = item.build_defect_dialog()
+    dialog.defect_widget("stuck").setChecked(True)
+    item.apply_defect_from_dialog(dialog)
+
+    assert domain_node.defect_active is True
+    assert domain_node.stuck_defect is True
+
+    item.update_from_domain(domain_node)
+    assert item._defect_indicator is True
+
+    restore_dialog = item.build_defect_dialog()
+    restore_dialog.restore_requested = True
+    item.apply_defect_from_dialog(restore_dialog)
+
+    assert domain_node.defect_active is False
 
 
 @pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)

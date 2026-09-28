@@ -940,20 +940,20 @@ class DirectionalValveItem(NodeItem):
 
     # -- Simulate defect (shared by all directional valves) ----------------
     # Dialog/command mechanics live in NodeItem; keys match
-    # DirectionalValve.DEFECT_FIELDS. Hydraulic only for now.
+    # DirectionalValve.DEFECT_FIELDS. "stuck" is domain-agnostic; "k" only
+    # exists in the hydraulic domain.
 
     def defect_fields(self):
-        if self.domain != "hydraulic":
-            return []
-        return [
-            DefectFieldSpec(
+        fields = []
+        if self.domain == "hydraulic":
+            fields.append(DefectFieldSpec(
                 "k",
                 QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
                 "number", placeholder="ex: 1.5e-8", min_value=0,
-            ),
-            DefectFieldSpec(
-                "stuck",
-                QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
-                "bool",
-            ),
-        ]
+            ))
+        fields.append(DefectFieldSpec(
+            "stuck",
+            QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
+            "bool",
+        ))
+        return fields

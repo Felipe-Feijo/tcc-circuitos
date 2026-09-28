@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
+from simulation.nodes.directional_valve.valve_4_3_ways import Valve_4_3_Ways
 
 
 def _make_valve(k=1e-7, body_state=0):
@@ -66,6 +67,21 @@ def test_stuck_defect_applies_even_without_k_attribute_pneumatic_domain():
     valve.handle_command({"action": "set_defect", "k": 999.0, "stuck": True})
     assert not hasattr(valve, "k")
     assert valve.stuck_defect is True
+
+
+def test_stuck_defect_freezes_pneumatic_3_position_valve_at_center_rest():
+    """Pneumatic Valve_4_3_Ways: no k attribute, defaults to center
+    (body_state == 1). Stuck must keep it there despite an actuator
+    command -- no pilot/timer actuator configured, so update() needs no
+    anchors."""
+    valve = Valve_4_3_Ways("v43", domain="pneumatic", properties={})
+    assert valve.body_state == 1
+
+    valve.handle_command({"action": "set_defect", "stuck": True})
+    valve.handle_command({"type": "actuator", "side": "left", "value": 1})
+    valve.update()
+
+    assert valve.body_state == 1
 
 
 def test_unknown_action_is_noop():

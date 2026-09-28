@@ -43,9 +43,9 @@ with **no behavior change**.
 
 ## Non-goals
 
-- No new defects. Pneumatic directional valves keep no defect menu
-  (even though `stuck` would work there) — deferred, as are all the
-  other components listed above.
+- No new defects beyond directional valves. Pneumatic directional
+  valves expose only `stuck` in their defect menu (`k` is
+  hydraulic-only) — all other components listed above are deferred.
 - Defects stay out of `get_state()`/`set_state()`: stepping backward in
   history does not undo a defect (unchanged).
 - Defects stay non-persistent: they live only in the running
@@ -187,18 +187,18 @@ Its `build_defect_dialog` / `apply_defect_from_dialog` are replaced by:
 
 ```python
 def defect_fields(self):
-    if self.domain != "hydraulic":
-        return []
-    return [
-        DefectFieldSpec("k", <"Conductance k (m³/s/√Pa)">, "number",
-                        placeholder="ex: 1.5e-8", min_value=0),
-        DefectFieldSpec("stuck", <"Valve stuck (won't switch)">, "bool"),
-    ]
+    fields = []
+    if self.domain == "hydraulic":
+        fields.append(DefectFieldSpec("k", <"Conductance k (m³/s/√Pa)">, "number",
+                                       placeholder="ex: 1.5e-8", min_value=0))
+    fields.append(DefectFieldSpec("stuck", <"Valve stuck (won't switch)">, "bool"))
+    return fields
 ```
 
 Field order, labels, placeholder, validation (k required, > 0 per the
 existing reject-zero/negative tests) and emitted payloads stay
-identical.
+identical for hydraulic. Pneumatic valves get the same dialog with
+only the `stuck` field (and the note field).
 
 ### i18n
 

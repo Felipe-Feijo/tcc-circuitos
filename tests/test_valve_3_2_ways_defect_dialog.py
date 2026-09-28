@@ -23,9 +23,13 @@ class _FakeDomainNode:
         return {"k": self.k, "stuck": self.stuck_defect}.get(key)
 
 
-def test_pneumatic_valve_has_no_defect_dialog():
+def test_pneumatic_valve_defect_dialog_has_only_stuck():
     item = Valve_3_2_Ways(domain="pneumatic")
-    assert item.build_defect_dialog() is None
+    dialog = item.build_defect_dialog()
+    assert dialog is not None
+    assert dialog.defect_widget("stuck") is not None
+    assert list(dialog.defect_values().keys()) == ["stuck"]
+    assert dialog.note_field is not None
 
 
 def test_hydraulic_valve_prefills_k_from_properties_before_any_simulation_step():

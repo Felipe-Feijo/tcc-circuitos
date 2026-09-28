@@ -82,3 +82,36 @@ def test_new_instance_never_inherits_defect_from_a_previous_one():
     fresh = _make_valve()
     assert fresh.defect_active is False
     assert fresh._stuck_defect is False
+
+
+def test_fresh_instance_has_no_defect_note():
+    valve = _make_valve()
+    assert valve._defect_note == ""
+
+
+def test_set_defect_stores_note_when_given():
+    valve = _make_valve()
+    valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
+    assert valve._defect_note == "sujeira no orifício"
+
+
+def test_set_defect_without_note_leaves_it_blank():
+    valve = _make_valve()
+    valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False})
+    assert valve._defect_note == ""
+
+
+def test_clear_defect_stores_its_own_note_when_given():
+    """The clear event can carry its own note (e.g. "corrigido"),
+    independent of whatever note the set_defect command had."""
+    valve = _make_valve()
+    valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
+    valve.handle_command({"action": "clear_defect", "note": "corrigido"})
+    assert valve._defect_note == "corrigido"
+
+
+def test_clear_defect_without_note_clears_the_note_too():
+    valve = _make_valve()
+    valve.handle_command({"action": "set_defect", "k": valve.k, "stuck": False, "note": "sujeira no orifício"})
+    valve.handle_command({"action": "clear_defect"})
+    assert valve._defect_note == ""

@@ -6,7 +6,7 @@ import glob
 
 from PIL import Image
 
-from simulation.report.frame_recorder import Frame
+from simulation.report.frame_recorder import Frame, DefectEvent
 from simulation.report.report_builder import build
 
 
@@ -83,15 +83,30 @@ def test_build_uses_real_length_when_piston_strokes_given(tmp_path):
     assert "0.2,0.5" in data_txt
 
 
+def test_build_logs_defect_events_in_data_txt(tmp_path):
+    frames = _frames_with_images(tmp_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    events = [DefectEvent(sim_time=0.1, node_id="v1", kind="applied", note="sujeira no orifício")]
+
+    build(frames, str(out_dir), node_names={"v1": "Válvula 1"}, defect_events=events)
+
+    data_txt = (out_dir / "dados.txt").read_text(encoding="utf-8")
+    assert "Válvula 1" in data_txt
+    assert "sujeira no orifício" in data_txt
+    assert "aplicado" in data_txt
+
+
 def test_build_forwards_digital_pistons_to_build_charts(tmp_path, monkeypatch):
     import simulation.report.report_builder as rb
 
     received = {}
     original_build_charts = rb.build_charts
 
-    def spy_build_charts(frames, node_names=None, digital_pistons=None, piston_strokes=None):
+    def spy_build_charts(frames, node_names=None, digital_pistons=None,
+                          piston_strokes=None, defect_events=None):
         received["digital_pistons"] = digital_pistons
-        return original_build_charts(frames, node_names, digital_pistons, piston_strokes)
+        return original_build_charts(frames, node_names, digital_pistons, piston_strokes, defect_events)
 
     monkeypatch.setattr(rb, "build_charts", spy_build_charts)
 

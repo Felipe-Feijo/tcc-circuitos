@@ -73,9 +73,50 @@ def _assign_display_names(node_ids: list, node_names: dict | None, type_label: s
     return display
 
 
+#: Visual style per DefectEvent.kind -- applied reads as "something
+#: broke" (red, dashed), cleared as "back to normal" (green, dotted).
+_DEFECT_MARKER_STYLE = {
+    "applied": {"color": "#c0392b", "linestyle": "--", "legend": "Defeito aplicado"},
+    "cleared": {"color": "#27ae60", "linestyle": ":",  "legend": "Defeito removido"},
+}
+
+
+def _draw_defect_markers(ax, times: list, defect_events: list | None) -> None:
+    """Draws a vertical line at each defect event's sim_time, skipping
+    events outside this chart's own time range (a defect on some other
+    part of the circuit, recorded before this chart's first frame or
+    after its last, shouldn't stretch the x-axis to fit it).
+
+    Only draws the event's note as text -- never an auto-generated
+    label -- so a defect with no note attached (the common case if the
+    user didn't bother typing one) adds just the line, not clutter. A
+    compact legend (one entry per kind actually drawn, not one per
+    event) explains what each line style means.
+    """
+    if not defect_events or not times:
+        return
+    t_min, t_max = min(times), max(times)
+    seen_kinds = set()
+    for event in defect_events:
+        if not (t_min <= event.sim_time <= t_max):
+            continue
+        style = _DEFECT_MARKER_STYLE[event.kind]
+        label = style["legend"] if event.kind not in seen_kinds else None
+        seen_kinds.add(event.kind)
+        ax.axvline(event.sim_time, color=style["color"], linestyle=style["linestyle"],
+                    linewidth=1.2, alpha=0.75, label=label)
+        if event.note:
+            ax.text(event.sim_time, 0.97, event.note, transform=ax.get_xaxis_transform(),
+                    rotation=90, va="top", ha="right", fontsize=7,
+                    color=style["color"], alpha=0.9)
+    if seen_kinds:
+        ax.legend(loc="upper left", fontsize=7, framealpha=0.7)
+
+
 def build_charts(frames: list, node_names: dict | None = None,
                   digital_pistons: set | None = None,
-                  piston_strokes: dict | None = None) -> list:
+                  piston_strokes: dict | None = None,
+                  defect_events: list | None = None) -> list:
     """Builds a position-vs-time chart per piston present in the frames.
 
     Args:
@@ -99,6 +140,10 @@ def build_charts(frames: list, node_names: dict | None = None,
             hydraulic piston with a real, measurable travel range.
             Pistons with no entry (pneumatic, or no stroke info given)
             keep the normalized 0-1 fraction chart.
+        defect_events: Optional list of `frame_recorder.DefectEvent`
+            (see `frame_recorder.ReportData.defect_events`). Draws a
+            vertical marker at each event's sim_time falling within
+            this chart's own time range.
 
     Returns:
         One `matplotlib.figure.Figure` per piston `node_id` found, in
@@ -135,13 +180,15 @@ def build_charts(frames: list, node_names: dict | None = None,
         ax.set_title(f"Posição do pistão — {display_names[node_id]}")
         ax.set_xlabel("Tempo (s)")
         ax.grid(True, alpha=0.3)
+        _draw_defect_markers(ax, times, defect_events)
         fig.tight_layout()
         figures.append(fig)
 
     return figures
 
 
-def build_gauge_charts(frames: list, node_names: dict | None = None) -> list:
+def build_gauge_charts(frames: list, node_names: dict | None = None,
+                        defect_events: list | None = None) -> list:
     """Builds a reading-vs-time chart per pressure gauge present in the frames.
 
     Hydraulic gauges (numeric readings, stored in Pa but plotted in bar
@@ -184,6 +231,7 @@ def build_gauge_charts(frames: list, node_names: dict | None = None) -> list:
             ax.set_ylabel("Pressão (bar)")
         ax.set_xlabel("Tempo (s)")
         ax.grid(True, alpha=0.3)
+        _draw_defect_markers(ax, times, defect_events)
         fig.tight_layout()
         figures.append(fig)
 
@@ -197,8 +245,29 @@ def _series_section(title: str, xlabel: str, ylabel: str, column: str, points: l
     return header + rows + "\n"
 
 
+def _defect_events_section(defect_events: list | None, node_names: dict | None) -> str:
+    """Formats the defect event log as `#`-commented lines -- one line
+    per applied/cleared transition, timestamped, with the component's
+    display name and the user's note (if any). Empty string if there
+    were no events, so callers can skip it entirely."""
+    if not defect_events:
+        return ""
+    ids = sorted({event.node_id for event in defect_events})
+    names = _assign_display_names(ids, node_names, "Componente")
+    kind_label = {"applied": "aplicado", "cleared": "removido"}
+    lines = ["# Eventos de defeito:"]
+    for event in defect_events:
+        note_part = f" — {event.note}" if event.note else ""
+        lines.append(
+            f"#   t={event.sim_time:.3f}s  {kind_label[event.kind]}  "
+            f"{names[event.node_id]}{note_part}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def build_data_txt(frames: list, node_names: dict | None = None,
-                    piston_strokes: dict | None = None) -> str:
+                    piston_strokes: dict | None = None,
+                    defect_events: list | None = None) -> str:
     """Builds a plain-text dump of every chart's underlying x/y data and
     title metadata, so the charts can be redrawn independently later.
 
@@ -212,21 +281,28 @@ def build_data_txt(frames: list, node_names: dict | None = None,
         piston_strokes: Optional node_id -> stroke (m) map -- same
             real-length-vs-normalized-fraction switch as `build_charts`,
             so the dump always matches what the chart actually plots.
+        defect_events: Optional list of `frame_recorder.DefectEvent` --
+            appended as a `# Eventos de defeito:` log, one line per
+            event (unlike the charts, this lists every event
+            unconditionally, not just ones inside some time range).
 
     Returns:
         One section per piston/gauge, each a `#`-commented header
-        (title, xlabel, ylabel) followed by a CSV table (`tempo_s,<col>`).
-        Sections are separated by a blank line, in the same alphabetical
-        order as `build_charts`/`build_gauge_charts`. A placeholder
-        comment if no series was recorded.
+        (title, xlabel, ylabel) followed by a CSV table (`tempo_s,<col>`),
+        plus the defect event log if any. Sections are separated by a
+        blank line, in the same alphabetical order as
+        `build_charts`/`build_gauge_charts`. A placeholder comment if no
+        series was recorded.
     """
     piston_series = _collect_piston_series(frames)
     length_series = _collect_piston_length_series(frames)
     gauge_series = _collect_gauge_series(frames)
     piston_strokes = piston_strokes or {}
+    defect_section = _defect_events_section(defect_events, node_names)
 
     if not piston_series and not gauge_series:
-        return "# Nenhum dado registrado\n"
+        text = "# Nenhum dado registrado\n"
+        return f"{text}\n{defect_section}" if defect_section else text
 
     piston_names = _assign_display_names(sorted(piston_series), node_names, "Cilindro")
     gauge_names = _assign_display_names(sorted(gauge_series), node_names, "Manômetro")
@@ -257,6 +333,9 @@ def build_data_txt(frames: list, node_names: dict | None = None,
             sections.append(_series_section(
                 f"Pressão — {gauge_names[node_id]}", "Tempo (s)", "Pressão (bar)", "pressao_bar", points_bar,
             ))
+
+    if defect_section:
+        sections.append(defect_section)
 
     return "\n".join(sections)
 
@@ -368,7 +447,8 @@ def _delete_frame_images(frames: list) -> None:
 
 def build(frames: list, out_dir: str, node_names: dict | None = None,
           digital_pistons: set | None = None,
-          piston_strokes: dict | None = None) -> None:
+          piston_strokes: dict | None = None,
+          defect_events: list | None = None) -> None:
     """Builds the report's artifacts (`relatorio.html`, `graficos.pdf`,
     `video.mp4`, `dados.txt`) in `out_dir`.
 
@@ -388,9 +468,12 @@ def build(frames: list, out_dir: str, node_names: dict | None = None,
             `frame_recorder.ReportData.piston_strokes`), used to plot a
             hydraulic piston's real length instead of its normalized
             0-1 fraction.
+        defect_events: Optional list of `frame_recorder.DefectEvent`
+            (see `frame_recorder.ReportData.defect_events`), marked on
+            every chart and logged in dados.txt.
     """
-    figures = build_charts(frames, node_names, digital_pistons, piston_strokes)
-    gauge_figures = build_gauge_charts(frames, node_names)
+    figures = build_charts(frames, node_names, digital_pistons, piston_strokes, defect_events)
+    gauge_figures = build_gauge_charts(frames, node_names, defect_events)
     all_figures = figures + gauge_figures
     try:
         if all_figures:
@@ -419,4 +502,4 @@ def build(frames: list, out_dir: str, node_names: dict | None = None,
         fh.write(html)
 
     with open(os.path.join(out_dir, "dados.txt"), "w", encoding="utf-8") as fh:
-        fh.write(build_data_txt(frames, node_names, piston_strokes))
+        fh.write(build_data_txt(frames, node_names, piston_strokes, defect_events))

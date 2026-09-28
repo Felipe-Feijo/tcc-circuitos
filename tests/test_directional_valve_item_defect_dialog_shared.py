@@ -75,6 +75,52 @@ def test_apply_defect_from_dialog_emits_clear_defect_on_restore(cls):
 
 
 @pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_apply_defect_from_dialog_includes_note_when_given(cls):
+    item = cls(domain="hydraulic")
+    item.properties["k"] = 1e-7
+    dialog = item.build_defect_dialog()
+    dialog._field_k.setText("3.3e-8")
+    dialog._field_note.setText("sujeira no orifício")
+
+    received = []
+    item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
+    item.apply_defect_from_dialog(dialog)
+
+    assert received[0][1]["note"] == "sujeira no orifício"
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_apply_defect_from_dialog_omits_note_key_when_blank(cls):
+    """No note key at all when left blank -- not "note": "" -- so
+    existing consumers that don't care about notes see no new field."""
+    item = cls(domain="hydraulic")
+    item.properties["k"] = 1e-7
+    dialog = item.build_defect_dialog()
+    dialog._field_k.setText("3.3e-8")
+
+    received = []
+    item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
+    item.apply_defect_from_dialog(dialog)
+
+    assert "note" not in received[0][1]
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_clear_defect_on_restore_includes_note_when_given(cls):
+    item = cls(domain="hydraulic")
+    item.properties["k"] = 1e-7
+    dialog = item.build_defect_dialog()
+    dialog._field_note.setText("corrigido")
+    dialog.restore_requested = True
+
+    received = []
+    item.command.connect(lambda node_id, payload: received.append((node_id, payload)))
+    item.apply_defect_from_dialog(dialog)
+
+    assert received == [(item.id, {"action": "clear_defect", "note": "corrigido"})]
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
 def test_context_menu_during_simulation_offers_defect_entry_only(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7

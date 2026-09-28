@@ -396,3 +396,77 @@ def test_piston_strokes_omits_pneumatic_pistons():
     data = recorder.finalize()
 
     assert data.piston_strokes == {}
+
+
+def _build_engine_with_valve():
+    from simulation.nodes.directional_valve.valve_4_2_ways import Valve_4_2_Ways
+
+    valve = Valve_4_2_Ways("v1", domain="hydraulic", properties={"k": 1e-7})
+    for port in ("P", "A", "B", "R"):
+        valve.add_anchor(port, domain="hydraulic")
+    engine = SimulationEngine(nodes={"v1": valve}, connections={})
+    return engine, valve
+
+
+def test_capture_step_records_no_defect_events_when_nothing_happens():
+    engine, valve = _build_engine_with_valve()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    data = recorder.finalize()
+
+    assert data.defect_events == []
+
+
+def test_capture_step_records_applied_event_on_transition():
+    engine, valve = _build_engine_with_valve()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()  # step 0, sim_time=0.0 -- no defect yet
+    valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": False, "note": "sujeira no orifício"})
+    recorder.capture_step()  # step 1, sim_time=0.1 -- defect just applied
+
+    data = recorder.finalize()
+    assert len(data.defect_events) == 1
+    ev = data.defect_events[0]
+    assert ev.sim_time == pytest.approx(0.1)
+    assert ev.node_id == "v1"
+    assert ev.kind == "applied"
+    assert ev.note == "sujeira no orifício"
+
+
+def test_capture_step_records_cleared_event_on_transition():
+    engine, valve = _build_engine_with_valve()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()  # step 0, sim_time=0.0 -- no defect yet (baseline)
+    valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": False})
+    recorder.capture_step()  # step 1, sim_time=0.1 -- applied
+    valve.handle_command({"action": "clear_defect", "note": "corrigido"})
+    recorder.capture_step()  # step 2, sim_time=0.2 -- just cleared
+
+    data = recorder.finalize()
+    cleared = [e for e in data.defect_events if e.kind == "cleared"]
+    assert len(cleared) == 1
+    ev = cleared[0]
+    assert ev.sim_time == pytest.approx(0.2)
+    assert ev.node_id == "v1"
+    assert ev.note == "corrigido"
+
+
+def test_capture_step_does_not_duplicate_event_across_unchanged_steps():
+    engine, valve = _build_engine_with_valve()
+    scene = _build_scene()
+    recorder = FrameRecorder(engine, scene, dt=0.1)
+
+    recorder.capture_step()
+    valve.handle_command({"action": "set_defect", "k": 5e-8, "stuck": False})
+    recorder.capture_step()
+    recorder.capture_step()
+    recorder.capture_step()
+
+    data = recorder.finalize()
+    assert len(data.defect_events) == 1

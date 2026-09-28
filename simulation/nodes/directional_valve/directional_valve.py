@@ -26,6 +26,12 @@ class DirectionalValve(Node):
         # Defect injected during simulation (never persisted to
         # self.properties -- lives only in this domain instance).
         self._stuck_defect = False
+        # Free-text note attached to the last set_defect/clear_defect
+        # command (blank if none was given). Read by FrameRecorder at
+        # the moment it detects a defect_active transition, to label
+        # the report chart's marker -- see DirectionalValveItem's
+        # defect dialog for where this comes from.
+        self._defect_note = ""
 
     def _init_hydraulic_k(self, k) -> None:
         """Validates and stores the hydraulic conductance k.
@@ -65,16 +71,18 @@ class DirectionalValve(Node):
         k: float      (new flow coefficient; only affects nodes that
                         define self.k -- hydraulic domain)
         stuck: bool   (True locks the valve's body at its current position)
+        note: str     (optional; see _defect_note)
 
         action: "clear_defect"
-        (no other fields -- restores the original k and unlocks)
+        note: str     (optional -- independent of set_defect's note)
+        (other fields: restores the original k and unlocks)
         """
         action = command.get("action")
         if action == "set_defect":
             self._apply_defect_command(command)
             return
         if action == "clear_defect":
-            self._clear_defect()
+            self._clear_defect(command.get("note", ""))
             return
 
         if command.get("type") != "actuator":
@@ -103,12 +111,14 @@ class DirectionalValve(Node):
             if k is not None:
                 self.k = float(k)
         self._stuck_defect = bool(command.get("stuck", False))
+        self._defect_note = command.get("note", "")
 
-    def _clear_defect(self) -> None:
+    def _clear_defect(self, note: str = "") -> None:
         """Clears any active defect, restoring the original k."""
         if hasattr(self, "_k_default"):
             self.k = self._k_default
         self._stuck_defect = False
+        self._defect_note = note
 
     @property
     def defect_active(self) -> bool:

@@ -6,7 +6,7 @@ import pytest
 import matplotlib
 matplotlib.use("Agg")
 
-from simulation.report.frame_recorder import Frame
+from simulation.report.frame_recorder import Frame, DefectEvent
 from simulation.report.report_builder import (
     build_charts, save_pdf, save_chart_pngs, build_gauge_charts, build_data_txt,
 )
@@ -241,3 +241,72 @@ def test_build_data_txt_uses_normalized_column_without_piston_strokes():
     assert "# ylabel: Posição (0 = recuado, 1 = avançado)" in text
     assert "tempo_s,posicao" in text
     assert "0.1,0.5" in text
+
+
+def _defect_events():
+    return [
+        DefectEvent(sim_time=0.1, node_id="v1", kind="applied", note="sujeira no orifício"),
+        DefectEvent(sim_time=0.2, node_id="v1", kind="cleared", note=""),
+    ]
+
+
+def test_build_charts_draws_a_line_per_defect_event_in_range():
+    figures = build_charts(_frames(), defect_events=_defect_events())
+    ax = figures[0].axes[0]
+
+    # 1 data line + 2 defect markers (applied at 0.1, cleared at 0.2 --
+    # both inside this chart's [0.0, 0.2] time range)
+    assert len(ax.lines) == 3
+
+
+def test_build_charts_ignores_defect_events_outside_the_chart_time_range():
+    events = [DefectEvent(sim_time=5.0, node_id="v1", kind="applied", note="fora do intervalo")]
+    figures = build_charts(_frames(), defect_events=events)
+    ax = figures[0].axes[0]
+
+    assert len(ax.lines) == 1  # only the data line -- marker outside [0.0, 0.2] skipped
+
+
+def test_build_charts_defect_marker_shows_note_as_text_when_given():
+    figures = build_charts(_frames(), defect_events=_defect_events())
+    ax = figures[0].axes[0]
+
+    texts = [t.get_text() for t in ax.texts]
+    assert "sujeira no orifício" in texts
+
+
+def test_build_charts_defect_marker_has_no_text_when_note_is_blank():
+    events = [DefectEvent(sim_time=0.1, node_id="v1", kind="applied", note="")]
+    figures = build_charts(_frames(), defect_events=events)
+    ax = figures[0].axes[0]
+
+    assert len(ax.texts) == 0
+
+
+def test_build_charts_without_defect_events_draws_only_the_data_line():
+    figures = build_charts(_frames())
+    ax = figures[0].axes[0]
+
+    assert len(ax.lines) == 1
+
+
+def test_build_gauge_charts_draws_defect_markers_too():
+    figures = build_gauge_charts(_gauge_frames(), defect_events=_defect_events())
+    ax = figures[0].axes[0]
+
+    assert len(ax.lines) == 3  # data line + applied + cleared
+
+
+def test_build_data_txt_lists_defect_events_with_resolved_name():
+    text = build_data_txt(_frames(), node_names={"v1": "Válvula direcional"},
+                           defect_events=_defect_events())
+
+    assert "Válvula direcional" in text
+    assert "aplicado" in text
+    assert "sujeira no orifício" in text
+    assert "removido" in text
+
+
+def test_build_data_txt_has_no_defect_section_without_events():
+    text = build_data_txt(_frames())
+    assert "defeito" not in text.lower()

@@ -32,6 +32,16 @@ class Frame:
 
 
 @dataclass
+class DefectEvent:
+    """One defect applied/cleared during the simulation, for the report
+    chart markers (see FrameRecorder.capture_step)."""
+    sim_time: float
+    node_id: str
+    kind: str  # "applied" | "cleared"
+    note: str = ""
+
+
+@dataclass
 class ReportData:
     """Data collected by a `FrameRecorder`, ready for `report_builder`."""
     frames: list = field(default_factory=list)
@@ -41,6 +51,7 @@ class ReportData:
     # node_id -> stroke (m), hydraulic pistons only -- lets report_builder
     # fix the length chart's y-axis to the piston's real travel range.
     piston_strokes: dict = field(default_factory=dict)
+    defect_events: list = field(default_factory=list)
 
 
 class FrameRecorder:
@@ -72,6 +83,12 @@ class FrameRecorder:
         self._temp_dir = tempfile.mkdtemp(prefix="circuit_report_")
         self._step_index = 0
         self._finalized = False
+
+        # Tracks each defect-capable node's last known defect_active, to
+        # detect the exact step a defect was applied/cleared (see
+        # _capture_defect_events).
+        self._defect_active_last: dict[str, bool] = {}
+        self._defect_events: list[DefectEvent] = []
 
         # Frame dimensions fixed at creation: `scene.sceneRect()` can
         # change during simulation (user zoom/pan), and the video
@@ -116,15 +133,41 @@ class FrameRecorder:
                 logger.exception("failed to capture report frame %d", self._step_index)
                 return
 
+        sim_time = self._step_index * self.dt
         self._frames.append(Frame(
             step_index=self._step_index,
-            sim_time=self._step_index * self.dt,
+            sim_time=sim_time,
             piston_positions=positions,
             image_path=image_path,
             gauge_readings=gauge_readings,
             piston_lengths=lengths,
         ))
+        self._capture_defect_events(sim_time)
         self._step_index += 1
+
+    def _capture_defect_events(self, sim_time: float) -> None:
+        """Detects defect_active transitions since the last capture_step()
+        call, recording one DefectEvent per transition -- applied
+        (False->True) or cleared (True->False). Nodes with no
+        `defect_active` (most node types -- only DirectionalValve has
+        one today) are silently skipped.
+        """
+        for node_id, node in self.engine.nodes.items():
+            active = getattr(node, "defect_active", None)
+            if active is None:
+                continue
+            was_active = self._defect_active_last.get(node_id, False)
+            if active and not was_active:
+                self._defect_events.append(DefectEvent(
+                    sim_time=sim_time, node_id=node_id, kind="applied",
+                    note=getattr(node, "_defect_note", ""),
+                ))
+            elif was_active and not active:
+                self._defect_events.append(DefectEvent(
+                    sim_time=sim_time, node_id=node_id, kind="cleared",
+                    note=getattr(node, "_defect_note", ""),
+                ))
+            self._defect_active_last[node_id] = active
 
     def finalize(self) -> ReportData:
         """Ends the recording and returns the collected frames.
@@ -138,6 +181,7 @@ class FrameRecorder:
             node_names=self._collect_node_names(),
             digital_pistons=self._collect_digital_pistons(),
             piston_strokes=self._collect_piston_strokes(),
+            defect_events=list(self._defect_events),
         )
 
     def _collect_piston_strokes(self) -> dict[str, float]:

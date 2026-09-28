@@ -117,7 +117,7 @@ class SimulationSession:
                 data = self._recorder.finalize()
                 report_builder.build(
                     data.frames, data.temp_dir, data.node_names,
-                    data.digital_pistons, data.piston_strokes,
+                    data.digital_pistons, data.piston_strokes, data.defect_events,
                 )
                 result = ReportResult(report_dir=data.temp_dir)
         except Exception:

@@ -975,16 +975,33 @@ class DirectionalValveItem(NodeItem):
             QCoreApplication.translate("DirectionalValveItem", "Valve stuck (won't switch)"),
             value=current_stuck,
         )
+        # Free-text personal annotation, e.g. "sujeira no orifício" --
+        # shown on the report charts (as a marker at the moment this
+        # defect was applied/cleared) only when non-empty, so leaving it
+        # blank never clutters the chart. Shared by both Apply and
+        # Restore, since either can end up wanting to leave a note.
+        dialog._field_note = dialog.add_text_field(
+            QCoreApplication.translate("DirectionalValveItem", "Note (optional)"),
+            placeholder=QCoreApplication.translate("DirectionalValveItem", "e.g. debris in the orifice"),
+        )
         return dialog
 
     def apply_defect_from_dialog(self, dialog):
+        note = dialog._field_note.text().strip()
+
         if dialog.restore_requested:
-            self.command.emit(self.id, {"action": "clear_defect"})
+            payload = {"action": "clear_defect"}
+            if note:
+                payload["note"] = note
+            self.command.emit(self.id, payload)
             return
 
         k_text = dialog._field_k.text().strip()
-        self.command.emit(self.id, {
+        payload = {
             "action": "set_defect",
             "k": float(k_text),
             "stuck": dialog._field_stuck.isChecked(),
-        })
+        }
+        if note:
+            payload["note"] = note
+        self.command.emit(self.id, payload)

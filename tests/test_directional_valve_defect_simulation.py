@@ -61,8 +61,8 @@ def test_unstuck_valve_still_reacts_normally_to_actuator_commands():
 
 def test_stuck_defect_applies_even_without_k_attribute_pneumatic_domain():
     """stuck é independente de k -- k só existe em domínio hidráulico, mas o
-    domínio de simulação não impede stuck em pneumático (a UI é quem restringe
-    a exposição desse defeito a hidráulico, ver Task 4)."""
+    domínio de simulação não impede stuck em pneumático (e a UI expõe stuck,
+    só não k, para válvulas pneumáticas -- ver Task 4)."""
     valve = Valve_4_2_Ways("v42", domain="pneumatic", properties={})
     valve.handle_command({"action": "set_defect", "k": 999.0, "stuck": True})
     assert not hasattr(valve, "k")

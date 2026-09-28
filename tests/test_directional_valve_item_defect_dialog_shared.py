@@ -95,6 +95,22 @@ def test_pneumatic_apply_and_restore_defect_drives_real_domain_node(cls):
 
 
 @pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
+def test_pneumatic_defect_dialog_prefills_stuck_from_live_domain_node(cls):
+    item = cls(domain="pneumatic")
+
+    domain_node = cls.simulation_cls(f"{cls.node_type}_1", domain="pneumatic", properties={})
+    item.command.connect(lambda node_id, payload: domain_node.handle_command(payload))
+
+    dialog = item.build_defect_dialog()
+    dialog.defect_widget("stuck").setChecked(True)
+    item.apply_defect_from_dialog(dialog)
+    item.update_from_domain(domain_node)
+
+    reopened = item.build_defect_dialog()
+    assert reopened.defect_widget("stuck").isChecked() is True
+
+
+@pytest.mark.parametrize("cls", ALL_VALVE_ITEM_CLASSES)
 def test_hydraulic_valve_defect_dialog_titled_after_palette_meta_name(cls):
     item = cls(domain="hydraulic")
     item.properties["k"] = 1e-7

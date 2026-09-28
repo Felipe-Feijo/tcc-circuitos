@@ -36,6 +36,7 @@ class LabelItem(QGraphicsTextItem):
         "movable": False,
         "max_length": None,
         "on_commit": None,
+        "on_reposition": None,
         "font_size": None,
         "font_delta": DEFAULT_FONT_DELTA,
         "bold": False,
@@ -59,6 +60,14 @@ class LabelItem(QGraphicsTextItem):
         self.editable = self.properties["editable"]
         self.max_length = self.properties["max_length"]
         self.on_commit = self.properties["on_commit"]
+        # Optional callback the owning node sets so its own repositioning
+        # logic (which depends on this label's actual rendered size, not
+        # just its text) reruns whenever that size changes on its own --
+        # currently only refresh_default_font_size() (a global font-size
+        # change never routed through the node itself). set_text() does
+        # NOT call this: callers that need repositioning after a text
+        # change already invoke their own reposition logic explicitly.
+        self.on_reposition = self.properties["on_reposition"]
 
         self.movable = self.properties["movable"]
         self.setFlag(self.GraphicsItemFlag.ItemIsMovable, self.movable)
@@ -187,6 +196,16 @@ class LabelItem(QGraphicsTextItem):
         """
         if self.properties.get("font_size") is None:
             self._apply_font()
+            # The font change resizes this label's bounding rect, but
+            # main_window.on_change_font_size() (the only caller) applies
+            # it directly to every LabelItem in the scene -- it has no
+            # notion of any particular node's own positioning logic, so
+            # nothing else would ever re-run it. Any owner that positions
+            # this label from its rendered size (centered/right-anchored
+            # relative to a sprite, etc.) sets on_reposition to keep that
+            # in sync.
+            if callable(self.on_reposition):
+                self.on_reposition()
 
     # =========================
     # External API

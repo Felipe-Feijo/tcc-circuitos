@@ -427,13 +427,6 @@ class DirectionalValveItem(NodeItem):
             self.remove_label(label_name, special=True)
 
             if actuator_name in ["limit_switch", "solenoid"] and sensor_name:
-                rect = self.actuator_rects[side]
-                
-
-                # position relative to the sprite
-                label_x = rect.x() +  rect.width() * (0.42 if side == "left" else 0.18)
-                label_y = rect.y() + rect.height() * 0.25
-
                 label = LabelItem(
                     properties={
                         "text": sensor_name,
@@ -444,15 +437,50 @@ class DirectionalValveItem(NodeItem):
                         "border": True,
                     }
                 )
-
-                relative_pos = QPointF(label_x, label_y)
-
-                label._relative_pos = relative_pos
-                label.setPos(relative_pos + self.visual_offset)
+                label.on_reposition = lambda s=side, l=label: self._position_actuator_label(s, l)
+                self._position_actuator_label(side, label)
 
                 self.add_label(label_name, label, special=True)
 
         self._initialize_spring_visuals(body)
+
+    def _position_actuator_label(self, side: str, label: LabelItem) -> None:
+        """Positions `label` over its actuator's rect. The two sides need
+        DIFFERENT anchoring, not the same ratio mirrored: a
+        QGraphicsTextItem always renders growing RIGHTWARD from its own
+        local origin, and the valve BODY sits on a different side of
+        each actuator rect:
+
+        - right actuator: the body is to its LEFT. A fixed top-left
+          anchor (18% into the rect) only ever grows AWAY from the body
+          as the label gets bigger -- the original static ratio is
+          already correct at any size, no repositioning needed.
+        - left actuator: the body is to its RIGHT. That same kind of
+          top-left anchor would grow the label INTO the body as it gets
+          bigger. Centering it on a fixed point instead (42% across the
+          rect) keeps it stable regardless of size.
+
+        The y placement centers on a fixed point either way (25% down
+        the rect) -- growing taller isn't a left/right-body-collision
+        concern. Recomputed off the label's OWN rendered bounding rect,
+        and re-run via label.on_reposition whenever a global font-size
+        change resizes it.
+        """
+        rect = self.actuator_rects[side]
+        lbl_rect = label.boundingRect()
+
+        if side == "left":
+            center_x = rect.x() + rect.width() * 0.42
+            x = center_x - lbl_rect.width() / 2
+        else:
+            x = rect.x() + rect.width() * 0.18
+
+        center_y = rect.y() + rect.height() * 0.25
+        y = center_y - lbl_rect.height() / 2
+
+        relative_pos = QPointF(x, y)
+        label._relative_pos = relative_pos
+        label.setPos(relative_pos + self.visual_offset)
 
     def _initialize_spring_visuals(self, body: QRectF) -> None:
         """Centering spring: always present on both sides of a

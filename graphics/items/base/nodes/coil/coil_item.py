@@ -13,6 +13,8 @@ class CoilItem(NodeItem):
     """
     Base class for coils, parameterizable by sprite, prefix and signal type.
     """
+    LABEL_GAP = 20  # px between the sprite and the sensor-name label
+
     def setup(self) -> None:
         self.properties = {
             "sensor": {"coil": {"name": ""}}
@@ -68,11 +70,23 @@ class CoilItem(NodeItem):
                 "border": False,
             }
         )
+        label.on_reposition = lambda: self._position_label(label)
 
-        x = -label.boundingRect().width() - 25
+        self._position_label(label)
+        self.add_label("sensor_name", label, special=True)
+
+    def _position_label(self, label) -> None:
+        """Right-anchors the label LABEL_GAP px left of the sprite.
+
+        Recomputed on every text change (not just at creation): the
+        label's bounding rect grows with its text, and with a
+        one-shot position (based on the empty text at init) a 3-char
+        name -- the max the field allows -- could grow past the gap
+        and overlap the sprite.
+        """
+        x = -label.boundingRect().width() - self.LABEL_GAP
         y = self.height / 2 - label.boundingRect().height() / 2
         label.setPos(QPointF(x, y))
-        self.add_label("sensor_name", label, special=True)
 
     # --------------------------
     # Geometry
@@ -158,6 +172,7 @@ class CoilItem(NodeItem):
         label = self.special_labels.get("sensor_name")
         if label:
             label.set_text(name)
+            self._position_label(label)
 
     def _unregister_sensor(self):
         sensor = self.sensors.get("coil")
@@ -181,6 +196,7 @@ class CoilItem(NodeItem):
         label = self.special_labels.get("sensor_name")
         if label:
             label.set_text("")
+            self._position_label(label)
 
     def _set_sensor_name(self, new_name):
         sensor = self.sensors["coil"]  # -- 'coil' key
@@ -195,6 +211,7 @@ class CoilItem(NodeItem):
         if not ok:
             if label:
                 label.set_text(old_name)  # reverts to the old name
+                self._position_label(label)
             QMessageBox.warning(
                 None,
                 QCoreApplication.translate("CoilItem", "Error renaming"),
@@ -207,6 +224,7 @@ class CoilItem(NodeItem):
         sensor["name"] = new_name
         if label:
             label.set_text(new_name)
+            self._position_label(label)
 
     def apply_properties(self):
         self.sensors = self.properties["sensor"]
@@ -214,5 +232,6 @@ class CoilItem(NodeItem):
         label = self.special_labels.get("sensor_name")
         if label:
             label.set_text(self.properties["sensor"]["coil"].get("name", ""))
+            self._position_label(label)
         self._register_sensor()
         self.update()

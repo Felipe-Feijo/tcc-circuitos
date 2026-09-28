@@ -73,10 +73,15 @@ Adding a defect to a node = (1) an attribute with a healthy default,
 
 ### Behavior
 
-- `handle_command(cmd)`:
-  - `action == "set_defect"` → `_set_defect(cmd)`, return.
-  - `action == "clear_defect"` → `_clear_defect(cmd)`, return.
-  - anything else → `super().handle_command(cmd)`.
+- `handle_defect_command(cmd) -> bool`:
+  - `action == "set_defect"` → `_set_defect(cmd)`, return True.
+  - `action == "clear_defect"` → `_clear_defect(cmd)`, return True.
+  - anything else → False.
+- `handle_command(cmd)`: `if not self.handle_defect_command(cmd):
+  super().handle_command(cmd)`. A subclass that overrides
+  `handle_command` (e.g. `DirectionalValve`, which precedes the mixin in
+  the MRO) must start with
+  `if self.handle_defect_command(command): return`.
 - `_set_defect(cmd)`: for each key in `cmd` that is in `DEFECT_FIELDS`
   and whose attribute exists on the instance (`hasattr`):
   - snapshot the attribute's current value into `_defect_originals`

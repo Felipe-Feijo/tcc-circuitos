@@ -42,6 +42,20 @@ from circuit_generator.grid_layout import Grid
 from circuit_generator.rail import RailPlanner
 from circuit_generator.sprite_metrics import METRICS as _M, anchor_local_for_routing
 
+# Contact.B and RelayCoil/SolenoidCoil.T don't sit at the same fraction of
+# their own sprite's width: Contact's T/B anchor is at 39/50 of its width,
+# matching where its switch-symbol line is actually drawn (see contact.py's
+# initialize_anchors()), while the coils' T/B anchor is centered at
+# width/2 -- both correct for their OWN sprite, but placing a contact and a
+# coil at the same grid column (same origin x) still leaves their real
+# anchors 14px apart, since the correction is in local-anchor space, not
+# origin space. Every coil in this generator sits directly under a contact
+# stack column, so its stored x always gets nudged by this constant delta,
+# making the anchors coincide exactly (a straight wire, not a routed jog).
+_CONTACT_B_X = anchor_local_for_routing("Contact", "B")[0]
+_RELAY_COIL_DX = _CONTACT_B_X - anchor_local_for_routing("RelayCoil", "T")[0]
+_SOLENOID_COIL_DX = _CONTACT_B_X - anchor_local_for_routing("SolenoidCoil", "T")[0]
+
 
 def _build_role_maps(data: dict) -> dict:
     role_map = {n["id"]: n.get("_role", "") for n in data["nodes"]}
@@ -152,10 +166,10 @@ def apply(data: dict) -> dict:
     ramo_stack_gap = 150.0
     reset_gap = 150.0
     coil_gap = 150.0
-    ground_gap = 300.0
-    zone_gap = 400.0
-    ramo_cell_w = 200.0
-    zone3_cell_w = 200.0
+    ground_gap = 150.0
+    zone_gap = 250.0
+    ramo_cell_w = 150.0
+    zone3_cell_w = 150.0
 
     contact_by_role = roles["contact_by_role"]
     sensor_depth_by_atom = {
@@ -253,7 +267,7 @@ def apply(data: dict) -> dict:
 
         coil_id = roles["coil_by_idx"][k]
         x, y = _place_aligned("coil_row", 3 * k + 1, coil_id)
-        node_by_id[coil_id]["position"] = {"x": x, "y": y}
+        node_by_id[coil_id]["position"] = {"x": x + _RELAY_COIL_DX, "y": y}
 
     # -- Power zone: contacts + Y coil, grouped to the RIGHT of every atom
     #    block -- 1 sub-column per (cylinder, direction) present in the
@@ -290,27 +304,41 @@ def apply(data: dict) -> dict:
                          coil_row_y, x_origin=zone3_x0)
             power_stack_rows_added.add("power_coil_row")
         x, y = grid.place("power_coil_row", g, coil_id)
-        node_by_id[coil_id]["position"] = {"x": x, "y": y}
+        node_by_id[coil_id]["position"] = {"x": x + _SOLENOID_COIL_DX, "y": y}
 
     # -- Ground (horizontal bar, bottom of the electric band) -------------
     ground_id = roles["ground_id"]
     node_by_id[ground_id]["position"] = {"x": cyl_first_x, "y": ground_row_y}
 
     # -- Registers the VoltageSource/Ground bars with RailPlanner, sized
-    #    from the grid's real reach (grows, never shrinks -- see
-    #    step_by_step_layout.py) -------------------------------------------
+    #    EXACTLY from the real x of every connection that will attach to
+    #    them, not a generic grid-wide guess. materialize() always plants
+    #    the bus's synthetic right-end terminal (node_b) at exactly
+    #    x_max -- sizing x_max from grid.occupied_x_range() (which scans
+    #    ALL rows, including the piston/valve row up top, unrelated to
+    #    how far right the ladder's real connections actually reach) left
+    #    slack whenever that row's reach didn't match the ladder's, and
+    #    that slack became a dangling wire stub past the last real tap,
+    #    with nothing wired to its far end.
+    def _other_endpoint_x(node_id: str, anchor_name: str) -> float:
+        pos = node_by_id[node_id]["position"]
+        local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
+        return pos["x"] + (local[0] if local else 0.0)
+
+    vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
+    ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
+
     rail = RailPlanner(min_spacing=_M.pl_spacing)
-    x_range = grid.occupied_x_range()
-    if x_range is not None:
-        min_x, max_x = x_range
-        needed_span = max(_M.pl_spacing, max_x - min_x)
-    else:
-        needed_span = _M.pl_spacing
-    for bus_id in (vsource_id, ground_id):
+    for bus_id, conns, other_side in (
+        (vsource_id, vsource_conns, "target"),
+        (ground_id, ground_conns, "source"),
+    ):
         pos = node_by_id[bus_id]["position"]
         width = _M.vsource_pix_w if node_type_map[bus_id] == "VoltageSource" else _M.ground_pix_w * 0.5
         x0 = pos["x"] + width
-        rail.register_bus(bus_id, "JunctionNodeItem", y=pos["y"], x_min=x0, x_max=x0 + needed_span)
+        other_xs = [_other_endpoint_x(c[other_side]["node"], c[other_side]["anchor"]) for c in conns]
+        x_max = max(other_xs) if other_xs else x0 + _M.pl_spacing
+        rail.register_bus(bus_id, "JunctionNodeItem", y=pos["y"], x_min=x0, x_max=max(x_max, x0))
 
     # -- Children (Exhaust / PressureSource) positioned relative to parent -
     _CHILD_ANCHOR = {"Exhaust": "R", "PressureSource": "P"}
@@ -352,14 +380,9 @@ def apply(data: dict) -> dict:
     #   no need for the push-based conflict logic PressureLine needs
     #   (there, N rows compete for the same X space; here it's a single
     #   bar).
-    def _other_endpoint_x(node_id: str, anchor_name: str) -> float:
-        pos = node_by_id[node_id]["position"]
-        local = anchor_local_for_routing(node_type_map.get(node_id, ""), anchor_name)
-        return pos["x"] + (local[0] if local else 0.0)
-
-    vsource_conns = [c for c in data["connections"] if c["source"]["node"] == vsource_id]
-    ground_conns = [c for c in data["connections"] if c["target"]["node"] == ground_id]
-
+    #   _other_endpoint_x/vsource_conns/ground_conns were already computed
+    #   above, to size the bus's x_max exactly -- reused here as-is.
+    #
     # Tracked by identity (not by node id) BEFORE rail.materialize() rewrites
     # each conn_ref's node/anchor in place -- after materialize(), only the
     # tap at bus.x_min still targets the original VoltageSource/Ground node

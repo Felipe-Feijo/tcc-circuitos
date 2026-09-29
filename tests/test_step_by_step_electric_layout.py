@@ -103,12 +103,27 @@ class TestCoherentAtomBlock:
 
     def test_reset_and_coil_same_x_as_ramo_b(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
+        node_by_id = {n["id"]: n for n in data["nodes"]}
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
         for k in range(4):
             ramo_b_x = _node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"]
             reset_x = _node(data, f"gen-contact-{k}-reset_nc")["position"]["x"]
-            coil_x = _node(data, f"gen-coil-{k}")["position"]["x"]
             assert reset_x == ramo_b_x
-            assert coil_x == ramo_b_x
+
+            # The coil's stored x is NOT the same as ramo_b_x (it carries a
+            # small correction, see step_by_step_electric_layout.py's
+            # _RELAY_COIL_DX) -- what must actually coincide is the real
+            # ANCHOR x, since that's what the connecting wire follows.
+            # Contact's T/B anchor sits at 39/50 of its own width (matching
+            # where its switch-symbol line is drawn) while RelayCoil's is
+            # centered at width/2 -- same column, different sprites, so
+            # only the corrected anchor-space x lines up, not the raw
+            # origin.
+            reset_anchor_x, _ = _scene_xy(node_by_id, node_type_map,
+                                           f"gen-contact-{k}-reset_nc", "B")
+            coil_anchor_x, _ = _scene_xy(node_by_id, node_type_map,
+                                          f"gen-coil-{k}", "T")
+            assert coil_anchor_x == reset_anchor_x
 
     def test_reset_below_ramo_row_coil_below_reset(self):
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
@@ -121,6 +136,38 @@ class TestCoherentAtomBlock:
         data = layout.apply(sbe.generate(parse("A+B+A-B-")))
         xs = [_node(data, f"gen-contact-{k}-ramo_b_self")["position"]["x"] for k in range(4)]
         assert xs == sorted(xs)
+
+
+class TestContactCoilConnectionsRenderStraight:
+    """Every Contact -> RelayCoil/SolenoidCoil connection (reset contact
+    feeding its K coil, power contact feeding its Y coil) must render as a
+    straight vertical line -- no routed jog. Regression test for the
+    anchor mismatch fixed by _RELAY_COIL_DX/_SOLENOID_COIL_DX (see
+    step_by_step_electric_layout.py): Contact's T/B anchor sits at 39/50
+    of its width while the coils' is centered at width/2, so aligning
+    them by GRID COLUMN alone (equal origin x) still left their real
+    anchors 14px apart -- visible as an inconsistent dogleg (A* picked
+    either shape depending on incidental tie-breaking)."""
+
+    @pytest.mark.parametrize("seq", [
+        "A+B+A-B-",
+        "C+(A+B+)C-A-B-",
+        "A+B+A-A+B-A-",
+    ])
+    def test_no_jog_between_any_contact_and_its_coil(self, seq):
+        data = layout.apply(sbe.generate(parse(seq)))
+        node_type_map = {n["id"]: n["type"] for n in data["nodes"]}
+        checked = 0
+        for conn in data["connections"]:
+            s_id, t_id = conn["source"]["node"], conn["target"]["node"]
+            s_type, t_type = node_type_map.get(s_id), node_type_map.get(t_id)
+            if s_type == "Contact" and t_type in ("RelayCoil", "SolenoidCoil"):
+                assert not conn.get("waypoints"), (
+                    f"{s_id} -> {t_id} should be a straight line, "
+                    f"got waypoints {conn.get('waypoints')}"
+                )
+                checked += 1
+        assert checked > 0  # sanity: the loop actually found some
 
 
 class TestStartButtonPosition:
@@ -579,12 +626,21 @@ class TestRegressionCounts:
     (Task 2/3) adds one real node (a JunctionNodeItem, interior tap or
     far-end) AND one connection (the chain segment leading to it) per bus
     tap, replacing the old single-node properties["anchors"] array -- see
-    task-7-report.md."""
+    task-7-report.md.
+
+    Counts dropped by 2 nodes / 2 connections each (vs. the numbers task-7
+    reported) after the dangling-wire-stub fix: register_bus's x_max used
+    to be sized from a generic grid-wide guess, always a bit past the real
+    rightmost tap, so materialize() planted a lone far-end JunctionNodeItem
+    (+ its stub connection) beyond the last real one. x_max is now sized
+    exactly from the real connections that attach to the bus, so the last
+    real tap lands exactly on the far-end terminal instead of one step
+    short of it -- no separate orphan node/connection is created."""
 
     @pytest.mark.parametrize("seq,n_nodes,n_conns", [
-        ("A+B+A-B-", 62, 73),
-        ("C+(A+B+)C-A-B-", 83, 98),
-        ("A+B+A-A+B-A-", 82, 99),
+        ("A+B+A-B-", 60, 71),
+        ("C+(A+B+)C-A-B-", 81, 96),
+        ("A+B+A-A+B-A-", 80, 97),
     ])
     def test_node_and_connection_counts_unchanged_from_topology(self, seq, n_nodes, n_conns):
         data = layout.apply(sbe.generate(parse(seq)))

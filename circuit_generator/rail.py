@@ -148,12 +148,28 @@ class RailPlanner:
         return _reg(desired_x, owner_id, owner_y, conn_ref, side, frozenset(), push_dir)
 
     def assign_sorted(self, bus_id: str, requests: list[tuple]) -> None:
+        """Sorts requests by desired_x and matches them 1:1 to bus taps,
+        pushing right by min_spacing on ties/overlaps (e.g. same-column
+        stacked power contacts from different cycles -- same real X,
+        different Y).
+
+        x_max GROWS to fit a push instead of clamping it back down: the
+        caller registers the bus with x_max already set to the real
+        rightmost desired_x (no padding -- see
+        step_by_step_electric_layout.py), so a hard ceiling here would
+        collide a pushed tap right back onto the one it was pushed away
+        from. x_min still clamps (the bus's own connector is a real,
+        fixed lower bound), and materialize()'s node_b terminal always
+        lands at the (possibly grown) x_max, so no dangling stub is ever
+        left past the last real tap.
+        """
         bus = self._buses[bus_id]
         ordered = sorted(requests, key=lambda r: r[2])  # by desired_x
         last_x = None
         for owner_id, owner_y, desired_x, conn_ref, side in ordered:
             x = desired_x if last_x is None else max(desired_x, last_x + self.min_spacing)
-            x = max(bus.x_min, min(bus.x_max, x))
+            x = max(bus.x_min, x)
+            bus.x_max = max(bus.x_max, x)
             bus.taps.append(Tap(x=x, owner_id=owner_id, owner_y=owner_y,
                                  conn_ref=conn_ref, side=side, push_dir=0))
             last_x = x

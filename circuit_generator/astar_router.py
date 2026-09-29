@@ -413,6 +413,27 @@ def route_connection(
             wp(tgt_px[0], oy),
         ]
 
+    # -- Contact.B -> RelayCoil/SolenoidCoil.T (contact stack feeding its
+    #    coil directly below) -------------------------------------------------
+    # Contact's T/B anchor sits at 39/50 of its own width -- matching where
+    # its switch-symbol line actually falls (see contact.py's
+    # initialize_anchors()) -- while RelayCoil/SolenoidCoil's anchor is
+    # centered at width/2: a small, constant X mismatch every time a
+    # contact stack ends in a coil, even when the generator places both
+    # at the same grid column. Nothing ever sits between them, so general
+    # A* had no obstacle to avoid -- it just picked, per connection,
+    # either this same shape or an equally-short one with the jog right
+    # below the contact instead, depending on incidental grid
+    # tie-breaking, which is what made some columns look aligned and
+    # others not for the exact same mismatch. Forcing this shape always
+    # keeps every column visually identical.
+    if src_type == "Contact" and tgt_type in ("RelayCoil", "SolenoidCoil") and tgt_dir == "UP":
+        ox, oy = tgt_off("UP")
+        return [
+            wp(src_px[0], oy),
+            wp(tgt_px[0], oy),
+        ]
+
     # -- Valve_5_2_Ways.A/B -> PressureLine ---------------------------------------
     # Goes up from the 5/2's UP anchor, moves horizontally to the PL's x, goes down to the PL.
     if src_type == "Valve_5_2_Ways" and tgt_type == "PressureLine":

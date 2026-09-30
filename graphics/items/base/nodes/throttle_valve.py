@@ -16,6 +16,7 @@ from simulation.nodes.throttle_valve import ThrottleValve as ThrottleValveNode
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from ....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/throttle_valve"
@@ -66,3 +67,11 @@ class ThrottleValve(NodeItem):
     def apply_properties_from_dialog(self, dialog: PropertiesDialog) -> None:
         k_text = dialog._field_k.text().strip()
         self.properties["k"] = float(k_text) if k_text else None
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "k", self.tr("Conductance k (m³/s/√Pa)"), "number",
+            placeholder="ex: 1.5e-8", min_value=0,
+        )]

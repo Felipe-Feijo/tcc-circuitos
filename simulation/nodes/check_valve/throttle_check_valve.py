@@ -78,12 +78,16 @@ from __future__ import annotations
 import math
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
 _DEFAULT_DELAY = 3
 
 
-class ThrottleCheckValve(Node, HydraulicMixin):
+class ThrottleCheckValve(DefectMixin, Node, HydraulicMixin):
+    # clogged restricted-direction orifice (hydraulic only; skipped in pneumatic)
+    DEFECT_FIELDS = {"k": "k"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(
             node_id, "throttle_check_valve", domain=domain, properties=properties

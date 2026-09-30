@@ -22,10 +22,14 @@ from __future__ import annotations
 import math
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
 
-class ThrottleValve(Node, HydraulicMixin):
+class ThrottleValve(DefectMixin, Node, HydraulicMixin):
+    # clogged orifice: lower conductance
+    DEFECT_FIELDS = {"k": "k"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "throttle_valve", domain=domain, properties=properties)
 

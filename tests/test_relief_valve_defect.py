@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication([])
 
 from main_window.language import language_manager
+from tests.defect_test_helpers import form_label_texts
 from graphics.items.base.nodes.relief_valve import ReliefValve as ReliefValveItem
 from simulation.connections import Connection
 from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
@@ -97,15 +98,6 @@ def test_defect_applied_mid_run_converges_to_new_p_set(factor):
 # Item
 # ---------------------------------------------------------------------------
 
-def _form_label_texts(dialog):
-    from PyQt6.QtWidgets import QFormLayout
-    labels = []
-    for i in range(dialog._form_layout.rowCount()):
-        item = dialog._form_layout.itemAt(i, QFormLayout.ItemRole.LabelRole)
-        if item and item.widget():
-            labels.append(item.widget().text())
-    return labels
-
 
 def test_item_defect_fields_one_spec_in_hydraulic():
     item = ReliefValveItem(domain="hydraulic")
@@ -157,7 +149,7 @@ def test_item_defect_dialog_label_translates_to_pt_br():
     try:
         dialog = item.build_defect_dialog()
         try:
-            assert "Pressão de abertura (Pa)" in _form_label_texts(dialog)
+            assert "Pressão de abertura (Pa)" in form_label_texts(dialog)
         finally:
             dialog.close()
     finally:

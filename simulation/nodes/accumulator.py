@@ -3,10 +3,14 @@
 import math
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
 
-class Accumulator(Node, HydraulicMixin):
+class Accumulator(DefectMixin, Node, HydraulicMixin):
+    # lost gas precharge
+    DEFECT_FIELDS = {"P0": "P0"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "accumulator", domain=domain, properties=properties)
 

@@ -7,6 +7,7 @@ from simulation.nodes.accumulator import Accumulator as AccumulatorNode
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from ....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/accumulator"
@@ -118,3 +119,11 @@ class Accumulator(NodeItem):
         p0_text = dialog._field_p0.text().strip()
         self.properties["V0"] = float(v0_text) if v0_text else None
         self.properties["P0"] = float(p0_text) if p0_text else None
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "P0", self.tr("Precharge pressure P0 (Pa)"), "number",
+            placeholder="ex: 3e6", min_value=0,
+        )]

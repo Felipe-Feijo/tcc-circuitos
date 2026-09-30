@@ -28,6 +28,7 @@ from simulation.nodes.relief_valve import ReliefValve as ReliefValveNode
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from ....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/relief_valve"
@@ -108,3 +109,11 @@ class ReliefValve(NodeItem):
             self.properties["piloted"] = dialog._field_piloted.isChecked()
         self._update_pilot_anchor()
         self.update()
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "p_set", self.tr("Cracking pressure (Pa)"), "number",
+            placeholder="ex: 1.5e7  (= 150 bar)", min_value=0,
+        )]

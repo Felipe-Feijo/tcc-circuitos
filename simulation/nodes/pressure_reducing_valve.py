@@ -48,10 +48,14 @@ regulated outlet pressure above the valve's own fixed setpoint.
 
 import math
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
 
-class PressureReducingValve(Node, HydraulicMixin):
+class PressureReducingValve(DefectMixin, Node, HydraulicMixin):
+    # misadjusted setpoint: regulates the outlet at a different pressure
+    DEFECT_FIELDS = {"p_set": "p_set"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "pressure_reducing_valve", domain=domain, properties=properties)
         if self.domain == "hydraulic":

@@ -36,6 +36,7 @@ from simulation.nodes.pressure_reducing_valve import PressureReducingValve as Pr
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from ....anchors.anchor import AnchorItem
 
 _SPRITE_DIR = "resources/nodes/pressure_reducing_valve"
@@ -140,3 +141,11 @@ class PressureReducingValve(NodeItem):
         self._update_relief_anchor()
         self._update_pilot_anchor()
         self.update()
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "p_set", self.tr("Setpoint pressure (Pa)"), "number",
+            placeholder="ex: 1.5e7  (= 150 bar)", min_value=0,
+        )]

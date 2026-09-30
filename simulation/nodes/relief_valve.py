@@ -3,9 +3,13 @@ piloted -- see properties["piloted"])."""
 
 import math
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
-class ReliefValve(Node, HydraulicMixin):
+class ReliefValve(DefectMixin, Node, HydraulicMixin):
+    # weak/misadjusted spring: cracks at a different pressure
+    DEFECT_FIELDS = {"p_set": "p_set"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "relief_valve", domain=domain, properties=properties)
         if self.domain == "hydraulic":

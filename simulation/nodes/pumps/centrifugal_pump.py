@@ -28,10 +28,14 @@ caused needless confusion in this class's sibling.
 """
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
 
-class CentrifugalPump(Node, HydraulicMixin):
+class CentrifugalPump(DefectMixin, Node, HydraulicMixin):
+    # worn impeller: the pump curve shrinks
+    DEFECT_FIELDS = {"H_shutoff": "H_shutoff", "Q_max": "Q_max"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "centrifugal_pump", domain=domain, properties=properties)
 

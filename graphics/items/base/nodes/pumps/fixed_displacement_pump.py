@@ -7,6 +7,7 @@ from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from .....anchors.anchor import AnchorItem
 
 
@@ -46,3 +47,11 @@ class FixedDisplacementPump(NodeItem):
         if dialog._field_Q is not None:
             Q_text = dialog._field_Q.text().strip()
             self.properties["Q"] = float(Q_text) if Q_text else None
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "Q", self.tr("Flow rate (m³/s)"), "number",
+            placeholder="ex: 8.3e-4  (= 50 L/min)", min_value=0,
+        )]

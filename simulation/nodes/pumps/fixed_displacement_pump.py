@@ -1,9 +1,13 @@
 """Fixed-displacement pump simulation node (hydraulic domain)."""
 
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
-class FixedDisplacementPump(Node, HydraulicMixin):
+class FixedDisplacementPump(DefectMixin, Node, HydraulicMixin):
+    # worn pump: lower volumetric efficiency, delivers less flow
+    DEFECT_FIELDS = {"Q": "Q_set"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "fixed_displacement_pump", domain=domain, properties=properties)
         self.setup()

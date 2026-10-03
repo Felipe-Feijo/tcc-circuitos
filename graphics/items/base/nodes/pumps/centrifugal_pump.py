@@ -7,6 +7,7 @@ from simulation.nodes.pumps.centrifugal_pump import CentrifugalPump as Centrifug
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.items.base.nodes.node_descriptor import PaletteMeta
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 from .....anchors.anchor import AnchorItem
 
 
@@ -56,3 +57,17 @@ class CentrifugalPump(NodeItem):
         if dialog._field_qmax is not None:
             q_text = dialog._field_qmax.text().strip()
             self.properties["Q_max"] = float(q_text) if q_text else None
+
+    def defect_fields(self):
+        if self.domain != "hydraulic":
+            return []
+        return [
+            DefectFieldSpec(
+                "H_shutoff", self.tr("Shutoff pressure H (Pa)"), "number",
+                placeholder="ex: 2e6", min_value=0,
+            ),
+            DefectFieldSpec(
+                "Q_max", self.tr("Maximum flow Q_max (m³/s)"), "number",
+                placeholder="ex: 8.3e-4  (= 50 L/min)", min_value=0,
+            ),
+        ]

@@ -2,9 +2,13 @@
 
 import math
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
-class DoubleActingCylinder(Node, HydraulicMixin):
+class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
+    # worn piston seal: laminar leakage A -> B, Q_L = c_leak * (P_A - P_B)
+    DEFECT_FIELDS = {"leak": "c_leak"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "double_acting_cylinder", domain=domain, properties=properties)
 
@@ -43,12 +47,35 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             self.stroke         = float(self.properties["stroke"])
             self.external_force = float(self.properties.get("external_force") or 0.0)
             self.friction       = 1e-3   # hidden -- minimum value to close the equation
+            self.c_leak         = 0.0    # m3/s/Pa -- healthy seal; set by the "leak" defect
             stroke = float(self.properties["stroke"])
             self.x = stroke if default == "extended" else 0.0
             self.locked_fwd     = False
             self.locked_bwd     = False
             self.flow_var_a     = f"Q_{self.id}_a"
             self.flow_var_b     = f"Q_{self.id}_b"
+
+    def _on_defect_changed(self) -> None:
+        if hasattr(self, "c_leak"):
+            self.c_leak = max(0.0, self.c_leak)
+
+    def _piston_velocity(self, Q_a, P_a, P_b):
+        """Piston velocity: port-A flow minus what leaks across to B."""
+        return (Q_a - self.c_leak * (P_a - P_b)) / self.area_a
+
+    @property
+    def piston_velocity(self):
+        """Post-solve piston velocity (m/s), or None if unavailable."""
+        if self.domain != "hydraulic":
+            return None
+        anchor_a = self.anchors.get("A")
+        anchor_b = self.anchors.get("B")
+        if anchor_a is None or anchor_b is None:
+            return None
+        values = (anchor_a.flow, anchor_a.pressure, anchor_b.pressure)
+        if any(isinstance(v, str) for v in values):
+            return None
+        return self._piston_velocity(*values)
 
     # ------------------------------------------------------------------
     # Hydraulic contract
@@ -100,7 +127,9 @@ class DoubleActingCylinder(Node, HydraulicMixin):
         EPS = self.stroke * 1e-4
 
         if self.x <= EPS or self.x >= self.stroke - EPS:
-            return {self.flow_var_a: 0.0, self.flow_var_b: 0.0}
+            # Piston parked: only the leak (if any) crosses the ports.
+            Q_l = self.c_leak * (P_a - P_b)
+            return {self.flow_var_a: Q_l, self.flow_var_b: -Q_l}
 
         F_hidro = P_a * self.area_a - P_b * self.area_b
         F_net   = F_hidro - self.external_force
@@ -130,7 +159,7 @@ class DoubleActingCylinder(Node, HydraulicMixin):
         P_a = x[idx[self.anchors["A"].pressure_var]]
         P_b = x[idx[self.anchors["B"].pressure_var]]
 
-        v       = Q_a / self.area_a
+        v       = self._piston_velocity(Q_a, P_a, P_b)
         F_hidro = P_a * self.area_a - P_b * self.area_b
         F_res   = self.external_force + self.friction * v
         F_net   = F_hidro - F_res
@@ -139,24 +168,27 @@ class DoubleActingCylinder(Node, HydraulicMixin):
         Q_scale = max(self.area_a * self.stroke, 1e-8)
 
         f = F_net / F_scale
-        q = Q_a   / Q_scale
+        # Complementarity acts on the piston's swept flow, not Q_a: at an
+        # end stop the piston halts but Q_a = Q_leak can keep flowing.
+        q = self.area_a * v / Q_scale
 
         EPS = self.stroke * 1e-4
 
         # Conservation always holds -- area-weighted, not equal-and-
-        # opposite: the piston moves at the same velocity on both sides
-        # (v = Q_a/area_a = -Q_b/area_b), but the rod makes area_b <
-        # area_a, so the chambers don't swap equal volumes. Q_a + Q_b = 0
-        # would be correct only if area_a == area_b (no rod).
-        eq_conservation = (self.area_b / self.area_a) * Q_a + Q_b
+        # opposite: the piston moves at the same velocity on both sides,
+        # but the rod makes area_b < area_a, so the chambers don't swap
+        # equal volumes. Q_a = area_a*v + Q_leak enters A; area_b*v +
+        # Q_leak leaves B. With c_leak = 0 this is the original
+        # (area_b/area_a)*Q_a + Q_b = 0.
+        eq_conservation = Q_b + self.area_b * v + self.c_leak * (P_a - P_b)
 
         if self.x <= EPS:
-            # Forbidden: Q_a < 0 (can't retract past the end stop)
+            # Forbidden: v < 0 (can't retract past the end stop)
             # phi(q, -f) = 0
             return [self._fb(q, -f), eq_conservation]
 
         if self.x >= self.stroke - EPS:
-            # Forbidden: Q_a > 0 (can't extend past the end stop)
+            # Forbidden: v > 0 (can't extend past the end stop)
             # phi(-q, f) = 0
             return [self._fb(-q, f), eq_conservation]
 
@@ -196,20 +228,18 @@ class DoubleActingCylinder(Node, HydraulicMixin):
             self._integrate_hydraulic(dt)
 
     def _integrate_hydraulic(self, dt):
-        anchor_a = self.anchors.get("A")
-        if not anchor_a or isinstance(anchor_a.flow, str):
+        v = self.piston_velocity
+        if v is None:
             return
 
-        Q_a = anchor_a.flow
-
-        # unlocks if the flow reversed
-        if self.locked_fwd and Q_a < 0:
+        # unlocks if the piston reversed
+        if self.locked_fwd and v < 0:
             self.locked_fwd = False
-        if self.locked_bwd and Q_a > 0:
+        if self.locked_bwd and v > 0:
             self.locked_bwd = False
 
         if not self.locked_fwd and not self.locked_bwd:
-            self.x += (Q_a / self.area_a) * dt
+            self.x += v * dt
             self.x  = max(0.0, min(self.x, self.stroke))
 
             self.position = round(self.x / self.stroke) if self.stroke > 0 else 0

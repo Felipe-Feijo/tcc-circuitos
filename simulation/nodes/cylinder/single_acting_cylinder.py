@@ -2,9 +2,14 @@
 
 import math
 from simulation.nodes.nodes import Node
+from simulation.nodes.defect import DefectMixin
 from simulation.hydraulic import HydraulicMixin
 
-class SingleActingCylinder(Node, HydraulicMixin):
+class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
+    # worn piston seal: laminar leakage A -> vented spring chamber,
+    # Q_L = c_leak * P_A
+    DEFECT_FIELDS = {"leak": "c_leak"}
+
     def __init__(self, node_id: str, *, domain=None, properties=None, **kwargs):
         super().__init__(node_id, "single_acting_cylinder", domain=domain, properties=properties)
 
@@ -42,6 +47,7 @@ class SingleActingCylinder(Node, HydraulicMixin):
             self.spring_k        = float(self.properties["spring_k"])
             self.external_force  = float(self.properties.get("external_force") or 0.0)
             self.friction        = 1e-3   # hidden -- minimum value to close the equation
+            self.c_leak          = 0.0    # m3/s/Pa -- healthy seal; set by the "leak" defect
             stroke_val = float(self.properties["stroke"])
             self.x = stroke_val if default == "extended" else 0.0
             self.flow_var        = f"Q_{self.id}"
@@ -54,6 +60,24 @@ class SingleActingCylinder(Node, HydraulicMixin):
                 1e8,
             )
             self.c_end = 2.0 * math.sqrt(self.k_end * self.area ** 2 / self.friction)
+
+    def _on_defect_changed(self) -> None:
+        if hasattr(self, "c_leak"):
+            self.c_leak = max(0.0, self.c_leak)
+
+    def _piston_velocity(self, Q, P_a):
+        """Piston velocity: port flow minus what leaks to the vented side."""
+        return (Q - self.c_leak * P_a) / self.area
+
+    @property
+    def piston_velocity(self):
+        """Post-solve piston velocity (m/s), or None if unavailable."""
+        if self.domain != "hydraulic":
+            return None
+        anchor = self.anchors.get("A")
+        if anchor is None or isinstance(anchor.flow, str) or isinstance(anchor.pressure, str):
+            return None
+        return self._piston_velocity(anchor.flow, anchor.pressure)
 
     # ------------------------------------------------------------------
     # End-stop helpers
@@ -117,8 +141,10 @@ class SingleActingCylinder(Node, HydraulicMixin):
         # escape that guess. Fix: at the end stops, guess 0 directly.
         # Off the stops, use the spring's p_hint (the real equilibrium
         # pressure), not anchor.pressure.
+        # With a leak, the parked piston still passes Q = c_leak * P,
+        # estimated from p_hint for the same reason.
         if self.x <= EPS or self.x >= self.stroke - EPS:
-            return {self.flow_var: 0.0}
+            return {self.flow_var: self.c_leak * max(self.p_hint, 0.0)}
 
         # Free zone: estimates Q from force equilibrium using p_hint (the
         # spring's pressure), which is always physically consistent --
@@ -147,6 +173,11 @@ class SingleActingCylinder(Node, HydraulicMixin):
         if self.x <= EPS:
             return {self.flow_var: (0.0, None)}    # can only extend
         elif self.x >= self.stroke - EPS:
+            if self.c_leak > 0:
+                # A pump holding pressure makes Q = c_leak * P > 0 with the
+                # piston parked -- Q <= 0 would be infeasible. The stop is
+                # still enforced by the complementarity on v in equations().
+                return {}
             return {self.flow_var: (None, 0.0)}    # can only retract
 
         return {}
@@ -154,22 +185,22 @@ class SingleActingCylinder(Node, HydraulicMixin):
     def equations(self, x, idx):
         Q = x[idx[self.flow_var]]
         P = x[idx[self.anchors["A"].pressure_var]]
-        v = Q / self.area
+        v = self._piston_velocity(Q, P)
         F_hidro = P * self.area
         F_res   = self.spring_k * self.x + self.external_force + self.friction * v
         EPS = self.stroke * 1e-3
 
         if self.x >= self.stroke - EPS:
-            # Complementarity: either Q=0 (piston stopped) or F_net=0 (piston moving)
+            # Complementarity: either v=0 (piston stopped) or F_net=0 (piston moving)
             # P_A is always anchored by the equation -- never left free in NodeContinuity
-            a = -Q / self.q_ref                    # >= 0 when Q <= 0
+            a = -self.area * v / self.q_ref        # >= 0 when the piston retracts
             b = (F_hidro - F_res) / max(F_res, 1)  # >= 0 when pressure sustains it
             return [a + b - math.sqrt(a**2 + b**2)]
 
         # at the retracted stop with force pushing outward
         if self.x <= EPS and F_hidro <= F_res:
             F_scale = max(abs(F_res), 1.0)
-            return [Q / (self.area * F_scale)]  # forces Q -> 0
+            return [v / F_scale]  # forces the piston to stay -> v = 0
 
         # free zone -- normal force equilibrium
         F_contact = self._contact_force(self.x, v)
@@ -202,9 +233,9 @@ class SingleActingCylinder(Node, HydraulicMixin):
             self.outputs[name] = {"type": "signal", "value": self.position == 1}
 
         if self.domain == "hydraulic" and dt is not None:
-            anchor = self.anchors["A"]
-            if anchor and not isinstance(anchor.flow, str):
-                self.x += (anchor.flow / self.area) * dt
+            v = self.piston_velocity
+            if v is not None:
+                self.x += v * dt
                 if self.x > self.stroke:
                     self.x = self.stroke
                 elif self.x < 0:

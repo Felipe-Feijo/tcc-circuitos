@@ -103,3 +103,38 @@ def test_leak_makes_blocked_cylinder_sink():
     P_a = cyl.anchors["A"].pressure
     assert P_a == pytest.approx((cyl.spring_k * cyl.x + cyl.external_force) / cyl.area, rel=2e-2)
     assert cyl.piston_velocity == pytest.approx(-C * P_a / cyl.area, rel=2e-2)
+
+
+def _pump_circuit():
+    """Fixed pump -> A with a relief valve on the same line."""
+    from simulation.nodes.pumps.fixed_displacement_pump import FixedDisplacementPump
+    from simulation.nodes.relief_valve import ReliefValve
+    props = dict(PROPS, default_state="retracted")
+    cyl = _anch(SingleActingCylinder("sa", domain="hydraulic", properties=props), "A")
+    pump = _anch(FixedDisplacementPump("pump", domain="hydraulic", properties={"Q": 1e-4}), "P", "S")
+    rv = _anch(ReliefValve("rv", domain="hydraulic", properties={"p_set": 5e6}), "P", "T")
+    r1 = _anch(Reservoir("r1", domain="hydraulic", properties={"pressure": 0.0}), "T")
+    r2 = _anch(Reservoir("r2", domain="hydraulic", properties={"pressure": 0.0}), "T")
+    conns = [
+        Connection(pump.get_anchor("S"), r1.get_anchor("T")),
+        Connection(pump.get_anchor("P"), cyl.get_anchor("A")),
+        Connection(pump.get_anchor("P"), rv.get_anchor("P")),
+        Connection(rv.get_anchor("T"), r2.get_anchor("T")),
+    ]
+    nodes = {n.id: n for n in (cyl, pump, rv, r1, r2)}
+    return SimulationEngine(nodes, {c.id: c for c in conns}), cyl
+
+
+def test_leak_at_extended_stop_under_pump_holds_and_flows():
+    """Covers the dropped extended-stop bound: with Q = c*P > 0 the
+    piston must still sit at the stop while the leak keeps flowing."""
+    engine, cyl = _pump_circuit()
+    leak = 1e-11
+    cyl.handle_command({"action": "set_defect", "leak": leak})
+    for _ in range(80):
+        engine.run_until_stable(dt=0.1)
+        assert cyl.x <= cyl.stroke
+    assert cyl.x == pytest.approx(cyl.stroke)
+    assert abs(cyl.piston_velocity) < 1e-6
+    assert cyl.anchors["A"].pressure == pytest.approx(5e6, rel=1e-2)
+    assert cyl.anchors["A"].flow == pytest.approx(leak * 5e6, rel=2e-2)

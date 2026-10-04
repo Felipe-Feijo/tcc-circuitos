@@ -147,3 +147,47 @@ def test_leak_at_extended_stop_flows_but_piston_holds():
     # Pump pressure climbs to the relief setting; the leak keeps flowing.
     assert cyl.anchors["A"].pressure == pytest.approx(P_SET, rel=1e-2)
     assert cyl.anchors["A"].flow == pytest.approx(C * P_SET, rel=2e-2)
+
+
+def test_extended_cylinder_drifts_back_with_a_blocked_and_b_to_tank():
+    """Covers the locked_fwd release on v < 0: once parked at the stop
+    with the supply closed, load + leak push the piston back."""
+    from simulation.nodes.directional_valve.valve_2_2_ways import Valve_2_2_Ways
+    pump = _anch(FixedDisplacementPump("pump", domain="hydraulic", properties={"Q": Q}), "P", "S")
+    valve = _anch(Valve_2_2_Ways("v", domain="hydraulic", properties={"k": 1e-6}), "P", "A")
+    valve.body_state = 1
+    cyl = _cyl()
+    rv = _anch(ReliefValve("rv", domain="hydraulic", properties={"p_set": P_SET}), "P", "T")
+    r1 = _anch(Reservoir("r1", domain="hydraulic", properties={"pressure": 0.0}), "T")
+    r2 = _anch(Reservoir("r2", domain="hydraulic", properties={"pressure": 0.0}), "T")
+    r3 = _anch(Reservoir("r3", domain="hydraulic", properties={"pressure": 0.0}), "T")
+    conns = [
+        Connection(pump.get_anchor("S"), r1.get_anchor("T")),
+        Connection(pump.get_anchor("P"), valve.get_anchor("P")),
+        Connection(pump.get_anchor("P"), rv.get_anchor("P")),
+        Connection(rv.get_anchor("T"), r2.get_anchor("T")),
+        Connection(valve.get_anchor("A"), cyl.get_anchor("A")),
+        Connection(cyl.get_anchor("B"), r3.get_anchor("T")),
+    ]
+    nodes = {n.id: n for n in (pump, valve, cyl, rv, r1, r2, r3)}
+    engine = SimulationEngine(nodes, {c.id: c for c in conns})
+    for _ in range(100):
+        engine.run_until_stable(dt=0.1)
+        if cyl.x >= cyl.stroke:
+            break
+    assert cyl.x == pytest.approx(cyl.stroke)
+
+    valve.body_state = 0
+    cyl.handle_command({"action": "set_defect", "leak": C})
+    xs = [cyl.x]
+    for _ in range(5):
+        engine.run_until_stable(dt=0.1)
+        xs.append(cyl.x)
+    assert all(b < a for a, b in zip(xs, xs[1:]))
+    # A blocked (Q_A = 0): v = -c * (P_A - P_B) / A_A, P_A held by the load.
+    a, b = cyl.anchors["A"], cyl.anchors["B"]
+    assert a.flow == pytest.approx(0.0, abs=1e-12)
+    assert cyl.piston_velocity == pytest.approx(
+        -C * (a.pressure - b.pressure) / cyl.area_a, rel=1e-6
+    )
+    assert a.pressure == pytest.approx(PROPS["external_force"] / cyl.area_a, rel=2e-2)

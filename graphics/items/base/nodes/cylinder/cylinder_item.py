@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMessageBox
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
 from graphics.utils.properties_dialog import PropertiesDialog
+from graphics.utils.defect_dialog import DefectFieldSpec
 
 class CylinderItem(NodeItem):
     """
@@ -204,26 +205,13 @@ class CylinderItem(NodeItem):
         self.update()
 
     def _update_velocity_from_domain(self, domain_node):
-        """Computes piston velocity from the domain node's flow and area."""
-        try:
-            anchor = domain_node.anchors.get("A")
-            if anchor is None or isinstance(getattr(anchor, "flow", None), str):
-                return
-
-            flow = anchor.flow  # m^3/s
-
-            # single acting uses `area`, double acting uses `area_a`
-            area = getattr(domain_node, "area", None) or getattr(domain_node, "area_a", None)
-            if not area:
-                return
-
-            velocity = flow / area  # m/s
-            if abs(velocity) < 1e-8:
-                velocity = 0.0
-                
-            self.update_velocity_label(velocity)
-        except Exception:
-            pass
+        """Shows the domain node's piston velocity (net of any internal leak)."""
+        velocity = getattr(domain_node, "piston_velocity", None)
+        if velocity is None:
+            return
+        if abs(velocity) < 1e-8:
+            velocity = 0.0
+        self.update_velocity_label(velocity)
 
     def reset_visual_state(self) -> None:
         super().reset_visual_state()
@@ -414,6 +402,20 @@ class CylinderItem(NodeItem):
 
         if name:
             self.sensor_registry.unregister(name)
+
+    def defect_fields(self):
+        # Explicit "CylinderItem" context, not self.tr(): inherited by
+        # both cylinder subclasses (see build_properties_dialog's note).
+        if self.domain != "hydraulic":
+            return []
+        return [DefectFieldSpec(
+            "leak",
+            QCoreApplication.translate("CylinderItem", "Internal leakage c_L (m³/s/Pa)"),
+            "number",
+            placeholder="ex: 1e-12  (≈ 0.6 L/min @ 100 bar)",
+            # healthy is 0 and min_value is exclusive; the node clamps negatives
+            min_value=None,
+        )]
 
     def build_properties_dialog(self):
         # QCoreApplication.translate(...) with an explicit "CylinderItem"

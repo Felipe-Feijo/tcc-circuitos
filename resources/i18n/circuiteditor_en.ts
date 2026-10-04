@@ -217,6 +217,11 @@
 </context><context>
     <name>CylinderItem</name>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="413" />
+        <source>Internal leakage c_L (m³/s/Pa)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="316" />
         <source>Error renaming sensor</source>
         <translation type="unfinished" />

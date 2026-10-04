@@ -89,9 +89,10 @@ v   = (Q − Q_L) / A
   (`_integrate_hydraulic` / `post_step_update`), for the double-acting
   `locked_fwd`/`locked_bwd` release (on the sign of `v`), and for the
   graphics velocity label.
-- `initial_guess` at the end stops guesses `Q_A = Q_L` (and
-  `Q_B = −Q_L` for double-acting) from the anchors' pressures instead
-  of 0.
+- `initial_guess` at the end stops guesses the leak flow instead of 0:
+  double-acting `Q_A = Q_L`, `Q_B = −Q_L` from the anchors' pressures;
+  single-acting `Q = c_leak · max(p_hint, 0)` (its existing comment
+  explains why anchor pressure is stale after a topology switch).
 
 ### Graphics
 

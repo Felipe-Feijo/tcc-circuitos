@@ -76,3 +76,33 @@ def test_defect_applied_and_cleared_mid_run(factor):
     v.handle_command({"action": "clear_defect"})
     engine.run_until_stable(dt=1.0)
     assert v.get_anchor("P").pressure == pytest.approx(P_SET + P_VENT, rel=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Item
+# ---------------------------------------------------------------------------
+
+from PyQt6.QtWidgets import QApplication
+
+app = QApplication.instance() or QApplication([])
+
+from graphics.items.base.nodes.pilot_operated_relief_valve import PilotOperatedReliefValve as Item
+
+
+def test_item_defect_fields_one_spec_in_hydraulic():
+    specs = Item(domain="hydraulic").defect_fields()
+    assert [s.key for s in specs] == ["p_set"]
+    assert specs[0].kind == "number"
+    assert specs[0].min_value == 0
+    assert specs[0].label == "Pilot setting p_set (Pa)"
+
+
+def test_item_apply_defect_emits_set_defect_float():
+    item = Item(domain="hydraulic")
+    item.properties["p_set"] = P_SET
+    dialog = item.build_defect_dialog()
+    dialog.defect_widget("p_set").setText("5e6")
+    received = []
+    item.command.connect(lambda nid, payload: received.append(payload))
+    item.apply_defect_from_dialog(dialog)
+    assert received == [{"action": "set_defect", "p_set": 5e6}]

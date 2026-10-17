@@ -160,3 +160,24 @@ def test_small_pump_flow_pilot_only_regime():
     expected = P_SET + (q / PilotOperatedReliefValve.K_ORIFICE) ** 2
     assert c.p_pump() == pytest.approx(expected, rel=1e-3)
     assert P_SET < c.p_pump() < P_SET + P_VENT
+
+
+# T held above p_set by a pressure source while X is vented: pilot stays
+# closed, main stage is forced open by backpressure, orifice flow leaves via X.
+
+# Node ids change variable ordering and thus the solver path; both orders
+# must converge.
+@pytest.mark.parametrize("t_id, x_id", [("tank_hi", "tank_x"), ("tb", "tx")])
+def test_t_pressurized_above_p_set_with_x_vented(t_id, x_id):
+    p_back = 1.5e7
+    c = Circuit()
+    v = c.add(PilotOperatedReliefValve, "po", "PTX", p_set=P_SET, p_vent=P_VENT)
+    c.connect(c.pump, "P", v, "P")
+    c.connect(v, "T", c.add(Reservoir, t_id, "T", pressure=p_back), "T")
+    c.connect(v, "X", c.add(Reservoir, x_id, "T", pressure=0.0), "T")
+    c.run()
+    q_orif = PilotOperatedReliefValve.K_ORIFICE * p_back ** 0.5
+    assert c.p_pump() == pytest.approx(p_back, rel=1e-3)
+    assert v.get_anchor("X").pressure == pytest.approx(0.0, abs=1e3)
+    assert v.get_anchor("X").flow == pytest.approx(-q_orif, rel=1e-2)
+    assert v.get_anchor("T").flow == pytest.approx(-(Q - q_orif), rel=1e-2)

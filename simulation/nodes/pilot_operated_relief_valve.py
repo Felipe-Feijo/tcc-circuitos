@@ -20,10 +20,13 @@ from simulation.hydraulic import HydraulicMixin
 
 
 def _relief_fb(p_in, p_out, threshold, q, P_scale, Q_scale):
-    # Same residual as ReliefValve.equations(), passive-regime guard included.
-    if p_out > threshold and p_out >= p_in and q > 0:
-        return (p_in - p_out) / P_scale
-    a = (threshold - p_in) / P_scale
+    # A stage can't discharge against an outlet above its setting, so the
+    # effective threshold is max(threshold, p_out). Same roots as
+    # ReliefValve's passive-regime branch (backpressured: p_in = p_out,
+    # q >= 0), but continuous: that branch jumps at q = 0+ and leaves q
+    # undetermined, so a stage whose inlet is pinned below p_out (pilot with
+    # X vented, T pressurized) converged to arbitrary pilot flow.
+    a = (max(threshold, p_out) - p_in) / P_scale
     b = q / Q_scale
     return a + b - math.sqrt(a * a + b * b)
 

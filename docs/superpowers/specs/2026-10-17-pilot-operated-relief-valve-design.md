@@ -137,12 +137,15 @@ With `Q_orif = Q_P − Q_main` (flow through the orifice):
 4. pilot stage FB: `a = (p_set − P_X) / P_ref`, `b = Q_pilot / Q_ref`
 5. main stage FB: `a = (P_X + p_vent − P_P) / P_ref`, `b = Q_main / Q_ref`
 
-Both FB residuals use `a + b − sqrt(a² + b²)` and reproduce
-`ReliefValve.equations()`' passive-regime guard (outlet backpressured
-above the threshold → `eq = (P_in − P_out) / P_ref`), with "in" being
-`P_X` / `P_P` and "out" `P_T`, so the node stays equivalent to the
-discrete build below in every regime. The guard is duplicated, not
-imported: `ReliefValve` is not touched.
+Both FB residuals use `a + b − sqrt(a² + b²)` with an effective
+threshold `max(threshold, P_T)` (a stage can't discharge against an
+outlet above its setting). This has the same roots as
+`ReliefValve.equations()`' passive-regime branch (backpressured:
+`P_in = P_T`, `q ≥ 0`), so the node matches the discrete build below
+at every real root, but it is continuous. The passive branch jumps at
+`q = 0⁺` and leaves `q` undetermined, and the final review found that
+with X vented and T pressurized above `p_set` the pilot then converged
+to an arbitrary pilot flow. `ReliefValve` is not touched.
 
 `p_hint = p_set + p_vent`. `set_scale` as `ReliefValve`
 (`p_ref ≥ 1e5`, `q_ref ≥ 1e-10`). `initial_guess`: flows 0, P pressure

@@ -160,3 +160,9 @@ def test_passive_regime_when_t_backpressured():
     ))
     assert all(math.isfinite(e) for e in eqs)
     assert_root(eqs)
+
+
+def test_registered_in_simulate_json():
+    from tests.simulate_json import ANCHORS_BY_TYPE, _get_node_classes
+    assert _get_node_classes()["PilotOperatedReliefValve"] is PilotOperatedReliefValve
+    assert ANCHORS_BY_TYPE["PilotOperatedReliefValve"] == ["P", "T", "X"]

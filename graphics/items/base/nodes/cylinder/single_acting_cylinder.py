@@ -52,6 +52,7 @@ class SingleActingCylinder(CylinderItem):
         if self.domain == "hydraulic":
             # friction doesn't appear in the dialog -- fixed at 0 in the simulation node
             self.properties.setdefault("external_force", 0.0)
+            self.properties.setdefault("c_leak", 0.0)
             self._rod_pixmap    = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_rod.png")
             self._body_pixmap   = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_body.png")
             self._spring_pixmap = QPixmap(f"{_BASE_PATH}/single_acting_cylinder_spring.png")
@@ -121,6 +122,7 @@ class SingleActingCylinder(CylinderItem):
             dialog._field_ext_force = dialog.add_number_field(
                 self.tr("External load (N)"),                placeholder="ex: 0.0",
                 value=self.properties.get("external_force", 0.0))
+            self._add_leak_field(dialog)
         else:
             dialog._field_bore = dialog._field_stroke = None
             dialog._field_spring_k = dialog._field_ext_force = None
@@ -139,3 +141,4 @@ class SingleActingCylinder(CylinderItem):
             ]:
                 text = field.text().strip()
                 self.properties[key] = float(text) if text else None
+            self._apply_leak_field(dialog)

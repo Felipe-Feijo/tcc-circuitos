@@ -403,16 +403,32 @@ class CylinderItem(NodeItem):
         if name:
             self.sensor_registry.unregister(name)
 
-    def defect_fields(self):
+    @staticmethod
+    def _leak_label() -> str:
         # Explicit "CylinderItem" context, not self.tr(): inherited by
         # both cylinder subclasses (see build_properties_dialog's note).
+        return QCoreApplication.translate("CylinderItem", "Internal leakage (m³/s/Pa)")
+
+    _LEAK_PLACEHOLDER = "ex: 1e-12  (≈ 0.6 L/min @ 100 bar)"
+
+    def _add_leak_field(self, dialog) -> None:
+        # optional; healthy is 0 and min_value is exclusive, the node clamps negatives
+        dialog._field_leak = dialog.add_number_field(
+            self._leak_label(), placeholder=self._LEAK_PLACEHOLDER,
+            value=self.properties.get("c_leak", 0.0))
+
+    def _apply_leak_field(self, dialog) -> None:
+        text = dialog._field_leak.text().strip()
+        self.properties["c_leak"] = float(text) if text else 0.0
+
+    def defect_fields(self):
         if self.domain != "hydraulic":
             return []
         return [DefectFieldSpec(
             "leak",
-            QCoreApplication.translate("CylinderItem", "Internal leakage c_L (m³/s/Pa)"),
+            self._leak_label(),
             "number",
-            placeholder="ex: 1e-12  (≈ 0.6 L/min @ 100 bar)",
+            placeholder=self._LEAK_PLACEHOLDER,
             # healthy is 0 and min_value is exclusive; the node clamps negatives
             min_value=None,
         )]

@@ -47,7 +47,8 @@ class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
             self.spring_k        = float(self.properties["spring_k"])
             self.external_force  = float(self.properties.get("external_force") or 0.0)
             self.friction        = 1e-3   # hidden -- minimum value to close the equation
-            self.c_leak          = 0.0    # m3/s/Pa -- healthy seal; set by the "leak" defect
+            # m3/s/Pa -- configured seal leakage (0 = healthy); the "leak" defect overrides it
+            self.c_leak          = max(0.0, float(self.properties.get("c_leak") or 0.0))
             stroke_val = float(self.properties["stroke"])
             self.x = stroke_val if default == "extended" else 0.0
             self.flow_var        = f"Q_{self.id}"

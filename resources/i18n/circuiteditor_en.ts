@@ -218,7 +218,7 @@
     <name>CylinderItem</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="413" />
-        <source>Internal leakage c_L (m³/s/Pa)</source>
+        <source>Internal leakage (m³/s/Pa)</source>
         <translation type="unfinished" />
     </message>
     <message>

@@ -218,8 +218,8 @@
     <name>CylinderItem</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="413" />
-        <source>Internal leakage c_L (m³/s/Pa)</source>
-        <translation>Vazamento interno c_L (m³/s/Pa)</translation>
+        <source>Internal leakage (m³/s/Pa)</source>
+        <translation>Vazamento interno (m³/s/Pa)</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="316" />

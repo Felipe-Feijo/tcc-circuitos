@@ -18,7 +18,7 @@ from graphics.items.base.nodes.cylinder.single_acting_cylinder import (
 from simulation.nodes.cylinder.double_acting_cylinder import DoubleActingCylinder
 
 ITEMS = [DoubleItem, SingleItem]
-LABEL = "Internal leakage c_L (m³/s/Pa)"
+LABEL = "Internal leakage (m³/s/Pa)"
 
 
 @pytest.mark.parametrize("cls", ITEMS)
@@ -72,7 +72,7 @@ def test_label_translates_to_pt_br():
     try:
         dialog = item.build_defect_dialog()
         try:
-            assert "Vazamento interno c_L (m³/s/Pa)" in form_label_texts(dialog)
+            assert "Vazamento interno (m³/s/Pa)" in form_label_texts(dialog)
         finally:
             dialog.close()
     finally:

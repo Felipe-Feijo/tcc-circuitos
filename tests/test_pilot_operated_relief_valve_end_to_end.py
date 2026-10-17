@@ -181,3 +181,23 @@ def test_t_pressurized_above_p_set_with_x_vented(t_id, x_id):
     assert v.get_anchor("X").pressure == pytest.approx(0.0, abs=1e3)
     assert v.get_anchor("X").flow == pytest.approx(-q_orif, rel=1e-2)
     assert v.get_anchor("T").flow == pytest.approx(-(Q - q_orif), rel=1e-2)
+
+
+# X pressurized above P while a load holds P low (e.g. a cylinder still
+# extending when X is switched onto another pressurized line): pilot oil
+# flows back through the orifice and leaves through P.
+
+def test_orifice_backflow_when_x_above_p():
+    p_x = 1.0e6
+    q_pump = 1e-5
+    q_back = 1e-5  # comparable to the circuit's flow scale, so solver tolerance doesn't swamp it
+    c, v = with_valve(q=q_pump)
+    load = c.add(FixedDisplacementPump, "load", "PS", Q=q_pump + q_back)
+    c.connect(v, "P", load, "S")
+    c.connect(load, "P", c.add(Reservoir, "tank_load", "T", pressure=0.0), "T")
+    c.connect(v, "X", c.add(Reservoir, "source_x", "T", pressure=p_x), "T")
+    c.run()
+    k = PilotOperatedReliefValve.K_ORIFICE
+    assert v.get_anchor("P").pressure == pytest.approx(p_x - (q_back / k) ** 2, rel=1e-3)
+    assert v.get_anchor("P").flow == pytest.approx(-q_back, rel=1e-3)
+    assert v.get_anchor("X").flow == pytest.approx(q_back, rel=1e-3)

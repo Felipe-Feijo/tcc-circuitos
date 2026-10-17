@@ -74,8 +74,9 @@ class PilotOperatedReliefValve(DefectMixin, Node, HydraulicMixin):
 
     @property
     def bounds(self):
+        # Q_P unbounded: with X pressurized above P, pilot oil flows back
+        # through the orifice and out of P.
         return {
-            self.flow_var_p: (0.0, None),
             self.flow_var_t: (None, 0.0),
             self.flow_var_main: (0.0, None),
             self.flow_var_pilot: (0.0, None),

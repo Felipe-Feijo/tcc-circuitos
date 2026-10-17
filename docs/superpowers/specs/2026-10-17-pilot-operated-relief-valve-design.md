@@ -118,7 +118,7 @@ component):
 
 | variable | bounds | meaning |
 |---|---|---|
-| `Q_{id}_P` | `(0, None)` | inlet |
+| `Q_{id}_P` | free | inlet; negative when X is pressurized above P and pilot oil flows back through the orifice (found in use: X switched onto a pressurized line while a cylinder held P low) |
 | `Q_{id}_T` | `(None, 0)` | outlet |
 | `Q_{id}_X` | free | port X (negative = pilot flow leaving through X) |
 | `Q_{id}_main` | `(0, None)` | main stage P → T |

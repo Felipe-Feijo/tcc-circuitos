@@ -93,7 +93,6 @@ def test_variables():
 def test_bounds():
     v = make_valve()
     assert v.bounds == {
-        v.flow_var_p: (0.0, None),
         v.flow_var_t: (None, 0.0),
         v.flow_var_main: (0.0, None),
         v.flow_var_pilot: (0.0, None),

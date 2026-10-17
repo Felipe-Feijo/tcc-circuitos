@@ -124,3 +124,23 @@ def test_graph_builder_accepts_unconnected_x():
     node = builder.add_node_from_item(item)
     builder.raise_if_errors()  # unconnected X must not be a validation error
     assert set(node.anchors) == {"P", "T", "X"}
+
+
+from main_window.language import language_manager
+from tests.defect_test_helpers import form_label_texts
+
+
+def test_pt_br_translations():
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        assert PilotOperatedReliefValve.palette_meta().name == "Válvula de Alívio (pré-operada)"
+        dialog = make_item(p_set=1e7).build_properties_dialog()
+        try:
+            assert dialog.windowTitle() == "Válvula de Alívio Pré-operada — Propriedades"
+            labels = form_label_texts(dialog)
+            assert "Ajuste do piloto p_set (Pa)" in labels
+            assert "Mola do estágio principal p_vent (Pa)" in labels
+        finally:
+            dialog.close()
+    finally:
+        language_manager.apply_language(app, "en")

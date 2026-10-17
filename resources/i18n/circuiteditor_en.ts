@@ -662,6 +662,28 @@ Built with PyQt6</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>PilotOperatedReliefValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="53" />
+        <source>Relief Valve (pilot-operated)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="81" />
+        <source>Pilot-Operated Relief Valve — Properties</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="83" />
+        <source>Pilot setting p_set (Pa)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="88" />
+        <source>Main-stage spring p_vent (Pa)</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>PressureGauge</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pressure_gauge.py" line="25" />

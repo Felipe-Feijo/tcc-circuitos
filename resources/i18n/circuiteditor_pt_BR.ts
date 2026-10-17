@@ -833,6 +833,28 @@ Desenvolvido com PyQt6</translation>
         <translation>Válvula OU</translation>
     </message>
 </context><context>
+    <name>PilotOperatedReliefValve</name>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="53" />
+        <source>Relief Valve (pilot-operated)</source>
+        <translation>Válvula de Alívio (pré-operada)</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="81" />
+        <source>Pilot-Operated Relief Valve — Properties</source>
+        <translation>Válvula de Alívio Pré-operada — Propriedades</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="83" />
+        <source>Pilot setting p_set (Pa)</source>
+        <translation>Ajuste do piloto p_set (Pa)</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="88" />
+        <source>Main-stage spring p_vent (Pa)</source>
+        <translation>Mola do estágio principal p_vent (Pa)</translation>
+    </message>
+</context><context>
     <name>PressureGauge</name>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pressure_gauge.py" line="25" />

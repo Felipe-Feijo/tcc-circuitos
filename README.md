@@ -1,89 +1,143 @@
-1. Criando o ambiente virtual (venv)
-Criar:
+# Simulador Didático de Sistemas Fluidomecânicos
+
+Editor e simulador de circuitos hidráulicos, pneumáticos e eletropneumáticos
+para ensino. Monte o circuito arrastando componentes, simule em tempo real e
+acompanhe pressões, vazões e o movimento dos atuadores.
+
+![Interface do simulador](docs/img/screenshot.png)
+
+## Funcionalidades
+
+- **Editor visual**: paleta de componentes, conexões com roteamento
+  ortogonal, rotação, copiar/colar, desfazer/refazer.
+- **Simulação**: execução contínua ou passo a passo (avançar/voltar no tempo),
+  com o estado do circuito refletido no diagrama.
+- **Componentes**: bombas, motores, cilindros, válvulas direcionais, de
+  retenção, de alívio, redutoras de pressão, controladoras de vazão e
+  lógicas, acumuladores, manômetros, reservatórios, além de fontes, botões,
+  relés e bobinas para comandos elétricos.
+- **Geração automática de circuitos** a partir de uma sequência de movimentos
+  (ex.: `A+ B+ A- B-`, ou `(A+ B+) A- B-` para movimentos simultâneos), pelos métodos cascata e passo a passo (pneumático e
+  elétrico).
+- **Defeitos simuláveis** em componentes (vazamentos, perda de desempenho
+  etc.), para exercícios de diagnóstico.
+- **Relatório** da simulação com gráficos das grandezas registradas.
+- Interface em **português e inglês**, com temas claro e escuro.
+
+## Download
+
+A forma mais simples de usar é baixar o executável pronto, sem precisar
+instalar Python:
+
+**[Baixar a versão mais recente](https://github.com/Felipe-Feijo/tcc-circuitos/releases/latest)**
+
+Baixe o `CircuitEditor.exe` e execute. Disponível para Windows.
+
+> Na primeira execução o Windows SmartScreen ou o antivírus podem exibir um
+> aviso, pois o executável não é assinado digitalmente. Ele também demora
+> alguns segundos para abrir, porque se descompacta numa pasta temporária.
+
+## Executando a partir do código-fonte
+
+Requer Python 3.14.
+
+```bash
+git clone https://github.com/Felipe-Feijo/tcc-circuitos.git
+cd tcc-circuitos
 python -m venv venv
-
-Ativar (Windows):
-venv\Scripts\activate
-
-Desativar:
-deactivate
-
-2. Instalando dependências do projeto
-
-Com o ambiente virtual ativo:
-
-pip install -r requirements.txt
-
-
-Se for a primeira vez que o projeto é clonado, o venv deve ser criado antes:
-
-python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+python app.py
+```
 
-3. Gerenciamento de dependências usando pip-tools
+## Desenvolvimento
 
-Este projeto utiliza pip-tools para manter as dependências organizadas.
+### Ambiente de desenvolvimento
 
-Instalar pip-tools:
-pip install pip-tools
+Além das dependências da aplicação, instale as ferramentas de desenvolvimento
+(pytest, PyInstaller, pip-tools e PySide6, usado para compilar as traduções):
 
-Arquivos usados:
-requirements.in
+```bash
+pip install -r requirements-dev.txt
+```
 
-Lista apenas as dependências diretas do projeto.
-Exemplo:
+### Dependências
 
-PyQt6
-numpy
-matplotlib
+As dependências são gerenciadas com [pip-tools](https://github.com/jazzband/pip-tools):
 
-requirements.txt
+- `requirements.in`: dependências diretas da aplicação.
+- `requirements-dev.in`: ferramentas de desenvolvimento (inclui o `requirements.in`).
+- `requirements.txt` / `requirements-dev.txt`: versões travadas, geradas
+  automaticamente. Não edite à mão.
 
-É gerado automaticamente com todas as dependências resolvidas e versões travadas.
+Para adicionar ou atualizar uma dependência, edite o `.in` correspondente e
+recompile:
 
-4. Gerando o requirements.txt
-
-Sempre que mudar o requirements.in, rode:
-
+```bash
 pip-compile requirements.in
+pip-compile requirements-dev.in
+pip install -r requirements-dev.txt
+```
 
+### Testes
 
-Isso cria/atualiza o requirements.txt.
+```bash
+pytest tests
+```
 
-5. Adicionando uma nova biblioteca
+### Traduções
 
-Instale a biblioteca:
+Os textos da interface estão em inglês no código e são traduzidos via Qt
+Linguist. Os catálogos ficam em `resources/i18n/`. Depois de editar um `.ts`,
+compile os `.qm`:
 
-pip install <biblioteca>
+```bash
+python scripts/compile_translations.py
+```
 
+### Gerando o executável
 
-Adicione no requirements.in:
+O executável é gerado com [PyInstaller](https://pyinstaller.org/). Há duas
+configurações:
 
-PyQt6-Charts
+| Arquivo | Resultado |
+|---|---|
+| `CircuitEditor-onefile.spec` | Um único `dist/CircuitEditor.exe`, mais fácil de distribuir. É o publicado em Releases. |
+| `CircuitEditor.spec` | Uma pasta `dist/CircuitEditor/` com o executável e suas dependências. Abre mais rápido. |
 
+Com o ambiente virtual ativo e as dependências de desenvolvimento instaladas,
+compile as traduções e gere o executável:
 
-Recompile a lista:
+```bash
+python scripts/compile_translations.py
+pyinstaller --clean CircuitEditor-onefile.spec
+```
 
-pip-compile requirements.in
+Em versões empacotadas sem console, erros são gravados em
+`circuit_editor.log`, ao lado do executável.
 
+## Arquitetura
 
-Atualize o repo:
+O código é organizado em camadas: interface (`main_window/`), editor
+(`editor/`, `graphics/`), persistência (`persistence/`), simulação
+(`simulation/`) e geração automática de circuitos (`circuit_generator/`).
+A descrição completa está em
+[system_architecture_overview.md](system_architecture_overview.md), e os
+diagramas UML em [docs/diagramas/](docs/diagramas/).
 
-git add requirements.in requirements.txt
-git commit -m "Atualiza dependências"
-git push
+## Sobre
 
-6. Fluxo de trabalho ao trocar de máquina
-Antes de começar a trabalhar:
-git pull
+Este simulador foi desenvolvido como Trabalho de Conclusão de Curso em
+Engenharia Mecatrônica na Escola Politécnica da Universidade de São Paulo
+(Poli-USP), Departamento de Engenharia Mecatrônica e de Sistemas Mecânicos (PMR).
 
-Ao abrir em uma máquina nova:
-git clone https://github.com/usuario/repositorio.git
-cd repositorio
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+- **Autor:** Felipe Prandini de Mattos Feijó
+- **Orientador:** Prof. Dr. Emílio Carlos Nelli Silva
+- **Trabalho:** *Simulador Didático de Sistemas Fluidomecânicos* (2026)
 
+## Licença
 
-Agora o ambiente está idêntico.
+Copyright (C) 2026 Felipe Prandini de Mattos Feijó
+
+Distribuído sob a licença [GNU General Public License v3.0](LICENSE) ou
+qualquer versão posterior (GPL-3.0-or-later).

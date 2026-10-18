@@ -172,3 +172,20 @@ def test_apply_properties_from_dialog_torque_mode_clears_omega_target():
     assert node.properties["control_mode"] == "torque"
     assert node.properties["T_load"] == 50.0
     assert node.properties["omega_target"] is None
+
+
+def test_dialog_labels_without_variable_names_pt_br():
+    from main_window.language import language_manager
+    from tests.defect_test_helpers import form_label_texts
+    language_manager.apply_language(app, "pt_BR")
+    try:
+        dialog = FixedDisplacementMotor(domain="hydraulic").build_properties_dialog()
+        try:
+            labels = form_label_texts(dialog)
+            for expected in ("Torque de carga (N·m)", "Pressão máxima (Pa) — opcional",
+                             "Velocidade máxima (rad/s) — opcional"):
+                assert expected in labels, labels
+        finally:
+            dialog.close()
+    finally:
+        language_manager.apply_language(app, "en")

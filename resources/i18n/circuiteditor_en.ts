@@ -49,7 +49,7 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="43" />
-        <source>Maximum flow Q_max (m³/s)</source>
+        <source>Maximum flow (m³/s)</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -419,7 +419,7 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="138" />
-        <source>Load torque T_load (N·m)</source>
+        <source>Load torque (N·m)</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -429,12 +429,12 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="153" />
-        <source>Limit P_max (Pa) — optional</source>
+        <source>Maximum pressure (Pa) — optional</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="158" />
-        <source>Limit n_max (rad/s) — optional</source>
+        <source>Maximum speed (rad/s) — optional</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -675,12 +675,12 @@ Built with PyQt6</source>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="83" />
-        <source>Pilot setting p_set (Pa)</source>
+        <source>Pilot setting (Pa)</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="88" />
-        <source>Main-stage spring p_vent (Pa)</source>
+        <source>Main-stage spring (Pa)</source>
         <translation type="unfinished" />
     </message>
 </context><context>

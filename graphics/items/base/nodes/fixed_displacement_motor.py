@@ -135,7 +135,7 @@ class FixedDisplacementMotor(NodeItem):
         # Same pattern already used by the conditional timer fields in
         # directional_valve_item.py.
         dialog._field_t = dialog.add_number_field(
-            self.tr("Load torque T_load (N·m)"), placeholder="ex: 50",
+            self.tr("Load torque (N·m)"), placeholder="ex: 50",
             value=self.properties.get("T_load"),
             required=False,
         )
@@ -150,12 +150,12 @@ class FixedDisplacementMotor(NodeItem):
         # physics. required=False -- absence is a valid choice (no
         # check), not a fill-in error.
         dialog._field_p_max = dialog.add_number_field(
-            self.tr("Limit P_max (Pa) — optional"), placeholder="ex: 1e7",
+            self.tr("Maximum pressure (Pa) — optional"), placeholder="ex: 1e7",
             value=self.properties.get("P_max"),
             required=False,
         )
         dialog._field_n_max = dialog.add_number_field(
-            self.tr("Limit n_max (rad/s) — optional"), placeholder="ex: 300",
+            self.tr("Maximum speed (rad/s) — optional"), placeholder="ex: 300",
             value=self.properties.get("n_max"),
             required=False,
         )

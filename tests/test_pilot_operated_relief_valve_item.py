@@ -138,8 +138,8 @@ def test_pt_br_translations():
         try:
             assert dialog.windowTitle() == "Válvula de Alívio Pré-operada — Propriedades"
             labels = form_label_texts(dialog)
-            assert "Ajuste do piloto p_set (Pa)" in labels
-            assert "Mola do estágio principal p_vent (Pa)" in labels
+            assert "Ajuste do piloto (Pa)" in labels
+            assert "Mola do estágio principal (Pa)" in labels
         finally:
             dialog.close()
     finally:

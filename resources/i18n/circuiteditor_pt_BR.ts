@@ -49,8 +49,8 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="43" />
-        <source>Maximum flow Q_max (m³/s)</source>
-        <translation>Vazão máxima Q_max (m³/s)</translation>
+        <source>Maximum flow (m³/s)</source>
+        <translation>Vazão máxima (m³/s)</translation>
     </message>
 </context><context>
     <name>CheckValve</name>
@@ -483,8 +483,8 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="138" />
-        <source>Load torque T_load (N·m)</source>
-        <translation>Torque de carga T_load (N·m)</translation>
+        <source>Load torque (N·m)</source>
+        <translation>Torque de carga (N·m)</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="143" />
@@ -493,13 +493,13 @@
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="153" />
-        <source>Limit P_max (Pa) — optional</source>
-        <translation>Limite P_max (Pa) — opcional</translation>
+        <source>Maximum pressure (Pa) — optional</source>
+        <translation>Pressão máxima (Pa) — opcional</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="158" />
-        <source>Limit n_max (rad/s) — optional</source>
-        <translation>Limite n_max (rad/s) — opcional</translation>
+        <source>Maximum speed (rad/s) — optional</source>
+        <translation>Velocidade máxima (rad/s) — opcional</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="164" />
@@ -846,13 +846,13 @@ Desenvolvido com PyQt6</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="83" />
-        <source>Pilot setting p_set (Pa)</source>
-        <translation>Ajuste do piloto p_set (Pa)</translation>
+        <source>Pilot setting (Pa)</source>
+        <translation>Ajuste do piloto (Pa)</translation>
     </message>
     <message>
         <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="88" />
-        <source>Main-stage spring p_vent (Pa)</source>
-        <translation>Mola do estágio principal p_vent (Pa)</translation>
+        <source>Main-stage spring (Pa)</source>
+        <translation>Mola do estágio principal (Pa)</translation>
     </message>
 </context><context>
     <name>PressureGauge</name>

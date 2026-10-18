@@ -41,7 +41,7 @@ class CentrifugalPump(NodeItem):
                 required=True,
             )
             dialog._field_qmax = dialog.add_number_field(
-                self.tr("Maximum flow Q_max (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
+                self.tr("Maximum flow (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q_max"),
                 required=True,
             )
@@ -67,7 +67,7 @@ class CentrifugalPump(NodeItem):
                 placeholder="ex: 2e6", min_value=0,
             ),
             DefectFieldSpec(
-                "Q_max", self.tr("Maximum flow Q_max (m³/s)"), "number",
+                "Q_max", self.tr("Maximum flow (m³/s)"), "number",
                 placeholder="ex: 8.3e-4  (= 50 L/min)", min_value=0,
             ),
         ]

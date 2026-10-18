@@ -94,7 +94,7 @@ def test_item_defect_fields_one_spec_in_hydraulic():
     assert [s.key for s in specs] == ["p_set"]
     assert specs[0].kind == "number"
     assert specs[0].min_value == 0
-    assert specs[0].label == "Pilot setting p_set (Pa)"
+    assert specs[0].label == "Pilot setting (Pa)"
 
 
 def test_item_apply_defect_emits_set_defect_float():

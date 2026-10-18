@@ -103,7 +103,7 @@ def test_item_defect_fields_two_specs():
     assert [s.key for s in specs] == ["H_shutoff", "Q_max"]
     assert all(s.kind == "number" and s.min_value == 0 for s in specs)
     assert specs[0].label == "Shutoff pressure H (Pa)"
-    assert specs[1].label == "Maximum flow Q_max (m³/s)"
+    assert specs[1].label == "Maximum flow (m³/s)"
 
 
 def test_item_dialog_prefilled_from_live_domain_node():
@@ -138,7 +138,7 @@ def test_item_defect_dialog_labels_translate_to_pt_br():
         try:
             labels = form_label_texts(dialog)
             assert "Pressão de shutoff H (Pa)" in labels
-            assert "Vazão máxima Q_max (m³/s)" in labels
+            assert "Vazão máxima (m³/s)" in labels
         finally:
             dialog.close()
     finally:

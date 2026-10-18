@@ -9,3 +9,6 @@ dist/
 # Superpowers skill scratch state (not project content)
 .superpowers/
 .claude/settings.local.json
+
+# Superpowers specs/plans live outside the repo, in ../docs/superpowers/
+docs/superpowers/

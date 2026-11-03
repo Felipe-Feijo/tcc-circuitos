@@ -3,6 +3,7 @@
 import math
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_non_negative, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
@@ -42,6 +43,10 @@ class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
                         f"SingleActingCylinder '{self.id}': required property '{key}' is not set."
                     )
             bore                 = float(self.properties["bore"])
+            # area is the velocity's denominator, stroke the end stop's.
+            require_positive(self, "bore", bore)
+            require_positive(self, "stroke", float(self.properties["stroke"]))
+            require_non_negative(self, "spring_k", float(self.properties["spring_k"]))
             self.area            = math.pi * (bore / 2) ** 2
             self.stroke          = float(self.properties["stroke"])
             self.spring_k        = float(self.properties["spring_k"])

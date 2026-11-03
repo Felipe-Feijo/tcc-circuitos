@@ -16,6 +16,7 @@ Steady state: P_P = min(p_set, P_remote) + p_vent.
 import math
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -45,16 +46,18 @@ class PilotOperatedReliefValve(DefectMixin, Node, HydraulicMixin):
             if p_set is None:
                 raise ValueError(f"PilotOperatedReliefValve '{self.id}': required property 'p_set' is not set.")
             self.p_set = float(p_set)
-            if self.p_set <= 0:
-                raise ValueError(f"PilotOperatedReliefValve '{self.id}': 'p_set' must be positive.")
             self.p_vent = float(self.properties.get("p_vent", self.DEFAULT_P_VENT))
-            if self.p_vent <= 0:
-                raise ValueError(f"PilotOperatedReliefValve '{self.id}': 'p_vent' must be positive.")
+            self.validate_params()
             self.flow_var_p = f"Q_{self.id}_P"
             self.flow_var_t = f"Q_{self.id}_T"
             self.flow_var_x = f"Q_{self.id}_X"
             self.flow_var_main = f"Q_{self.id}_main"
             self.flow_var_pilot = f"Q_{self.id}_pilot"
+
+    def validate_params(self) -> None:
+        if self.domain == "hydraulic":
+            require_positive(self, "p_set", self.p_set)
+            require_positive(self, "p_vent", self.p_vent)
 
     @property
     def p_hint(self) -> float:

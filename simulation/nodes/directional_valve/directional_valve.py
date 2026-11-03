@@ -12,7 +12,7 @@ clog/unclog the valve mid-run.
 
 from simulation.nodes.defect import DefectMixin
 from simulation.nodes.nodes import Node
-from simulation.nodes.orifice import parse_conductance
+from simulation.nodes.orifice import check_conductance, parse_conductance
 
 class DirectionalValve(DefectMixin, Node):
     THREE_POSITION = False
@@ -53,6 +53,10 @@ class DirectionalValve(DefectMixin, Node):
         Validates (required, numeric, >= 0) and sets self.k.
         """
         self.k = parse_conductance(self, k)
+
+    def validate_params(self) -> None:
+        if self.domain == "hydraulic":
+            check_conductance(self, self.k)
 
     @property
     def hydraulic_blocked(self) -> bool:

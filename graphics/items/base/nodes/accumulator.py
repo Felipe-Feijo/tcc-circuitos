@@ -105,12 +105,14 @@ class Accumulator(NodeItem):
             placeholder="ex: 0.001",
             value=self.properties.get("V0"),
             required=True,
+            min_value=0,
         )
         dialog._field_p0 = dialog.add_number_field(
             self.tr("Precharge pressure P0 (Pa)"),
             placeholder="ex: 3e6",
             value=self.properties.get("P0"),
             required=True,
+            min_value=0,
         )
         return dialog
 

@@ -27,7 +27,7 @@ import math
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.orifice import parse_conductance
+from simulation.nodes.orifice import check_conductance, parse_conductance
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -41,6 +41,9 @@ class ThrottleValve(DefectMixin, Node, HydraulicMixin):
         self.k = parse_conductance(self, self.properties.get("k"))
         self.flow_var_x = f"Q_{self.id}_X"
         self.flow_var_y = f"Q_{self.id}_Y"
+
+    def validate_params(self) -> None:
+        check_conductance(self, self.k)
 
     @property
     def blocked(self) -> bool:

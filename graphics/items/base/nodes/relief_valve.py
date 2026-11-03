@@ -92,6 +92,7 @@ class ReliefValve(NodeItem):
                 self.tr("Cracking pressure (Pa)"), placeholder="ex: 1.5e7  (= 150 bar)",
                 value=self.properties.get("p_set"),
                 required=True,
+                min_value=0,
             )
             dialog._field_piloted = dialog.add_bool_field(
                 self.tr("External pilot (Y)"), value=self.properties.get("piloted", False),

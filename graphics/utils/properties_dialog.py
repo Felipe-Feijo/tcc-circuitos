@@ -45,6 +45,16 @@ class PropertiesDialog(QDialog):
 
         self._main_layout.addStretch()
 
+        # first validation problem, in words (empty = hidden)
+        self._error_label = QLabel()
+        self._error_label.setStyleSheet("color: red;")
+        self._error_label.setWordWrap(True)
+        self._error_label.hide()
+        self._main_layout.addWidget(self._error_label)
+
+        # cross-field rules (see add_check)
+        self._checks: list = []
+
         # buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -136,61 +146,79 @@ class PropertiesDialog(QDialog):
 
         return field
 
-    def _validate_field(self, field: QLineEdit) -> bool:
-        """Validates a single field. Returns True if ok."""
+    def add_check(self, check) -> None:
+        """Registers a cross-field rule: check() returns an error message
+        (already translated) or None. A failing check disables OK and
+        shows its message, like an invalid field."""
+        self._checks.append(check)
+        self._refresh_ok_button()
+
+    def _field_problem(self, field: QLineEdit) -> tuple[bool, str | None]:
+        """(ok, message). message is None for an empty required field --
+        the red border is enough there."""
         text = field.text().strip()
-        required = getattr(field, "_is_required", False)
 
         if not text:
-            if required:
-                field.setStyleSheet("border: 1px solid red;")
-                return False
-            field.setStyleSheet("")
-            return True
+            return (not getattr(field, "_is_required", False)), None
 
         try:
             parsed = float(text)
         except ValueError:
-            field.setStyleSheet("border: 1px solid red;")
-            return False
+            return False, QCoreApplication.translate("PropertiesDialog", "not a valid number")
 
         min_value = getattr(field, "_min_value", None)
         if min_value is not None:
             if getattr(field, "_min_inclusive", False):
-                below = parsed < min_value
-            else:
-                below = parsed <= min_value
-            if below:
-                field.setStyleSheet("border: 1px solid red;")
-                return False
+                if parsed < min_value:
+                    return False, QCoreApplication.translate(
+                        "PropertiesDialog", "must be at least {0}").format(min_value)
+            elif parsed <= min_value:
+                return False, QCoreApplication.translate(
+                    "PropertiesDialog", "must be greater than {0}").format(min_value)
 
-        field.setStyleSheet("")
-        return True
+        return True, None
 
-    def _refresh_ok_button(self):
-        """Enables OK only when every required field is filled and valid."""
+    def _validate_field(self, field: QLineEdit) -> bool:
+        """Validates a single field. Returns True if ok."""
+        ok, message = self._field_problem(field)
+        field.setStyleSheet("" if ok else "border: 1px solid red;")
+        field.setToolTip(message or "")
+        return ok
+
+    def _first_problem(self) -> tuple[bool, str | None]:
+        """(all_ok, first message) across number fields, then checks."""
+        all_ok, first = True, None
         for i in range(self._form_layout.rowCount()):
             item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
-            if not item:
+            widget = item.widget() if item else None
+            if not isinstance(widget, QLineEdit) or not getattr(widget, "_is_number_field", False):
                 continue
-            widget = item.widget()
-            if not isinstance(widget, QLineEdit):
+            if self._validate_field(widget):
                 continue
-            if not getattr(widget, "_is_number_field", False):
-                continue
-            if not self._validate_field(widget):
-                self._ok_btn.setEnabled(False)
-                return
-        self._ok_btn.setEnabled(True)
+            all_ok = False
+            message = widget.toolTip()
+            if message and first is None:
+                label = self._form_layout.labelForField(widget)
+                first = f"{label.text()}: {message}" if label is not None else message
+        for check in self._checks:
+            message = check()
+            if message:
+                all_ok = False
+                if first is None:
+                    first = message
+        return all_ok, first
+
+    def _refresh_ok_button(self):
+        """Enables OK only when every required field is filled and valid
+        and every check passes; shows the first problem's message."""
+        all_ok, message = self._first_problem()
+        self._ok_btn.setEnabled(all_ok)
+        self._error_label.setText(message or "")
+        self._error_label.setVisible(bool(message))
 
     def _validate_and_accept(self):
         # second line of defense: validates everything before closing
-        for i in range(self._form_layout.rowCount()):
-            item = self._form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
-            if not item:
-                continue
-            widget = item.widget()
-            if isinstance(widget, QLineEdit) and getattr(widget, "_is_number_field", False):
-                if not self._validate_field(widget):
-                    return  # doesn't close
+        all_ok, _ = self._first_problem()
+        if not all_ok:
+            return  # doesn't close
         self.accept()

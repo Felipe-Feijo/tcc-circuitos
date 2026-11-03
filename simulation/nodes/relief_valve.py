@@ -4,6 +4,7 @@ piloted -- see properties["piloted"])."""
 import math
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_positive
 from simulation.hydraulic import HydraulicMixin
 
 class ReliefValve(DefectMixin, Node, HydraulicMixin):
@@ -17,11 +18,16 @@ class ReliefValve(DefectMixin, Node, HydraulicMixin):
             if p_set is None:
                 raise ValueError(f"ReliefValve '{self.id}': required property 'p_set' is not set.")
             self.p_set        = float(p_set)
+            self.validate_params()
             self.flow_var_in  = f"Q_{self.id}_in"
             self.flow_var_out = f"Q_{self.id}_out"
             self.piloted = bool(self.properties.get("piloted", False))
             if self.piloted:
                 self.flow_var_y = f"Q_{self.id}_Y"
+
+    def validate_params(self) -> None:
+        if self.domain == "hydraulic":
+            require_positive(self, "p_set", self.p_set)
 
     @property
     def p_hint(self) -> float:

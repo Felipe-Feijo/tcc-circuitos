@@ -83,10 +83,12 @@ class PilotOperatedReliefValve(NodeItem):
             self.tr("Pilot setting (Pa)"), placeholder="ex: 1e7  (= 100 bar)",
             value=self.properties.get("p_set"),
             required=True,
+            min_value=0,
         )
         dialog._field_p_vent = dialog.add_number_field(
             self.tr("Main-stage spring (Pa)"), placeholder="3e5  (= 3 bar, default)",
             value=self.properties.get("p_vent"),
+            min_value=0,
         )
         return dialog
 

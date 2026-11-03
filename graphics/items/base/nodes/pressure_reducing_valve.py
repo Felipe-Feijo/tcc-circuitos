@@ -124,6 +124,7 @@ class PressureReducingValve(NodeItem):
             self.tr("Setpoint pressure (Pa)"), placeholder="ex: 1.5e7  (= 150 bar)",
             value=self.properties.get("p_set"),
             required=True,
+            min_value=0,
         )
         dialog._field_relieving = dialog.add_bool_field(
             self.tr("Tank port (T)"), value=self.properties.get("relieving", False),

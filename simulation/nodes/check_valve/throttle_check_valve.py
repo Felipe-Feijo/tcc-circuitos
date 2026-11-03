@@ -91,7 +91,7 @@ import math
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.orifice import parse_conductance
+from simulation.nodes.orifice import check_conductance, parse_conductance
 from simulation.hydraulic import HydraulicMixin
 
 _DEFAULT_DELAY = 3
@@ -123,6 +123,10 @@ class ThrottleCheckValve(DefectMixin, Node, HydraulicMixin):
 
             # Latched sprite -- only updated in post_step_update on stabilised states.
             self._sprite: str = "open"
+
+    def validate_params(self) -> None:
+        if self.domain == "hydraulic":
+            check_conductance(self, self.k)
 
     # ------------------------------------------------------------------
     # Pneumatic domain

@@ -22,9 +22,14 @@ def parse_conductance(node, k) -> float:
             f"{type(node).__name__} '{node.id}': required property 'k' is not set."
         )
     k = float(k)
-    if k < 0:
+    check_conductance(node, k)
+    return k
+
+
+def check_conductance(node, k: float) -> None:
+    """Raises ValueError unless k >= 0 (also used for "k" defects)."""
+    if not k >= 0:
         raise ValueError(
             f"{type(node).__name__} '{node.id}': property 'k' must be >= 0 "
             f"(0 = fully blocked), got {k}."
         )
-    return k

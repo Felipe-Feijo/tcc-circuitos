@@ -29,6 +29,7 @@ caused needless confusion in this class's sibling.
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_non_negative, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -54,6 +55,14 @@ class CentrifugalPump(DefectMixin, Node, HydraulicMixin):
             self.Q_max = float(q_max)
             self.flow_var_p = f"Q_{self.id}_P"
             self.flow_var_s = f"Q_{self.id}_S"
+            self.validate_params()
+
+    def validate_params(self) -> None:
+        # Q_max is the curve's denominator; H_shutoff = 0 is a pump that
+        # builds no pressure.
+        if self.domain == "hydraulic":
+            require_positive(self, "Q_max", self.Q_max)
+            require_non_negative(self, "H_shutoff", self.H_shutoff)
 
     @property
     def is_flow_source(self) -> bool:

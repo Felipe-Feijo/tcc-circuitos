@@ -53,6 +53,7 @@ solving with the rest of the circuit -- not validated here.
 
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
+from simulation.nodes.param_checks import require_positive
 
 
 class FixedDisplacementMotor(Node, HydraulicMixin):
@@ -66,6 +67,7 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
                     f"FixedDisplacementMotor '{self.id}': required property 'D' is not set."
                 )
             self.D = float(d)
+            require_positive(self, "D", self.D)  # torque mode divides by D
 
             p_max = self.properties.get("P_max")
             self.P_max = float(p_max) if p_max is not None else None

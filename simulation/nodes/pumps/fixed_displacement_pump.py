@@ -2,6 +2,7 @@
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_positive
 from simulation.hydraulic import HydraulicMixin
 
 class FixedDisplacementPump(DefectMixin, Node, HydraulicMixin):
@@ -25,6 +26,11 @@ class FixedDisplacementPump(DefectMixin, Node, HydraulicMixin):
             # direction is set by the forced values below.
             self.flow_in_var  = f"Q_{self.id}_P"
             self.flow_out_var = f"Q_{self.id}_S"
+            self.validate_params()
+
+    def validate_params(self) -> None:
+        if self.domain == "hydraulic":
+            require_positive(self, "Q", self.Q_set)
 
     @property
     def is_flow_source(self) -> bool:

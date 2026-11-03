@@ -18,11 +18,22 @@ it's touched; clear restores every snapshotted attribute.
 defect_active compares current values against that snapshot, so a
 new defect never needs its own restore/detect code.
 
+Defect values go through the same range checks as the node's
+properties: after applying a set_defect, the mixin calls
+validate_params() (the node's own checks, also run by its __init__). If
+it raises ValueError, every attribute touched by that command is rolled
+back, the command is ignored and the reason is logged and kept in
+defect_error -- an invalid defect never reaches the solver.
+
 Defects are transient: never persisted to properties nor included in
 get_state() (stepping backward doesn't undo them).
 """
 
 from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _coerce(original, value):
@@ -42,6 +53,8 @@ class DefectMixin:
         # Free-text note of the last set/clear command; FrameRecorder
         # uses it to label the report chart's defect markers.
         self.defect_note: str = ""
+        # Reason the last set_defect was rejected ("" = accepted).
+        self.defect_error: str = ""
 
     def handle_command(self, command: dict):
         if not self.handle_defect_command(command):
@@ -62,13 +75,33 @@ class DefectMixin:
             return True
         return False
 
+    def validate_params(self) -> None:
+        """Raises ValueError if a current parameter is out of range.
+
+        Override in nodes with range-checked parameters; call it at the
+        end of __init__ too, so properties and defects share the rules.
+        """
+
     def _set_defect(self, command: dict) -> None:
-        for key, value in command.items():
-            attr = self.DEFECT_FIELDS.get(key)
-            if attr is None or not hasattr(self, attr):
-                continue
-            original = self._defect_originals.setdefault(attr, getattr(self, attr))
-            setattr(self, attr, _coerce(original, value))
+        previous: dict[str, object] = {}
+        try:
+            for key, value in command.items():
+                attr = self.DEFECT_FIELDS.get(key)
+                if attr is None or not hasattr(self, attr):
+                    continue
+                previous.setdefault(attr, getattr(self, attr))
+                original = self._defect_originals.get(attr, previous[attr])
+                setattr(self, attr, _coerce(original, value))
+            self.validate_params()
+        except (TypeError, ValueError) as e:
+            for attr, value in previous.items():
+                setattr(self, attr, value)
+            self.defect_error = str(e)
+            logger.warning("defect rejected: %s", e)
+            return
+        for attr, value in previous.items():
+            self._defect_originals.setdefault(attr, value)
+        self.defect_error = ""
         self.defect_note = command.get("note", "")
         self._on_defect_changed()
 
@@ -76,6 +109,7 @@ class DefectMixin:
         for attr, original in self._defect_originals.items():
             setattr(self, attr, original)
         self._defect_originals.clear()
+        self.defect_error = ""
         self.defect_note = command.get("note", "")
         self._on_defect_changed()
 

@@ -418,6 +418,11 @@
 </context><context>
     <name>DoubleActingCylinder</name>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" />
+        <source>Rod diameter must be smaller than the bore diameter.</source>
+        <translation>O diâmetro da haste deve ser menor que o diâmetro do êmbolo.</translation>
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="41" />
         <source>Double Acting Cylinder</source>
         <translation>Cilindro de Dupla Ação</translation>
@@ -904,6 +909,21 @@ Desenvolvido com PyQt6</translation>
     </message>
 </context><context>
     <name>PropertiesDialog</name>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>not a valid number</source>
+        <translation>não é um número válido</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>must be at least {0}</source>
+        <translation>deve ser no mínimo {0}</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>must be greater than {0}</source>
+        <translation>deve ser maior que {0}</translation>
+    </message>
     <message>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="20" />
         <source>Properties</source>

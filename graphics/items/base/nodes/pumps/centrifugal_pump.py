@@ -39,11 +39,13 @@ class CentrifugalPump(NodeItem):
                 self.tr("Shutoff pressure H (Pa)"), placeholder="ex: 2e6",
                 value=self.properties.get("H_shutoff"),
                 required=True,
+                min_value=0, min_inclusive=True,
             )
             dialog._field_qmax = dialog.add_number_field(
                 self.tr("Maximum flow (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q_max"),
                 required=True,
+                min_value=0,
             )
         else:
             dialog._field_h = None
@@ -64,7 +66,7 @@ class CentrifugalPump(NodeItem):
         return [
             DefectFieldSpec(
                 "H_shutoff", self.tr("Shutoff pressure H (Pa)"), "number",
-                placeholder="ex: 2e6", min_value=0,
+                placeholder="ex: 2e6", min_value=0, min_inclusive=True,
             ),
             DefectFieldSpec(
                 "Q_max", self.tr("Maximum flow (m³/s)"), "number",

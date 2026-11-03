@@ -121,6 +121,7 @@ class FixedDisplacementMotor(NodeItem):
             self.tr("Displacement D (m³/rad)"), placeholder="ex: 1.5e-6",
             value=self.properties.get("D"),
             required=True,
+            min_value=0,
         )
         dialog._combo_mode = dialog.add_combo_field(
             self.tr("Control mode"),

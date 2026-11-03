@@ -4,6 +4,7 @@ import math
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.param_checks import require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -23,6 +24,13 @@ class Accumulator(DefectMixin, Node, HydraulicMixin):
         self.P0 = float(self.properties["P0"])
         self.Vf = 0.0
         self.flow_var = f"Q_{self.id}"
+        self.validate_params()
+
+    def validate_params(self) -> None:
+        # V0 > 0: _p_gas divides by V0 - Vf, with an end-stop margin that
+        # scales with V0 (V0 = 0 leaves no margin at all).
+        require_positive(self, "V0", self.V0)
+        require_positive(self, "P0", self.P0)
 
     @property
     def _eps(self) -> float:

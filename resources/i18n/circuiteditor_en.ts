@@ -354,6 +354,11 @@
 </context><context>
     <name>DoubleActingCylinder</name>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" />
+        <source>Rod diameter must be smaller than the bore diameter.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="41" />
         <source>Double Acting Cylinder</source>
         <translation type="unfinished" />
@@ -733,6 +738,21 @@ Built with PyQt6</source>
     </message>
 </context><context>
     <name>PropertiesDialog</name>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>not a valid number</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>must be at least {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" />
+        <source>must be greater than {0}</source>
+        <translation type="unfinished" />
+    </message>
     <message>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="20" />
         <source>Properties</source>

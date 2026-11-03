@@ -38,6 +38,7 @@ class FixedDisplacementPump(NodeItem):
                 self.tr("Flow rate (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q"),
                 required=True,
+                min_value=0,
             )
         else:
             dialog._field_Q = None

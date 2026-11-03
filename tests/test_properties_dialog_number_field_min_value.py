@@ -56,3 +56,19 @@ def test_ok_button_enabled_when_min_value_satisfied():
     field.setText("0.001")
     dialog._refresh_ok_button()
     assert dialog._ok_btn.isEnabled() is True
+
+
+def test_number_field_with_inclusive_min_value_accepts_value_equal_to_min():
+    dialog = PropertiesDialog(title="Test")
+    field = dialog.add_number_field("K", required=True, min_value=0, min_inclusive=True)
+    field.setText("0")
+    assert dialog._validate_field(field) is True
+    assert field.styleSheet() == ""
+
+
+def test_number_field_with_inclusive_min_value_rejects_value_below_min():
+    dialog = PropertiesDialog(title="Test")
+    field = dialog.add_number_field("K", required=True, min_value=0, min_inclusive=True)
+    field.setText("-1e-9")
+    assert dialog._validate_field(field) is False
+    assert "red" in field.styleSheet()

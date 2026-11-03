@@ -33,10 +33,12 @@ class Valve_5_2_Ways(DirectionalValve, HydraulicMixin):
     # Same scheme as the 4/2-way: five ports always connected in pairs
     # (get_internal_connections()), each pair with its own conservation +
     # turbulent orifice equation.
+    # k == 0 (hydraulic_blocked): both pairs blocked, every port
+    # isolated (see DirectionalValve).
 
     @property
     def variables(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return []
         vars_ = list(self._flow_vars.values())
         for anchor_name in self.hydraulic_ports().keys():
@@ -47,7 +49,7 @@ class Valve_5_2_Ways(DirectionalValve, HydraulicMixin):
 
     @property
     def initial_guess(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return {}
         guess = {}
         for port_a, port_b in self.get_internal_connections():
@@ -56,11 +58,13 @@ class Valve_5_2_Ways(DirectionalValve, HydraulicMixin):
         return guess
 
     def hydraulic_ports(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return {}
         return dict(self._flow_vars)
 
     def equations(self, x, idx):
+        if self.hydraulic_blocked:
+            return []
         Q_scale = max(self.q_ref, 1e-12)
         P_scale = max(self.p_ref, 1e-3)
 

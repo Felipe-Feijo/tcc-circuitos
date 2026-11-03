@@ -790,6 +790,7 @@ class DirectionalValveItem(NodeItem):
                 _("Conductance k (m³/s/√Pa)"), placeholder="ex: 1.5e-8",
                 value=self.properties.get("k"),
                 required=True,
+                min_value=0, min_inclusive=True,  # 0 = fully blocked
             )
         else:
             dialog._field_k = None
@@ -949,7 +950,7 @@ class DirectionalValveItem(NodeItem):
             fields.append(DefectFieldSpec(
                 "k",
                 QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
-                "number", placeholder="ex: 1.5e-8", min_value=0,
+                "number", placeholder="ex: 1.5e-8", min_value=0, min_inclusive=True,
             ))
         fields.append(DefectFieldSpec(
             "stuck",

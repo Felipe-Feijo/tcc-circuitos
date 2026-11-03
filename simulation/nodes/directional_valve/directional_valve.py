@@ -1,7 +1,18 @@
-"""Base simulation class for directional valves."""
+"""Base simulation class for directional valves.
+
+Hydraulic subclasses model each open passage of the current position as
+a turbulent orifice, dP = copysign((Q / k)^2, Q), with a single
+conductance k. k = 0 means a fully clogged valve: every passage open in
+the current position is blocked (hydraulic_blocked). Each subclass then
+uses the closed Valve_2_2_Ways pattern -- variables, initial_guess and
+hydraulic_ports empty, equations() returns [] -- leaving all ports
+isolated. hydraulic_blocked reads the CURRENT k, so the "k" defect can
+clog/unclog the valve mid-run.
+"""
 
 from simulation.nodes.defect import DefectMixin
 from simulation.nodes.nodes import Node
+from simulation.nodes.orifice import parse_conductance
 
 class DirectionalValve(DefectMixin, Node):
     THREE_POSITION = False
@@ -39,13 +50,14 @@ class DirectionalValve(DefectMixin, Node):
                 self._init_hydraulic_k(self.properties.get("k"))
                 self._flow_vars = {...}  # subclass-specific rest
 
-        Validates (required, must be numeric) and sets self.k.
+        Validates (required, numeric, >= 0) and sets self.k.
         """
-        if k is None:
-            raise ValueError(
-                f"{type(self).__name__} '{self.id}': required property 'k' is not set."
-            )
-        self.k = float(k)
+        self.k = parse_conductance(self, k)
+
+    @property
+    def hydraulic_blocked(self) -> bool:
+        """k == 0: every passage of the current position is blocked."""
+        return self.domain == "hydraulic" and self.k == 0.0
 
     def handle_command(self, command: dict):
         """

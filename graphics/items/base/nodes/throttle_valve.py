@@ -61,6 +61,7 @@ class ThrottleValve(NodeItem):
             placeholder="ex: 1.5e-8",
             value=self.properties.get("k"),
             required=True,
+            min_value=0, min_inclusive=True,  # 0 = fully blocked
         )
         return dialog
 
@@ -73,5 +74,5 @@ class ThrottleValve(NodeItem):
             return []
         return [DefectFieldSpec(
             "k", self.tr("Conductance k (m³/s/√Pa)"), "number",
-            placeholder="ex: 1.5e-8", min_value=0,
+            placeholder="ex: 1.5e-8", min_value=0, min_inclusive=True,
         )]

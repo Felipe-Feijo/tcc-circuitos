@@ -22,9 +22,13 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
     # ------------------------------------------------------------------
     # Hydraulic domain
     # ------------------------------------------------------------------
+    # k == 0 (hydraulic_blocked): the active pair is blocked too, every
+    # port isolated (see DirectionalValve).
 
     @property
     def variables(self):
+        if self.hydraulic_blocked:
+            return []
         vars = [self.flow_var_in, self.flow_var_out]
         for anchor_name in self.hydraulic_ports().keys():
             anchor = self.anchors.get(anchor_name)
@@ -34,7 +38,7 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
     
     @property
     def initial_guess(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return {}
         # sentinels -- will be scaled by the pump's flow_hint
         # opposite sign guarantees Q_in + Q_out = 0 from the start
@@ -44,6 +48,8 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
         }
 
     def hydraulic_ports(self):
+        if self.hydraulic_blocked:
+            return {}
         if self.body_state == 1:  # P → A
             return {
                 "P": self.flow_var_in,
@@ -57,6 +63,8 @@ class Valve_3_2_Ways(DirectionalValve, HydraulicMixin):
 
 
     def equations(self, x, idx):
+        if self.hydraulic_blocked:
+            return []
         Q_in  = x[idx[self.flow_var_in]]
         Q_out = x[idx[self.flow_var_out]]
 

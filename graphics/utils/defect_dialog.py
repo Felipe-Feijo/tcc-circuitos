@@ -30,6 +30,7 @@ class DefectFieldSpec:
     options: tuple[tuple[str, str], ...] = ()  # choice: (value, translated label)
     placeholder: str = ""
     min_value: float | None = None
+    min_inclusive: bool = False  # see PropertiesDialog.add_number_field
 
 
 def _default_defect_title() -> str:
@@ -72,6 +73,7 @@ class DefectDialog(PropertiesDialog):
             widget = self.add_number_field(
                 spec.label, placeholder=spec.placeholder, value=value,
                 required=True, min_value=spec.min_value,
+                min_inclusive=spec.min_inclusive,
             )
         elif spec.kind == "bool":
             widget = self.add_bool_field(spec.label, value=bool(value))

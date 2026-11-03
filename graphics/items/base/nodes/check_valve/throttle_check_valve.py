@@ -102,6 +102,7 @@ class ThrottleCheckValve(NodeItem):
                 placeholder="ex: 1.5e-8",
                 value=self.properties.get("k"),
                 required=True,
+                min_value=0, min_inclusive=True,  # 0 = restricted direction blocked
             )
         else:
             dialog._field_delay = dialog.add_number_field(
@@ -131,5 +132,5 @@ class ThrottleCheckValve(NodeItem):
             return []
         return [DefectFieldSpec(
             "k", self.tr("Conductance k (m³/s/√Pa) — restricted direction"), "number",
-            placeholder="ex: 1.5e-8", min_value=0,
+            placeholder="ex: 1.5e-8", min_value=0, min_inclusive=True,
         )]

@@ -85,13 +85,14 @@ def test_apply_defect_from_dialog_emits_clear_defect_when_restore_requested():
     assert received == [(item.id, {"action": "clear_defect"})]
 
 
-def test_build_defect_dialog_k_field_rejects_zero():
+def test_build_defect_dialog_k_field_accepts_zero():
+    """k = 0 is a fully clogged valve (passages blocked), not an error."""
     item = Valve_3_2_Ways(domain="hydraulic")
     item.properties["k"] = 1e-7
     dialog = item.build_defect_dialog()
     dialog.defect_widget("k").setText("0")
     dialog._refresh_ok_button()
-    assert dialog._ok_btn.isEnabled() is False
+    assert dialog._ok_btn.isEnabled() is True
 
 
 def test_build_defect_dialog_k_field_rejects_negative():

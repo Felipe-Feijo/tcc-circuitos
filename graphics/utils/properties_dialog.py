@@ -108,7 +108,10 @@ class PropertiesDialog(QDialog):
         value: float | None = None,
         required: bool = False,
         min_value: float | None = None,
+        min_inclusive: bool = False,
     ) -> QLineEdit:
+        """min_value is an exclusive lower bound (value > min_value);
+        min_inclusive=True accepts min_value itself (value >= min_value)."""
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
         if value is not None:
@@ -117,6 +120,7 @@ class PropertiesDialog(QDialog):
         field._is_number_field = True
         field._is_required = required
         field._min_value = min_value
+        field._min_inclusive = min_inclusive
 
         field.textChanged.connect(self._refresh_ok_button)
 
@@ -151,9 +155,14 @@ class PropertiesDialog(QDialog):
             return False
 
         min_value = getattr(field, "_min_value", None)
-        if min_value is not None and parsed <= min_value:
-            field.setStyleSheet("border: 1px solid red;")
-            return False
+        if min_value is not None:
+            if getattr(field, "_min_inclusive", False):
+                below = parsed < min_value
+            else:
+                below = parsed <= min_value
+            if below:
+                field.setStyleSheet("border: 1px solid red;")
+                return False
 
         field.setStyleSheet("")
         return True

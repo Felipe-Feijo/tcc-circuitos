@@ -35,10 +35,13 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
     # ------------------------------------------------------------------
     # Hydraulic domain
     # ------------------------------------------------------------------
+    # k == 0 (hydraulic_blocked): every port isolated in any position
+    # (see DirectionalValve) -- in the closed center this replaces the
+    # Q = 0 equations, both block every port.
 
     @property
     def variables(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return []
         vars_ = list(self._flow_vars.values())
         for anchor_name in self.hydraulic_ports().keys():
@@ -49,7 +52,7 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
 
     @property
     def initial_guess(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return {}
         guess = {}
         pairs = self.get_internal_connections()
@@ -63,11 +66,13 @@ class Valve_4_3_Ways(DirectionalValve, HydraulicMixin):
         return guess
 
     def hydraulic_ports(self):
-        if self.domain != "hydraulic":
+        if self.domain != "hydraulic" or self.hydraulic_blocked:
             return {}
         return dict(self._flow_vars)
 
     def equations(self, x, idx):
+        if self.hydraulic_blocked:
+            return []
         Q_scale = max(self.q_ref, 1e-12)
         P_scale = max(self.p_ref, 1e-3)
 

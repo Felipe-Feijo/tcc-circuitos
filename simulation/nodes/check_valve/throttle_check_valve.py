@@ -65,8 +65,20 @@ flow or pressure exactly to zero) -- it's a resistance that changes
 value depending on direction, so it uses a hard branch (if/else, same
 as ReliefValve already uses) instead of Fischer-Burmeister.
 
-`k` is required in the hydraulic domain (same pattern as Valve_3_2_Ways).
-Plus flow conservation: Q_X + Q_Y = 0.
+`k` is required in the hydraulic domain (same pattern as Valve_3_2_Ways)
+and must be >= 0. Plus flow conservation: Q_X + Q_Y = 0.
+
+k = 0 (fully clogged orifice): the restricted direction BLOCKS and the
+valve degenerates into a plain check valve -- the Q_Y-sign branch is
+replaced by the same Fischer-Burmeister complementarity and Q bounds
+CheckValve (check_valve.py) uses:
+
+    a = Q_Y / Q_scale, b = (P_X - P_Y) / P_scale
+    a + b - sqrt(a^2 + b^2) = 0      (Q_Y >= 0, P_X >= P_Y, one of them 0)
+
+The free direction still conducts with zero pressure drop. Evaluated
+from the CURRENT k, so a "k" defect (DEFECT_FIELDS) can switch regimes
+mid-run.
 
 Visual state (see get_visual_state):
     "open"   -- b <= 0 (favorable direction, no resistance)
@@ -79,6 +91,7 @@ import math
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
+from simulation.nodes.orifice import parse_conductance
 from simulation.hydraulic import HydraulicMixin
 
 _DEFAULT_DELAY = 3
@@ -94,12 +107,7 @@ class ThrottleCheckValve(DefectMixin, Node, HydraulicMixin):
         )
 
         if self.domain == "hydraulic":
-            k = self.properties.get("k")
-            if k is None:
-                raise ValueError(
-                    f"ThrottleCheckValve '{self.id}': required property 'k' is not set."
-                )
-            self.k = float(k)
+            self.k = parse_conductance(self, self.properties.get("k"))
             self.flow_var_x = f"Q_{self.id}_X"
             self.flow_var_y = f"Q_{self.id}_Y"
         else:
@@ -223,6 +231,21 @@ class ThrottleCheckValve(DefectMixin, Node, HydraulicMixin):
         return {"X": self.flow_var_x, "Y": self.flow_var_y}
 
     @property
+    def restricted_blocked(self) -> bool:
+        """k == 0: restricted direction blocked, behaves as a plain check valve."""
+        return self.domain == "hydraulic" and self.k == 0.0
+
+    @property
+    def bounds(self):
+        if not self.restricted_blocked:
+            return {}
+        # Same bounds as CheckValve's non-piloted mode.
+        return {
+            self.flow_var_y: (0.0, None),
+            self.flow_var_x: (None, 0.0),
+        }
+
+    @property
     def initial_guess(self):
         if self.domain != "hydraulic":
             return {}
@@ -250,7 +273,12 @@ class ThrottleCheckValve(DefectMixin, Node, HydraulicMixin):
         # determined by conservation + whatever is connected to the
         # valve) eliminates that ambiguity.
         b = P_x - P_y
-        if Q_y >= 0:
+        if self.restricted_blocked:
+            # Clogged orifice -- check-valve complementarity (see CheckValve).
+            a = Q_y / Q_scale
+            b_n = b / P_scale
+            eq_valve = a + b_n - math.sqrt(a * a + b_n * b_n)
+        elif Q_y >= 0:
             # Favorable direction -- zero resistance, same branch as the
             # pure check valve when open.
             eq_valve = (P_x - P_y) / P_scale

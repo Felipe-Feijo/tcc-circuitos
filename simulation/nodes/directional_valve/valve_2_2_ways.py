@@ -29,11 +29,20 @@ class Valve_2_2_Ways(DirectionalValve, HydraulicMixin):
     # connected, only the pairing changes), the 2/2-way can genuinely be
     # BLOCKED at rest -- in that state there's no orifice or conservation
     # between P and A, each port stays isolated (variables/hydraulic_ports
-    # empty, equations() contributes no equation at all).
+    # empty, equations() contributes no equation at all). The same applies
+    # in the active position when k == 0 (hydraulic_blocked).
+
+    @property
+    def _passage_open(self) -> bool:
+        return (
+            self.domain == "hydraulic"
+            and self.body_state == 1
+            and not self.hydraulic_blocked
+        )
 
     @property
     def variables(self):
-        if self.domain != "hydraulic" or self.body_state != 1:
+        if not self._passage_open:
             return []
         vars_ = [self.flow_var_in, self.flow_var_out]
         for anchor_name in self.hydraulic_ports().keys():
@@ -44,7 +53,7 @@ class Valve_2_2_Ways(DirectionalValve, HydraulicMixin):
 
     @property
     def initial_guess(self):
-        if self.domain != "hydraulic" or self.body_state != 1:
+        if not self._passage_open:
             return {}
         return {
             self.flow_var_in:  1.0,
@@ -52,7 +61,7 @@ class Valve_2_2_Ways(DirectionalValve, HydraulicMixin):
         }
 
     def hydraulic_ports(self):
-        if self.domain != "hydraulic" or self.body_state != 1:
+        if not self._passage_open:
             return {}
         return {
             "P": self.flow_var_in,
@@ -60,7 +69,7 @@ class Valve_2_2_Ways(DirectionalValve, HydraulicMixin):
         }
 
     def equations(self, x, idx):
-        if self.domain != "hydraulic" or self.body_state != 1:
+        if not self._passage_open:
             return []
 
         Q_in  = x[idx[self.flow_var_in]]

@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QGraphicsView
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPen
 
+from graphics.anchors.anchor import AnchorItem
 from graphics.items.base.connections.connection_item import ConnectionItem
 from editor.mode import EditorMode
 from graphics.items.base.nodes.node_item import NodeItem
@@ -457,8 +458,13 @@ class GraphicsView(QGraphicsView):
         self._temp_connection.pen = pen
         self._temp_connection.setZValue(-1)
         self.scene().addItem(self._temp_connection)
-        source_anchor.setBrush(Qt.GlobalColor.gray)
-        source_anchor.update()
+        self.refresh_anchors()
+
+    def refresh_anchors(self) -> None:
+        """Reapplies every anchor's appearance after a CONNECT mode/gesture change."""
+        for item in self.scene().items():
+            if isinstance(item, AnchorItem):
+                item.refresh_junction_dot()
 
     def cleanup_temp_connection(self) -> None:
         """Removes the temporary preview connection and restores the
@@ -482,8 +488,6 @@ class GraphicsView(QGraphicsView):
         if self._temp_connection:
             self.scene().removeItem(self._temp_connection)
             self._temp_connection = None
-        if self.editor._conn_source_anchor:
-            self.editor._conn_source_anchor.refresh_junction_dot()
         self.editor._connecting = False
         self.editor._conn_source_anchor = None
 
@@ -491,6 +495,8 @@ class GraphicsView(QGraphicsView):
             from editor.undo import _restore_snapshot
             _restore_snapshot(self._connect_before_snapshot, self.scene(), self.editor)
             self._connect_before_snapshot = None
+
+        self.refresh_anchors()
 
     # Node preview
 

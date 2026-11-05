@@ -2,17 +2,24 @@
 
 from PyQt6.QtWidgets import QGraphicsEllipseItem
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from PyQt6.QtGui import QPen, QPainterPath
+from PyQt6.QtGui import QColor, QPen, QPainterPath
 
 from graphics.labels.label import LabelItem
 from editor.mode import EditorMode
+
+# (dark theme, light theme) -- same colors as ConnectionItem._get_pen.
+_DOMAIN_COLORS = {
+    "pneumatic": (QColor(0, 255, 0), QColor(0, 128, 0)),
+    "electric": (QColor(255, 255, 0), QColor(184, 132, 0)),
+    "hydraulic": (QColor(0, 255, 255), QColor(0, 137, 123)),
+}
 
 
 class AnchorItem(QGraphicsEllipseItem):
     """Visually represents a NodeItem's connection point.
 
-    Detects cursor hover in CONNECT mode and shows/hides based on
-    context. For hydraulic anchors, keeps pressure and flow labels
+    In CONNECT mode, shows every anchor the current gesture can connect
+    to, colored by domain, and detects cursor hover. For hydraulic anchors, keeps pressure and flow labels
     updated by ViewSync after each simulation step.
 
     Args:
@@ -53,7 +60,7 @@ class AnchorItem(QGraphicsEllipseItem):
             self.flow: float = 0.0
             self._init_hydraulic_labels()
 
-        # Initial appearance: invisible until hover or simulation
+        # Initial appearance: invisible until refresh_junction_dot says otherwise
         self.setBrush(Qt.GlobalColor.transparent)
         self.setPen(QPen(Qt.PenStyle.NoPen))
 
@@ -74,24 +81,9 @@ class AnchorItem(QGraphicsEllipseItem):
 
     def hoverEnterEvent(self, event):
         """Highlights the anchor when the cursor enters it in CONNECT mode."""
-        if not self.node.editor:
-            return
-
-        is_source_anchor = (
-            self.node.editor._connecting
-            and self.node.editor._conn_source_anchor is self
-        )
-
-        if self.node.editor.mode == EditorMode.CONNECT and not is_source_anchor:
-            source = self.node.editor._conn_source_anchor
-
-            # Prevents connecting anchors from different domains
-            if source and source.domain != self.domain:
-                return
-
-            self.setBrush(Qt.GlobalColor.red)
+        if self._is_connect_target():
             self.node.editor.hover_anchor = self
-            self.update()
+            self.refresh_junction_dot()
 
     def hoverLeaveEvent(self, event):
         """Restores appearance and clears hover_anchor when the cursor leaves."""
@@ -101,13 +93,21 @@ class AnchorItem(QGraphicsEllipseItem):
         if self.node.editor.hover_anchor is self:
             self.node.editor.hover_anchor = None
 
-        is_source_anchor = (
-            self.node.editor._connecting
-            and self.node.editor._conn_source_anchor is self
-        )
+        self.refresh_junction_dot()
 
-        if not is_source_anchor:
-            self.refresh_junction_dot()
+    def _is_connect_target(self) -> bool:
+        """True if a click here can start or complete the CONNECT gesture.
+
+        Mirrors the rules enforced by GraphicsView._complete_connect_press:
+        same domain as the source, on a different node.
+        """
+        editor = getattr(self.node, "editor", None)
+        if not editor or editor.mode != EditorMode.CONNECT:
+            return False
+        source = editor._conn_source_anchor
+        return source is None or (
+            source.domain == self.domain and source.node is not self.node
+        )
 
     def set_exit_directions(self, directions) -> None:
         """Sets the exit directions allowed for the A* router.
@@ -131,23 +131,53 @@ class AnchorItem(QGraphicsEllipseItem):
         )
 
     def refresh_junction_dot(self) -> None:
-        """Shows a permanent dot when this anchor becomes a real junction
-        (3+ connections) -- a hydraulic/pneumatic T-fitting or a 3+-
-        conductor electric node. Called whenever a connection is
-        created/removed on this anchor (GraphicsView.create_connection,
-        GraphicsView.split_connection_at, ConnectionItem.prepare_delete)."""
-        if self.always_visible or self.connection_count() >= 3:
-            self.setBrush(Qt.GlobalColor.lightGray)
-            # White on dark, black on light -- same convention as the
-            # default connection pen (ConnectionItem._get_pen) -- a white
-            # outline was invisible against a light-theme canvas.
-            is_light = getattr(self.node, "use_light_theme", False)
-            outline = Qt.GlobalColor.black if is_light else Qt.GlobalColor.white
-            self.setPen(QPen(outline, 1))
+        """Derives the anchor's appearance from the editor state.
+
+        Called when a connection is created/removed on this anchor, on
+        theme changes, and for every anchor on CONNECT mode/gesture
+        changes (GraphicsView.refresh_anchors).
+
+        A dot marking a real junction (3+ connections, or always_visible)
+        is part of the drawn circuit, so it stays when the anchor is not a
+        connect target.
+        """
+        editor = getattr(self.node, "editor", None)
+        in_connect = bool(editor) and editor.mode == EditorMode.CONNECT
+        is_source = in_connect and editor._conn_source_anchor is self
+        is_target = self._is_connect_target()
+
+        # Qt delivers hover only to the topmost accepting item, so a hidden
+        # anchor would otherwise block a connectable one beneath it.
+        self.setAcceptHoverEvents(not in_connect or is_source or is_target)
+
+        if is_source:
+            brush = QColor(Qt.GlobalColor.gray)
+        elif is_target and editor.hover_anchor is self:
+            brush = QColor(Qt.GlobalColor.red)
+        elif is_target:
+            brush = self._domain_color()
+        elif self.always_visible or self.connection_count() >= 3:
+            brush = QColor(Qt.GlobalColor.lightGray)
         else:
             self.setBrush(Qt.GlobalColor.transparent)
             self.setPen(QPen(Qt.PenStyle.NoPen))
+            self.update()
+            return
+
+        self.setBrush(brush)
+        # White on dark, black on light -- same convention as the
+        # default connection pen (ConnectionItem._get_pen) -- a white
+        # outline was invisible against a light-theme canvas.
+        is_light = getattr(self.node, "use_light_theme", False)
+        outline = Qt.GlobalColor.black if is_light else Qt.GlobalColor.white
+        self.setPen(QPen(outline, 1))
         self.update()
+
+    def _domain_color(self) -> QColor:
+        colors = _DOMAIN_COLORS.get(self.domain)
+        if colors is None:
+            return QColor(Qt.GlobalColor.lightGray)
+        return colors[1 if getattr(self.node, "use_light_theme", False) else 0]
 
     def reposition_hydraulic_label(self) -> None:
         """Recomputes and applies the hydraulic label's offset.

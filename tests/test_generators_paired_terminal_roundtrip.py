@@ -39,9 +39,9 @@ _discover_palette_nodes()
 
 class _FakeEditor:
     """Minimal stand-in for EditorState. deserialize_scene only assigns
-    it to node.editor/conn.editor and generate_and_load only checks for
-    an optional fit_scene() -- no other attribute is touched."""
-    pass
+    it to node.editor/conn.editor, generate_and_load only checks for an
+    optional fit_scene(), and AnchorItem.refresh_junction_dot reads mode."""
+    mode = None
 
 
 @pytest.mark.parametrize("method,sub_type,sequence", [

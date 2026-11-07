@@ -148,3 +148,220 @@ def test_chained_diamonds_do_not_blow_up_combinatorially():
     assert elapsed < 2.0
     assert ground.state is True
     assert current.state is True  # último merge, adjacente ao ground
+
+
+# --------------------------------------------------------------------------
+# Load actuation: a coil actuates only with a voltage across it (T and B at
+# different potentials on some source->ground path), not merely because
+# both of its anchors are energized.
+# --------------------------------------------------------------------------
+
+from simulation.nodes.coil import Coil
+from simulation.nodes.switch.contact import Contact
+
+
+class _Circuit:
+    """Builds a test circuit from terminals, coils, contacts and wires."""
+
+    def __init__(self):
+        self.nodes = {}
+        self.connections = {}
+
+    def terminal(self, node_id, anchor_type=None):
+        node, anchor = _terminal(node_id, anchor_type)
+        self.nodes[node_id] = node
+        return anchor
+
+    def _two_terminal(self, node):
+        node.add_anchor("T", domain="electric")
+        node.add_anchor("B", domain="electric")
+        self.nodes[node.id] = node
+        return node
+
+    def coil(self, node_id):
+        return self._two_terminal(Coil(node_id, domain="electric"))
+
+    def contact(self, node_id, contact_type):
+        return self._two_terminal(
+            Contact(node_id, domain="electric", properties={"contact_type": contact_type})
+        )
+
+    def wire(self, a, b):
+        c = Connection(a, b)
+        self.connections[c.id] = c
+
+    def place(self, part, a, b):
+        """Wires a two-terminal node's T to `a` and B to `b`."""
+        self.wire(a, part.anchors["T"])
+        self.wire(part.anchors["B"], b)
+
+    def run(self):
+        engine = SimulationEngine(self.nodes, self.connections)
+        engine.run_until_stable()
+        return engine
+
+
+def test_coil_with_both_terminals_on_one_point_does_not_actuate():
+    """K has T and B on the same point A of an active path: no voltage across it."""
+    c = _Circuit()
+    src, gnd, a = c.terminal("src", "source"), c.terminal("gnd", "ground"), c.terminal("A")
+    k, load = c.coil("K"), c.coil("L")
+    c.wire(src, a)
+    c.place(k, a, a)
+    c.place(load, a, gnd)
+    c.run()
+
+    assert k.energized == 0
+    assert load.energized == 1
+    # No current through K: its wires read like a dead-end branch.
+    assert a.state is True
+    assert k.anchors["T"].state is False
+    assert k.anchors["B"].state is False
+
+
+def test_coil_parallel_to_closed_contact_does_not_actuate_until_it_opens():
+    """K in parallel with an NC contact, in series with L. The closed NC
+    equalizes K's terminals; opening it puts K and L in series."""
+    c = _Circuit()
+    src, gnd = c.terminal("src", "source"), c.terminal("gnd", "ground")
+    a, b = c.terminal("A"), c.terminal("B")
+    k, load, nc = c.coil("K"), c.coil("L"), c.contact("NC", "NC")
+    c.wire(src, a)
+    c.place(k, a, b)
+    c.place(nc, a, b)
+    c.place(load, b, gnd)
+    engine = c.run()
+
+    assert k.energized == 0
+    assert load.energized == 1
+    # Current goes through the NC, not through K.
+    assert nc.anchors["T"].state is True
+    assert nc.anchors["B"].state is True
+    assert k.anchors["T"].state is False
+    assert k.anchors["B"].state is False
+
+    nc.handle_command({"type": "switch", "value": 1})
+    engine.run_until_stable()
+
+    assert k.energized == 1
+    assert load.energized == 1
+    assert k.anchors["T"].state is True
+    assert k.anchors["B"].state is True
+
+
+def test_coil_parallel_to_a_wire_does_not_actuate():
+    c = _Circuit()
+    src, gnd = c.terminal("src", "source"), c.terminal("gnd", "ground")
+    a, b = c.terminal("A"), c.terminal("B")
+    k, load = c.coil("K"), c.coil("L")
+    c.place(load, src, a)
+    c.place(k, a, b)
+    c.wire(a, b)
+    c.wire(b, gnd)
+    c.run()
+
+    assert k.energized == 0
+    assert load.energized == 1
+    assert k.anchors["T"].state is False
+    assert k.anchors["B"].state is False
+
+
+def test_two_coils_in_parallel_between_distinct_points_both_actuate():
+    c = _Circuit()
+    src, gnd = c.terminal("src", "source"), c.terminal("gnd", "ground")
+    a, b = c.terminal("A"), c.terminal("B")
+    k1, k2 = c.coil("K1"), c.coil("K2")
+    c.wire(src, a)
+    c.place(k1, a, b)
+    c.place(k2, a, b)
+    c.wire(b, gnd)
+    c.run()
+
+    assert k1.energized == 1
+    assert k2.energized == 1
+
+
+def test_two_coils_in_series_both_actuate():
+    """No voltage division in the model: series loads all actuate."""
+    c = _Circuit()
+    src, gnd, mid = c.terminal("src", "source"), c.terminal("gnd", "ground"), c.terminal("M")
+    k1, k2 = c.coil("K1"), c.coil("K2")
+    c.place(k1, src, mid)
+    c.place(k2, mid, gnd)
+    c.run()
+
+    assert k1.energized == 1
+    assert k2.energized == 1
+
+
+def test_load_loop_hanging_off_a_single_point_does_not_actuate():
+    """Three coils in a ring hanging off a single point (source side, then
+    ground side). Biconnected blocks split at the articulation point;
+    bridge-separated components would not."""
+    for hang_off in ("src", "gnd"):
+        c = _Circuit()
+        rails = {"src": c.terminal("src", "source"), "gnd": c.terminal("gnd", "ground")}
+        x, y = c.terminal("X"), c.terminal("Y")
+        load = c.coil("L")
+        ring = [c.coil(f"R{i}") for i in range(3)]
+        c.place(load, rails["src"], rails["gnd"])
+        p = rails[hang_off]
+        c.place(ring[0], p, x)
+        c.place(ring[1], x, y)
+        c.place(ring[2], y, p)
+        c.run()
+
+        assert load.energized == 1, hang_off
+        assert [r.energized for r in ring] == [0, 0, 0], hang_off
+        assert x.state is False and y.state is False, hang_off
+
+
+def test_coil_between_two_sources_or_two_grounds_does_not_actuate():
+    """All sources share one potential, and so do all grounds."""
+    c = _Circuit()
+    s1, s2 = c.terminal("s1", "source"), c.terminal("s2", "source")
+    g1, g2 = c.terminal("g1", "ground"), c.terminal("g2", "ground")
+    k_src, k_gnd, load = c.coil("K_src"), c.coil("K_gnd"), c.coil("L")
+    c.place(k_src, s1, s2)
+    c.place(load, s2, g1)
+    c.place(k_gnd, g1, g2)
+    c.run()
+
+    assert k_src.energized == 0
+    assert k_gnd.energized == 0
+    assert load.energized == 1
+    for k in (k_src, k_gnd):
+        assert k.anchors["T"].state is False
+        assert k.anchors["B"].state is False
+
+
+def test_shorted_supply_powers_no_load():
+    c = _Circuit()
+    src, gnd = c.terminal("src", "source"), c.terminal("gnd", "ground")
+    k = c.coil("K")
+    c.wire(src, gnd)
+    c.place(k, src, gnd)
+    c.run()
+
+    assert k.energized == 0
+
+
+def test_load_decision_handles_a_long_series_chain():
+    """Iterative DFS: a 3000-coil chain would overflow a recursive one."""
+    c = _Circuit()
+    current = c.terminal("src", "source")
+    coils = []
+    for i in range(3000):
+        nxt = c.terminal(f"m{i}")
+        coils.append(c.coil(f"K{i}"))
+        c.place(coils[-1], current, nxt)
+        current = nxt
+    c.wire(current, c.terminal("gnd", "ground"))
+    engine = SimulationEngine(c.nodes, c.connections)
+
+    start = time.perf_counter()
+    powered = engine._compute_powered_electric_loads()
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 2.0
+    assert powered == set(coils)

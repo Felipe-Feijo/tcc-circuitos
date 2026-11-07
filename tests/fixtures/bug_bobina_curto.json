@@ -1,0 +1,858 @@
+{
+ "version": 1,
+ "nodes": [
+  {
+   "id": "cyl-A",
+   "type": "DoubleActingCylinder",
+   "domain": "pneumatic",
+   "position": {
+    "x": 300.0,
+    "y": 0.0
+   },
+   "labels": {},
+   "properties": {
+    "sensors": {
+     "retracted": {
+      "enabled": false,
+      "name": ""
+     },
+     "extended": {
+      "enabled": false,
+      "name": ""
+     }
+    },
+    "default_state": "retracted"
+   }
+  },
+  {
+   "id": "v42",
+   "type": "Valve_4_2_Ways",
+   "domain": "pneumatic",
+   "position": {
+    "x": 127.0,
+    "y": 330.0
+   },
+   "labels": {},
+   "properties": {
+    "actuators": {
+     "left": {
+      "type": "solenoid",
+      "sensor_name": "Y1"
+     },
+     "right": {
+      "type": "spring"
+     }
+    },
+    "default_side": "right"
+   }
+  },
+  {
+   "id": "exh",
+   "type": "Exhaust",
+   "domain": "pneumatic",
+   "position": {
+    "x": 302.0,
+    "y": 560.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "psrc",
+   "type": "PressureSource",
+   "domain": "pneumatic",
+   "position": {
+    "x": 369.0,
+    "y": 560.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "vsrc",
+   "type": "VoltageSource",
+   "domain": "electric",
+   "position": {
+    "x": 0.0,
+    "y": 631.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "gnd",
+   "type": "Ground",
+   "domain": "electric",
+   "position": {
+    "x": 1000.0,
+    "y": 1100.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "j+1",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 250.0,
+    "y": 700.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "j+2",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 600.0,
+    "y": 700.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jg1",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 250.0,
+    "y": 1100.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jg2",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 600.0,
+    "y": 1100.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jA",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 250.0,
+    "y": 850.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "K2",
+   "type": "RelayCoil",
+   "domain": "electric",
+   "position": {
+    "x": 225.0,
+    "y": 960.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "K2"
+     }
+    }
+   }
+  },
+  {
+   "id": "K1",
+   "type": "RelayCoil",
+   "domain": "electric",
+   "position": {
+    "x": 75.0,
+    "y": 900.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "K1"
+     }
+    }
+   }
+  },
+  {
+   "id": "cK1",
+   "type": "Contact",
+   "domain": "electric",
+   "position": {
+    "x": 561.0,
+    "y": 780.0
+   },
+   "labels": {},
+   "properties": {
+    "contact_type": "NO",
+    "actuator_sensor": "K1"
+   }
+  },
+  {
+   "id": "Y1",
+   "type": "SolenoidCoil",
+   "domain": "electric",
+   "position": {
+    "x": 575.0,
+    "y": 960.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "Y1"
+     }
+    }
+   }
+  },
+  {
+   "id": "j+3",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1000.0,
+    "y": 700.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jg3",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1000.0,
+    "y": 1100.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jB1",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1000.0,
+    "y": 790.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jB2",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1000.0,
+    "y": 900.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "K3",
+   "type": "RelayCoil",
+   "domain": "electric",
+   "position": {
+    "x": 875.0,
+    "y": 820.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "K3"
+     }
+    }
+   }
+  },
+  {
+   "id": "cNF",
+   "type": "Contact",
+   "domain": "electric",
+   "position": {
+    "x": 961.0,
+    "y": 808.0
+   },
+   "labels": {},
+   "properties": {
+    "contact_type": "NC",
+    "actuator_sensor": "__button__",
+    "button_mode": "latch"
+   }
+  },
+  {
+   "id": "K4",
+   "type": "RelayCoil",
+   "domain": "electric",
+   "position": {
+    "x": 975.0,
+    "y": 960.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "K4"
+     }
+    }
+   }
+  },
+  {
+   "id": "j+4",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1300.0,
+    "y": 700.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "jg4",
+   "type": "JunctionNodeItem",
+   "domain": "electric",
+   "position": {
+    "x": 1300.0,
+    "y": 1100.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "cK3",
+   "type": "Contact",
+   "domain": "electric",
+   "position": {
+    "x": 1261.0,
+    "y": 780.0
+   },
+   "labels": {},
+   "properties": {
+    "contact_type": "NO",
+    "actuator_sensor": "K3"
+   }
+  },
+  {
+   "id": "Y2",
+   "type": "SolenoidCoil",
+   "domain": "electric",
+   "position": {
+    "x": 1275.0,
+    "y": 960.0
+   },
+   "labels": {},
+   "properties": {
+    "sensor": {
+     "coil": {
+      "name": "Y2"
+     }
+    }
+   }
+  },
+  {
+   "id": "cyl-B",
+   "type": "DoubleActingCylinder",
+   "domain": "pneumatic",
+   "position": {
+    "x": 1000.0,
+    "y": 0.0
+   },
+   "labels": {},
+   "properties": {
+    "sensors": {
+     "retracted": {
+      "enabled": false,
+      "name": ""
+     },
+     "extended": {
+      "enabled": false,
+      "name": ""
+     }
+    },
+    "default_state": "retracted"
+   }
+  },
+  {
+   "id": "v42b",
+   "type": "Valve_4_2_Ways",
+   "domain": "pneumatic",
+   "position": {
+    "x": 827.0,
+    "y": 330.0
+   },
+   "labels": {},
+   "properties": {
+    "actuators": {
+     "left": {
+      "type": "solenoid",
+      "sensor_name": "Y2"
+     },
+     "right": {
+      "type": "spring"
+     }
+    },
+    "default_side": "right"
+   }
+  },
+  {
+   "id": "exhb",
+   "type": "Exhaust",
+   "domain": "pneumatic",
+   "position": {
+    "x": 1002.0,
+    "y": 560.0
+   },
+   "labels": {},
+   "properties": {}
+  },
+  {
+   "id": "psrcb",
+   "type": "PressureSource",
+   "domain": "pneumatic",
+   "position": {
+    "x": 1069.0,
+    "y": 560.0
+   },
+   "labels": {},
+   "properties": {}
+  }
+ ],
+ "connections": [
+  {
+   "source": {
+    "node": "v42",
+    "anchor": "A"
+   },
+   "target": {
+    "node": "cyl-A",
+    "anchor": "A"
+   },
+   "waypoints": [
+    {
+     "x": 318.0,
+     "y": 260.0
+    },
+    {
+     "x": 318.0,
+     "y": 260.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "v42",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "cyl-A",
+    "anchor": "B"
+   },
+   "waypoints": [
+    {
+     "x": 383.0,
+     "y": 260.0
+    },
+    {
+     "x": 709.0,
+     "y": 260.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "exh",
+    "anchor": "R"
+   },
+   "target": {
+    "node": "v42",
+    "anchor": "P"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "psrc",
+    "anchor": "P"
+   },
+   "target": {
+    "node": "v42",
+    "anchor": "R"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "vsrc",
+    "anchor": "X1"
+   },
+   "target": {
+    "node": "j+1",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+1",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "j+2",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jg1",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "jg2",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jg2",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "gnd",
+    "anchor": "X1"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+1",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "jA",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jA",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "K2",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "K2",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jg1",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "K1",
+    "anchor": "T"
+   },
+   "target": {
+    "node": "jA",
+    "anchor": "J"
+   },
+   "waypoints": [
+    {
+     "x": 100.0,
+     "y": 850.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "K1",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jA",
+    "anchor": "J"
+   },
+   "waypoints": [
+    {
+     "x": 100.0,
+     "y": 990.0
+    },
+    {
+     "x": 170.0,
+     "y": 990.0
+    },
+    {
+     "x": 170.0,
+     "y": 850.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "j+2",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "cK1",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "cK1",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "Y1",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "Y1",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jg2",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+2",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "j+3",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jg3",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "jg2",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+3",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "jB1",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jB1",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "K3",
+    "anchor": "T"
+   },
+   "waypoints": [
+    {
+     "x": 900.0,
+     "y": 790.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "K3",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jB2",
+    "anchor": "J"
+   },
+   "waypoints": [
+    {
+     "x": 900.0,
+     "y": 900.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "jB1",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "cNF",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "cNF",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jB2",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jB2",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "K4",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "K4",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jg3",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+3",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "j+4",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "jg4",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "jg3",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "j+4",
+    "anchor": "J"
+   },
+   "target": {
+    "node": "cK3",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "cK3",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "Y2",
+    "anchor": "T"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "Y2",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "jg4",
+    "anchor": "J"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "v42b",
+    "anchor": "A"
+   },
+   "target": {
+    "node": "cyl-B",
+    "anchor": "A"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "v42b",
+    "anchor": "B"
+   },
+   "target": {
+    "node": "cyl-B",
+    "anchor": "B"
+   },
+   "waypoints": [
+    {
+     "x": 1083.0,
+     "y": 260.0
+    },
+    {
+     "x": 1409.0,
+     "y": 260.0
+    }
+   ]
+  },
+  {
+   "source": {
+    "node": "exhb",
+    "anchor": "R"
+   },
+   "target": {
+    "node": "v42b",
+    "anchor": "P"
+   },
+   "waypoints": []
+  },
+  {
+   "source": {
+    "node": "psrcb",
+    "anchor": "P"
+   },
+   "target": {
+    "node": "v42b",
+    "anchor": "R"
+   },
+   "waypoints": []
+  }
+ ]
+}

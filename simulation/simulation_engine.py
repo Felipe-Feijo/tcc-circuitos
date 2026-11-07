@@ -190,9 +190,34 @@ class SimulationEngine:
         return group
 
     def _update_electric_domain(self):
+        """Propagates the electric domain in two steps.
+
+        1. Load actuation: a load (node with is_electric_load) is powered
+           only if there's a voltage across it
+           (_compute_powered_electric_loads). Both anchors energized
+           isn't enough -- a shorted coil has both at the same potential.
+        2. Anchor states (what the UI shows): an anchor is energized if
+           it sits on some source->ground path that carries current
+           (_compute_valid_electric_anchors). Unpowered loads carry no
+           current, so they're left out of that graph: the wires leading
+           to a shorted coil read like a dead-end branch.
+
+        Returns:
+            True if any load decision or anchor state changed.
+        """
         changed = False
 
-        valid_anchors = self._compute_valid_electric_anchors()
+        powered_loads = self._compute_powered_electric_loads()
+
+        for node in self.nodes.values():
+            if not node.is_electric_load:
+                continue
+            new_powered = node in powered_loads
+            if node.powered != new_powered:
+                node.powered = new_powered
+                changed = True
+
+        valid_anchors = self._compute_valid_electric_anchors(powered_loads)
 
         for node in self.nodes.values():
             for a in node.anchors.values():
@@ -205,14 +230,179 @@ class SimulationEngine:
 
         return changed
 
-    def _compute_valid_electric_anchors(self):
+    def _compute_powered_electric_loads(self):
+        """Determines which electric loads have a voltage across them.
+
+        Conductors (zero resistance): external connections and the
+        internal connections of non-load nodes (closed contacts,
+        junctions). Loads: the internal connections of nodes with
+        is_electric_load (coils).
+
+        1. Union-find over conductors merges anchors into equipotential
+           supernodes. All sources share one potential, and so do all
+           grounds, so they're merged too.
+        2. Contracted multigraph: vertices = supernodes, edges = loads.
+           A load with both terminals in the same supernode (shorted,
+           parallel to a closed contact or a wire, between two sources)
+           has no voltage across it and is dropped.
+        3. A load is powered if its edge lies on some simple path
+           between the source supernode S and the ground supernode G.
+           With a virtual edge S-G added, that holds exactly when the
+           load's edge shares a biconnected component (block) with the
+           virtual edge: path + virtual edge form a cycle, and any cycle
+           through both yields such a path. Blocks are split at
+           articulation points, so a load loop hanging off a single
+           point falls in a separate block. Bridge-separated
+           (2-edge-connected) components would not split it.
+
+        Loads in series all stay powered (no voltage division). If the
+        source supernode is the ground supernode (supply shorted), no
+        load is powered.
+
+        Returns:
+            Set of load nodes to power. O(V+E).
+        """
+        anchors = [
+            a for node in self.nodes.values() for a in node.anchors.values()
+            if a.domain == "electric"
+        ]
+        parent = {a: a for a in anchors}
+
+        def find(x):
+            while parent[x] is not x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            root_a, root_b = find(a), find(b)
+            if root_a is not root_b:
+                parent[root_a] = root_b
+
+        loads = []
+        for node in self.nodes.values():
+            for a_id, b_id in node.get_internal_connections():
+                a_anchor = node.get_anchor(a_id)
+                b_anchor = node.get_anchor(b_id)
+                if a_anchor.domain != "electric" or b_anchor.domain != "electric":
+                    continue
+                if node.is_electric_load:
+                    loads.append((node, a_anchor, b_anchor))
+                else:
+                    union(a_anchor, b_anchor)
+
+        for a in anchors:
+            for conn in a.connections:
+                other = conn.get_other(a)
+                if other.domain == "electric":
+                    union(a, other)
+
+        sources = [a for a in anchors if a.type == "source"]
+        grounds = [a for a in anchors if a.type == "ground"]
+        if not loads or not sources or not grounds:
+            return set()
+        for a in sources[1:]:
+            union(sources[0], a)
+        for a in grounds[1:]:
+            union(grounds[0], a)
+
+        source_root = find(sources[0])
+        ground_root = find(grounds[0])
+        if source_root is ground_root:
+            return set()
+
+        adjacency = defaultdict(list)
+        edge_load = []
+        for node, a_anchor, b_anchor in loads:
+            u, v = find(a_anchor), find(b_anchor)
+            if u is v:
+                continue
+            edge_id = len(edge_load)
+            edge_load.append(node)
+            adjacency[u].append((v, edge_id))
+            adjacency[v].append((u, edge_id))
+
+        virtual_edge = len(edge_load)
+        adjacency[source_root].append((ground_root, virtual_edge))
+        adjacency[ground_root].append((source_root, virtual_edge))
+
+        block = self._block_containing_edge(source_root, adjacency, virtual_edge)
+        return {edge_load[e] for e in block if e != virtual_edge}
+
+    @staticmethod
+    def _block_containing_edge(root, adjacency, target_edge):
+        """Iterative Tarjan biconnected components over a multigraph.
+
+        DFS from `root` with an edge stack; a block is popped when a
+        child v of u has low(v) >= disc(u) (u is an articulation point
+        or the root). Edges are tracked by id rather than by parent
+        vertex, so parallel edges between the same pair form a cycle.
+
+        Args:
+            root: Start vertex; `target_edge` must be incident to it.
+            adjacency: {vertex: [(neighbor, edge_id), ...]}.
+            target_edge: Edge id whose block is wanted.
+
+        Returns:
+            Set of edge ids in the block containing `target_edge`.
+        """
+        disc = {root: 0}
+        low = {root: 0}
+        timer = 1
+        edge_stack = []
+        # (vertex, edge it was reached through, iterator over its edges)
+        stack = [(root, None, iter(adjacency[root]))]
+
+        while stack:
+            u, parent_edge, edges = stack[-1]
+            descended = False
+            for v, edge_id in edges:
+                if edge_id == parent_edge:
+                    continue
+                if v not in disc:
+                    disc[v] = low[v] = timer
+                    timer += 1
+                    edge_stack.append(edge_id)
+                    stack.append((v, edge_id, iter(adjacency[v])))
+                    descended = True
+                    break
+                if disc[v] < disc[u]:
+                    # Back edge to an ancestor; seen again from the
+                    # ancestor's side with disc[v] > disc[u] and skipped.
+                    edge_stack.append(edge_id)
+                    low[u] = min(low[u], disc[v])
+            if descended:
+                continue
+
+            stack.pop()
+            if not stack:
+                break
+            p = stack[-1][0]
+            low[p] = min(low[p], low[u])
+            if low[u] >= disc[p]:
+                block = set()
+                while True:
+                    edge_id = edge_stack.pop()
+                    block.add(edge_id)
+                    if edge_id == parent_edge:
+                        break
+                if target_edge in block:
+                    return block
+
+        return set()
+
+    def _compute_valid_electric_anchors(self, powered_loads):
         """Determines which electric anchors sit on some source->ground path.
+
+        Display only: load actuation is decided beforehand by
+        _compute_powered_electric_loads.
 
         An anchor is "energized" if there's some simple path from a
         "source"-type anchor to a "ground"-type anchor passing through
         it -- being in the same connected component isn't enough (a
         dead-end branch hanging off the middle of the path doesn't
-        conduct).
+        conduct). Loads not in `powered_loads` carry no current, so
+        their internal connections are left out of the graph.
 
         Computed in O(V+E) via bridges (Tarjan): collapses each
         2-edge-connected component (e.g. two parallel contacts that
@@ -228,14 +418,14 @@ class SimulationEngine:
         if not anchors:
             return set()
 
-        adjacency = self._build_electric_adjacency(anchors)
+        adjacency = self._build_electric_adjacency(anchors, powered_loads)
         bridges = self._find_bridges(anchors, adjacency)
         comp_of = self._electric_components(anchors, adjacency, bridges)
         valid_components = self._valid_bridge_tree_components(anchors, adjacency, bridges, comp_of)
 
         return {a for a in anchors if comp_of[a] in valid_components}
 
-    def _build_electric_adjacency(self, anchors):
+    def _build_electric_adjacency(self, anchors, powered_loads):
         adjacency = defaultdict(list)
         next_edge_id = [0]
 
@@ -246,6 +436,8 @@ class SimulationEngine:
             adjacency[b].append((a, edge_id))
 
         for node in self.nodes.values():
+            if node.is_electric_load and node not in powered_loads:
+                continue
             for a_id, b_id in node.get_internal_connections():
                 a_anchor = node.get_anchor(a_id)
                 b_anchor = node.get_anchor(b_id)

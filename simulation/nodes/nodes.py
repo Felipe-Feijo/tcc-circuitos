@@ -43,7 +43,15 @@ class Node:
         handle_command(cmd):      receives the NodeItem.command signal's dict.
         get_state() / set_state(): used by HistoryManager (step_backward).
         get_internal_connections(): returns [(anchor_a, anchor_b), ...].
+
+    Electric loads:
+        is_electric_load = True marks the node's electric internal
+        connections as loads (non-zero resistance) instead of
+        conductors. The engine then sets `self.powered` on every
+        electric pass (see SimulationEngine._compute_powered_electric_loads).
     """
+
+    is_electric_load: bool = False
 
     def __init__(self, node_id: str, node_type: str, *,
                  domain: str | None = None,

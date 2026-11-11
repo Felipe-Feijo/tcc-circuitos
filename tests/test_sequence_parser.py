@@ -34,21 +34,21 @@ class TestValidateCylinderStates:
         validate_cylinder_states([("A","+",0), ("B","+",0), ("A","-",None), ("B","-",None)])
 
     def test_invalid_consecutive_same_direction_extend(self):
-        with pytest.raises(ValueError, match="estendido"):
+        with pytest.raises(ValueError, match="already extended"):
             validate_cylinder_states([("A","+"), ("B","+"), ("A","+"), ("B","-"), ("A","-")])
 
     def test_invalid_consecutive_same_direction_retract(self):
-        with pytest.raises(ValueError, match="retraído"):
+        with pytest.raises(ValueError, match="already retracted"):
             validate_cylinder_states([("A","+"), ("A","-"), ("B","+"), ("A","-"), ("B","-")])
 
     def test_invalid_does_not_close_cycle(self):
         # A começa com + mas termina com + (ímpar de movimentos)
-        with pytest.raises(ValueError, match="não fecha o ciclo"):
+        with pytest.raises(ValueError, match="does not close the cycle"):
             validate_cylinder_states([("A","+"), ("B","+"), ("A","-"), ("B","-"), ("A","+")])
 
     def test_invalid_mixed_start_does_not_close(self):
         # A começa retraído ("+"), B começa avançado ("-"); B não fecha
-        with pytest.raises(ValueError, match="não fecha o ciclo"):
+        with pytest.raises(ValueError, match="does not close the cycle"):
             validate_cylinder_states([("A","+"), ("B","-"), ("A","-")])
 
 
@@ -91,7 +91,7 @@ class TestParse:
             parse("A+B+A+A-B-A-")
 
     def test_raises_on_open_cycle(self):
-        with pytest.raises(ValueError, match="não fecha o ciclo"):
+        with pytest.raises(ValueError, match="does not close the cycle"):
             parse("A+B+B-")
 
     def test_multi_cycle_without_parentheses_still_valid(self):
@@ -130,19 +130,19 @@ class TestParseParallelGroups:
         ]
 
     def test_duplicate_letter_in_block_raises(self):
-        with pytest.raises(ValueError, match="repetido dentro do mesmo grupo simultâneo"):
+        with pytest.raises(ValueError, match="repeated within the same simultaneous group"):
             parse("(A+A-)")
 
     def test_nested_parentheses_raises(self):
-        with pytest.raises(ValueError, match="aninhados"):
+        with pytest.raises(ValueError, match="nested parentheses"):
             parse("(A+(B+C+))")
 
     def test_unbalanced_missing_close_raises(self):
-        with pytest.raises(ValueError, match=r"'\(' sem '\)' correspondente"):
+        with pytest.raises(ValueError, match=r"'\(' without matching '\)'"):
             parse("(A+B+")
 
     def test_unbalanced_missing_open_raises(self):
-        with pytest.raises(ValueError, match=r"'\)' sem '\(' correspondente"):
+        with pytest.raises(ValueError, match=r"'\)' without matching '\('"):
             parse("A+B+)")
 
 

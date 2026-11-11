@@ -1,7 +1,7 @@
 """Modal dialog for configuring and triggering the automatic circuit generator."""
 
 import re
-from circuit_generator.sequence_parser import parse as _parse_sequence, validate_cylinder_states
+from circuit_generator.sequence_parser import parse as _parse_sequence, SequenceError
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QRadioButton, QButtonGroup, QGroupBox, QWidget,
@@ -152,8 +152,33 @@ class CircuitGeneratorDialog(QDialog):
         try:
             _parse_sequence(text.replace(" ", ""))
             return None
-        except ValueError as e:
-            return str(e)
+        except SequenceError as e:
+            return self._sequence_error_text(e)
+
+    def _sequence_error_text(self, e: SequenceError) -> str:
+        # Literal tr() per code so pylupdate6 extracts each template.
+        templates = {
+            "invalid": self.tr("Invalid sequence: '{sequence}'"),
+            "nested_parentheses": self.tr(
+                "Invalid sequence: nested parentheses are not allowed in '{sequence}'"),
+            "unmatched_close": self.tr(
+                "Invalid sequence: ')' without matching '(' in '{sequence}'"),
+            "unmatched_open": self.tr(
+                "Invalid sequence: '(' without matching ')' in '{sequence}'"),
+            "repeated_in_group": self.tr(
+                "Cylinder '{letter}' repeated within the same simultaneous group in '{sequence}'"),
+            "already_extended": self.tr(
+                "Cylinder '{letter}' tries to move '{direction}' while already extended. "
+                "Consecutive moves in the same direction are invalid."),
+            "already_retracted": self.tr(
+                "Cylinder '{letter}' tries to move '{direction}' while already retracted. "
+                "Consecutive moves in the same direction are invalid."),
+            "cycle_not_closed": self.tr(
+                "Cylinder '{letter}' does not close the cycle: first move '{first}', "
+                "last '{last}'. The sequence must return each cylinder to its initial state."),
+        }
+        template = templates.get(e.code)
+        return template.format(**e.params) if template else str(e)
 
     def _on_generate(self):
         text = self._seq_edit.text().strip()

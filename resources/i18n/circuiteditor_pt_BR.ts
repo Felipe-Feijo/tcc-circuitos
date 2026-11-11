@@ -4,22 +4,23 @@
 <context>
     <name>Accumulator</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="36" />
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="37" />
         <source>Accumulator</source>
         <translation>Acumulador</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="101" />
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="102" />
         <source>Accumulator — Properties</source>
         <translation>Acumulador — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="103" />
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="104" />
         <source>Total volume V0 (m³)</source>
         <translation>Volume total V0 (m³)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="109" />
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="129" />
+        <location filename="..\..\graphics\items\base\nodes\accumulator.py" line="111" />
         <source>Precharge pressure P0 (Pa)</source>
         <translation>Pressão de pré-carga P0 (Pa)</translation>
     </message>
@@ -33,22 +34,24 @@
 </context><context>
     <name>CentrifugalPump</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="22" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="23" />
         <source>Centrifugal Pump</source>
         <translation>Bomba Centrífuga</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="35" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="36" />
         <source>Centrifugal Pump — Properties</source>
         <translation>Bomba Centrífuga — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="38" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="68" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="39" />
         <source>Shutoff pressure H (Pa)</source>
         <translation>Pressão de shutoff H (Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="43" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="72" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\centrifugal_pump.py" line="45" />
         <source>Maximum flow (m³/s)</source>
         <translation>Vazão máxima (m³/s)</translation>
     </message>
@@ -136,32 +139,72 @@
         <source>Enter a sequence.</source>
         <translation>Digite uma sequência.</translation>
     </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="161" />
+        <source>Invalid sequence: '{sequence}'</source>
+        <translation>Sequência inválida: '{sequence}'</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="162" />
+        <source>Invalid sequence: nested parentheses are not allowed in '{sequence}'</source>
+        <translation>Sequência inválida: parênteses aninhados não são permitidos em '{sequence}'</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="164" />
+        <source>Invalid sequence: ')' without matching '(' in '{sequence}'</source>
+        <translation>Sequência inválida: ')' sem '(' correspondente em '{sequence}'</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="166" />
+        <source>Invalid sequence: '(' without matching ')' in '{sequence}'</source>
+        <translation>Sequência inválida: '(' sem ')' correspondente em '{sequence}'</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="168" />
+        <source>Cylinder '{letter}' repeated within the same simultaneous group in '{sequence}'</source>
+        <translation>Cilindro '{letter}' repetido dentro do mesmo grupo simultâneo em '{sequence}'</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="170" />
+        <source>Cylinder '{letter}' tries to move '{direction}' while already extended. Consecutive moves in the same direction are invalid.</source>
+        <translation>Cilindro '{letter}' tenta mover para '{direction}' estando já estendido. Movimentos consecutivos na mesma direção são inválidos.</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="173" />
+        <source>Cylinder '{letter}' tries to move '{direction}' while already retracted. Consecutive moves in the same direction are invalid.</source>
+        <translation>Cilindro '{letter}' tenta mover para '{direction}' estando já retraído. Movimentos consecutivos na mesma direção são inválidos.</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\circuit_generator_dialog.py" line="176" />
+        <source>Cylinder '{letter}' does not close the cycle: first move '{first}', last '{last}'. The sequence must return each cylinder to its initial state.</source>
+        <translation>Cilindro '{letter}' não fecha o ciclo: primeiro movimento '{first}', último '{last}'. A sequência deve retornar cada cilindro ao seu estado inicial.</translation>
+    </message>
 </context><context>
     <name>CoilItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="108" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="122" />
         <source>Coil — Properties</source>
         <translation>Bobina — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="111" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="125" />
         <source>Signal name</source>
         <translation>Nome do sinal</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="200" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="217" />
         <source>Error renaming</source>
         <translation>Erro ao renomear</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="201" />
+        <location filename="..\..\graphics\items\base\nodes\coil\coil_item.py" line="218" />
         <source>A signal named '{0}' already exists.</source>
         <translation>Já existe um sinal com o nome '{0}'.</translation>
     </message>
 </context><context>
     <name>ConnectionItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\connections\connection_item.py" line="968" />
+        <location filename="..\..\graphics\items\base\connections\connection_item.py" line="977" />
         <source>Delete waypoint</source>
         <translation>Deletar waypoint</translation>
     </message>
@@ -217,44 +260,44 @@
 </context><context>
     <name>CylinderItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="413" />
-        <source>Internal leakage (m³/s/Pa)</source>
-        <translation>Vazamento interno (m³/s/Pa)</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="316" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="304" />
         <source>Error renaming sensor</source>
         <translation>Erro ao renomear sensor</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="317" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="305" />
         <source>A sensor named '{0}' already exists.</source>
         <translation>Já existe um sensor com o nome '{0}'.</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="336" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="324" />
         <source>Retracted sensor</source>
         <translation>Sensor retraído</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="341" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="329" />
         <source>Extended sensor</source>
         <translation>Sensor estendido</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="347" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="335" />
         <source>Initial state</source>
         <translation>Estado inicial</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="349" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="337" />
         <source>Retracted</source>
         <translation>Retraído</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="350" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="338" />
         <source>Extended</source>
         <translation>Estendido</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\cylinder_item.py" line="410" />
+        <source>Internal leakage (m³/s/Pa)</source>
+        <translation>Vazamento interno (m³/s/Pa)</translation>
     </message>
     <message>
         <source>Cylinder — Properties</source>
@@ -267,97 +310,96 @@
 </context><context>
     <name>DefectDialog</name>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="17" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="37" />
         <source>Simulate defect</source>
         <translation>Simular defeito</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="32" />
-        <source>Apply</source>
-        <translation>Aplicar</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="34" />
-        <source>Restore</source>
-        <translation>Restaurar</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="103" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="105" />
         <source>Note (optional)</source>
         <translation>Nota (opcional)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="104" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="106" />
         <source>e.g. debris in the orifice</source>
         <translation>ex.: sujeira no orifício</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="52" />
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="54" />
+        <source>Restore</source>
+        <translation>Restaurar</translation>
     </message>
 </context><context>
     <name>DirectionalValveItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="517" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="545" />
         <source>Left actuator</source>
         <translation>Atuador esquerdo</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="518" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="546" />
         <source>Right actuator</source>
         <translation>Atuador direito</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="524" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="552" />
         <source>Default position</source>
         <translation>Posição padrão</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="534" />
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="527" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="562" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="555" />
         <source>Right (0)</source>
         <translation>Direita (0)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="528" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="556" />
         <source>Center (1)</source>
         <translation>Centro (1)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="529" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="557" />
         <source>Left (2)</source>
         <translation>Esquerda (2)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="535" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="563" />
         <source>Left (1)</source>
         <translation>Esquerda (1)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="550" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="578" />
         <source>None</source>
         <translation>Nenhum</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="623" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="651" />
         <source>Latched</source>
         <translation>Retido</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="624" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="652" />
         <source>Momentary</source>
         <translation>Momentâneo</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="937" />
-        <source>Simulate defect — {0}</source>
-        <translation>Simular defeito — {0}</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="942" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="952" />
         <source>Conductance k (m³/s/√Pa)</source>
         <translation>Condutância k (m³/s/√Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="947" />
+        <location filename="..\..\graphics\items\base\nodes\directional_valve\directional_valve_item.py" line="957" />
         <source>Valve stuck (won't switch)</source>
         <translation>Válvula travada (não comuta)</translation>
+    </message>
+    <message>
+        <source>Simulate defect — {0}</source>
+        <translation type="vanished">Simular defeito — {0}</translation>
     </message>
     <message>
         <source>Button</source>
@@ -418,34 +460,34 @@
 </context><context>
     <name>DoubleActingCylinder</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" />
-        <source>Rod diameter must be smaller than the bore diameter.</source>
-        <translation>O diâmetro da haste deve ser menor que o diâmetro do êmbolo.</translation>
-    </message>
-    <message>
         <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="41" />
         <source>Double Acting Cylinder</source>
         <translation>Cilindro de Dupla Ação</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="98" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="99" />
         <source>Bore diameter (m)</source>
         <translation>Diâmetro do furo (m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="101" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="102" />
         <source>Rod diameter (m)</source>
         <translation>Diâmetro da haste (m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="104" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="106" />
         <source>Stroke (m)</source>
         <translation>Curso (m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="107" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="109" />
         <source>External load (N)</source>
         <translation>Carga externa (N)</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\cylinder\double_acting_cylinder.py" line="129" />
+        <source>Rod diameter must be smaller than the bore diameter.</source>
+        <translation>O diâmetro da haste deve ser menor que o diâmetro do êmbolo.</translation>
     </message>
 </context><context>
     <name>Exhaust</name>
@@ -472,69 +514,70 @@
         <translation>Deslocamento D (m³/rad)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="126" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
         <source>Control mode</source>
         <translation>Modo de controle</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="128" />
         <source>Torque</source>
         <translation>Torque</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="127" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="128" />
         <source>Speed</source>
         <translation>Velocidade</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="138" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="139" />
         <source>Load torque (N·m)</source>
         <translation>Torque de carga (N·m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="143" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="144" />
         <source>Target speed ω (rad/s)</source>
         <translation>Velocidade alvo ω (rad/s)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="153" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="154" />
         <source>Maximum pressure (Pa) — optional</source>
         <translation>Pressão máxima (Pa) — opcional</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="158" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="159" />
         <source>Maximum speed (rad/s) — optional</source>
         <translation>Velocidade máxima (rad/s) — opcional</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="164" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="165" />
         <source>Calculated requirement</source>
         <translation>Requisito calculado</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="190" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="191" />
         <source>Required Δp: {0:.3g} Pa</source>
         <translation>Δp necessário: {0:.3g} Pa</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="194" />
+        <location filename="..\..\graphics\items\base\nodes\fixed_displacement_motor.py" line="195" />
         <source>Required flow rate: {0:.3g} m³/s</source>
         <translation>Vazão necessária: {0:.3g} m³/s</translation>
     </message>
 </context><context>
     <name>FixedDisplacementPump</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="22" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="23" />
         <source>Fixed Displacement Pump</source>
         <translation>Bomba de Deslocamento Fixo</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="34" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="35" />
         <source>Fixed Displacement Pump — Properties</source>
         <translation>Bomba de Deslocamento Fixo — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="37" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="56" />
+        <location filename="..\..\graphics\items\base\nodes\pumps\fixed_displacement_pump.py" line="38" />
         <source>Flow rate (m³/s)</source>
         <translation>Vazão (m³/s)</translation>
     </message>
@@ -773,39 +816,39 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>NodeItem</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="619" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="309" />
+        <source>Simulate defect — {0}</source>
+        <translation>Simular defeito — {0}</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="653" />
         <source>Component name</source>
         <translation>Nome do componente</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="700" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="752" />
         <source>Simulate defect...</source>
         <translation>Simular defeito...</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="707" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="759" />
         <source>Properties...</source>
         <translation>Propriedades...</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="713" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="765" />
         <source>Rotate 90°</source>
         <translation>Girar 90°</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="725" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="777" />
         <source>Rotate component</source>
         <translation>Girar componente</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="732" />
+        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="784" />
         <source>Add label</source>
         <translation>Adicionar label</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\items\base\nodes\node_item.py" line="309" />
-        <source>Simulate defect — {0}</source>
-        <translation>Simular defeito — {0}</translation>
     </message>
 </context><context>
     <name>NodePalette</name>
@@ -850,12 +893,13 @@ Desenvolvido com PyQt6</translation>
         <translation>Válvula de Alívio Pré-operada — Propriedades</translation>
     </message>
     <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="109" />
         <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="83" />
         <source>Pilot setting (Pa)</source>
         <translation>Ajuste do piloto (Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="88" />
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="89" />
         <source>Main-stage spring (Pa)</source>
         <translation>Mola do estágio principal (Pa)</translation>
     </message>
@@ -876,27 +920,28 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>PressureReducingValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="53" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="54" />
         <source>Pressure Reducing Valve</source>
         <translation>Válvula Redutora de Pressão</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="121" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="122" />
         <source>Pressure Reducing Valve — Properties</source>
         <translation>Válvula Redutora de Pressão — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="123" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="150" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="124" />
         <source>Setpoint pressure (Pa)</source>
         <translation>Pressão de ajuste (Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="128" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="130" />
         <source>Tank port (T)</source>
         <translation>Via de tanque (T)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="131" />
+        <location filename="..\..\graphics\items\base\nodes\pressure_reducing_valve.py" line="133" />
         <source>External pilot (Y)</source>
         <translation>Pilotagem externa (Y)</translation>
     </message>
@@ -910,34 +955,34 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>PropertiesDialog</name>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" />
-        <source>not a valid number</source>
-        <translation>não é um número válido</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" />
-        <source>must be at least {0}</source>
-        <translation>deve ser no mínimo {0}</translation>
-    </message>
-    <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" />
-        <source>must be greater than {0}</source>
-        <translation>deve ser maior que {0}</translation>
-    </message>
-    <message>
         <location filename="..\..\graphics\utils\properties_dialog.py" line="20" />
         <source>Properties</source>
         <translation>Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="52" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="62" />
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="55" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="65" />
         <source>OK</source>
         <translation>OK</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="167" />
+        <source>not a valid number</source>
+        <translation>não é um número válido</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="173" />
+        <source>must be at least {0}</source>
+        <translation>deve ser no mínimo {0}</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="176" />
+        <source>must be greater than {0}</source>
+        <translation>deve ser maior que {0}</translation>
     </message>
 </context><context>
     <name>RelayCoil</name>
@@ -949,22 +994,23 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>ReliefValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="45" />
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="46" />
         <source>Relief Valve (direct)</source>
         <translation>Válvula de Alívio (direta)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="88" />
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="89" />
         <source>Relief Valve — Properties</source>
         <translation>Válvula de Alívio — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="91" />
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="118" />
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="92" />
         <source>Cracking pressure (Pa)</source>
         <translation>Pressão de abertura (Pa)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="96" />
+        <location filename="..\..\graphics\items\base\nodes\relief_valve.py" line="98" />
         <source>External pilot (Y)</source>
         <translation>Pilotagem externa (Y)</translation>
     </message>
@@ -1027,22 +1073,22 @@ Desenvolvido com PyQt6</translation>
         <translation>Cilindro de Ação Simples</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="113" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="114" />
         <source>Bore diameter (m)</source>
         <translation>Diâmetro do furo (m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="116" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="117" />
         <source>Stroke (m)</source>
         <translation>Curso (m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="119" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="120" />
         <source>Spring constant (N/m)</source>
         <translation>Constante da mola (N/m)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="122" />
+        <location filename="..\..\graphics\items\base\nodes\cylinder\single_acting_cylinder.py" line="124" />
         <source>External load (N)</source>
         <translation>Carga externa (N)</translation>
     </message>
@@ -1056,39 +1102,41 @@ Desenvolvido com PyQt6</translation>
 </context><context>
     <name>ThrottleCheckValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="38" />
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="39" />
         <source>Throttle Check Valve</source>
         <translation>Válvula de Retenção com Estrangulamento</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="96" />
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="97" />
         <source>Throttle Check Valve — Properties</source>
         <translation>Válvula de Retenção com Estrangulamento — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="100" />
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="134" />
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="101" />
         <source>Conductance k (m³/s/√Pa) — restricted direction</source>
         <translation>Condutância k (m³/s/√Pa) — sentido restrito</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="107" />
+        <location filename="..\..\graphics\items\base\nodes\check_valve\throttle_check_valve.py" line="109" />
         <source>Delay steps (restricted direction)</source>
         <translation>Delay steps (sentido restrito)</translation>
     </message>
 </context><context>
     <name>ThrottleValve</name>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="33" />
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="34" />
         <source>Throttle Valve</source>
         <translation>Estrangulamento</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="57" />
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="58" />
         <source>Throttle Valve — Properties</source>
         <translation>Estrangulamento — Propriedades</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="59" />
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="76" />
+        <location filename="..\..\graphics\items\base\nodes\throttle_valve.py" line="60" />
         <source>Conductance k (m³/s/√Pa)</source>
         <translation>Condutância k (m³/s/√Pa)</translation>
     </message>

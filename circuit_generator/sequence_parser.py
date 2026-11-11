@@ -10,6 +10,37 @@ import re
 _EVENT_RE = re.compile(r'([A-Z][a-z]*)([+-])')
 
 
+class SequenceError(ValueError):
+    """Invalid sequence. `code` and `params` let the UI build a translated
+    message; str() is the English fallback."""
+
+    _MESSAGES = {
+        "invalid": "Invalid sequence: '{sequence}'",
+        "nested_parentheses":
+            "Invalid sequence: nested parentheses are not allowed in '{sequence}'",
+        "unmatched_close":
+            "Invalid sequence: ')' without matching '(' in '{sequence}'",
+        "unmatched_open":
+            "Invalid sequence: '(' without matching ')' in '{sequence}'",
+        "repeated_in_group":
+            "Cylinder '{letter}' repeated within the same simultaneous group in '{sequence}'",
+        "already_extended":
+            "Cylinder '{letter}' tries to move '{direction}' while already extended. "
+            "Consecutive moves in the same direction are invalid.",
+        "already_retracted":
+            "Cylinder '{letter}' tries to move '{direction}' while already retracted. "
+            "Consecutive moves in the same direction are invalid.",
+        "cycle_not_closed":
+            "Cylinder '{letter}' does not close the cycle: first move '{first}', "
+            "last '{last}'. The sequence must return each cylinder to its initial state.",
+    }
+
+    def __init__(self, code: str, **params):
+        self.code = code
+        self.params = params
+        super().__init__(self._MESSAGES[code].format(**params))
+
+
 def parse(sequence: str) -> list[tuple[str, str, int | None]]:
     """
     "A+B+A-B-" -> [("A","+",None), ("B","+",None), ("A","-",None), ("B","-",None)]
@@ -20,13 +51,13 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
     with a single event, e.g. "(A+)", is equivalent to "A+" without
     parentheses (parallel_id=None).
 
-    Raises ValueError if the string contains no valid token, if the
+    Raises SequenceError (a ValueError) if the string contains no valid token, if the
     parentheses are unbalanced or nested, if a block repeats a
     cylinder, or if the cylinders violate the state-alternation rules.
     """
     text = sequence.replace(" ", "")
     if not text:
-        raise ValueError(f"Sequência inválida: {sequence!r}")
+        raise SequenceError("invalid", sequence=sequence)
 
     events: list[tuple[str, str, int | None]] = []
     in_block = False
@@ -40,10 +71,7 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
 
         if ch == '(':
             if in_block:
-                raise ValueError(
-                    f"Sequência inválida: parênteses aninhados não são "
-                    f"permitidos em {sequence!r}"
-                )
+                raise SequenceError("nested_parentheses", sequence=sequence)
             in_block = True
             block_id += 1
             block_events = []
@@ -52,15 +80,12 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
 
         if ch == ')':
             if not in_block:
-                raise ValueError(
-                    f"Sequência inválida: ')' sem '(' correspondente em {sequence!r}"
-                )
+                raise SequenceError("unmatched_close", sequence=sequence)
             letters = [letter for letter, _ in block_events]
             for letter in letters:
                 if letters.count(letter) > 1:
-                    raise ValueError(
-                        f"Cilindro '{letter}' repetido dentro do mesmo grupo "
-                        f"simultâneo em {sequence!r}"
+                    raise SequenceError(
+                        "repeated_in_group", letter=letter, sequence=sequence
                     )
             if len(block_events) == 1:
                 letter, direction = block_events[0]
@@ -74,7 +99,7 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
 
         match = _EVENT_RE.match(text, pos)
         if not match:
-            raise ValueError(f"Sequência inválida: {sequence!r}")
+            raise SequenceError("invalid", sequence=sequence)
         letter, direction = match.group(1), match.group(2)
         if in_block:
             block_events.append((letter, direction))
@@ -83,11 +108,9 @@ def parse(sequence: str) -> list[tuple[str, str, int | None]]:
         pos = match.end()
 
     if in_block:
-        raise ValueError(
-            f"Sequência inválida: '(' sem ')' correspondente em {sequence!r}"
-        )
+        raise SequenceError("unmatched_open", sequence=sequence)
     if not events:
-        raise ValueError(f"Sequência inválida: {sequence!r}")
+        raise SequenceError("invalid", sequence=sequence)
 
     validate_cylinder_states(events)
     return events
@@ -103,7 +126,7 @@ def validate_cylinder_states(events: list[tuple]) -> None:
     Accepts 2- or 3-field events -- (letter, direction) or
     (letter, direction, parallel_id); parallel_id is ignored here.
 
-    Raises ValueError with a descriptive message if any rule is violated.
+    Raises SequenceError (a ValueError) with a descriptive message if any rule is violated.
     Assumes no initial state -- the cylinder can start either retracted or extended.
     """
     first_move: dict[str, str] = {}   # each cylinder's first event's direction
@@ -115,10 +138,9 @@ def validate_cylinder_states(events: list[tuple]) -> None:
         else:
             prev = last_move[letter]
             if direction == prev:
-                state_name = "estendido" if prev == "+" else "retraído"
-                raise ValueError(
-                    f"Cilindro '{letter}' tenta mover para '{direction}' estando já "
-                    f"{state_name}. Movimentos consecutivos na mesma direção são inválidos."
+                raise SequenceError(
+                    "already_extended" if prev == "+" else "already_retracted",
+                    letter=letter, direction=direction,
                 )
         last_move[letter] = direction
 
@@ -127,10 +149,9 @@ def validate_cylinder_states(events: list[tuple]) -> None:
     opposite = {"+": "-", "-": "+"}
     for letter in first_move:
         if last_move[letter] != opposite[first_move[letter]]:
-            raise ValueError(
-                f"Cilindro '{letter}' não fecha o ciclo: "
-                f"primeiro movimento '{first_move[letter]}', último '{last_move[letter]}'. "
-                f"A sequência deve retornar cada cilindro ao seu estado inicial."
+            raise SequenceError(
+                "cycle_not_closed", letter=letter,
+                first=first_move[letter], last=last_move[letter],
             )
 
 

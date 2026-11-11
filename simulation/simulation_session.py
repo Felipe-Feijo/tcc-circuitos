@@ -46,16 +46,17 @@ class SimulationSession:
         self.timer_interval = 1000
         self.speed_index = 0
 
-    def start(self) -> str | None:
+    def start(self) -> ValueError | None:
         """Starts the simulation from the scene's current state.
 
         Builds the domain graph, instantiates the engine and
         controller, wires the graphics items and runs the first step.
 
         Returns:
-            None if started successfully, or an error string if some
-            component has a required property left unset. The caller
-            is responsible for showing the message to the user.
+            None if started successfully, or the ValueError (usually a
+            GraphBuildError) explaining why not. The caller is responsible
+            for showing it to the user (main_window.ui.simulation_error_text
+            builds the translated message).
         """
         if self.active:
             return None
@@ -72,7 +73,7 @@ class SimulationSession:
                 connections=builder.connections,
             )
         except ValueError as e:
-            return str(e)
+            return e
 
         self.controller = SimulationController(self.engine)
         self.controller.on_update_node = builder.node_map

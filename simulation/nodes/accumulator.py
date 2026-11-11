@@ -4,7 +4,7 @@ import math
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.param_checks import require_positive
+from simulation.nodes.param_checks import ParamError, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -17,9 +17,7 @@ class Accumulator(DefectMixin, Node, HydraulicMixin):
 
         for key in ("V0", "P0"):
             if self.properties.get(key) is None:
-                raise ValueError(
-                    f"Accumulator '{self.id}': required property '{key}' is not set."
-                )
+                raise ParamError(self, "missing_property", key=key)
         self.V0 = float(self.properties["V0"])
         self.P0 = float(self.properties["P0"])
         self.Vf = 0.0

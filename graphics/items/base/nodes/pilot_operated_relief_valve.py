@@ -80,13 +80,13 @@ class PilotOperatedReliefValve(NodeItem):
     def build_properties_dialog(self):
         dialog = PropertiesDialog(title=self.tr("Pilot-Operated Relief Valve — Properties"))
         dialog._field_p_set = dialog.add_number_field(
-            self.tr("Pilot setting (Pa)"), placeholder="ex: 1e7  (= 100 bar)",
+            self.tr("Pilot setting (Pa)"), example="1e7  (= 100 bar)",
             value=self.properties.get("p_set"),
             required=True,
             min_value=0,
         )
         dialog._field_p_vent = dialog.add_number_field(
-            self.tr("Main-stage spring (Pa)"), placeholder="3e5  (= 3 bar, default)",
+            self.tr("Main-stage spring (Pa)"), placeholder=self.tr("3e5  (= 3 bar, default)"),
             value=self.properties.get("p_vent"),
             min_value=0,
         )
@@ -107,5 +107,5 @@ class PilotOperatedReliefValve(NodeItem):
             return []
         return [DefectFieldSpec(
             "p_set", self.tr("Pilot setting (Pa)"), "number",
-            placeholder="ex: 1e7  (= 100 bar)", min_value=0,
+            example="1e7  (= 100 bar)", min_value=0,
         )]

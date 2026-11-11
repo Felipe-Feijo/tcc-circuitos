@@ -14,6 +14,7 @@ from editor.editor_controller import EditorController
 from graphics.items.base.diagram_item_base import DiagramItemBase
 from graphics.scene import GraphicsScene
 from main_window.ui.docks.node_palette_dock import create_node_palette
+from main_window.ui.simulation_error_text import format_simulation_error
 from main_window import settings
 from graphics.items.base.nodes.node_item import NodeItem
 from graphics.labels.label import LabelItem
@@ -322,7 +323,10 @@ class MainWindow(QMainWindow):
     def start_simulation(self):
         error = self.simulation.start()
         if error:
-            QMessageBox.warning(self, "Propriedades incompletas", error)
+            QMessageBox.warning(
+                self, self.tr("Incomplete properties"),
+                format_simulation_error(error, self.scene),
+            )
             return
         self.simulation.controller.state_changed.connect(self.update_simulation_actions)
 

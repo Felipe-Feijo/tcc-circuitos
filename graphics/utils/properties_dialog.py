@@ -74,10 +74,17 @@ class PropertiesDialog(QDialog):
         # extra buttons between Cancel and OK/Apply.
         self._btn_layout = btn_layout
 
+    @staticmethod
+    def _placeholder(placeholder: str, example: str) -> str:
+        """`example` (a sample value) becomes the translated "e.g. <example>"."""
+        if not example:
+            return placeholder
+        return QCoreApplication.translate("PropertiesDialog", "e.g. {0}").format(example)
+
     def add_text_field(self, label: str, placeholder: str = "", value: str = "",
-                        at_top: bool = False) -> QLineEdit:
+                        at_top: bool = False, example: str = "") -> QLineEdit:
         field = QLineEdit()
-        field.setPlaceholderText(placeholder)
+        field.setPlaceholderText(self._placeholder(placeholder, example))
         field.setText(value)
         if at_top:
             self._form_layout.insertRow(0, label, field)
@@ -119,11 +126,12 @@ class PropertiesDialog(QDialog):
         required: bool = False,
         min_value: float | None = None,
         min_inclusive: bool = False,
+        example: str = "",
     ) -> QLineEdit:
         """min_value is an exclusive lower bound (value > min_value);
         min_inclusive=True accepts min_value itself (value >= min_value)."""
         field = QLineEdit()
-        field.setPlaceholderText(placeholder)
+        field.setPlaceholderText(self._placeholder(placeholder, example))
         if value is not None:
             field.setText(str(value))
 

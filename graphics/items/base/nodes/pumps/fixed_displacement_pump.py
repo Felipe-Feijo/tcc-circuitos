@@ -35,7 +35,7 @@ class FixedDisplacementPump(NodeItem):
         dialog = PropertiesDialog(title=self.tr("Fixed Displacement Pump — Properties"))
         if self.domain == "hydraulic":
             dialog._field_Q = dialog.add_number_field(
-                self.tr("Flow rate (m³/s)"), placeholder="ex: 8.3e-4  (= 50 L/min)",
+                self.tr("Flow rate (m³/s)"), example="8.3e-4  (= 50 L/min)",
                 value=self.properties.get("Q"),
                 required=True,
                 min_value=0,
@@ -54,5 +54,5 @@ class FixedDisplacementPump(NodeItem):
             return []
         return [DefectFieldSpec(
             "Q", self.tr("Flow rate (m³/s)"), "number",
-            placeholder="ex: 8.3e-4  (= 50 L/min)", min_value=0,
+            example="8.3e-4  (= 50 L/min)", min_value=0,
         )]

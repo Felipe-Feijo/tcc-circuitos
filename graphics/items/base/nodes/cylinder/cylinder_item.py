@@ -409,12 +409,12 @@ class CylinderItem(NodeItem):
         # both cylinder subclasses (see build_properties_dialog's note).
         return QCoreApplication.translate("CylinderItem", "Internal leakage (m³/s/Pa)")
 
-    _LEAK_PLACEHOLDER = "ex: 1e-12  (≈ 0.6 L/min @ 100 bar)"
+    _LEAK_EXAMPLE = "1e-12  (≈ 0.6 L/min @ 100 bar)"
 
     def _add_leak_field(self, dialog) -> None:
         # optional; healthy is 0 and min_value is exclusive, the node clamps negatives
         dialog._field_leak = dialog.add_number_field(
-            self._leak_label(), placeholder=self._LEAK_PLACEHOLDER,
+            self._leak_label(), example=self._LEAK_EXAMPLE,
             value=self.properties.get("c_leak", 0.0))
 
     def _apply_leak_field(self, dialog) -> None:
@@ -428,7 +428,7 @@ class CylinderItem(NodeItem):
             "leak",
             self._leak_label(),
             "number",
-            placeholder=self._LEAK_PLACEHOLDER,
+            example=self._LEAK_EXAMPLE,
             # healthy is 0 and min_value is exclusive; the node clamps negatives
             min_value=None,
         )]
@@ -467,7 +467,7 @@ class CylinderItem(NodeItem):
             # already cataloged for the context-menu toggle titles.
             side_label = _("Retracted sensor") if pos == "retracted" else _("Extended sensor")
             checkbox = dialog.add_bool_field(side_label, value=current_enabled)
-            name_field = dialog.add_text_field(_("  Signal name"), placeholder="ex: A1", value=current_name)
+            name_field = dialog.add_text_field(_("  Signal name"), example="A1", value=current_name)
             name_field.setEnabled(current_enabled)
 
             def on_enabled_changed(_state, checkbox=checkbox):

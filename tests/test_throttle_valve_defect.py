@@ -99,7 +99,7 @@ def test_item_defect_fields_one_spec_in_hydraulic():
     assert specs[0].kind == "number"
     assert specs[0].min_value == 0
     assert specs[0].label == "Conductance k (m³/s/√Pa)"
-    assert specs[0].placeholder == "ex: 1.5e-8"
+    assert specs[0].example == "1.5e-8"
 
 
 def test_item_dialog_prefilled_from_properties_before_sync():

@@ -9,6 +9,7 @@ stops converging). k < 0 has no physical meaning and is rejected.
 """
 
 from __future__ import annotations
+from simulation.nodes.param_checks import ParamError
 
 
 def parse_conductance(node, k) -> float:
@@ -18,9 +19,7 @@ def parse_conductance(node, k) -> float:
         ValueError: k is missing (None) or negative.
     """
     if k is None:
-        raise ValueError(
-            f"{type(node).__name__} '{node.id}': required property 'k' is not set."
-        )
+        raise ParamError(node, "missing_property", key="k")
     k = float(k)
     check_conductance(node, k)
     return k
@@ -29,7 +28,4 @@ def parse_conductance(node, k) -> float:
 def check_conductance(node, k: float) -> None:
     """Raises ValueError unless k >= 0 (also used for "k" defects)."""
     if not k >= 0:
-        raise ValueError(
-            f"{type(node).__name__} '{node.id}': property 'k' must be >= 0 "
-            f"(0 = fully blocked), got {k}."
-        )
+        raise ParamError(node, "conductance_negative", key="k", value=k)

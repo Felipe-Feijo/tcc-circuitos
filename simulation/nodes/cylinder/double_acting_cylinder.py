@@ -3,7 +3,7 @@
 import math
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.param_checks import require_non_negative, require_positive
+from simulation.nodes.param_checks import ParamError, require_non_negative, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
@@ -38,9 +38,7 @@ class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
         if self.domain == "hydraulic":
             for key in ("bore", "rod_diameter", "stroke"):
                 if self.properties.get(key) is None:
-                    raise ValueError(
-                        f"DoubleActingCylinder '{self.id}': required property '{key}' is not set."
-                    )
+                    raise ParamError(self, "missing_property", key=key)
             bore     = float(self.properties["bore"])
             rod      = float(self.properties["rod_diameter"])
             # area_a is the velocity's denominator; rod >= bore leaves the
@@ -48,10 +46,7 @@ class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
             require_positive(self, "bore", bore)
             require_non_negative(self, "rod_diameter", rod)
             if not rod < bore:
-                raise ValueError(
-                    f"DoubleActingCylinder '{self.id}': property 'rod_diameter' must be "
-                    f"< bore ({bore}), got {rod}."
-                )
+                raise ParamError(self, "rod_not_smaller_than_bore", bore=bore, rod=rod)
             require_positive(self, "stroke", float(self.properties["stroke"]))
             self.area_a = math.pi * (bore / 2) ** 2
             self.area_b = self.area_a - math.pi * (rod / 2) ** 2

@@ -123,7 +123,7 @@ class CoilItem(NodeItem):
         current_name = self.properties["sensor"]["coil"].get("name", "")
         dialog._name_field = dialog.add_text_field(
             QCoreApplication.translate("CoilItem", "Signal name"),
-            placeholder=f"ex: {self.PREFIX}1",
+            example=f"{self.PREFIX}1",
             value=current_name,
         )
         return dialog

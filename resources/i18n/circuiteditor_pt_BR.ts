@@ -310,27 +310,27 @@
 </context><context>
     <name>DefectDialog</name>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="37" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="38" />
         <source>Simulate defect</source>
         <translation>Simular defeito</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="105" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="106" />
         <source>Note (optional)</source>
         <translation>Nota (opcional)</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="106" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="107" />
         <source>e.g. debris in the orifice</source>
         <translation>ex.: sujeira no orifício</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="52" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="53" />
         <source>Apply</source>
         <translation>Aplicar</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\defect_dialog.py" line="54" />
+        <location filename="..\..\graphics\utils\defect_dialog.py" line="55" />
         <source>Restore</source>
         <translation>Restaurar</translation>
     </message>
@@ -591,69 +591,69 @@
 </context><context>
     <name>MainWindow</name>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="179" />
-        <location filename="..\..\main_window\main_window.py" line="117" />
-        <location filename="..\..\main_window\main_window.py" line="39" />
+        <location filename="..\..\main_window\main_window.py" line="180" />
+        <location filename="..\..\main_window\main_window.py" line="118" />
+        <location filename="..\..\main_window\main_window.py" line="40" />
         <source>Circuit Editor</source>
         <translation>Editor de Circuitos</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="103" />
+        <location filename="..\..\main_window\main_window.py" line="104" />
         <source>File</source>
         <translation>Arquivo</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="104" />
+        <location filename="..\..\main_window\main_window.py" line="105" />
         <source>Edit</source>
         <translation>Editar</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="105" />
+        <location filename="..\..\main_window\main_window.py" line="106" />
         <source>View</source>
         <translation>Visualizar</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="106" />
+        <location filename="..\..\main_window\main_window.py" line="107" />
         <source>Help</source>
         <translation>Ajuda</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="107" />
+        <location filename="..\..\main_window\main_window.py" line="108" />
         <source>Language</source>
         <translation>Idioma</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="109" />
+        <location filename="..\..\main_window\main_window.py" line="110" />
         <source>Tools</source>
         <translation>Ferramentas</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="119" />
+        <location filename="..\..\main_window\main_window.py" line="120" />
         <source>Nodes</source>
         <translation>Nós</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="121" />
+        <location filename="..\..\main_window\main_window.py" line="122" />
         <source>Pneumatic</source>
         <translation>Pneumático</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="122" />
+        <location filename="..\..\main_window\main_window.py" line="123" />
         <source>Electric</source>
         <translation>Elétrico</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="123" />
+        <location filename="..\..\main_window\main_window.py" line="124" />
         <source>Hydraulic</source>
         <translation>Hidráulico</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="235" />
+        <location filename="..\..\main_window\main_window.py" line="236" />
         <source>About</source>
         <translation>Sobre</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="236" />
+        <location filename="..\..\main_window\main_window.py" line="237" />
         <source>Circuit Editor
 Pneumatic and Hydraulic Systems
 
@@ -664,48 +664,53 @@ Sistemas Pneumáticos e Hidráulicos
 Desenvolvido com PyQt6</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="275" />
+        <location filename="..\..\main_window\main_window.py" line="276" />
         <source>Add node</source>
         <translation>Adicionar nó</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="335" />
+        <location filename="..\..\main_window\main_window.py" line="327" />
+        <source>Incomplete properties</source>
+        <translation>Propriedades incompletas</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\main_window.py" line="339" />
         <source>circuit</source>
         <translation>circuito</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="368" />
+        <location filename="..\..\main_window\main_window.py" line="372" />
         <source>Step size</source>
         <translation>Tamanho do passo</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="368" />
+        <location filename="..\..\main_window\main_window.py" line="372" />
         <source>Δt (s):</source>
         <translation>Δt (s):</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="374" />
+        <location filename="..\..\main_window\main_window.py" line="378" />
         <source>Δt: {0:.3f}s</source>
         <translation>Δt: {0:.3f}s</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="405" />
-        <location filename="..\..\main_window\main_window.py" line="397" />
+        <location filename="..\..\main_window\main_window.py" line="409" />
+        <location filename="..\..\main_window\main_window.py" line="401" />
         <source>Run</source>
         <translation>Executar</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="405" />
+        <location filename="..\..\main_window\main_window.py" line="409" />
         <source>Pause</source>
         <translation>Pausar</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="439" />
+        <location filename="..\..\main_window\main_window.py" line="443" />
         <source>Light Theme</source>
         <translation>Tema Claro</translation>
     </message>
     <message>
-        <location filename="..\..\main_window\main_window.py" line="439" />
+        <location filename="..\..\main_window\main_window.py" line="443" />
         <source>Dark Theme</source>
         <translation>Tema Escuro</translation>
     </message>
@@ -903,6 +908,11 @@ Desenvolvido com PyQt6</translation>
         <source>Main-stage spring (Pa)</source>
         <translation>Mola do estágio principal (Pa)</translation>
     </message>
+    <message>
+        <location filename="..\..\graphics\items\base\nodes\pilot_operated_relief_valve.py" line="89" />
+        <source>3e5  (= 3 bar, default)</source>
+        <translation>3e5  (= 3 bar, padrão)</translation>
+    </message>
 </context><context>
     <name>PressureGauge</name>
     <message>
@@ -970,17 +980,22 @@ Desenvolvido com PyQt6</translation>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="167" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="82" />
+        <source>e.g. {0}</source>
+        <translation>ex.: {0}</translation>
+    </message>
+    <message>
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="175" />
         <source>not a valid number</source>
         <translation>não é um número válido</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="173" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="181" />
         <source>must be at least {0}</source>
         <translation>deve ser no mínimo {0}</translation>
     </message>
     <message>
-        <location filename="..\..\graphics\utils\properties_dialog.py" line="176" />
+        <location filename="..\..\graphics\utils\properties_dialog.py" line="184" />
         <source>must be greater than {0}</source>
         <translation>deve ser maior que {0}</translation>
     </message>
@@ -1046,6 +1061,12 @@ Desenvolvido com PyQt6</translation>
         <translation>Salvar cena</translation>
     </message>
     <message>
+        <location filename="..\..\persistence\file_session.py" line="60" />
+        <location filename="..\..\persistence\file_session.py" line="46" />
+        <source>Scene Files (*.json)</source>
+        <translation>Arquivos de Cena (*.json)</translation>
+    </message>
+    <message>
         <location filename="..\..\persistence\file_session.py" line="58" />
         <source>Open scene</source>
         <translation>Abrir cena</translation>
@@ -1064,6 +1085,65 @@ Desenvolvido com PyQt6</translation>
         <location filename="..\..\persistence\file_session.py" line="100" />
         <source>Circuit Editor – {0}</source>
         <translation>Editor de Circuitos – {0}</translation>
+    </message>
+</context><context>
+    <name>Settings</name>
+    <message>
+        <location filename="..\..\main_window\settings.py" line="57" />
+        <source>Font Size</source>
+        <translation>Tamanho da Fonte</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\settings.py" line="58" />
+        <source>Point size:</source>
+        <translation>Tamanho (pt):</translation>
+    </message>
+</context><context>
+    <name>SimulationErrors</name>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="14" />
+        <source>{node}: required property '{key}' is not set.</source>
+        <translation>{node}: a propriedade obrigatória '{key}' não foi definida.</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="16" />
+        <source>{node}: property '{key}' must be greater than 0 (got {value}).</source>
+        <translation>{node}: a propriedade '{key}' deve ser maior que 0 (valor: {value}).</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="18" />
+        <source>{node}: property '{key}' must be at least 0 (got {value}).</source>
+        <translation>{node}: a propriedade '{key}' deve ser maior ou igual a 0 (valor: {value}).</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="20" />
+        <source>{node}: property '{key}' must be at least 0, where 0 means fully blocked (got {value}).</source>
+        <translation>{node}: a propriedade '{key}' deve ser maior ou igual a 0, sendo 0 totalmente bloqueado (valor: {value}).</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="22" />
+        <source>{node}: rod diameter ({rod}) must be smaller than the bore diameter ({bore}).</source>
+        <translation>{node}: o diâmetro da haste ({rod}) deve ser menor que o diâmetro do êmbolo ({bore}).</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="24" />
+        <source>{node}: control mode must be 'torque' or 'speed' (got '{value}').</source>
+        <translation>{node}: o modo de controle deve ser 'torque' ou 'speed' (valor: '{value}').</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="26" />
+        <source>{node}: load torque {T_load} N·m requires {dp} Pa, above the limit P_max = {P_max} Pa.</source>
+        <translation>{node}: o torque de carga {T_load} N·m exige {dp} Pa, acima do limite P_max = {P_max} Pa.</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="28" />
+        <source>{node}: target speed {omega} rad/s is above the limit n_max = {n_max} rad/s.</source>
+        <translation>{node}: a velocidade alvo {omega} rad/s está acima do limite n_max = {n_max} rad/s.</translation>
+    </message>
+    <message>
+        <location filename="..\..\main_window\ui\simulation_error_text.py" line="30" />
+        <source>{node}: port '{port}' is not connected to anything.</source>
+        <translation>{node}: a porta '{port}' não está conectada a nada.</translation>
     </message>
 </context><context>
     <name>SingleActingCylinder</name>

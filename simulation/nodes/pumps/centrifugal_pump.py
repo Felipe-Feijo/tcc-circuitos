@@ -29,7 +29,7 @@ caused needless confusion in this class's sibling.
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.param_checks import require_non_negative, require_positive
+from simulation.nodes.param_checks import ParamError, require_non_negative, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -43,14 +43,10 @@ class CentrifugalPump(DefectMixin, Node, HydraulicMixin):
         if self.domain == "hydraulic":
             h_shutoff = self.properties.get("H_shutoff")
             if h_shutoff is None:
-                raise ValueError(
-                    f"CentrifugalPump '{self.id}': required property 'H_shutoff' is not set."
-                )
+                raise ParamError(self, "missing_property", key="H_shutoff")
             q_max = self.properties.get("Q_max")
             if q_max is None:
-                raise ValueError(
-                    f"CentrifugalPump '{self.id}': required property 'Q_max' is not set."
-                )
+                raise ParamError(self, "missing_property", key="Q_max")
             self.H_shutoff = float(h_shutoff)
             self.Q_max = float(q_max)
             self.flow_var_p = f"Q_{self.id}_P"

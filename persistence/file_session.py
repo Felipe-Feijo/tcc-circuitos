@@ -43,7 +43,7 @@ class SceneFileSession:
             self.parent,
             QCoreApplication.translate("SceneFileSession", "Save scene"),
             "",
-            "Scene Files (*.json)",
+            QCoreApplication.translate("SceneFileSession", "Scene Files (*.json)"),
         )
         if not path:
             return
@@ -57,7 +57,7 @@ class SceneFileSession:
             self.parent,
             QCoreApplication.translate("SceneFileSession", "Open scene"),
             "",
-            "Scene Files (*.json)",
+            QCoreApplication.translate("SceneFileSession", "Scene Files (*.json)"),
         )
         if not path:
             return

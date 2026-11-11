@@ -102,14 +102,14 @@ class Accumulator(NodeItem):
         dialog = PropertiesDialog(title=self.tr("Accumulator — Properties"))
         dialog._field_v0 = dialog.add_number_field(
             self.tr("Total volume V0 (m³)"),
-            placeholder="ex: 0.001",
+            example="0.001",
             value=self.properties.get("V0"),
             required=True,
             min_value=0,
         )
         dialog._field_p0 = dialog.add_number_field(
             self.tr("Precharge pressure P0 (Pa)"),
-            placeholder="ex: 3e6",
+            example="3e6",
             value=self.properties.get("P0"),
             required=True,
             min_value=0,
@@ -127,5 +127,5 @@ class Accumulator(NodeItem):
             return []
         return [DefectFieldSpec(
             "P0", self.tr("Precharge pressure P0 (Pa)"), "number",
-            placeholder="ex: 3e6", min_value=0,
+            example="3e6", min_value=0,
         )]

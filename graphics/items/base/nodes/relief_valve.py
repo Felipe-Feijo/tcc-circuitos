@@ -89,7 +89,7 @@ class ReliefValve(NodeItem):
         dialog = PropertiesDialog(title=self.tr("Relief Valve — Properties"))
         if self.domain == "hydraulic":
             dialog._field_p_set = dialog.add_number_field(
-                self.tr("Cracking pressure (Pa)"), placeholder="ex: 1.5e7  (= 150 bar)",
+                self.tr("Cracking pressure (Pa)"), example="1.5e7  (= 150 bar)",
                 value=self.properties.get("p_set"),
                 required=True,
                 min_value=0,
@@ -116,5 +116,5 @@ class ReliefValve(NodeItem):
             return []
         return [DefectFieldSpec(
             "p_set", self.tr("Cracking pressure (Pa)"), "number",
-            placeholder="ex: 1.5e7  (= 150 bar)", min_value=0,
+            example="1.5e7  (= 150 bar)", min_value=0,
         )]

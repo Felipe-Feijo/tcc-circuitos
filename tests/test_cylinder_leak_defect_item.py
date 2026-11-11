@@ -28,7 +28,7 @@ def test_hydraulic_offers_one_leak_field(cls):
     assert specs[0].kind == "number"
     assert specs[0].min_value is None
     assert specs[0].label == LABEL
-    assert specs[0].placeholder == "ex: 1e-12  (≈ 0.6 L/min @ 100 bar)"
+    assert specs[0].example == "1e-12  (≈ 0.6 L/min @ 100 bar)"
 
 
 @pytest.mark.parametrize("cls", ITEMS)

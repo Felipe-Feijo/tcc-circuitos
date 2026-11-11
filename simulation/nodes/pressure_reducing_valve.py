@@ -49,7 +49,7 @@ regulated outlet pressure above the valve's own fixed setpoint.
 import math
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.param_checks import require_positive
+from simulation.nodes.param_checks import ParamError, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 
@@ -62,7 +62,7 @@ class PressureReducingValve(DefectMixin, Node, HydraulicMixin):
         if self.domain == "hydraulic":
             p_set = self.properties.get("p_set")
             if p_set is None:
-                raise ValueError(f"PressureReducingValve '{self.id}': required property 'p_set' is not set.")
+                raise ParamError(self, "missing_property", key="p_set")
             self.p_set        = float(p_set)
             self.validate_params()
             self.flow_var_p   = f"Q_{self.id}_P"

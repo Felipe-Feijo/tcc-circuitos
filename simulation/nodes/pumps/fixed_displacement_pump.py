@@ -2,7 +2,7 @@
 
 from simulation.nodes.nodes import Node
 from simulation.nodes.defect import DefectMixin
-from simulation.nodes.param_checks import require_positive
+from simulation.nodes.param_checks import ParamError, require_positive
 from simulation.hydraulic import HydraulicMixin
 
 class FixedDisplacementPump(DefectMixin, Node, HydraulicMixin):
@@ -17,7 +17,7 @@ class FixedDisplacementPump(DefectMixin, Node, HydraulicMixin):
         if self.domain == "hydraulic":
             Q = self.properties.get("Q")
             if Q is None:
-                raise ValueError(f"FixedDisplacementPump '{self.id}': required property 'Q' is not set.")
+                raise ParamError(self, "missing_property", key="Q")
             self.Q_set = float(Q)
             # Names kept for compatibility: flow_in_var maps to port P
             # (discharge/pressure, sprite top), flow_out_var to port S

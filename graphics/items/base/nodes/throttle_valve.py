@@ -58,7 +58,7 @@ class ThrottleValve(NodeItem):
         dialog = PropertiesDialog(title=self.tr("Throttle Valve — Properties"))
         dialog._field_k = dialog.add_number_field(
             self.tr("Conductance k (m³/s/√Pa)"),
-            placeholder="ex: 1.5e-8",
+            example="1.5e-8",
             value=self.properties.get("k"),
             required=True,
             min_value=0, min_inclusive=True,  # 0 = fully blocked
@@ -74,5 +74,5 @@ class ThrottleValve(NodeItem):
             return []
         return [DefectFieldSpec(
             "k", self.tr("Conductance k (m³/s/√Pa)"), "number",
-            placeholder="ex: 1.5e-8", min_value=0, min_inclusive=True,
+            example="1.5e-8", min_value=0, min_inclusive=True,
         )]

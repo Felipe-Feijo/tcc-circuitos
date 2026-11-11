@@ -1,6 +1,15 @@
 """Builds the simulation graph from the scene's graphics items."""
 
 from simulation.connections import Connection
+from simulation.nodes.param_checks import ParamError
+
+
+class GraphBuildError(ValueError):
+    """Every error found while building the graph; str() joins them one per line."""
+
+    def __init__(self, errors: list[ValueError]):
+        self.errors = errors
+        super().__init__("\n".join(str(e) for e in errors))
 
 
 class GraphBuilder:
@@ -18,7 +27,7 @@ class GraphBuilder:
         self.connections: dict = {}
         self.node_map: dict = {}
         self.connection_map: dict = {}
-        self._errors: list[str] = []
+        self._errors: list[ValueError] = []
 
     def add_node_from_item(self, node_item):
         """Creates the domain node corresponding to a graphics NodeItem.
@@ -48,7 +57,7 @@ class GraphBuilder:
                 properties=getattr(node_item, "properties", {}),
             )
         except ValueError as e:
-            self._errors.append(str(e))
+            self._errors.append(e)
             return None
 
         for anchor_item in node_item.anchors.values():
@@ -91,15 +100,15 @@ class GraphBuilder:
         return self.connections[connection.id]
 
     def raise_if_errors(self) -> None:
-        """Raises a consolidated ValueError if any node has missing required
+        """Raises a consolidated GraphBuildError if any node has missing required
         properties or an unconnected dead (sensing-only) port.
 
         Raises:
-            ValueError: Combined message of every accumulated error.
+            GraphBuildError: Holds every accumulated error.
         """
         self._validate_dead_ports()
         if self._errors:
-            raise ValueError("\n".join(self._errors))
+            raise GraphBuildError(self._errors)
 
     def _validate_dead_ports(self) -> None:
         """Pre-flight check for sensing-only ports (e.g. a valve's pilot
@@ -117,5 +126,5 @@ class GraphBuilder:
                 anchor = node.anchors.get(port_name)
                 if anchor is None or not anchor.connections:
                     self._errors.append(
-                        f"{type(node).__name__} '{node.id}': port '{port_name}' is not connected to anything."
+                        ParamError(node, "port_not_connected", port=port_name)
                     )

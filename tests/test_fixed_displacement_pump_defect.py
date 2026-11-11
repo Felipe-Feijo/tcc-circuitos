@@ -92,7 +92,7 @@ def test_item_defect_fields_one_spec():
     assert specs[0].kind == "number"
     assert specs[0].min_value == 0
     assert specs[0].label == "Flow rate (m³/s)"
-    assert specs[0].placeholder == "ex: 8.3e-4  (= 50 L/min)"
+    assert specs[0].example == "8.3e-4  (= 50 L/min)"
 
 
 def test_item_dialog_prefilled_from_properties_before_sync():

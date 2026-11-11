@@ -53,7 +53,7 @@ solving with the rest of the circuit -- not validated here.
 
 from simulation.nodes.nodes import Node
 from simulation.hydraulic import HydraulicMixin
-from simulation.nodes.param_checks import require_positive
+from simulation.nodes.param_checks import ParamError, require_positive
 
 
 class FixedDisplacementMotor(Node, HydraulicMixin):
@@ -63,9 +63,7 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
         if self.domain == "hydraulic":
             d = self.properties.get("D")
             if d is None:
-                raise ValueError(
-                    f"FixedDisplacementMotor '{self.id}': required property 'D' is not set."
-                )
+                raise ParamError(self, "missing_property", key="D")
             self.D = float(d)
             require_positive(self, "D", self.D)  # torque mode divides by D
 
@@ -76,40 +74,30 @@ class FixedDisplacementMotor(Node, HydraulicMixin):
 
             self.control_mode = self.properties.get("control_mode", "torque")
             if self.control_mode not in ("torque", "speed"):
-                raise ValueError(
-                    f"FixedDisplacementMotor '{self.id}': 'control_mode' must be 'torque' or 'speed', "
-                    f"got {self.control_mode!r}."
-                )
+                raise ParamError(self, "invalid_control_mode", value=self.control_mode)
 
             if self.control_mode == "torque":
                 t_load = self.properties.get("T_load")
                 if t_load is None:
-                    raise ValueError(
-                        f"FixedDisplacementMotor '{self.id}': required property 'T_load' "
-                        "is not set (control_mode='torque')."
-                    )
+                    raise ParamError(self, "missing_property", key="T_load")
                 self.T_load = float(t_load)
 
                 if self.P_max is not None:
                     implied_delta_p = abs(self.T_load / self.D)
                     if implied_delta_p > self.P_max:
-                        raise ValueError(
-                            f"FixedDisplacementMotor '{self.id}': T_load={self.T_load:.3g} N*m implies "
-                            f"dp={implied_delta_p:.3g} Pa, above limit P_max={self.P_max:.3g} Pa."
+                        raise ParamError(
+                            self, "torque_exceeds_pressure_limit",
+                            T_load=self.T_load, dp=implied_delta_p, P_max=self.P_max,
                         )
             else:
                 omega_target = self.properties.get("omega_target")
                 if omega_target is None:
-                    raise ValueError(
-                        f"FixedDisplacementMotor '{self.id}': required property 'omega_target' "
-                        "is not set (control_mode='speed')."
-                    )
+                    raise ParamError(self, "missing_property", key="omega_target")
                 self.omega_target = float(omega_target)
 
                 if self.n_max is not None and abs(self.omega_target) > self.n_max:
-                    raise ValueError(
-                        f"FixedDisplacementMotor '{self.id}': omega_target={self.omega_target:.3g} rad/s "
-                        f"above limit n_max={self.n_max:.3g} rad/s."
+                    raise ParamError(
+                        self, "speed_exceeds_limit", omega=self.omega_target, n_max=self.n_max,
                     )
 
             self.flow_var_a = f"Q_{self.id}_A"

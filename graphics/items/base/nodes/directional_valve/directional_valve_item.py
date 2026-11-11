@@ -787,7 +787,7 @@ class DirectionalValveItem(NodeItem):
             dialog._field_k = dialog.add_number_field(
                 # Reuses the same phrasing already cataloged for the
                 # defect dialog's field of the same physical quantity.
-                _("Conductance k (m³/s/√Pa)"), placeholder="ex: 1.5e-8",
+                _("Conductance k (m³/s/√Pa)"), example="1.5e-8",
                 value=self.properties.get("k"),
                 required=True,
                 min_value=0, min_inclusive=True,  # 0 = fully blocked
@@ -844,7 +844,7 @@ class DirectionalValveItem(NodeItem):
         # cataloged for the context-menu submenu titles.
         dialog._combo_left = dialog.add_combo_field(_("Left actuator"), options, current=current_value("left"))
         dialog._field_timer_left = dialog.add_number_field(
-            _("Timer delay — left (steps)"), placeholder="ex: 3",
+            _("Timer delay — left (steps)"), example="3",
             value=_timer_delay("left"), required=False,
         )
         dialog._field_latch_left = dialog.add_bool_field(
@@ -853,7 +853,7 @@ class DirectionalValveItem(NodeItem):
 
         dialog._combo_right = dialog.add_combo_field(_("Right actuator"), options, current=current_value("right"))
         dialog._field_timer_right = dialog.add_number_field(
-            _("Timer delay — right (steps)"), placeholder="ex: 3",
+            _("Timer delay — right (steps)"), example="3",
             value=_timer_delay("right"), required=False,
         )
         dialog._field_latch_right = dialog.add_bool_field(
@@ -950,7 +950,7 @@ class DirectionalValveItem(NodeItem):
             fields.append(DefectFieldSpec(
                 "k",
                 QCoreApplication.translate("DirectionalValveItem", "Conductance k (m³/s/√Pa)"),
-                "number", placeholder="ex: 1.5e-8", min_value=0, min_inclusive=True,
+                "number", example="1.5e-8", min_value=0, min_inclusive=True,
             ))
         fields.append(DefectFieldSpec(
             "stuck",

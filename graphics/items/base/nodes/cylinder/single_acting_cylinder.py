@@ -111,17 +111,17 @@ class SingleActingCylinder(CylinderItem):
 
         if self.domain == "hydraulic":
             dialog._field_bore      = dialog.add_number_field(
-                self.tr("Bore diameter (m)"),            placeholder="ex: 0.05",
+                self.tr("Bore diameter (m)"),            example="0.05",
                 value=self.properties.get("bore"), required=True, min_value=0)
             dialog._field_stroke    = dialog.add_number_field(
-                self.tr("Stroke (m)"),                        placeholder="ex: 0.5",
+                self.tr("Stroke (m)"),                        example="0.5",
                 value=self.properties.get("stroke"), required=True, min_value=0)
             dialog._field_spring_k  = dialog.add_number_field(
-                self.tr("Spring constant (N/m)"),          placeholder="ex: 5000",
+                self.tr("Spring constant (N/m)"),          example="5000",
                 value=self.properties.get("spring_k"), required=True,
                 min_value=0, min_inclusive=True)
             dialog._field_ext_force = dialog.add_number_field(
-                self.tr("External load (N)"),                placeholder="ex: 0.0",
+                self.tr("External load (N)"),                example="0.0",
                 value=self.properties.get("external_force", 0.0))
             self._add_leak_field(dialog)
         else:

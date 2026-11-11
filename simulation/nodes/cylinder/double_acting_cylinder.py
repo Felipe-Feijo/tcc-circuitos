@@ -202,10 +202,13 @@ class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
         return [f, eq_conservation]
 
     # ------------------------------------------------------------------
-    # Logical update
+    # Post step
     # ------------------------------------------------------------------
 
-    def update(self, outputs=None):
+    def post_step_update(self, dt=None):
+        super().post_step_update(dt=dt)
+
+        # motion first, sensors last: outputs must reflect the committed state
         if self.domain != "hydraulic":
             a = self.anchors["A"].state
             b = self.anchors["B"].state
@@ -215,13 +218,8 @@ class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
             elif b:              # 01 -- retracts
                 self.position = 0
             # 00 -- unchanged
-
-    # ------------------------------------------------------------------
-    # Post step
-    # ------------------------------------------------------------------
-
-    def post_step_update(self, dt=None):
-        super().post_step_update(dt=dt)
+        elif dt is not None:
+            self._integrate_hydraulic(dt)
 
         if self.sensors["retracted"]["enabled"]:
             name = self.sensors["retracted"]["name"]
@@ -230,9 +228,6 @@ class DoubleActingCylinder(DefectMixin, Node, HydraulicMixin):
         if self.sensors["extended"]["enabled"]:
             name = self.sensors["extended"]["name"]
             self.outputs[name] = {"type": "signal", "value": self.position == 1}
-
-        if self.domain == "hydraulic" and dt is not None:
-            self._integrate_hydraulic(dt)
 
     def _integrate_hydraulic(self, dt):
         v = self.piston_velocity

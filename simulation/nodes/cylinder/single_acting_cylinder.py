@@ -213,30 +213,16 @@ class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
         return [F_net / F_scale]
 
     # ------------------------------------------------------------------
-    # Logical update
-    # ------------------------------------------------------------------
-
-    def update(self, outputs=None):
-        if self.domain != "hydraulic":
-            self.position = 1 if self.anchors["A"].state else 0
-
-    # ------------------------------------------------------------------
     # Post step
     # ------------------------------------------------------------------
 
     def post_step_update(self, dt=None):
         super().post_step_update(dt=dt)
 
-        # sensors
-        if self.sensors["retracted"]["enabled"]:
-            name = self.sensors["retracted"]["name"]
-            self.outputs[name] = {"type": "signal", "value": self.position == 0}
-
-        if self.sensors["extended"]["enabled"]:
-            name = self.sensors["extended"]["name"]
-            self.outputs[name] = {"type": "signal", "value": self.position == 1}
-
-        if self.domain == "hydraulic" and dt is not None:
+        # motion first, sensors last: outputs must reflect the committed state
+        if self.domain != "hydraulic":
+            self.position = 1 if self.anchors["A"].state else 0
+        elif dt is not None:
             v = self.piston_velocity
             if v is not None:
                 self.x += v * dt
@@ -255,6 +241,13 @@ class SingleActingCylinder(DefectMixin, Node, HydraulicMixin):
                     else:
                         self.position = round(ratio)
 
+        if self.sensors["retracted"]["enabled"]:
+            name = self.sensors["retracted"]["name"]
+            self.outputs[name] = {"type": "signal", "value": self.position == 0}
+
+        if self.sensors["extended"]["enabled"]:
+            name = self.sensors["extended"]["name"]
+            self.outputs[name] = {"type": "signal", "value": self.position == 1}
 
     # ------------------------------------------------------------------
     # State

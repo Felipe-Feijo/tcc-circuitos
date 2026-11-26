@@ -88,13 +88,24 @@ class GraphicsView(QGraphicsView):
     # Mouse events
 
     def wheelEvent(self, event) -> None:
-        """Applies zoom via the mouse wheel, anchored under the cursor."""
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        """Applies zoom via the mouse wheel, anchored under the cursor.
+
+        Anchors explicitly on the wheel event position instead of Qt's
+        AnchorUnderMouse: that one uses the scene point stored by
+        QGraphicsView.mouseMoveEvent, which goes stale whenever our
+        mouseMoveEvent returns early (ADD mode preview, panning)."""
+        cursor = event.position().toPoint()
+        anchor_scene = self.mapToScene(cursor)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
         if event.angleDelta().y() > 0:
             self.zoom_in()
         else:
             self.zoom_out()
+        drift = self.mapFromScene(anchor_scene) - cursor
+        self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + drift.x())
+        self.verticalScrollBar().setValue(self.verticalScrollBar().value() + drift.y())
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        event.accept()
 
     def mousePressEvent(self, event) -> None:
         """Handles clicks according to the editor's current mode."""

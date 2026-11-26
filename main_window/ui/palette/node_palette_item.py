@@ -2,11 +2,12 @@
 
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainter, QPen
+from PyQt6.QtGui import QPainter, QPen, QFontMetricsF
 from graphics.utils.pixmap_utils import generate_pixmap_for_palette
 
 DEFAULT_PIXMAP_WH = (60, 40)
 DEFAULT_ITEM_WIDTH = 100
+MIN_FONT_POINT_SIZE = 6.0
 
 
 class NodePaletteItem(QWidget):
@@ -17,6 +18,7 @@ class NodePaletteItem(QWidget):
         self.icon_path = icon_path
         self.use_light_theme = False
         self._pixmap_wh = DEFAULT_PIXMAP_WH
+        self._target_point_size = QApplication.instance().font().pointSizeF()
 
         self.setFixedWidth(DEFAULT_ITEM_WIDTH)
 
@@ -55,14 +57,30 @@ class NodePaletteItem(QWidget):
         margins = self.layout().contentsMargins()
         content_width = item_width - margins.left() - margins.right()
         self.text_label.setFixedWidth(content_width)
-        font = self.text_label.font()
-        font.setPointSize(QApplication.instance().font().pointSize() + font_delta)
-        self.text_label.setFont(font)
+        self._target_point_size = QApplication.instance().font().pointSizeF() + font_delta
+        self._fit_font()
 
         self.setFixedWidth(item_width)
 
     def set_name(self, name: str):
         self.text_label.setText(name)
+        self._fit_font()
+
+    def _fit_font(self):
+        # Word wrap only breaks at whitespace: shrink the font until the
+        # longest word fits the label width, otherwise it gets clipped.
+        font = self.text_label.font()
+        size = self._target_point_size
+        font.setPointSizeF(size)
+        words = self.text_label.text().split() or [""]
+        available = self.text_label.maximumWidth() - 2
+        while size > MIN_FONT_POINT_SIZE:
+            metrics = QFontMetricsF(font)
+            if max(metrics.horizontalAdvance(w) for w in words) <= available:
+                break
+            size -= 0.5
+            font.setPointSizeF(size)
+        self.text_label.setFont(font)
 
     def set_selected(self, value: bool):
         self.selected = value

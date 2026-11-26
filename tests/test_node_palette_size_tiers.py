@@ -77,7 +77,7 @@ def test_set_size_tier_recomputes_columns(tmp_path):
 def test_apply_size_tracks_live_app_font(tmp_path):
     palette = NodePalette(settings_obj=_ini_settings(tmp_path))
     section = palette.add_section("Hydraulic")
-    item = section.add_node("Accumulator", ICON_PATH, callback=lambda: None)
+    item = section.add_node("Tank", ICON_PATH, callback=lambda: None)
 
     original_font = app.font()
     try:
@@ -89,5 +89,27 @@ def test_apply_size_tracks_live_app_font(tmp_path):
 
         expected = app.font().pointSize() + NodePalette.SIZE_TIERS["large"]["font_delta"]
         assert item.text_label.font().pointSize() == expected
+    finally:
+        app.setFont(original_font)
+
+
+def test_long_word_shrinks_font_to_fit_label(tmp_path):
+    from PyQt6.QtGui import QFontMetricsF
+
+    palette = NodePalette(settings_obj=_ini_settings(tmp_path))
+    section = palette.add_section("Pneumatic")
+    item = section.add_node("Manômetro", ICON_PATH, callback=lambda: None)
+
+    original_font = app.font()
+    try:
+        new_font = app.font()
+        new_font.setPointSize(14)
+        app.setFont(new_font)
+
+        for tier in NodePalette.SIZE_TIERS:
+            palette.set_size_tier(tier, persist=False)
+            item.set_name("Estrangulamento")
+            metrics = QFontMetricsF(item.text_label.font())
+            assert metrics.horizontalAdvance("Estrangulamento") <= item.text_label.maximumWidth()
     finally:
         app.setFont(original_font)
